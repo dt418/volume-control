@@ -10,6 +10,10 @@ use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use crate::audio::VolumeState;
 
 /// Commands the app can receive from the tray menu.
+///
+/// The host maps each command to a shared [`crate::ui::AppAction`] at the host
+/// boundary and dispatches it through the central action handler; tray-origin
+/// commands bypass the hotkey blacklist gate by design.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrayCommand {
     ToggleMute,

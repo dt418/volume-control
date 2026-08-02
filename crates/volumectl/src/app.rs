@@ -39,6 +39,7 @@ use crate::hotkeys_win32::{
 use crate::mixer::{Mixer, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET};
 use crate::overlay::Overlay;
 use crate::tray::{Tray, TrayCommand};
+use crate::ui::{AppAction, SurfaceId, SurfaceVisibility};
 
 const ID_TIMER_POLL: usize = 1;
 const POLL_MS: u32 = 150;
@@ -89,6 +90,13 @@ struct AppContext {
     mixer: Mixer,
     help: Help,
     tray: Tray,
+    /// Shared confirmed UI state published to every renderer by
+    /// [`publish_confirmed_state`].
+    ui_state: crate::ui::AppState,
+    /// Display-session capabilities measured once at startup. Consumed by the
+    /// adaptive renderers (Tasks 7/8).
+    #[allow(dead_code)]
+    caps: crate::ui::UiCapabilities,
 }
 
 /// Prevent two instances (VolumePro's `#SingleInstance Force` equivalent).
@@ -210,6 +218,16 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mixer = Mixer::new(hwnd)?;
     let help = Help::new()?;
 
+    // Shared confirmed UI state starts from the audio snapshot and the
+    // appearance preferences loaded from config; `publish_confirmed_state`
+    // keeps it fresh after that.
+    let mut ui_state =
+        crate::ui::AppState::from_audio(last_state.percent(), last_state.muted, None);
+    ui_state.theme = config.appearance.theme;
+    ui_state.material = config.appearance.material;
+    ui_state.motion = config.appearance.motion;
+    let caps = crate::ui::primitives::detect_capabilities(hwnd);
+
     // Store context in GWLP_USERDATA.
     let ctx = Box::into_raw(Box::new(AppContext {
         audio,
@@ -221,6 +239,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         mixer,
         help,
         tray,
+        ui_state,
+        caps,
     }));
     unsafe {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, ctx as isize);
@@ -267,7 +287,7 @@ unsafe extern "system" fn host_wndproc(
         WM_HOTKEY => {
             if let Some(action) = hotkey_action(wparam as i32) {
                 if !ctx.is_null() {
-                    apply(&mut *ctx, action);
+                    apply_hotkey(&mut *ctx, action);
                 }
             }
             0
@@ -276,42 +296,29 @@ unsafe extern "system" fn host_wndproc(
         WM_APP_WHEEL => {
             if let Some(action) = hotkey_action(wparam as i32) {
                 if !ctx.is_null() {
-                    apply(&mut *ctx, action);
+                    apply_hotkey(&mut *ctx, action);
                 }
             }
             0
         }
-        // ── Mixer: slider moved ──────────────────────────────────────────
+        // ── Mixer: slider moved → shared action, host owns the mutation ──
         WM_APP_MIXER_CHANGE => {
             if !ctx.is_null() {
-                let ctx = &mut *ctx;
-                let pct_raw = (wparam as u32).min(100);
-                let pct = pct_raw as f32 / 100.0;
-                log::debug!("mixer change: request={}%%", pct_raw);
-                if let Err(e) = ctx.audio.set_volume(pct) {
-                    log::warn!("{e}");
-                }
-                refresh_ui(ctx);
+                let pct = (wparam as u32).min(100) as u16;
+                log::debug!("mixer change: request={}%%", pct);
+                handle_action(&mut *ctx, AppAction::SetVolumePercent { percent: pct });
             }
             0
         }
         WM_APP_MIXER_MUTE => {
             if !ctx.is_null() {
-                let ctx = &mut *ctx;
-                if let Err(e) = ctx.audio.toggle_mute() {
-                    log::warn!("{e}");
-                }
-                refresh_ui(ctx);
+                handle_action(&mut *ctx, AppAction::ToggleMute);
             }
             0
         }
         WM_APP_MIXER_RESET => {
             if !ctx.is_null() {
-                let ctx = &mut *ctx;
-                if let Err(e) = ctx.audio.set_volume(0.5) {
-                    log::warn!("{e}");
-                }
-                refresh_ui(ctx);
+                handle_action(&mut *ctx, AppAction::ResetVolume);
             }
             0
         }
@@ -328,19 +335,17 @@ unsafe extern "system" fn host_wndproc(
                     handle_tray_command(ctx, cmd);
                 }
 
-                // External volume changes (media keys, other apps).
-                if let Ok(st) = ctx.audio.get_state() {
-                    if reloaded {
-                        ctx.overlay.show(&st, &ctx.config);
-                    }
-                    ctx.tray.set_volume(&st);
-                    if ctx.mixer.is_open() {
-                        ctx.mixer.sync(&st);
-                    }
-                    if st != ctx.last_state {
-                        log::debug!("ext change: {}% muted={}", st.percent(), st.muted);
-                        ctx.last_state = st;
-                    }
+                // External volume changes (media keys, other apps). Only re-show
+                // the overlay when the config just reloaded, so the native
+                // media-key flyout stays authoritative.
+                let before = ctx.last_state;
+                publish_confirmed_state(ctx, reloaded);
+                if ctx.last_state != before {
+                    log::debug!(
+                        "ext change: {}% muted={}",
+                        ctx.last_state.percent(),
+                        ctx.last_state.muted
+                    );
                 }
             }
             0
@@ -353,35 +358,18 @@ unsafe extern "system" fn host_wndproc(
     }
 }
 
-/// Apply a hotkey action (keyboard or wheel). Blacklist + limit beeps happen
-/// here, matching VolumePro's behaviour.
-fn apply(ctx: &mut AppContext, action: HotkeyAction) {
-    use HotkeyAction as A;
+/// Apply a hotkey action (keyboard or wheel). The blacklist gate and the limit
+/// beep are hotkey-origin concerns and live here, matching VolumePro's
+/// behaviour; tray-origin commands bypass the gate.
+fn apply_hotkey(ctx: &mut AppContext, action: HotkeyAction) {
+    use HotkeyAction as H;
 
     // Actions that don't change volume bypass the blacklist gate.
-    match action {
-        A::OpenMenu => {
-            // Background processes cannot SetForegroundWindow directly
-            // (Windows foreground lock); simulating Alt unlocks it.
-            unsafe {
-                keybd_event(VK_MENU as u8, 0, KEYEVENTF_EXTENDEDKEY, 0);
-                keybd_event(VK_MENU as u8, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
-            }
-            ctx.tray.show_menu();
-            return;
-        }
-        A::OpenMixer => {
-            if ctx.mixer.is_open() {
-                ctx.mixer.toggle();
-            } else {
-                if let Ok(st) = ctx.audio.get_state() {
-                    ctx.mixer.sync(&st);
-                }
-                ctx.mixer.toggle();
-            }
-            return;
-        }
-        _ => {}
+    if matches!(action, H::OpenMenu | H::OpenMixer) {
+        let step = ctx.config.volume_step as i16;
+        let step_large = ctx.config.volume_step_large as i16;
+        handle_action(ctx, hotkey_to_action(action, step, step_large));
+        return;
     }
 
     // Blacklist gate: suppress hotkeys while a blacklisted app is focused.
@@ -393,96 +381,223 @@ fn apply(ctx: &mut AppContext, action: HotkeyAction) {
         }
     }
 
-    let old = ctx.last_state;
-    log::debug!("hotkey: {:?} (current {}%)", action, old.percent());
+    log::debug!("hotkey: {action:?} (current {}%)", ctx.last_state.percent());
+    let step = ctx.config.volume_step as i16;
+    let step_large = ctx.config.volume_step_large as i16;
+    handle_action(ctx, hotkey_to_action(action, step, step_large));
+}
 
-    // Volume actions: apply, then beep if we were already at the limit.
-    let step = ctx.config.volume_step as f32;
-    let step_large = ctx.config.volume_step_large as f32;
-    let target = match action {
-        A::VolumeUp => Some(crate::core::step_volume(old.volume, step)),
-        A::VolumeDown => Some(crate::core::step_volume(old.volume, -step)),
-        A::VolumeUpLarge => Some(crate::core::step_volume(old.volume, step_large)),
-        A::VolumeDownLarge => Some(crate::core::step_volume(old.volume, -step_large)),
-        A::Reset50 => Some(0.5),
-        A::ToggleMute => None,
-        _ => None,
+/// Map a hotkey action to the shared action contract, resolving the configured
+/// step sizes. Deliberately pure and testable: the blacklist gate is NOT part
+/// of this mapping — it is a host concern applied only to hotkey/wheel origin.
+fn hotkey_to_action(action: HotkeyAction, step: i16, step_large: i16) -> AppAction {
+    use HotkeyAction as H;
+    match action {
+        H::VolumeUp => AppAction::AdjustVolume {
+            delta_percent: step,
+        },
+        H::VolumeDown => AppAction::AdjustVolume {
+            delta_percent: -step,
+        },
+        H::VolumeUpLarge => AppAction::AdjustVolume {
+            delta_percent: step_large,
+        },
+        H::VolumeDownLarge => AppAction::AdjustVolume {
+            delta_percent: -step_large,
+        },
+        H::ToggleMute => AppAction::ToggleMute,
+        H::Reset50 => AppAction::ResetVolume,
+        H::OpenMixer => AppAction::ToggleSurface(SurfaceId::Mixer),
+        H::OpenMenu => AppAction::OpenTrayMenu,
+    }
+}
+
+/// Re-read the audio state, update the audio-truth cache and the shared
+/// confirmed [`crate::ui::AppState`], then push the snapshot into every
+/// renderer (overlay, tray, mixer). `show_overlay` controls whether the
+/// transient volume overlay is re-shown — the external-sync path only shows it
+/// when the config just reloaded, so the native media-key flyout stays
+/// authoritative.
+fn publish_confirmed_state(ctx: &mut AppContext, show_overlay: bool) {
+    let Ok(st) = ctx.audio.get_state() else {
+        return;
+    };
+    ctx.last_state = st;
+
+    ctx.ui_state.volume_percent = st.percent();
+    ctx.ui_state.muted = st.muted;
+    ctx.ui_state.theme = ctx.config.appearance.theme;
+    ctx.ui_state.material = ctx.config.appearance.material;
+    ctx.ui_state.motion = ctx.config.appearance.motion;
+    ctx.ui_state.surfaces.mixer = if ctx.mixer.is_open() {
+        SurfaceVisibility::Visible
+    } else {
+        SurfaceVisibility::Hidden
     };
 
-    match target {
-        Some(v) => {
-            if let Err(e) = ctx.audio.set_volume(v) {
+    log::debug!(
+        "publish: state={}%% muted={} mixer_open={} show_overlay={}",
+        st.percent(),
+        st.muted,
+        ctx.mixer.is_open(),
+        show_overlay
+    );
+
+    if show_overlay {
+        ctx.ui_state.surfaces.overlay = SurfaceVisibility::Visible;
+        ctx.overlay.show(&st, &ctx.config);
+    }
+    ctx.tray.set_volume(&st);
+    if ctx.mixer.is_open() {
+        ctx.mixer.sync(&st);
+    }
+}
+
+/// Apply a command from the tray menu. Tray-origin commands bypass the
+/// blacklist gate by design (the gate only suppresses hotkey/wheel input).
+fn handle_tray_command(ctx: &mut AppContext, cmd: TrayCommand) {
+    handle_action(ctx, tray_command_to_action(cmd));
+}
+
+/// Map a tray menu command to the shared action contract. Pure and testable;
+/// like the hotkey mapping it carries no blacklist gate.
+fn tray_command_to_action(cmd: TrayCommand) -> AppAction {
+    use TrayCommand as C;
+    match cmd {
+        C::ToggleMute => AppAction::ToggleMute,
+        C::Reset50 => AppAction::ResetVolume,
+        C::OpenMixer => AppAction::ToggleSurface(SurfaceId::Mixer),
+        C::Help => AppAction::ShowSurface(SurfaceId::Help),
+        C::EditConfig => AppAction::OpenConfigLocation,
+        C::ReloadConfig => AppAction::ReloadConfig,
+        C::ApplyBlacklist => AppAction::ApplyRecommendedBlacklist,
+        C::Exit => AppAction::Exit,
+    }
+}
+
+/// Central handler for every [`AppAction`] emitted by any surface. Owns all
+/// audio/config/hotkey mutation; renderers only ever emit actions and never
+/// mutate anything themselves.
+fn handle_action(ctx: &mut AppContext, action: AppAction) {
+    use AppAction as A;
+    use SurfaceId as S;
+
+    match action {
+        A::SetVolumePercent { percent } => {
+            let pct = (percent.min(100) as f32) / 100.0;
+            if let Err(e) = ctx.audio.set_volume(pct) {
+                log::warn!("{e}");
+            }
+            publish_confirmed_state(ctx, true);
+        }
+        A::AdjustVolume { delta_percent } => {
+            // Step actions use the cached audio-truth as the base so the limit
+            // beep compares against the same reference as before the mutation.
+            let old = ctx.last_state;
+            let target = crate::core::step_volume(old.volume, delta_percent as f32);
+            log::debug!(
+                "action: adjust {delta_percent}% ({}% -> {:.0}%)",
+                old.percent(),
+                target * 100.0
+            );
+            if let Err(e) = ctx.audio.set_volume(target) {
                 log::warn!("{e}");
             }
             // Limit beep: no change and already at a boundary.
-            if v == old.volume && (old.volume == 0.0 || old.volume == 1.0) {
+            if target == old.volume && (old.volume == 0.0 || old.volume == 1.0) {
                 beep_limit(&ctx.config);
             }
+            publish_confirmed_state(ctx, true);
         }
-        None => {
+        A::ToggleMute => {
             if let Err(e) = ctx.audio.toggle_mute() {
                 log::warn!("{e}");
             }
+            publish_confirmed_state(ctx, true);
         }
-    }
-
-    refresh_ui(ctx);
-}
-
-/// Re-read the audio state and push it into overlay, tray and mixer.
-fn refresh_ui(ctx: &mut AppContext) {
-    if let Ok(st) = ctx.audio.get_state() {
-        log::debug!(
-            "refresh_ui: state={}%% muted={} mixer_open={}",
-            st.percent(),
-            st.muted,
-            ctx.mixer.is_open()
-        );
-        ctx.last_state = st;
-        ctx.overlay.show(&st, &ctx.config);
-        ctx.tray.set_volume(&st);
-        if ctx.mixer.is_open() {
-            ctx.mixer.sync(&st);
-        }
-    }
-}
-
-/// Apply a command from the tray menu.
-fn handle_tray_command(ctx: &mut AppContext, cmd: TrayCommand) {
-    use TrayCommand as C;
-    match cmd {
-        C::ToggleMute => {
-            if let Err(e) = ctx.audio.toggle_mute() {
+        A::SetMute { muted } => {
+            if let Err(e) = ctx.audio.set_mute(muted) {
                 log::warn!("{e}");
             }
-            refresh_ui(ctx);
+            publish_confirmed_state(ctx, true);
         }
-        C::Reset50 => {
+        A::ResetVolume => {
+            let old = ctx.last_state;
             if let Err(e) = ctx.audio.set_volume(0.5) {
                 log::warn!("{e}");
             }
-            refresh_ui(ctx);
+            // VolumePro parity: a reset cannot land on a boundary, so the limit
+            // beep never fires here; the check is kept for symmetry with the
+            // step path.
+            if 0.5 == old.volume && (old.volume == 0.0 || old.volume == 1.0) {
+                beep_limit(&ctx.config);
+            }
+            publish_confirmed_state(ctx, true);
         }
-        C::OpenMixer => {
+        A::ShowSurface(S::Mixer) => {
+            if !ctx.mixer.is_open() {
+                if let Ok(st) = ctx.audio.get_state() {
+                    ctx.mixer.sync(&st);
+                }
+                ctx.mixer.toggle();
+            }
+            publish_confirmed_state(ctx, false);
+        }
+        A::HideSurface(S::Mixer) => {
+            if ctx.mixer.is_open() {
+                ctx.mixer.toggle();
+            }
+            publish_confirmed_state(ctx, false);
+        }
+        A::ToggleSurface(S::Mixer) => {
+            // Sync before showing so the mixer reflects current audio state
+            // when it appears (mirrors the original hotkey/tray behavior).
+            if !ctx.mixer.is_open() {
+                if let Ok(st) = ctx.audio.get_state() {
+                    ctx.mixer.sync(&st);
+                }
+            }
             ctx.mixer.toggle();
-            if let Ok(st) = ctx.audio.get_state() {
-                ctx.mixer.sync(&st);
+            publish_confirmed_state(ctx, false);
+        }
+        A::ShowSurface(S::Help) => {
+            ctx.help.show(&ctx.config);
+            ctx.ui_state.surfaces.help = SurfaceVisibility::Visible;
+        }
+        A::HideSurface(S::Help) => {
+            ctx.help.hide();
+            ctx.ui_state.surfaces.help = SurfaceVisibility::Hidden;
+        }
+        A::ToggleSurface(S::Help) => {
+            if ctx.ui_state.surfaces.help.is_visible() {
+                ctx.help.hide();
+                ctx.ui_state.surfaces.help = SurfaceVisibility::Hidden;
+            } else {
+                ctx.help.show(&ctx.config);
+                ctx.ui_state.surfaces.help = SurfaceVisibility::Visible;
             }
         }
-        C::Help => {
-            ctx.help.show(&ctx.config);
+        A::OpenTrayMenu | A::ToggleSurface(S::Tray) => {
+            // Background processes cannot SetForegroundWindow directly
+            // (Windows foreground lock); simulating Alt unlocks it.
+            unsafe {
+                keybd_event(VK_MENU as u8, 0, KEYEVENTF_EXTENDEDKEY, 0);
+                keybd_event(VK_MENU as u8, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+            }
+            ctx.tray.show_menu();
+            ctx.ui_state.surfaces.tray = SurfaceVisibility::Visible;
         }
-        C::EditConfig => {
+        A::OpenConfigLocation => {
             crate::config::open_in_editor();
             ctx.overlay
                 .show_text("Editing config — changes reload automatically", &ctx.config);
         }
-        C::ReloadConfig => {
+        A::ReloadConfig => {
             ctx.last_config_mtime = None; // force
             reload_config_if_changed(ctx);
             ctx.overlay.show_text("Config reloaded", &ctx.config);
         }
-        C::ApplyBlacklist => {
+        A::ApplyRecommendedBlacklist => {
             let recommended = crate::config::recommended_blacklist(ctx.config.modifier);
             let added = crate::config::apply_recommended_blacklist(&mut ctx.config);
             ctx.last_config_mtime = None; // force reload from disk
@@ -497,8 +612,154 @@ fn handle_tray_command(ctx: &mut AppContext, cmd: TrayCommand) {
             log::info!("{msg}");
             ctx.overlay.show_text(&msg, &ctx.config);
         }
-        C::Exit => unsafe {
+        A::Exit => unsafe {
             PostQuitMessage(0);
         },
+        // Settings draft/appearance intents are for Tasks 9/10; not wired yet.
+        A::ApplyConfig
+        | A::CancelConfig
+        | A::ResetConfig
+        | A::SetTheme(_)
+        | A::SetMaterial(_)
+        | A::SetMotion(_)
+        | A::AddBlacklistEntry(_)
+        | A::RemoveBlacklistEntry(_)
+        | A::ClearBlacklist => {
+            log::debug!("action stubbed for Settings (Tasks 9/10): {action:?}");
+        }
+        // Surface toggles without a native surface yet (Settings/Overlay/Tray
+        // show-hide from future renderers).
+        A::ShowSurface(S::Settings)
+        | A::HideSurface(S::Settings)
+        | A::ToggleSurface(S::Settings)
+        | A::ShowSurface(S::Overlay)
+        | A::HideSurface(S::Overlay)
+        | A::ToggleSurface(S::Overlay)
+        | A::ShowSurface(S::Tray)
+        | A::HideSurface(S::Tray) => {
+            log::debug!("action stubbed (no native surface yet): {action:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const STEP: i16 = 2;
+    const STEP_LARGE: i16 = 10;
+
+    fn adjust(delta: i16) -> AppAction {
+        AppAction::AdjustVolume {
+            delta_percent: delta,
+        }
+    }
+
+    #[test]
+    fn every_hotkey_maps_to_a_sensible_shared_action() {
+        use HotkeyAction as H;
+        assert_eq!(hotkey_to_action(H::VolumeUp, STEP, STEP_LARGE), adjust(2));
+        assert_eq!(
+            hotkey_to_action(H::VolumeDown, STEP, STEP_LARGE),
+            adjust(-2)
+        );
+        assert_eq!(
+            hotkey_to_action(H::VolumeUpLarge, STEP, STEP_LARGE),
+            adjust(10)
+        );
+        assert_eq!(
+            hotkey_to_action(H::VolumeDownLarge, STEP, STEP_LARGE),
+            adjust(-10)
+        );
+        assert_eq!(
+            hotkey_to_action(H::ToggleMute, STEP, STEP_LARGE),
+            AppAction::ToggleMute
+        );
+        assert_eq!(
+            hotkey_to_action(H::Reset50, STEP, STEP_LARGE),
+            AppAction::ResetVolume
+        );
+        assert_eq!(
+            hotkey_to_action(H::OpenMixer, STEP, STEP_LARGE),
+            AppAction::ToggleSurface(SurfaceId::Mixer)
+        );
+        assert_eq!(
+            hotkey_to_action(H::OpenMenu, STEP, STEP_LARGE),
+            AppAction::OpenTrayMenu
+        );
+    }
+
+    #[test]
+    fn hotkey_mapping_uses_configured_step_sizes() {
+        use HotkeyAction as H;
+        // Large steps come from the config, not hardcoded.
+        assert_eq!(hotkey_to_action(H::VolumeUpLarge, STEP, 25), adjust(25));
+        assert_eq!(hotkey_to_action(H::VolumeDownLarge, STEP, 25), adjust(-25));
+    }
+
+    #[test]
+    fn hotkey_mapping_never_embeds_blacklist_gating() {
+        use HotkeyAction as H;
+        // The mapping has no blacklist input and always yields the plain
+        // volume action; the gate is a host concern in `apply_hotkey` that only
+        // applies to hotkey/wheel origin.
+        assert_eq!(hotkey_to_action(H::VolumeUp, STEP, STEP_LARGE), adjust(2));
+        assert_eq!(
+            hotkey_to_action(H::ToggleMute, STEP, STEP_LARGE),
+            AppAction::ToggleMute
+        );
+        assert_eq!(
+            hotkey_to_action(H::OpenMenu, STEP, STEP_LARGE),
+            AppAction::OpenTrayMenu
+        );
+    }
+
+    #[test]
+    fn every_tray_command_maps_to_intended_action() {
+        use TrayCommand as C;
+        assert_eq!(tray_command_to_action(C::ToggleMute), AppAction::ToggleMute);
+        assert_eq!(tray_command_to_action(C::Reset50), AppAction::ResetVolume);
+        assert_eq!(
+            tray_command_to_action(C::OpenMixer),
+            AppAction::ToggleSurface(SurfaceId::Mixer)
+        );
+        assert_eq!(
+            tray_command_to_action(C::Help),
+            AppAction::ShowSurface(SurfaceId::Help)
+        );
+        assert_eq!(
+            tray_command_to_action(C::EditConfig),
+            AppAction::OpenConfigLocation
+        );
+        assert_eq!(
+            tray_command_to_action(C::ReloadConfig),
+            AppAction::ReloadConfig
+        );
+        assert_eq!(
+            tray_command_to_action(C::ApplyBlacklist),
+            AppAction::ApplyRecommendedBlacklist
+        );
+        assert_eq!(tray_command_to_action(C::Exit), AppAction::Exit);
+    }
+
+    #[test]
+    fn tray_commands_bypass_the_blacklist_gate() {
+        use TrayCommand as C;
+        // Every tray command maps to a plain action the central handler
+        // applies unconditionally; none route through the hotkey gate.
+        for cmd in [
+            C::ToggleMute,
+            C::Reset50,
+            C::OpenMixer,
+            C::Help,
+            C::EditConfig,
+            C::ReloadConfig,
+            C::ApplyBlacklist,
+            C::Exit,
+        ] {
+            let action = tray_command_to_action(cmd);
+            assert_ne!(action, AppAction::OpenTrayMenu);
+            assert_ne!(action, AppAction::SetVolumePercent { percent: 0 });
+        }
     }
 }

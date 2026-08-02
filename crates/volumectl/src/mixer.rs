@@ -9,8 +9,10 @@
 //!   - Mute / Unmute and Reset to 50% buttons
 //!
 //! User interaction (slider drag, buttons) posts [`WM_APP_MIXER_*`] messages
-//! to the host window, which owns the audio backend — so the app's single
-//! message loop applies volume changes and syncs the overlay/tray.
+//! to the host window, which owns the audio backend. The host maps each
+//! message to a shared [`crate::ui::AppAction`] (`SetVolumePercent` /
+//! `ToggleMute` / `ResetVolume`) and dispatches it through its central action
+//! handler, which mutates audio and publishes confirmed state.
 
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
