@@ -93,7 +93,7 @@ impl AppState {
     /// Construct confirmed state from an already-clamped volume percentage.
     pub fn from_audio(volume_percent: u8, muted: bool, device: Option<String>) -> Self {
         Self {
-            volume_percent,
+            volume_percent: volume_percent.min(100),
             muted,
             device,
             ..Self::default()
@@ -222,6 +222,13 @@ mod tests {
         assert_eq!(state.device.as_deref(), Some("Speakers"));
         assert_eq!(state.theme, ThemeMode::System);
         assert!(!state.is_visible(SurfaceId::Overlay));
+    }
+
+    #[test]
+    fn from_audio_clamps_percentage_above_maximum() {
+        let state = AppState::from_audio(250, false, None);
+
+        assert_eq!(state.volume_percent, 100);
     }
 
     #[test]
