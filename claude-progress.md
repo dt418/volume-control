@@ -5,9 +5,9 @@
 - Repository root: D:\Projects\volume-control
 - Standard startup path: `scripts/win-build.bat run` or `cargo run` (workspace default member = crates/volumectl) — MUST run through vcvars (MSVC env)
 - Standard verification path: `scripts/win-build.bat build` then `scripts/win-build.bat test`
-- Current highest-priority unfinished feature: NONE — all vol-001..vol-008 PASSING on Windows
+- Current highest-priority unfinished feature: vol-009 (mixer/overlay placement fix) — verified on Windows, feature-list update pending
 - Current blocker: none (macOS/Linux backends pending native hardware; crate compiles via CLI fallback)
-- PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio), vol-003 (hotkeys), vol-004 (overlay), vol-005 (tray), vol-006 (config reload+sync), vol-007 (mac/Linux scaffolds+docs), vol-008 (release E2E)
+- PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio), vol-003 (hotkeys), vol-004 (overlay), vol-005 (tray), vol-006 (config reload+sync), vol-007 (mac/Linux scaffolds+docs), vol-008 (release E2E), vol-009 (mixer/overlay placement fix)
 
 ## Session Log
 

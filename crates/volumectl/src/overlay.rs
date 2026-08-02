@@ -30,10 +30,10 @@ use crate::audio::VolumeState;
 use crate::config::{ColorThresholds, Config};
 use crate::core::volume_color_rgb;
 
-const WIDTH: i32 = 320;
-const HEIGHT: i32 = 64;
-const MARGIN_X: i32 = 20;
-const MARGIN_Y: i32 = 40;
+pub(crate) const OVERLAY_WIDTH: i32 = 320;
+pub(crate) const OVERLAY_HEIGHT: i32 = 64;
+pub(crate) const OVERLAY_MARGIN_X: i32 = 20;
+pub(crate) const OVERLAY_MARGIN_Y: i32 = 40;
 const TIMER_ID: usize = 1;
 
 /// GDI COLORREF is 0x00BBGGRR.
@@ -46,6 +46,8 @@ struct OverlayData {
     percent: u8,
     muted: bool,
     thresholds: ColorThresholds,
+    /// When set, paint this toast text instead of the volume bar.
+    toast: Option<String>,
 }
 
 pub struct Overlay {
@@ -71,6 +73,7 @@ impl Overlay {
                 percent: 0,
                 muted: false,
                 thresholds: Config::default().color_thresholds,
+                toast: None,
             }));
 
             let hwnd = CreateWindowExW(
@@ -81,8 +84,8 @@ impl Overlay {
                 WS_POPUP,
                 0,
                 0,
-                WIDTH,
-                HEIGHT,
+                OVERLAY_WIDTH,
+                OVERLAY_HEIGHT,
                 0, // hwndParent
                 0, // hmenu
                 hinst,
@@ -108,6 +111,7 @@ impl Overlay {
             d.percent = state.percent();
             d.muted = state.muted;
             d.thresholds = config.color_thresholds.clone();
+            d.toast = None;
 
             // Bottom-right of the primary screen.
             let sw = GetSystemMetrics(SM_CXSCREEN);
@@ -115,23 +119,48 @@ impl Overlay {
             let ok = SetWindowPos(
                 self.hwnd,
                 HWND_TOPMOST,
-                sw - WIDTH - MARGIN_X,
-                sh - HEIGHT - MARGIN_Y,
-                WIDTH,
-                HEIGHT,
+                sw - OVERLAY_WIDTH - OVERLAY_MARGIN_X,
+                sh - OVERLAY_HEIGHT - OVERLAY_MARGIN_Y,
+                OVERLAY_WIDTH,
+                OVERLAY_HEIGHT,
                 SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
             log::debug!(
                 "overlay show hwnd={:x} pos=({},{}) ok={}",
                 self.hwnd,
-                sw - WIDTH - MARGIN_X,
-                sh - HEIGHT - MARGIN_Y,
+                sw - OVERLAY_WIDTH - OVERLAY_MARGIN_X,
+                sh - OVERLAY_HEIGHT - OVERLAY_MARGIN_Y,
                 ok
             );
 
             InvalidateRect(self.hwnd, std::ptr::null(), 0);
 
             // Restart the auto-hide timer.
+            KillTimer(self.hwnd, TIMER_ID);
+            let ms = config.overlay_duration_ms.min(10_000) as u32;
+            SetTimer(self.hwnd, TIMER_ID, ms, None);
+        }
+    }
+
+    /// Show a text toast (e.g. "Config reloaded", "No blacklist needed").
+    pub fn show_text(&mut self, text: &str, config: &Config) {
+        unsafe {
+            let d = &mut *self.data;
+            d.toast = Some(text.to_string());
+
+            let sw = GetSystemMetrics(SM_CXSCREEN);
+            let sh = GetSystemMetrics(SM_CYSCREEN);
+            SetWindowPos(
+                self.hwnd,
+                HWND_TOPMOST,
+                sw - OVERLAY_WIDTH - OVERLAY_MARGIN_X,
+                sh - OVERLAY_HEIGHT - OVERLAY_MARGIN_Y,
+                OVERLAY_WIDTH,
+                OVERLAY_HEIGHT,
+                SWP_NOACTIVATE | SWP_SHOWWINDOW,
+            );
+            InvalidateRect(self.hwnd, std::ptr::null(), 0);
+
             KillTimer(self.hwnd, TIMER_ID);
             let ms = config.overlay_duration_ms.min(10_000) as u32;
             SetTimer(self.hwnd, TIMER_ID, ms, None);
@@ -175,7 +204,7 @@ unsafe extern "system" fn overlay_wndproc(
             let mut ps: PAINTSTRUCT = std::mem::zeroed();
             let hdc = BeginPaint(hwnd, &mut ps);
             let data = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut OverlayData);
-            paint(hdc, data, WIDTH, HEIGHT);
+            paint(hdc, data, OVERLAY_WIDTH, OVERLAY_HEIGHT);
             EndPaint(hwnd, &ps);
             0
         }
@@ -184,6 +213,7 @@ unsafe extern "system" fn overlay_wndproc(
 }
 
 /// Draw the overlay contents: dark background, bar track, coloured fill, %.
+/// When `data.toast` is set, only the toast text is drawn.
 unsafe fn paint(hdc: isize, data: &OverlayData, w: i32, h: i32) {
     // Background.
     let bg = CreateSolidBrush(rgb(0x14, 0x14, 0x18));
@@ -195,6 +225,16 @@ unsafe fn paint(hdc: isize, data: &OverlayData, w: i32, h: i32) {
     };
     FillRect(hdc, &bg_rect, bg);
     DeleteObject(bg);
+
+    SetBkMode(hdc, TRANSPARENT as i32);
+
+    // Toast mode: just the text, centered-ish.
+    if let Some(text) = &data.toast {
+        let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        SetTextColor(hdc, rgb(0xDD, 0xDD, 0xDD));
+        TextOutW(hdc, 24, 24, wide.as_ptr(), (wide.len() - 1) as i32);
+        return;
+    }
 
     // Bar track.
     let bar_left = 16;
@@ -233,7 +273,6 @@ unsafe fn paint(hdc: isize, data: &OverlayData, w: i32, h: i32) {
     } else {
         format!("{}%", data.percent).encode_utf16().chain(std::iter::once(0)).collect()
     };
-    SetBkMode(hdc, TRANSPARENT as i32);
     SetTextColor(
         hdc,
         if data.muted { rgb(0x88, 0x88, 0x88) } else { rgb(0xDD, 0xDD, 0xDD) },

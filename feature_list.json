@@ -14,6 +14,27 @@
   },
   "features": [
     {
+      "id": "vol-009",
+      "priority": 9,
+      "area": "overlay-mixer",
+      "title": "Separate volume overlay and mixer placement",
+      "user_visible_behavior": "The transient volume overlay and the Volume Mixer card appear together without overlapping.",
+      "status": "passing",
+      "verification": [
+        "Run the app and open the mixer.",
+        "Trigger a volume hotkey while the mixer remains open.",
+        "Measure both window rectangles and confirm a visible gap between them.",
+        "Run the Windows build and test suite."
+      ],
+      "evidence": [
+        "Mixer rectangle measured as [2180,1142,2540,1320] on a 2560x1440 display.",
+        "Overlay rectangle measured as [2220,1336,2540,1400]; vertical gap is 16px and rectangles do not intersect.",
+        "The mixer is positioned above the overlay using shared placement constants.",
+        "scripts/win-build.bat build succeeded; scripts/win-build.bat test passed (3/3 unit tests)."
+      ],
+      "notes": "Overlay and mixer now share overlay geometry constants; mixer placement reserves overlay height plus a 16px gap."
+    },
+    {
       "id": "vol-001",
       "priority": 1,
       "area": "workspace",
