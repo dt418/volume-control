@@ -5,9 +5,9 @@
 - Repository root: D:\Projects\volume-control
 - Standard startup path: `scripts/win-build.bat run` or `cargo run` (workspace default member = crates/volumectl) — MUST run through vcvars (MSVC env)
 - Standard verification path: `scripts/win-build.bat build` then `scripts/win-build.bat test`
-- Current highest-priority unfinished feature: vol-004 (volume overlay UI)
+- Current highest-priority unfinished feature: vol-005 (system tray)
 - Current blocker: none
-- PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio backend), vol-003 (hotkeys)
+- PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio backend), vol-003 (hotkeys), vol-004 (overlay)
 
 ## Session Log
 
@@ -31,7 +31,8 @@
 - Known risk or unresolved issue:
   - MSVC toolchain setup: this machine had NO C linker — installed MSVC Build Tools 17.14 + Windows SDK 10.0.26100. Builds MUST run through scripts/win-build.bat (sets PATH/LIB/INCLUDE via vcvars64.bat).
   - Ctrl+Alt+M/R/V conflict with the running VolumePro AHK script (same default modifier) — handled gracefully (logged + skipped); user can change modifier in config.json.
-  - overlay.rs / tray.rs not yet written — next milestone (vol-004, vol-005).
+  - overlay.rs COMPLETE + verified (vol-004 passing): GDI-painted Win32 popup, bottom-right, threshold colors, click-through (WS_EX_LAYERED|TRANSPARENT), auto-hide timer. Verified via EnumWindows visibility transitions + screenshot.
+  - tray.rs (vol-005) not yet written — next milestone (tray-icon + muda menu).
   - Config live reload (vol-006) not yet implemented — watcher pending.
   - superpowers plugin SessionStart hook + rtk PreToolUse hook activate on a fresh Claude Code session.
-- Next best step: implement the volume overlay (vol-004) — native Win32 popup, bottom-right, threshold colors, auto-hide; then tray (vol-005).
+- Next best step: implement the system tray (vol-005) — tray-icon + muda context menu (Volume %, Mute, Reset 50%, Exit), poll menu events in the 150ms timer.

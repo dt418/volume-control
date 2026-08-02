@@ -76,14 +76,19 @@
       "area": "overlay",
       "title": "Volume overlay UI",
       "user_visible_behavior": "A bottom-right overlay shows volume % with threshold colors and auto-hides.",
-      "status": "not_started",
+      "status": "passing",
       "verification": [
         "Run the app and trigger a hotkey volume change.",
         "Verify overlay appears bottom-right with correct % and color.",
         "Verify it auto-hides after the configured duration."
       ],
-      "evidence": [],
-      "notes": ""
+      "evidence": [
+        "EnumWindows: VolCtlOverlay window visible=True at +0.5s after Ctrl+Alt+Up/Down, visible=False after duration (auto-hide)",
+        "Screenshot of bottom-right corner shows dark popup, threshold-colored bar (orange at ~100%), % text, positioned above taskbar",
+        "SetWindowPos pos=(2220,1336) on 2560x1440 screen = bottom-right margin 20/40px",
+        "3 unit tests pass (step_volume clamping, color thresholds, muted-grey)"
+      ],
+      "notes": "Implementations in crates/volumectl/src/overlay.rs (GDI paint, WS_EX_LAYERED|TRANSPARENT click-through, one-shot auto-hide timer)."
     },
     {
       "id": "vol-005",

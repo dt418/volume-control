@@ -26,6 +26,7 @@ use crate::audio_windows::WindowsAudio;
 use crate::config::Config;
 use crate::hotkeys::HotkeyAction;
 use crate::hotkeys_win32::{Win32Hotkeys, hotkey_action};
+use crate::overlay::Overlay;
 
 const ID_TIMER_POLL: usize = 1;
 const POLL_MS: u32 = 150;
@@ -36,11 +37,13 @@ struct AppContext {
     _hotkeys: Win32Hotkeys,
     config: Config,
     last_state: VolumeState,
+    overlay: Overlay,
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = crate::config::load();
     let audio = WindowsAudio::new()?;
+    let overlay = Overlay::new()?;
     let last_state = audio
         .get_state()
         .unwrap_or(VolumeState {
@@ -89,6 +92,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         _hotkeys,
         config,
         last_state,
+        overlay,
     }));
     unsafe {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, ctx as isize);
@@ -214,8 +218,9 @@ fn apply(ctx: &mut AppContext, action: HotkeyAction) {
             return;
         }
     }
-    // Re-read and store the new state.
+    // Re-read the new state and show the overlay for feedback.
     if let Ok(st) = ctx.audio.get_state() {
         ctx.last_state = st;
+        ctx.overlay.show(&st, &ctx.config);
     }
 }

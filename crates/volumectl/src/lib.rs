@@ -16,6 +16,8 @@ pub mod audio_windows;
 pub mod hotkeys_win32;
 #[cfg(target_os = "windows")]
 pub mod app;
+#[cfg(target_os = "windows")]
+pub mod overlay;
 
 /// CLI fallback for non-Windows platforms (also handy for testing).
 #[cfg(not(target_os = "windows"))]
