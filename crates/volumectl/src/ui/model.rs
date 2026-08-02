@@ -43,6 +43,17 @@ pub enum MotionMode {
     Disabled,
 }
 
+/// Preferred accent palette for surfaces and volume indicators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum AccentMode {
+    #[default]
+    System,
+    Blue,
+    Green,
+    Purple,
+    Orange,
+}
+
 /// Visibility state for a surface, including transient overlay presentation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SurfaceVisibility {

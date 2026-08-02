@@ -8,8 +8,89 @@
 //! The app silently watches the file (mtime) and reloads it while running,
 //! so tweaking config in a text editor takes effect without restart.
 
+use crate::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{fmt, path::PathBuf};
+
+const MIN_VOLUME_STEP: u32 = 1;
+const MAX_VOLUME_STEP: u32 = 50;
+const MIN_OVERLAY_DURATION_MS: u64 = 200;
+const MAX_OVERLAY_DURATION_MS: u64 = 10_000;
+
+/// A field-specific configuration validation error.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigValidationError {
+    pub field: &'static str,
+    pub message: String,
+}
+
+impl fmt::Display for ConfigValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.field, self.message)
+    }
+}
+
+impl std::error::Error for ConfigValidationError {}
+
+/// Errors returned when validated persistence cannot complete.
+#[derive(Debug)]
+pub enum ConfigError {
+    Validation(ConfigValidationError),
+    Io(std::io::Error),
+    Serialization(serde_json::Error),
+}
+
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Validation(error) => error.fmt(f),
+            Self::Io(error) => write!(f, "config I/O failed: {error}"),
+            Self::Serialization(error) => write!(f, "config serialization failed: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+impl From<std::io::Error> for ConfigError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+impl From<serde_json::Error> for ConfigError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Serialization(error)
+    }
+}
+
+fn validation(field: &'static str, message: impl Into<String>) -> ConfigValidationError {
+    ConfigValidationError {
+        field,
+        message: message.into(),
+    }
+}
+
+/// Persisted preferences shared by all UI renderers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AppearanceConfig {
+    pub theme: ThemeMode,
+    pub material: MaterialMode,
+    pub motion: MotionMode,
+    pub accent: AccentMode,
+}
+
+impl Default for AppearanceConfig {
+    fn default() -> Self {
+        Self {
+            theme: ThemeMode::System,
+            material: MaterialMode::Auto,
+            motion: MotionMode::Full,
+            accent: AccentMode::System,
+        }
+    }
+}
 
 /// Modifier combos for the custom hotkeys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -42,6 +123,9 @@ pub struct Config {
     pub color_thresholds: ColorThresholds,
     /// Audible feedback for blocked hotkeys and volume limits.
     pub beep: BeepConfig,
+    /// Appearance preferences shared by all UI surfaces.
+    #[serde(default)]
+    pub appearance: AppearanceConfig,
 }
 
 /// Beep feedback settings (mirrors VolumePro's `[Beep]` section).
@@ -95,6 +179,7 @@ impl Default for Config {
                 orange_up_to: 100,
             },
             beep: BeepConfig::default(),
+            appearance: AppearanceConfig::default(),
         }
     }
 }
@@ -188,7 +273,7 @@ pub fn load() -> Config {
     match std::fs::read_to_string(&path) {
         Ok(raw) => match serde_json::from_str::<Config>(&raw) {
             Ok(orig) => {
-                let cfg = validate(orig.clone());
+                let cfg = normalize(orig.clone());
                 if cfg != orig {
                     let _ = save(&cfg);
                 }
@@ -196,24 +281,87 @@ pub fn load() -> Config {
             }
             Err(e) => {
                 log::warn!("config parse error ({e}); using defaults");
-                let cfg = validate(Config::default());
+                let cfg = normalize(Config::default());
                 let _ = save(&cfg);
                 cfg
             }
         },
         Err(_) => {
             log::info!("no config yet — writing defaults to {}", path.display());
-            let cfg = validate(Config::default());
+            let cfg = normalize(Config::default());
             let _ = save(&cfg);
             cfg
         }
     }
 }
 
-fn validate(mut cfg: Config) -> Config {
-    cfg.volume_step = cfg.volume_step.clamp(1, 50);
-    cfg.volume_step_large = cfg.volume_step_large.clamp(cfg.volume_step + 1, 50);
-    cfg.overlay_duration_ms = cfg.overlay_duration_ms.clamp(200, 10_000);
+/// Validate raw configuration values without changing them.
+///
+/// This is intentionally strict for callers such as Settings Apply. The live
+/// loader uses [`normalize`] instead so an older or hand-edited file still has
+/// the historical fallback behavior.
+pub fn validate(cfg: &Config) -> Result<(), ConfigValidationError> {
+    if !(MIN_VOLUME_STEP..=MAX_VOLUME_STEP).contains(&cfg.volume_step) {
+        return Err(validation(
+            "volume_step",
+            format!("must be between {MIN_VOLUME_STEP} and {MAX_VOLUME_STEP}"),
+        ));
+    }
+    if !(MIN_VOLUME_STEP..=MAX_VOLUME_STEP).contains(&cfg.volume_step_large) {
+        return Err(validation(
+            "volume_step_large",
+            format!("must be between {MIN_VOLUME_STEP} and {MAX_VOLUME_STEP}"),
+        ));
+    }
+    if cfg.volume_step_large <= cfg.volume_step {
+        return Err(validation(
+            "volume_step_large",
+            "must be greater than volume_step",
+        ));
+    }
+    if !(MIN_OVERLAY_DURATION_MS..=MAX_OVERLAY_DURATION_MS).contains(&cfg.overlay_duration_ms) {
+        return Err(validation(
+            "overlay_duration_ms",
+            format!("must be between {MIN_OVERLAY_DURATION_MS} and {MAX_OVERLAY_DURATION_MS}"),
+        ));
+    }
+    if !(37..=32_767).contains(&cfg.beep.blocked_freq) {
+        return Err(validation(
+            "beep.blocked_freq",
+            "must be between 37 and 32767",
+        ));
+    }
+    if !(10..=2_000).contains(&cfg.beep.blocked_duration_ms) {
+        return Err(validation(
+            "beep.blocked_duration_ms",
+            "must be between 10 and 2000",
+        ));
+    }
+    if !(37..=32_767).contains(&cfg.beep.limit_freq) {
+        return Err(validation(
+            "beep.limit_freq",
+            "must be between 37 and 32767",
+        ));
+    }
+    if !(10..=2_000).contains(&cfg.beep.limit_duration_ms) {
+        return Err(validation(
+            "beep.limit_duration_ms",
+            "must be between 10 and 2000",
+        ));
+    }
+    Ok(())
+}
+
+/// Return a normalized copy while preserving the existing config bounds.
+pub fn normalize(mut cfg: Config) -> Config {
+    cfg.volume_step = cfg.volume_step.clamp(MIN_VOLUME_STEP, MAX_VOLUME_STEP);
+    // Saturating arithmetic avoids the old `min > max` panic when a hand-edited
+    // file sets the small step to its maximum.
+    let minimum_large = cfg.volume_step.saturating_add(1).min(MAX_VOLUME_STEP);
+    cfg.volume_step_large = cfg.volume_step_large.clamp(minimum_large, MAX_VOLUME_STEP);
+    cfg.overlay_duration_ms = cfg
+        .overlay_duration_ms
+        .clamp(MIN_OVERLAY_DURATION_MS, MAX_OVERLAY_DURATION_MS);
     // Blacklist entries are lowercased + trimmed at load so the hotkey gate
     // can do an exact lowercase match against the foreground process name.
     cfg.blacklist = cfg
@@ -229,19 +377,39 @@ fn validate(mut cfg: Config) -> Config {
     cfg
 }
 
-/// Check whether the given lowercase process name is blacklisted.
-pub fn is_blacklisted(blacklist: &[String], process_lower: &str) -> bool {
-    blacklist.iter().any(|b| b == process_lower)
+/// Validate, normalize, persist, and return the saved configuration.
+pub fn save_validated(cfg: &Config) -> Result<Config, ConfigError> {
+    validate(cfg).map_err(ConfigError::Validation)?;
+    let normalized = normalize(cfg.clone());
+    save_at_path(&normalized, &config_path())?;
+    Ok(normalized)
 }
 
-/// Persist the config; creates the parent dir if absent.
-pub fn save(cfg: &Config) -> std::io::Result<()> {
-    let path = config_path();
+fn save_at_path(cfg: &Config, path: &std::path::Path) -> Result<(), ConfigError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
     let text = serde_json::to_string_pretty(cfg)?;
-    std::fs::write(&path, text)
+    std::fs::write(path, text)?;
+    Ok(())
+}
+
+/// Backwards-compatible persistence entry point.
+pub fn save(cfg: &Config) -> std::io::Result<()> {
+    save_at_path(cfg, &config_path()).map_err(|error| match error {
+        ConfigError::Io(error) => error,
+        ConfigError::Serialization(error) => {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, error)
+        }
+        ConfigError::Validation(error) => {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, error)
+        }
+    })
+}
+
+/// Check whether the given lowercase process name is blacklisted.
+pub fn is_blacklisted(blacklist: &[String], process_lower: &str) -> bool {
+    blacklist.iter().any(|b| b == process_lower)
 }
 
 /// Open the config in the user's text editor.
@@ -258,4 +426,90 @@ pub fn open_in_editor() {
 #[allow(dead_code)]
 pub fn open_in_editor() {
     // No-op stub for non-Windows until the GUI frontend lands.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
+
+    #[test]
+    fn old_json_without_appearance_uses_appearance_defaults() {
+        let cfg: Config = serde_json::from_str(
+            r#"{
+                "volume_step": 2,
+                "volume_step_large": 10,
+                "overlay_duration_ms": 1800,
+                "modifier": "CtrlAlt",
+                "blacklist": [],
+                "color_thresholds": {
+                    "green_up_to": 40,
+                    "blue_up_to": 75,
+                    "orange_up_to": 100
+                },
+                "beep": {
+                    "enabled": true,
+                    "blocked_freq": 400,
+                    "blocked_duration_ms": 80,
+                    "limit_freq": 600,
+                    "limit_duration_ms": 60
+                }
+            }"#,
+        )
+        .expect("legacy config remains readable");
+
+        assert_eq!(cfg.appearance, AppearanceConfig::default());
+    }
+
+    #[test]
+    fn appearance_defaults_are_system_auto_full_system() {
+        let appearance = AppearanceConfig::default();
+
+        assert_eq!(appearance.theme, ThemeMode::System);
+        assert_eq!(appearance.material, MaterialMode::Auto);
+        assert_eq!(appearance.motion, MotionMode::Full);
+        assert_eq!(appearance.accent, AccentMode::System);
+    }
+
+    #[test]
+    fn strict_validation_reports_invalid_step_relationship_by_field() {
+        let mut cfg = Config::default();
+        cfg.volume_step = 20;
+        cfg.volume_step_large = 10;
+
+        let error = validate(&cfg).expect_err("large step must be greater");
+
+        assert_eq!(error.field, "volume_step_large");
+        assert!(error.to_string().contains("volume_step_large"));
+    }
+
+    #[test]
+    fn normalize_preserves_bounds_and_repairs_step_relationship() {
+        let mut cfg = Config::default();
+        cfg.volume_step = 0;
+        cfg.volume_step_large = 0;
+        cfg.overlay_duration_ms = u64::MAX;
+        cfg.beep.blocked_freq = 0;
+        cfg.beep.blocked_duration_ms = 0;
+
+        let normalized = normalize(cfg);
+
+        assert_eq!(normalized.volume_step, 1);
+        assert_eq!(normalized.volume_step_large, 2);
+        assert_eq!(normalized.overlay_duration_ms, 10_000);
+        assert_eq!(normalized.beep.blocked_freq, 37);
+        assert_eq!(normalized.beep.blocked_duration_ms, 10);
+        validate(&normalized).expect("normalized config is valid");
+    }
+
+    #[test]
+    fn save_validated_rejects_invalid_config_before_writing() {
+        let mut cfg = Config::default();
+        cfg.volume_step = 30;
+        cfg.volume_step_large = 29;
+
+        let error = save_validated(&cfg).expect_err("invalid relationship must not save");
+
+        assert!(matches!(error, ConfigError::Validation(_)));
+    }
 }

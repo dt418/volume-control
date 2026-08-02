@@ -5,6 +5,6 @@
 mod model;
 
 pub use model::{
-    AppAction, AppState, MaterialMode, MotionMode, SurfaceId, SurfaceVisibility,
+    AccentMode, AppAction, AppState, MaterialMode, MotionMode, SurfaceId, SurfaceVisibility,
     SurfaceVisibilityState, ThemeMode, UiStatus,
 };
