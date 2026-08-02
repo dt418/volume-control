@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-03T00:40",
+  "last_updated": "2026-08-03T01:25",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -187,6 +187,27 @@
         "Unit tests: 3/3 pass; debug build 0 warnings"
       ],
       "notes": "All vol-001..vol-008 features passing on Windows with recorded evidence."
+    },
+    {
+      "id": "vol-010",
+      "priority": 10,
+      "area": "mixer-ui",
+      "title": "Mixer close affordance and system theme",
+      "user_visible_behavior": "The mixer has a visible close control and follows Windows light/dark app theme preferences.",
+      "status": "passing",
+      "verification": [
+        "Build the Windows target.",
+        "Run the Windows unit test suite.",
+        "Confirm the close button routes to the existing hide path and theme state is read from Windows preferences."
+      ],
+      "evidence": [
+        "Mixer creates a top-right `×` button (ID_BTN_CLOSE) and routes it through WM_CLOSE, which hides the window and clears open state.",
+        "Mixer reads HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\\AppsUseLightTheme; unavailable values fall back to light mode.",
+        "Theme-aware DWM dark mode, background/static colors, and DarkMode_Explorer common controls are applied.",
+        "scripts/win-build.bat build succeeded; scripts/win-build.bat test passed (3/3 unit tests).",
+        "Interactive screenshot/UIAutomation verification of close-click and both theme variants remains unverified."
+      ],
+      "notes": "Native Rust/Win32 implementation; no WinUI 3 or additional UI runtime introduced."
     }
   ]
 }

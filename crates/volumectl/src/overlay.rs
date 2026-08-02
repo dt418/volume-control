@@ -12,17 +12,17 @@
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
     Graphics::Gdi::{
-        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, InvalidateRect,
-        PAINTSTRUCT, SetBkMode, SetTextColor, TextOutW, TRANSPARENT,
+        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, InvalidateRect, SetBkMode,
+        SetTextColor, TextOutW, PAINTSTRUCT, TRANSPARENT,
     },
     System::LibraryLoader::GetModuleHandleW,
     UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, GetSystemMetrics, GetWindowLongPtrW,
         KillTimer, RegisterClassW, SetLayeredWindowAttributes, SetTimer, SetWindowLongPtrW,
-        SetWindowPos, ShowWindow, GWLP_USERDATA, HWND_TOPMOST, LWA_ALPHA, SM_CXSCREEN, SM_CYSCREEN,
-        SW_HIDE, SWP_NOACTIVATE, SWP_SHOWWINDOW, WNDCLASSW, CS_HREDRAW,
-        CS_VREDRAW, WM_ERASEBKGND, WM_PAINT, WM_TIMER, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+        SetWindowPos, ShowWindow, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HWND_TOPMOST, LWA_ALPHA,
+        SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WM_ERASEBKGND, WM_PAINT,
+        WM_TIMER, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+        WS_EX_TRANSPARENT, WS_POPUP,
     },
 };
 
@@ -77,7 +77,10 @@ impl Overlay {
             }));
 
             let hwnd = CreateWindowExW(
-                WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_LAYERED
+                WS_EX_TOPMOST
+                    | WS_EX_TOOLWINDOW
+                    | WS_EX_TRANSPARENT
+                    | WS_EX_LAYERED
                     | WS_EX_NOACTIVATE,
                 class,
                 windows_sys::core::w!("VolumeControl Overlay"),
@@ -271,11 +274,18 @@ unsafe fn paint(hdc: isize, data: &OverlayData, w: i32, h: i32) {
     let label: Vec<u16> = if data.muted {
         "Muted".encode_utf16().chain(std::iter::once(0)).collect()
     } else {
-        format!("{}%", data.percent).encode_utf16().chain(std::iter::once(0)).collect()
+        format!("{}%", data.percent)
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect()
     };
     SetTextColor(
         hdc,
-        if data.muted { rgb(0x88, 0x88, 0x88) } else { rgb(0xDD, 0xDD, 0xDD) },
+        if data.muted {
+            rgb(0x88, 0x88, 0x88)
+        } else {
+            rgb(0xDD, 0xDD, 0xDD)
+        },
     );
     TextOutW(hdc, 24, 20, label.as_ptr(), (label.len() - 1) as i32);
 }

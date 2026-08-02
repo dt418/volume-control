@@ -9,13 +9,17 @@ pub mod config;
 pub mod core;
 pub mod hotkeys;
 
+#[cfg(target_os = "windows")]
+pub mod app;
 /// Windows-only backends.
 #[cfg(target_os = "windows")]
 pub mod audio_windows;
 #[cfg(target_os = "windows")]
+pub mod help;
+#[cfg(target_os = "windows")]
 pub mod hotkeys_win32;
 #[cfg(target_os = "windows")]
-pub mod app;
+pub mod mixer;
 #[cfg(target_os = "windows")]
 pub mod overlay;
 #[cfg(target_os = "windows")]

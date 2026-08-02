@@ -13,20 +13,27 @@
 //! message loop applies volume changes and syncs the overlay/tray.
 
 use windows_sys::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+    Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
     Graphics::Dwm::{
-        DwmSetWindowAttribute, DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
-        DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DWMSBT_MAINWINDOW,
+        DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
+        DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
     },
-    Graphics::Gdi::{CreateSolidBrush, DeleteObject, HBRUSH},
-    System::LibraryLoader::GetModuleHandleW,
-    UI::Controls::{InitCommonControlsEx, SetWindowTheme, INITCOMMONCONTROLSEX, ICC_BAR_CLASSES},
+    Graphics::Gdi::{
+        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, SetBkMode, SetTextColor,
+        HBRUSH, HDC, PAINTSTRUCT, TRANSPARENT,
+    },
+    System::{
+        LibraryLoader::GetModuleHandleW,
+        Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
+    },
+    UI::Controls::{InitCommonControlsEx, SetWindowTheme, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX},
     UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, GetSystemMetrics, GetWindowLongPtrW,
-        PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-        ShowWindow, GWLP_USERDATA, HWND_TOPMOST, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE,
-        SWP_NOACTIVATE, SWP_SHOWWINDOW, WNDCLASSW, WM_CLOSE, WM_COMMAND, WM_HSCROLL, WM_USER,
-        WS_CHILD, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE, CW_USEDEFAULT, BN_CLICKED,
+        PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW, SetWindowPos,
+        SetWindowTextW, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GWLP_USERDATA, HWND_TOPMOST,
+        SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WM_CLOSE, WM_COMMAND,
+        WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_HSCROLL, WM_PAINT, WM_USER, WNDCLASSW, WS_CHILD,
+        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
     },
 };
 
@@ -45,6 +52,64 @@ const OVERLAY_GAP: i32 = 16;
 
 const ID_BTN_MUTE: usize = 1;
 const ID_BTN_RESET: usize = 2;
+const ID_BTN_CLOSE: usize = 3;
+
+#[derive(Clone, Copy)]
+struct MixerTheme {
+    dark: bool,
+    background: u32,
+    text: u32,
+    secondary_text: u32,
+}
+
+impl MixerTheme {
+    fn system() -> Self {
+        let dark = system_prefers_dark();
+        Self {
+            dark,
+            background: if dark {
+                rgb(0x20, 0x20, 0x20)
+            } else {
+                rgb(0xF9, 0xF9, 0xF9)
+            },
+            text: if dark {
+                rgb(0xF5, 0xF5, 0xF5)
+            } else {
+                rgb(0x1A, 0x1A, 0x1A)
+            },
+            secondary_text: if dark {
+                rgb(0xB8, 0xB8, 0xB8)
+            } else {
+                rgb(0x5F, 0x5F, 0x5F)
+            },
+        }
+    }
+}
+
+/// Read the Windows app theme preference. A missing or unreadable value uses
+/// the light theme, keeping the mixer usable on older Windows versions.
+fn system_prefers_dark() -> bool {
+    unsafe {
+        let mut value = 1u32;
+        let mut size = std::mem::size_of::<u32>() as u32;
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            windows_sys::core::w!(
+                "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"
+            ),
+            windows_sys::core::w!("AppsUseLightTheme"),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            &mut value as *mut u32 as *mut _,
+            &mut size,
+        ) == 0
+            && value == 0
+    }
+}
+
+fn rgb(r: u8, g: u8, b: u8) -> u32 {
+    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16)
+}
 
 // Trackbar messages (TBM_*) — canonical Win32 values (WM_USER-based,
 // verified against CommCtrl.h: TBM_GETPOS=WM_USER, TBM_SETPOS=WM_USER+5,
@@ -63,9 +128,30 @@ struct MixerData {
     percent_label: HWND,
     mute_btn: HWND,
     _reset_btn: HWND,
+    _close_btn: HWND,
     accent: HBRUSH,
+    background: HBRUSH,
+    theme: MixerTheme,
     muted: bool,
     open: bool,
+}
+
+impl MixerData {
+    fn placeholder(host: HWND, theme: MixerTheme) -> Self {
+        Self {
+            host,
+            slider: 0,
+            percent_label: 0,
+            mute_btn: 0,
+            _reset_btn: 0,
+            _close_btn: 0,
+            accent: 0,
+            background: 0,
+            theme,
+            muted: false,
+            open: false,
+        }
+    }
 }
 
 pub struct Mixer {
@@ -108,7 +194,10 @@ impl Mixer {
             if hwnd == 0 {
                 return Err("mixer CreateWindowEx failed".into());
             }
-            Self::style(hwnd);
+            let theme = MixerTheme::system();
+            Self::style(hwnd, theme.dark);
+            let data = Box::into_raw(Box::new(MixerData::placeholder(host, theme)));
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, data as isize);
 
             // Trackbar slider.
             let slider = CreateWindowExW(
@@ -169,14 +258,43 @@ impl Mixer {
                 hinst,
                 std::ptr::null(),
             );
-            if slider == 0 || percent_label == 0 || mute_btn == 0 || reset_btn == 0 {
+            // A visible close affordance hides the flyout without changing
+            // the existing hotkey/tray toggle behavior.
+            let close_btn = CreateWindowExW(
+                0,
+                windows_sys::core::w!("Button"),
+                windows_sys::core::w!("×"),
+                WS_CHILD | WS_VISIBLE,
+                WIN_W - 42,
+                12,
+                28,
+                28,
+                hwnd,
+                ID_BTN_CLOSE as isize,
+                hinst,
+                std::ptr::null(),
+            );
+            if slider == 0
+                || percent_label == 0
+                || mute_btn == 0
+                || reset_btn == 0
+                || close_btn == 0
+            {
                 return Err("mixer child control failed".into());
             }
 
-            // Dark theme on the controls.
-            for ctl in [mute_btn, reset_btn, slider] {
-                SetWindowTheme(ctl, windows_sys::core::w!("DarkMode_Explorer"), std::ptr::null());
+            // Use the dark Explorer theme only for dark mode; the default
+            // theme gives light mode the native light button/trackbar styling.
+            if theme.dark {
+                for ctl in [mute_btn, reset_btn, close_btn, slider] {
+                    SetWindowTheme(
+                        ctl,
+                        windows_sys::core::w!("DarkMode_Explorer"),
+                        std::ptr::null(),
+                    );
+                }
             }
+            set_window_text(close_btn, "×");
 
             // Range 0–100, position 50.
             // TBM_SETRANGE packs MAKELONG(min, max) = (max << 16) | min in the
@@ -186,25 +304,23 @@ impl Mixer {
             SendMessageW(slider, TBM_SETPOS, 1, 50);
 
             let accent = CreateSolidBrush(0x00_00_78_D4); // 0x00BBGGRR — blue
+            let background = CreateSolidBrush(theme.background);
 
-            let data = Box::into_raw(Box::new(MixerData {
-                host,
-                slider,
-                percent_label,
-                mute_btn,
-                _reset_btn: reset_btn,
-                accent,
-                muted: false,
-                open: false,
-            }));
-            SetWindowLongPtrW(hwnd, GWLP_USERDATA, data as isize);
+            let d = &mut *data;
+            d.slider = slider;
+            d.percent_label = percent_label;
+            d.mute_btn = mute_btn;
+            d._reset_btn = reset_btn;
+            d._close_btn = close_btn;
+            d.accent = accent;
+            d.background = background;
 
             Ok(Mixer { hwnd })
         }
     }
 
-    /// Apply the Win11 DWM styling (rounded corners, dark mode, backdrop).
-    fn style(hwnd: HWND) {
+    /// Apply the Win11 DWM styling (rounded corners, theme-aware backdrop).
+    fn style(hwnd: HWND, dark: bool) {
         unsafe {
             let v: i32 = DWMWCP_ROUND;
             DwmSetWindowAttribute(
@@ -213,7 +329,7 @@ impl Mixer {
                 &v as *const _ as *const _,
                 4,
             );
-            let v: i32 = 1; // dark mode on
+            let v: i32 = if dark { 1 } else { 0 };
             DwmSetWindowAttribute(
                 hwnd,
                 DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
@@ -270,7 +386,12 @@ impl Mixer {
             let pct = state.percent() as isize;
             let cur = SendMessageW(d.slider, TBM_GETPOS, 0, 0);
             if cur != pct {
-                log::debug!("mixer sync: slider {} -> {} (muted={})", cur, pct, state.muted);
+                log::debug!(
+                    "mixer sync: slider {} -> {} (muted={})",
+                    cur,
+                    pct,
+                    state.muted
+                );
                 SendMessageW(d.slider, TBM_SETPOS, 1, pct);
             }
             set_window_text(d.percent_label, &format!("{}%", state.percent()));
@@ -283,6 +404,7 @@ impl Mixer {
         unsafe {
             let d = &mut *(GetWindowLongPtrW(self.hwnd, GWLP_USERDATA) as *mut MixerData);
             DeleteObject(d.accent);
+            DeleteObject(d.background);
             drop(Box::from_raw(d));
             DestroyWindow(self.hwnd);
         }
@@ -290,7 +412,10 @@ impl Mixer {
 }
 
 unsafe extern "system" fn mixer_wndproc(
-    hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM,
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
 ) -> LRESULT {
     match msg {
         // ── Slider moved by the user → tell the host to set volume ───────
@@ -307,8 +432,46 @@ unsafe extern "system" fn mixer_wndproc(
             match (wparam & 0xFFFF) as usize {
                 ID_BTN_MUTE => PostMessageW(d.host, WM_APP_MIXER_MUTE, 0, 0),
                 ID_BTN_RESET => PostMessageW(d.host, WM_APP_MIXER_RESET, 0, 0),
+                ID_BTN_CLOSE => {
+                    SendMessageW(hwnd, WM_CLOSE, 0, 0);
+                    0
+                }
                 _ => return DefWindowProcW(hwnd, msg, wparam, lparam),
             };
+            0
+        }
+        WM_CTLCOLORSTATIC => {
+            let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
+            SetBkMode(wparam as HDC, TRANSPARENT as i32);
+            SetTextColor(wparam as HDC, d.theme.text);
+            d.background as LRESULT
+        }
+        WM_ERASEBKGND => 1,
+        WM_PAINT => {
+            let mut ps: PAINTSTRUCT = std::mem::zeroed();
+            let hdc = BeginPaint(hwnd, &mut ps);
+            let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
+            let rect = RECT {
+                left: 0,
+                top: 0,
+                right: WIN_W,
+                bottom: WIN_H,
+            };
+            FillRect(hdc, &rect, d.background);
+            SetBkMode(hdc, TRANSPARENT as i32);
+            SetTextColor(hdc, d.theme.secondary_text);
+            let label: Vec<u16> = "System volume"
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
+            windows_sys::Win32::Graphics::Gdi::TextOutW(
+                hdc,
+                18,
+                20,
+                label.as_ptr(),
+                (label.len() - 1) as i32,
+            );
+            EndPaint(hwnd, &ps);
             0
         }
         // ── Close (Esc / close) just hides ───────────────────────────────

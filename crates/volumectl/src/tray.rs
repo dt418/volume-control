@@ -15,6 +15,10 @@ pub enum TrayCommand {
     ToggleMute,
     Reset50,
     OpenMixer,
+    Help,
+    EditConfig,
+    ReloadConfig,
+    ApplyBlacklist,
     Exit,
 }
 
@@ -29,12 +33,22 @@ impl Tray {
         let menu = Menu::new();
 
         let vol_label = MenuItem::with_id("volume", "Volume: --", false, None);
-        let mute_item = CheckMenuItem::with_id("mute", "Mute", true, false, None);
+        let mixer = MenuItem::with_id("mixer", "Volume Mixer", true, None);
+        let mute_item = CheckMenuItem::with_id("mute", "Mute / Unmute", true, false, None);
+        let help = MenuItem::with_id("help", "Help / Hotkeys", true, None);
+        let sep1 = PredefinedMenuItem::separator();
+        let edit = MenuItem::with_id("edit", "Edit Config", true, None);
+        let reload = MenuItem::with_id("reload", "Reload Config", true, None);
+        let sep2 = PredefinedMenuItem::separator();
+        let blacklist = MenuItem::with_id("blacklist", "Apply Recommended Blacklist", true, None);
+        let sep3 = PredefinedMenuItem::separator();
         let reset = MenuItem::with_id("reset", "Reset to 50%", true, None);
-        let separator = PredefinedMenuItem::separator();
         let exit = MenuItem::with_id("exit", "Exit", true, None);
 
-        menu.append_items(&[&vol_label, &mute_item, &reset, &separator, &exit])?;
+        menu.append_items(&[
+            &vol_label, &mixer, &mute_item, &help, &sep1, &edit, &reload, &sep2, &blacklist, &sep3,
+            &reset, &exit,
+        ])?;
 
         let tray = tray_icon::TrayIconBuilder::new()
             .with_menu(Box::new(menu))
@@ -59,6 +73,10 @@ impl Tray {
                         "mute" => Some(TrayCommand::ToggleMute),
                         "reset" => Some(TrayCommand::Reset50),
                         "mixer" => Some(TrayCommand::OpenMixer),
+                        "help" => Some(TrayCommand::Help),
+                        "edit" => Some(TrayCommand::EditConfig),
+                        "reload" => Some(TrayCommand::ReloadConfig),
+                        "blacklist" => Some(TrayCommand::ApplyBlacklist),
                         "exit" => Some(TrayCommand::Exit),
                         _ => None,
                     };
@@ -73,7 +91,8 @@ impl Tray {
 
     /// Refresh the volume label and mute check state.
     pub fn set_volume(&self, state: &VolumeState) {
-        self.vol_label.set_text(&format!("Volume: {}%", state.percent()));
+        self.vol_label
+            .set_text(&format!("Volume: {}%", state.percent()));
         self.mute_item.set_checked(state.muted);
     }
 

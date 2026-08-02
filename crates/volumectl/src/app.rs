@@ -1,34 +1,42 @@
-//! Windows application shell.
+//! Windows application shell — the single message loop that ties together
+//! audio, hotkeys, the mouse-wheel hook, tray, overlay, mixer and help.
 //!
-//! Creates a single hidden window that owns both [`WindowsAudio`] and
-//! [`Win32Hotkeys`]. The window proc handles `WM_HOTKEY` (custom combos) and
-//! a 150 ms `WM_TIMER` (external volume sync / media-key detection) in one
-//! message loop.
+//! A hidden host window receives everything as messages:
+//!   - `WM_HOTKEY`        → custom keyboard combo fired
+//!   - `WM_APP_WHEEL`     → `Mod+Scroll` fired (from the low-level mouse hook)
+//!   - `WM_APP_MIXER_*`   → mixer slider / button interaction
+//!   - `WM_TIMER` (150ms) → config live reload, tray menu events, external
+//!     volume sync, mixer UI sync
 //!
-//! The hidden window is purely a message pump; it is never shown. When volume
-//! changes via custom hotkeys the change is applied to the system audio
-//! backend; external changes (media keys, tray, Bluetooth) are picked up by
-//! the timer and logged (tray/overlay attach here in later milestones).
+//! Custom hotkeys are gated by the app blacklist (foreground process name)
+//! with a configurable blocked beep; pressing volume at 0% / 100% beeps the
+//! limit tone. A single-instance mutex prevents duplicates.
 
 use windows_sys::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, WPARAM, FALSE},
+    Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM},
+    System::Diagnostics::Debug::Beep,
     System::LibraryLoader::GetModuleHandleW,
-    UI::Input::KeyboardAndMouse::{
-        keybd_event, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_MENU,
+    System::Threading::{
+        CreateMutexW, OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
     },
+    UI::Input::KeyboardAndMouse::{keybd_event, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_MENU},
     UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, PostQuitMessage,
-        RegisterClassW, SetTimer, TranslateMessage, MSG, WNDCLASSW, WM_DESTROY, WM_HOTKEY,
-        WM_TIMER, GWLP_USERDATA, SetWindowLongPtrW, GetWindowLongPtrW, CW_USEDEFAULT, CS_OWNDC,
-        WS_POPUP, WS_EX_TOOLWINDOW,
+        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
+        GetWindowLongPtrW, GetWindowThreadProcessId, PostQuitMessage, RegisterClassW, SetTimer,
+        SetWindowLongPtrW, TranslateMessage, CS_OWNDC, CW_USEDEFAULT, GWLP_USERDATA, MSG,
+        WM_DESTROY, WM_HOTKEY, WM_TIMER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
     },
 };
 
 use crate::audio::{AudioBackend, VolumeState};
 use crate::audio_windows::WindowsAudio;
 use crate::config::Config;
+use crate::help::Help;
 use crate::hotkeys::HotkeyAction;
-use crate::hotkeys_win32::{Win32Hotkeys, hotkey_action};
+use crate::hotkeys_win32::{
+    hotkey_action, install_wheel_hook, uninstall_wheel_hook, Win32Hotkeys, WM_APP_WHEEL,
+};
+use crate::mixer::{Mixer, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET};
 use crate::overlay::Overlay;
 use crate::tray::{Tray, TrayCommand};
 
@@ -78,21 +86,90 @@ struct AppContext {
     last_state: VolumeState,
     last_config_mtime: Option<std::time::SystemTime>,
     overlay: Overlay,
+    mixer: Mixer,
+    help: Help,
     tray: Tray,
 }
 
+/// Prevent two instances (VolumePro's `#SingleInstance Force` equivalent).
+fn ensure_single_instance() -> bool {
+    unsafe {
+        let h = CreateMutexW(
+            std::ptr::null(),
+            1, // bInitialOwner
+            windows_sys::core::w!("Local\\VolumeControl.SingleInstance"),
+        );
+        if h == 0 {
+            return true; // could not create — allow (unusual)
+        }
+        if GetLastError() == ERROR_ALREADY_EXISTS {
+            CloseHandle(h);
+            log::warn!("another VolumeControl instance is already running");
+            return false;
+        }
+        true
+    }
+}
+
+/// Lowercase base name (e.g. `code.exe`) of the foreground window's process.
+fn foreground_process() -> Option<String> {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd == 0 {
+            return None;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == 0 {
+            return None;
+        }
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle == 0 {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut len);
+        CloseHandle(handle);
+        if ok == 0 {
+            return None;
+        }
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        let base = path.rsplit('\\').next().unwrap_or(&path);
+        Some(base.to_lowercase())
+    }
+}
+
+fn beep_blocked(cfg: &Config) {
+    if cfg.beep.enabled {
+        unsafe {
+            Beep(cfg.beep.blocked_freq, cfg.beep.blocked_duration_ms);
+        }
+    }
+}
+
+fn beep_limit(cfg: &Config) {
+    if cfg.beep.enabled {
+        unsafe {
+            Beep(cfg.beep.limit_freq, cfg.beep.limit_duration_ms);
+        }
+    }
+}
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    if !ensure_single_instance() {
+        return Ok(()); // another instance handles it
+    }
+
     let config = crate::config::load();
     let last_config_mtime = config_mtime();
     let audio = WindowsAudio::new()?;
     let overlay = Overlay::new()?;
     let tray = Tray::new()?;
-    let last_state = audio
-        .get_state()
-        .unwrap_or(VolumeState {
-            volume: 0.5,
-            muted: false,
-        });
+    let last_state = audio.get_state().unwrap_or(VolumeState {
+        volume: 0.5,
+        muted: false,
+    });
 
     // Hidden host window.
     let hinst = unsafe { GetModuleHandleW(std::ptr::null()) };
@@ -115,10 +192,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             CW_USEDEFAULT,
             0,
             0,
-            0, // hwndParent: HWND = isize
-            0, // hmenu: HMENU = isize
+            0, // hwndParent
+            0, // hmenu
             hinst,
-            std::ptr::null(), // lpParam
+            std::ptr::null(),
         )
     };
     if hwnd == 0 {
@@ -126,8 +203,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     log::debug!("host hwnd=0x{:x}", hwnd);
 
-    // Hotkeys are registered against the host window.
+    // Hotkeys + mouse-wheel hook, both targeted at the host window.
     let hotkeys = Win32Hotkeys::new(hwnd, config.modifier)?;
+    install_wheel_hook(hwnd)?;
+
+    let mixer = Mixer::new(hwnd)?;
+    let help = Help::new()?;
 
     // Store context in GWLP_USERDATA.
     let ctx = Box::into_raw(Box::new(AppContext {
@@ -137,6 +218,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         last_state,
         last_config_mtime,
         overlay,
+        mixer,
+        help,
         tray,
     }));
     unsafe {
@@ -151,24 +234,16 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     log::info!("volumectl {} running", crate::VERSION);
 
-    // Message pump: GetMessageW returns 0 on WM_QUIT, -1 on error.
+    // Message pump.
     unsafe {
         let mut msg: MSG = std::mem::zeroed();
-        let mut seen: usize = 0;
-        while GetMessageW(&mut msg, 0, 0, 0) > FALSE {
-            seen += 1;
-            if seen <= 20 {
-                log::trace!(
-                    "msg 0x{:04x} hwnd={:x} wparam={}",
-                    msg.message,
-                    msg.hwnd,
-                    msg.wParam
-                );
-            }
+        while GetMessageW(&mut msg, 0, 0, 0) > 0 {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
     }
+
+    uninstall_wheel_hook();
 
     // Cleanup the context.
     if !ctx.is_null() {
@@ -186,10 +261,10 @@ unsafe extern "system" fn host_wndproc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    let ctx = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppContext;
     match msg {
-        // ── Custom hotkey fired ──────────────────────────────────────────
+        // ── Custom hotkey (keyboard) fired ───────────────────────────────
         WM_HOTKEY => {
-            let ctx = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppContext;
             if let Some(action) = hotkey_action(wparam as i32) {
                 if !ctx.is_null() {
                     apply(&mut *ctx, action);
@@ -197,9 +272,51 @@ unsafe extern "system" fn host_wndproc(
             }
             0
         }
-        // ── Periodic poll: config reload + tray menu + external changes ──
+        // ── Mod+Scroll fired (mouse hook posts the same action ids) ──────
+        WM_APP_WHEEL => {
+            if let Some(action) = hotkey_action(wparam as i32) {
+                if !ctx.is_null() {
+                    apply(&mut *ctx, action);
+                }
+            }
+            0
+        }
+        // ── Mixer: slider moved ──────────────────────────────────────────
+        WM_APP_MIXER_CHANGE => {
+            if !ctx.is_null() {
+                let ctx = &mut *ctx;
+                let pct_raw = (wparam as u32).min(100);
+                let pct = pct_raw as f32 / 100.0;
+                log::debug!("mixer change: request={}%%", pct_raw);
+                if let Err(e) = ctx.audio.set_volume(pct) {
+                    log::warn!("{e}");
+                }
+                refresh_ui(ctx);
+            }
+            0
+        }
+        WM_APP_MIXER_MUTE => {
+            if !ctx.is_null() {
+                let ctx = &mut *ctx;
+                if let Err(e) = ctx.audio.toggle_mute() {
+                    log::warn!("{e}");
+                }
+                refresh_ui(ctx);
+            }
+            0
+        }
+        WM_APP_MIXER_RESET => {
+            if !ctx.is_null() {
+                let ctx = &mut *ctx;
+                if let Err(e) = ctx.audio.set_volume(0.5) {
+                    log::warn!("{e}");
+                }
+                refresh_ui(ctx);
+            }
+            0
+        }
+        // ── Periodic poll: config reload + tray + external sync ──────────
         WM_TIMER => {
-            let ctx = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppContext;
             if !ctx.is_null() {
                 let ctx = &mut *ctx;
 
@@ -214,10 +331,12 @@ unsafe extern "system" fn host_wndproc(
                 // External volume changes (media keys, other apps).
                 if let Ok(st) = ctx.audio.get_state() {
                     if reloaded {
-                        // Thresholds may have changed — re-show the overlay.
                         ctx.overlay.show(&st, &ctx.config);
                     }
                     ctx.tray.set_volume(&st);
+                    if ctx.mixer.is_open() {
+                        ctx.mixer.sync(&st);
+                    }
                     if st != ctx.last_state {
                         log::debug!("ext change: {}% muted={}", st.percent(), st.muted);
                         ctx.last_state = st;
@@ -234,53 +353,16 @@ unsafe extern "system" fn host_wndproc(
     }
 }
 
+/// Apply a hotkey action (keyboard or wheel). Blacklist + limit beeps happen
+/// here, matching VolumePro's behaviour.
 fn apply(ctx: &mut AppContext, action: HotkeyAction) {
-    let old = ctx.last_state;
-    log::debug!("hotkey: {:?} (current {}%)", action, old.percent());
     use HotkeyAction as A;
+
+    // Actions that don't change volume bypass the blacklist gate.
     match action {
-        A::VolumeUp => {
-            let v = crate::core::step_volume(old.volume, ctx.config.volume_step as f32);
-            if let Err(e) = ctx.audio.set_volume(v) {
-                log::warn!("{e}");
-            }
-        }
-        A::VolumeDown => {
-            let v = crate::core::step_volume(old.volume, -(ctx.config.volume_step as f32));
-            if let Err(e) = ctx.audio.set_volume(v) {
-                log::warn!("{e}");
-            }
-        }
-        A::VolumeUpLarge => {
-            let v = crate::core::step_volume(old.volume, ctx.config.volume_step_large as f32);
-            if let Err(e) = ctx.audio.set_volume(v) {
-                log::warn!("{e}");
-            }
-        }
-        A::VolumeDownLarge => {
-            let v = crate::core::step_volume(old.volume, -(ctx.config.volume_step_large as f32));
-            if let Err(e) = ctx.audio.set_volume(v) {
-                log::warn!("{e}");
-            }
-        }
-        A::ToggleMute => {
-            if let Err(e) = ctx.audio.toggle_mute() {
-                log::warn!("{e}");
-            }
-        }
-        A::Reset50 => {
-            if let Err(e) = ctx.audio.set_volume(0.5) {
-                log::warn!("{e}");
-            }
-        }
-        A::OpenMixer => {
-            log::info!("OpenMixer — not wired yet");
-            return;
-        }
         A::OpenMenu => {
-            // A background process cannot SetForegroundWindow directly (Windows
-            // foreground lock), which TrackPopupMenu needs. Simulating a press
-            // of the Alt key unlocks foreground ownership — the standard trick.
+            // Background processes cannot SetForegroundWindow directly
+            // (Windows foreground lock); simulating Alt unlocks it.
             unsafe {
                 keybd_event(VK_MENU as u8, 0, KEYEVENTF_EXTENDEDKEY, 0);
                 keybd_event(VK_MENU as u8, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
@@ -288,40 +370,135 @@ fn apply(ctx: &mut AppContext, action: HotkeyAction) {
             ctx.tray.show_menu();
             return;
         }
+        A::OpenMixer => {
+            if ctx.mixer.is_open() {
+                ctx.mixer.toggle();
+            } else {
+                if let Ok(st) = ctx.audio.get_state() {
+                    ctx.mixer.sync(&st);
+                }
+                ctx.mixer.toggle();
+            }
+            return;
+        }
+        _ => {}
     }
-    // Re-read the new state and show the overlay for feedback.
+
+    // Blacklist gate: suppress hotkeys while a blacklisted app is focused.
+    if let Some(proc) = foreground_process() {
+        if crate::config::is_blacklisted(&ctx.config.blacklist, &proc) {
+            log::debug!("hotkey blocked by blacklist ({proc})");
+            beep_blocked(&ctx.config);
+            return;
+        }
+    }
+
+    let old = ctx.last_state;
+    log::debug!("hotkey: {:?} (current {}%)", action, old.percent());
+
+    // Volume actions: apply, then beep if we were already at the limit.
+    let step = ctx.config.volume_step as f32;
+    let step_large = ctx.config.volume_step_large as f32;
+    let target = match action {
+        A::VolumeUp => Some(crate::core::step_volume(old.volume, step)),
+        A::VolumeDown => Some(crate::core::step_volume(old.volume, -step)),
+        A::VolumeUpLarge => Some(crate::core::step_volume(old.volume, step_large)),
+        A::VolumeDownLarge => Some(crate::core::step_volume(old.volume, -step_large)),
+        A::Reset50 => Some(0.5),
+        A::ToggleMute => None,
+        _ => None,
+    };
+
+    match target {
+        Some(v) => {
+            if let Err(e) = ctx.audio.set_volume(v) {
+                log::warn!("{e}");
+            }
+            // Limit beep: no change and already at a boundary.
+            if v == old.volume && (old.volume == 0.0 || old.volume == 1.0) {
+                beep_limit(&ctx.config);
+            }
+        }
+        None => {
+            if let Err(e) = ctx.audio.toggle_mute() {
+                log::warn!("{e}");
+            }
+        }
+    }
+
+    refresh_ui(ctx);
+}
+
+/// Re-read the audio state and push it into overlay, tray and mixer.
+fn refresh_ui(ctx: &mut AppContext) {
     if let Ok(st) = ctx.audio.get_state() {
+        log::debug!(
+            "refresh_ui: state={}%% muted={} mixer_open={}",
+            st.percent(),
+            st.muted,
+            ctx.mixer.is_open()
+        );
         ctx.last_state = st;
         ctx.overlay.show(&st, &ctx.config);
         ctx.tray.set_volume(&st);
+        if ctx.mixer.is_open() {
+            ctx.mixer.sync(&st);
+        }
     }
 }
 
 /// Apply a command from the tray menu.
 fn handle_tray_command(ctx: &mut AppContext, cmd: TrayCommand) {
     use TrayCommand as C;
-    let state = match cmd {
-        C::ToggleMute => ctx.audio.toggle_mute().ok(),
+    match cmd {
+        C::ToggleMute => {
+            if let Err(e) = ctx.audio.toggle_mute() {
+                log::warn!("{e}");
+            }
+            refresh_ui(ctx);
+        }
         C::Reset50 => {
             if let Err(e) = ctx.audio.set_volume(0.5) {
                 log::warn!("{e}");
             }
-            ctx.audio.get_state().ok()
+            refresh_ui(ctx);
         }
         C::OpenMixer => {
-            log::info!("OpenMixer — not wired yet");
-            None
-        }
-        C::Exit => {
-            unsafe {
-                PostQuitMessage(0);
+            ctx.mixer.toggle();
+            if let Ok(st) = ctx.audio.get_state() {
+                ctx.mixer.sync(&st);
             }
-            return;
         }
-    };
-    if let Some(st) = state {
-        ctx.last_state = st;
-        ctx.overlay.show(&st, &ctx.config);
-        ctx.tray.set_volume(&st);
+        C::Help => {
+            ctx.help.show(&ctx.config);
+        }
+        C::EditConfig => {
+            crate::config::open_in_editor();
+            ctx.overlay
+                .show_text("Editing config — changes reload automatically", &ctx.config);
+        }
+        C::ReloadConfig => {
+            ctx.last_config_mtime = None; // force
+            reload_config_if_changed(ctx);
+            ctx.overlay.show_text("Config reloaded", &ctx.config);
+        }
+        C::ApplyBlacklist => {
+            let recommended = crate::config::recommended_blacklist(ctx.config.modifier);
+            let added = crate::config::apply_recommended_blacklist(&mut ctx.config);
+            ctx.last_config_mtime = None; // force reload from disk
+            reload_config_if_changed(ctx);
+            let msg = if recommended.is_empty() {
+                format!("No blacklist needed for {:?}", ctx.config.modifier)
+            } else if added > 0 {
+                format!("Blacklist: +{added} app(s) applied")
+            } else {
+                "Blacklist already up to date".to_string()
+            };
+            log::info!("{msg}");
+            ctx.overlay.show_text(&msg, &ctx.config);
+        }
+        C::Exit => unsafe {
+            PostQuitMessage(0);
+        },
     }
 }

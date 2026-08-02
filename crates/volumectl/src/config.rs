@@ -35,10 +35,41 @@ pub struct Config {
     pub overlay_duration_ms: u64,
     /// Modifier used for custom hotkeys (default CtrlAlt).
     pub modifier: HotkeyModifier,
-    /// Window titles / executable names where custom hotkeys are suppressed.
+    /// Executable names (lowercase, with `.exe`) where custom hotkeys are
+    /// suppressed while that process has the foreground window.
     pub blacklist: Vec<String>,
     /// Percent thresholds for the colour legend: [gray<green<blue<orange].
     pub color_thresholds: ColorThresholds,
+    /// Audible feedback for blocked hotkeys and volume limits.
+    pub beep: BeepConfig,
+}
+
+/// Beep feedback settings (mirrors VolumePro's `[Beep]` section).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BeepConfig {
+    /// Master switch.
+    pub enabled: bool,
+    /// Frequency (Hz) when a hotkey is blocked by the blacklist.
+    pub blocked_freq: u32,
+    /// Duration (ms) of the blocked beep.
+    pub blocked_duration_ms: u32,
+    /// Frequency (Hz) when volume is already at 0% / 100%.
+    pub limit_freq: u32,
+    /// Duration (ms) of the limit beep.
+    pub limit_duration_ms: u32,
+}
+
+impl Default for BeepConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            blocked_freq: 400,
+            blocked_duration_ms: 80,
+            limit_freq: 600,
+            limit_duration_ms: 60,
+        }
+    }
 }
 
 /// Colour legend thresholds, matching VolumePro's (0 grey, ≤40 green,
@@ -63,14 +94,74 @@ impl Default for Config {
                 blue_up_to: 75,
                 orange_up_to: 100,
             },
+            beep: BeepConfig::default(),
         }
     }
+}
+
+/// Recommended blacklist presets per modifier (VolumePro parity).
+///
+/// `CtrlAlt` / `CapsLock` have no known conflicts → empty list.
+/// `Alt` conflicts with move-line in editors → editors.
+/// `Ctrl` conflicts with paste/zoom/reload in browsers, editors, terminals.
+pub fn recommended_blacklist(modifier: HotkeyModifier) -> Vec<String> {
+    let list: &[&str] = match modifier {
+        HotkeyModifier::CtrlAlt | HotkeyModifier::CapsLock => &[],
+        HotkeyModifier::Alt => &[
+            "Code.exe",
+            "idea64.exe",
+            "webstorm64.exe",
+            "phpstorm64.exe",
+            "sublime_text.exe",
+            "notepad++.exe",
+            "cursor.exe",
+        ],
+        HotkeyModifier::Ctrl => &[
+            "chrome.exe",
+            "msedge.exe",
+            "firefox.exe",
+            "brave.exe",
+            "opera.exe",
+            "vivaldi.exe",
+            "Code.exe",
+            "idea64.exe",
+            "webstorm64.exe",
+            "phpstorm64.exe",
+            "sublime_text.exe",
+            "notepad++.exe",
+            "cursor.exe",
+            "WindowsTerminal.exe",
+        ],
+    };
+    // Entries are lowercased so they match the lowercase process-name check.
+    list.iter()
+        .map(|s| s.to_lowercase())
+        .filter(|s| s.ends_with(".exe"))
+        .collect()
+}
+
+/// Merge the recommended blacklist for `modifier` into the config, preserving
+/// the user's custom entries. Returns the number of apps added (0 if none).
+pub fn apply_recommended_blacklist(cfg: &mut Config) -> usize {
+    let rec = recommended_blacklist(cfg.modifier);
+    let mut seen: std::collections::HashSet<String> = cfg.blacklist.iter().cloned().collect();
+    let mut added = 0;
+    for app in rec {
+        if seen.insert(app.clone()) {
+            cfg.blacklist.push(app);
+            added += 1;
+        }
+    }
+    if added > 0 {
+        let _ = save(cfg);
+    }
+    added
 }
 
 /// Compute the config file path (user config dir + `volume-control/config.json`).
 pub fn config_path() -> PathBuf {
     #[cfg(target_os = "windows")]
-    let base = std::env::var("APPDATA").unwrap_or_else(|_| "." .into());
+    let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
     #[cfg(target_os = "macos")]
     let base = {
         std::env::var("HOME")
@@ -83,7 +174,9 @@ pub fn config_path() -> PathBuf {
             .unwrap_or_else(|_| std::env::var("HOME").unwrap_or_else(|_| ".".into()) + "/.config")
     };
 
-    PathBuf::from(base).join("volume-control").join("config.json")
+    PathBuf::from(base)
+        .join("volume-control")
+        .join("config.json")
 }
 
 /// Load the config; on absence/parse/validation failure write default and re-save.
@@ -121,7 +214,24 @@ fn validate(mut cfg: Config) -> Config {
     cfg.volume_step = cfg.volume_step.clamp(1, 50);
     cfg.volume_step_large = cfg.volume_step_large.clamp(cfg.volume_step + 1, 50);
     cfg.overlay_duration_ms = cfg.overlay_duration_ms.clamp(200, 10_000);
+    // Blacklist entries are lowercased + trimmed at load so the hotkey gate
+    // can do an exact lowercase match against the foreground process name.
+    cfg.blacklist = cfg
+        .blacklist
+        .iter()
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| s.ends_with(".exe"))
+        .collect();
+    cfg.beep.blocked_freq = cfg.beep.blocked_freq.clamp(37, 32767);
+    cfg.beep.blocked_duration_ms = cfg.beep.blocked_duration_ms.clamp(10, 2000);
+    cfg.beep.limit_freq = cfg.beep.limit_freq.clamp(37, 32767);
+    cfg.beep.limit_duration_ms = cfg.beep.limit_duration_ms.clamp(10, 2000);
     cfg
+}
+
+/// Check whether the given lowercase process name is blacklisted.
+pub fn is_blacklisted(blacklist: &[String], process_lower: &str) -> bool {
+    blacklist.iter().any(|b| b == process_lower)
 }
 
 /// Persist the config; creates the parent dir if absent.

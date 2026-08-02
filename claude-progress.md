@@ -5,9 +5,23 @@
 - Repository root: D:\Projects\volume-control
 - Standard startup path: `scripts/win-build.bat run` or `cargo run` (workspace default member = crates/volumectl) — MUST run through vcvars (MSVC env)
 - Standard verification path: `scripts/win-build.bat build` then `scripts/win-build.bat test`
-- Current highest-priority unfinished feature: vol-009 (mixer/overlay placement fix) — verified on Windows, feature-list update pending
+- Current highest-priority unfinished feature: native Settings window (designed, not yet implemented)
 - Current blocker: none (macOS/Linux backends pending native hardware; crate compiles via CLI fallback)
-- PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio), vol-003 (hotkeys), vol-004 (overlay), vol-005 (tray), vol-006 (config reload+sync), vol-007 (mac/Linux scaffolds+docs), vol-008 (release E2E), vol-009 (mixer/overlay placement fix)
+- PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio), vol-003 (hotkeys), vol-004 (overlay), vol-005 (tray), vol-006 (config reload+sync), vol-007 (mac/Linux scaffolds+docs), vol-008 (release E2E), vol-009 (mixer/overlay placement fix), vol-010 (mixer close button + system theme) 
+
+### Session 002 (2026-08-03)
+
+- Goal: Add an explicit mixer close/toggle affordance and system dark-mode support without introducing WinUI 3 or another UI runtime.
+- Completed:
+  - Added a visible top-right `×` button. It routes through the existing `WM_CLOSE` hide path; hotkey/tray toggles still reopen the mixer.
+  - Added Windows system theme detection using `AppsUseLightTheme`, with a light fallback when the registry value is unavailable.
+  - Applied theme-aware DWM dark-mode state, background brush, static-label colors, and dark common-control theme for buttons/slider.
+  - Preserved the existing native Rust/Win32 architecture, WASAPI synchronization, and mixer-above-overlay placement.
+- Verification:
+  - `scripts/win-build.bat build` — succeeded.
+  - `scripts/win-build.bat test` — 3 passed, 0 failed.
+- Remaining:
+  - Full interactive Windows screenshot/UIAutomation verification of the close button and both light/dark variants is still pending; build and unit-test evidence is complete.
 
 ## Session Log
 
