@@ -13,6 +13,9 @@
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, WPARAM, FALSE},
     System::LibraryLoader::GetModuleHandleW,
+    UI::Input::KeyboardAndMouse::{
+        keybd_event, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_MENU,
+    },
     UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, PostQuitMessage,
         RegisterClassW, SetTimer, TranslateMessage, MSG, WNDCLASSW, WM_DESTROY, WM_HOTKEY,
@@ -27,6 +30,7 @@ use crate::config::Config;
 use crate::hotkeys::HotkeyAction;
 use crate::hotkeys_win32::{Win32Hotkeys, hotkey_action};
 use crate::overlay::Overlay;
+use crate::tray::{Tray, TrayCommand};
 
 const ID_TIMER_POLL: usize = 1;
 const POLL_MS: u32 = 150;
@@ -38,12 +42,14 @@ struct AppContext {
     config: Config,
     last_state: VolumeState,
     overlay: Overlay,
+    tray: Tray,
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = crate::config::load();
     let audio = WindowsAudio::new()?;
     let overlay = Overlay::new()?;
+    let tray = Tray::new()?;
     let last_state = audio
         .get_state()
         .unwrap_or(VolumeState {
@@ -93,6 +99,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         config,
         last_state,
         overlay,
+        tray,
     }));
     unsafe {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, ctx as isize);
@@ -152,12 +159,20 @@ unsafe extern "system" fn host_wndproc(
             }
             0
         }
-        // ── Periodic poll for external changes ──────────────────────────
+        // ── Periodic poll: tray menu events + external volume changes ────
         WM_TIMER => {
             let ctx = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppContext;
             if !ctx.is_null() {
                 let ctx = &mut *ctx;
+
+                // Tray menu commands.
+                while let Some(cmd) = ctx.tray.poll() {
+                    handle_tray_command(ctx, cmd);
+                }
+
+                // External volume changes (media keys, other apps).
                 if let Ok(st) = ctx.audio.get_state() {
+                    ctx.tray.set_volume(&st);
                     if st != ctx.last_state {
                         log::debug!("ext change: {}% muted={}", st.percent(), st.muted);
                         ctx.last_state = st;
@@ -217,10 +232,51 @@ fn apply(ctx: &mut AppContext, action: HotkeyAction) {
             log::info!("OpenMixer — not wired yet");
             return;
         }
+        A::OpenMenu => {
+            // A background process cannot SetForegroundWindow directly (Windows
+            // foreground lock), which TrackPopupMenu needs. Simulating a press
+            // of the Alt key unlocks foreground ownership — the standard trick.
+            unsafe {
+                keybd_event(VK_MENU as u8, 0, KEYEVENTF_EXTENDEDKEY, 0);
+                keybd_event(VK_MENU as u8, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+            }
+            ctx.tray.show_menu();
+            return;
+        }
     }
     // Re-read the new state and show the overlay for feedback.
     if let Ok(st) = ctx.audio.get_state() {
         ctx.last_state = st;
         ctx.overlay.show(&st, &ctx.config);
+        ctx.tray.set_volume(&st);
+    }
+}
+
+/// Apply a command from the tray menu.
+fn handle_tray_command(ctx: &mut AppContext, cmd: TrayCommand) {
+    use TrayCommand as C;
+    let state = match cmd {
+        C::ToggleMute => ctx.audio.toggle_mute().ok(),
+        C::Reset50 => {
+            if let Err(e) = ctx.audio.set_volume(0.5) {
+                log::warn!("{e}");
+            }
+            ctx.audio.get_state().ok()
+        }
+        C::OpenMixer => {
+            log::info!("OpenMixer — not wired yet");
+            None
+        }
+        C::Exit => {
+            unsafe {
+                PostQuitMessage(0);
+            }
+            return;
+        }
+    };
+    if let Some(st) = state {
+        ctx.last_state = st;
+        ctx.overlay.show(&st, &ctx.config);
+        ctx.tray.set_volume(&st);
     }
 }

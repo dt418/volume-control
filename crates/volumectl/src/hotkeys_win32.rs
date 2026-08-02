@@ -29,6 +29,7 @@ pub const ID_VOL_DOWN_LARGE: i32 = 0x04;
 pub const ID_MUTE: i32 = 0x05;
 pub const ID_RESET: i32 = 0x06;
 pub const ID_MIXER: i32 = 0x07;
+pub const ID_SHOW_MENU: i32 = 0x08;
 
 /// Map `HotkeyModifier` → Win32 modifier bits (HOT_KEY_MODIFIERS = u32).
 fn modifier_bits(m: HotkeyModifier, shifted: bool) -> u32 {
@@ -56,6 +57,7 @@ pub fn hotkey_action(id: i32) -> Option<HotkeyAction> {
         ID_MUTE => A::ToggleMute,
         ID_RESET => A::Reset50,
         ID_MIXER => A::OpenMixer,
+        ID_SHOW_MENU => A::OpenMenu,
         _ => return None,
     })
 }
@@ -114,6 +116,7 @@ impl Win32Hotkeys {
             (ID_MUTE, mb(false), VK_M),
             (ID_RESET, mb(false), VK_R),
             (ID_MIXER, mb(false), VK_V),
+            (ID_SHOW_MENU, mb(true), VK_M),
         ] {
             if let Err(e) = self.reg(id, mods, vk) {
                 log::warn!("{e} — skipping this hotkey");

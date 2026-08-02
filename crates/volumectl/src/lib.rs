@@ -18,6 +18,8 @@ pub mod hotkeys_win32;
 pub mod app;
 #[cfg(target_os = "windows")]
 pub mod overlay;
+#[cfg(target_os = "windows")]
+pub mod tray;
 
 /// CLI fallback for non-Windows platforms (also handy for testing).
 #[cfg(not(target_os = "windows"))]

@@ -15,6 +15,8 @@ pub enum HotkeyAction {
     ToggleMute,
     Reset50,
     OpenMixer,
+    /// Open the tray context menu (useful when the tray icon is hidden).
+    OpenMenu,
 }
 
 impl HotkeyAction {
@@ -27,6 +29,7 @@ impl HotkeyAction {
             HotkeyAction::ToggleMute => "Mute",
             HotkeyAction::Reset50 => "Reset 50%",
             HotkeyAction::OpenMixer => "Mixer",
+            HotkeyAction::OpenMenu => "Open tray menu",
         }
     }
 }

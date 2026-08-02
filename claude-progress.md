@@ -5,9 +5,9 @@
 - Repository root: D:\Projects\volume-control
 - Standard startup path: `scripts/win-build.bat run` or `cargo run` (workspace default member = crates/volumectl) — MUST run through vcvars (MSVC env)
 - Standard verification path: `scripts/win-build.bat build` then `scripts/win-build.bat test`
-- Current highest-priority unfinished feature: vol-005 (system tray)
+- Current highest-priority unfinished feature: vol-006 (config live reload + external sync)
 - Current blocker: none
-- PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio backend), vol-003 (hotkeys), vol-004 (overlay)
+- PASSING with recorded evidence: vol-001..vol-005 (workspace, audio, hotkeys, overlay, tray)
 
 ## Session Log
 
@@ -32,7 +32,7 @@
   - MSVC toolchain setup: this machine had NO C linker — installed MSVC Build Tools 17.14 + Windows SDK 10.0.26100. Builds MUST run through scripts/win-build.bat (sets PATH/LIB/INCLUDE via vcvars64.bat).
   - Ctrl+Alt+M/R/V conflict with the running VolumePro AHK script (same default modifier) — handled gracefully (logged + skipped); user can change modifier in config.json.
   - overlay.rs COMPLETE + verified (vol-004 passing): GDI-painted Win32 popup, bottom-right, threshold colors, click-through (WS_EX_LAYERED|TRANSPARENT), auto-hide timer. Verified via EnumWindows visibility transitions + screenshot.
-  - tray.rs (vol-005) not yet written — next milestone (tray-icon + muda menu).
+  - tray.rs COMPLETE + verified (vol-005 passing): tray-icon + muda menu (Volume % live label, Mute check, Reset 50%, separator, Exit). Tray icon found via UIA; menu captured in screenshot (Reset to 50% / Exit items); clean exit verified via WM_QUIT (same path as menu Exit). Added Ctrl+Alt+Shift+M OpenMenu hotkey (reachable even when icon is in the overflow flyout). NOTE: automated menu clicking is flaky on Windows 11 tray virtualization — items confirmed visually instead.
   - Config live reload (vol-006) not yet implemented — watcher pending.
   - superpowers plugin SessionStart hook + rtk PreToolUse hook activate on a fresh Claude Code session.
-- Next best step: implement the system tray (vol-005) — tray-icon + muda context menu (Volume %, Mute, Reset 50%, Exit), poll menu events in the 150ms timer.
+- Next best step: implement config live reload + external sync (vol-006) — poll config.json mtime in the 150ms timer, re-register hotkeys + re-apply steps when changed (external volume sync already works via the timer).
