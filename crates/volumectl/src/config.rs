@@ -10,7 +10,15 @@
 
 use crate::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
 use serde::{Deserialize, Serialize};
-use std::{fmt, path::PathBuf};
+use std::{
+    fmt,
+    fs::{self, OpenOptions},
+    io::{self, Write},
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 const MIN_VOLUME_STEP: u32 = 1;
 const MAX_VOLUME_STEP: u32 = 50;
@@ -354,11 +362,17 @@ pub fn validate(cfg: &Config) -> Result<(), ConfigValidationError> {
 
 /// Return a normalized copy while preserving the existing config bounds.
 pub fn normalize(mut cfg: Config) -> Config {
-    cfg.volume_step = cfg.volume_step.clamp(MIN_VOLUME_STEP, MAX_VOLUME_STEP);
-    // Saturating arithmetic avoids the old `min > max` panic when a hand-edited
-    // file sets the small step to its maximum.
-    let minimum_large = cfg.volume_step.saturating_add(1).min(MAX_VOLUME_STEP);
-    cfg.volume_step_large = cfg.volume_step_large.clamp(minimum_large, MAX_VOLUME_STEP);
+    // There must be room for a strictly larger large step within the existing
+    // 1..=50 bounds, so the small step's effective maximum is 49.
+    cfg.volume_step = cfg
+        .volume_step
+        .clamp(MIN_VOLUME_STEP, MAX_VOLUME_STEP.saturating_sub(1));
+    cfg.volume_step_large = cfg
+        .volume_step_large
+        .clamp(cfg.volume_step.saturating_add(1), MAX_VOLUME_STEP);
+
+    // Keeping the relationship repair here (rather than relying on callers to
+    // validate first) makes normalization safe for hand-edited legacy files.
     cfg.overlay_duration_ms = cfg
         .overlay_duration_ms
         .clamp(MIN_OVERLAY_DURATION_MS, MAX_OVERLAY_DURATION_MS);
@@ -385,13 +399,84 @@ pub fn save_validated(cfg: &Config) -> Result<Config, ConfigError> {
     Ok(normalized)
 }
 
-fn save_at_path(cfg: &Config, path: &std::path::Path) -> Result<(), ConfigError> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
+fn save_at_path(cfg: &Config, path: &Path) -> Result<(), ConfigError> {
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(dir)?;
     let text = serde_json::to_string_pretty(cfg)?;
-    std::fs::write(path, text)?;
-    Ok(())
+    let temp_path = temporary_path(path);
+
+    let write_result = (|| -> io::Result<()> {
+        let mut temp = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)?;
+        temp.write_all(text.as_bytes())?;
+        temp.flush()?;
+        temp.sync_all()?;
+        drop(temp);
+        replace_file(&temp_path, path)
+    })();
+
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+    write_result.map_err(ConfigError::Io)
+}
+
+fn temporary_path(path: &Path) -> PathBuf {
+    let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("config");
+    path.with_file_name(format!(".{file_name}.tmp-{}-{counter}", std::process::id()))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn replace_file(temp_path: &Path, path: &Path) -> io::Result<()> {
+    fs::rename(temp_path, path)
+}
+
+#[cfg(target_os = "windows")]
+fn replace_file(temp_path: &Path, path: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::GetLastError;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, ReplaceFileW, MOVEFILE_REPLACE_EXISTING,
+    };
+
+    let temp: Vec<u16> = temp_path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let replaced = unsafe {
+        ReplaceFileW(
+            destination.as_ptr(),
+            temp.as_ptr(),
+            std::ptr::null(),
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    if replaced != 0 {
+        return Ok(());
+    }
+
+    // ReplaceFileW requires an existing destination. MoveFileExW preserves the
+    // same-directory atomic replacement behavior for a newly created config.
+    let moved = unsafe {
+        MoveFileExW(
+            temp.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING,
+        )
+    };
+    if moved != 0 {
+        Ok(())
+    } else {
+        Err(io::Error::from_raw_os_error(unsafe { GetLastError() } as i32))
+    }
+}
+
+#[cfg(test)]
+fn save_at_path_for_test(cfg: &Config, path: &Path) -> Result<(), ConfigError> {
+    save_at_path(cfg, path)
 }
 
 /// Backwards-compatible persistence entry point.
@@ -500,6 +585,58 @@ mod tests {
         assert_eq!(normalized.beep.blocked_freq, 37);
         assert_eq!(normalized.beep.blocked_duration_ms, 10);
         validate(&normalized).expect("normalized config is valid");
+    }
+
+    #[test]
+    fn normalize_repairs_maximum_step_boundary() {
+        let mut cfg = Config::default();
+        cfg.volume_step = 50;
+        cfg.volume_step_large = 50;
+
+        let normalized = normalize(cfg);
+
+        assert_eq!(normalized.volume_step, 49);
+        assert_eq!(normalized.volume_step_large, 50);
+        validate(&normalized).expect("maximum normalized config is valid");
+    }
+
+    #[test]
+    fn save_at_path_preserves_existing_file_contents() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "volumectl-config-test-{}-{}",
+            std::process::id(),
+            TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&temp_dir).expect("create temporary test directory");
+        let path = temp_dir.join("config.json");
+        std::fs::write(&path, "existing config").expect("seed existing config");
+
+        save_at_path_for_test(&Config::default(), &path).expect("safe save succeeds");
+
+        assert_ne!(std::fs::read_to_string(&path).unwrap(), "existing config");
+        assert!(std::fs::read_dir(&temp_dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .all(|entry| entry.path() == path));
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn save_at_path_does_not_truncate_existing_directory_destination() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "volumectl-config-directory-destination-{}-{}",
+            std::process::id(),
+            TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&temp_dir).expect("create temporary test directory");
+        let path = temp_dir.join("config.json");
+        std::fs::create_dir(&path).expect("create directory destination");
+
+        let result = save_at_path_for_test(&Config::default(), &path);
+
+        assert!(result.is_err());
+        assert!(path.is_dir());
+        let _ = std::fs::remove_dir_all(temp_dir);
     }
 
     #[test]
