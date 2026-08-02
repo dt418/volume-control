@@ -107,6 +107,15 @@ pub fn place_overlay(
     }
 }
 
+/// Place a surface centered in `work_area`, clamped so the rectangle never
+/// extends outside the work area (a surface larger than the work area is
+/// top-left aligned).
+pub fn place_centered(work_area: WorkArea, size: SurfaceSize) -> SurfaceRect {
+    let x = (work_area.x + (work_area.width - size.width) / 2).max(work_area.x);
+    let y = (work_area.y + (work_area.height - size.height) / 2).max(work_area.y);
+    SurfaceRect::new(x, y, x + size.width, y + size.height)
+}
+
 /// Place the mixer in the bottom-right corner, directly above the overlay
 /// with exactly `gap` pixels of vertical separation.
 ///
@@ -213,6 +222,43 @@ mod tests {
         assert!(overlay.top >= work_area.y && mixer.top >= work_area.y);
         assert!(overlay.right <= work_area.right());
         assert!(mixer.bottom <= work_area.bottom());
+    }
+
+    #[test]
+    fn centered_surface_is_mid_work_area() {
+        let work_area = WorkArea::new(0, 0, 2560, 1400);
+        let rect = place_centered(work_area, SurfaceSize::new(580, 636));
+
+        assert_eq!(
+            rect,
+            SurfaceRect::new(990, 382, 1570, 1018),
+            "centered on (2560-580)/2 = 990 and (1400-636)/2 = 382"
+        );
+    }
+
+    #[test]
+    fn centered_surface_handles_negative_origin_work_area() {
+        let work_area = WorkArea::new(-1920, 0, 1920, 1040);
+        let rect = place_centered(work_area, SurfaceSize::new(580, 636));
+
+        assert_eq!(
+            rect,
+            SurfaceRect::new(-1250, 202, -670, 838),
+            "offset by the negative x origin: -1920 + (1920-580)/2 = -1250"
+        );
+    }
+
+    #[test]
+    fn centered_surface_clamps_inside_work_area_when_larger() {
+        let work_area = WorkArea::new(0, 0, 400, 300);
+        let rect = place_centered(work_area, SurfaceSize::new(580, 636));
+
+        // Clamped to the work-area origin; right/bottom edges may exceed the
+        // area when the surface itself is larger than the area.
+        assert_eq!(rect.left, 0);
+        assert_eq!(rect.top, 0);
+        assert_eq!(rect.width(), 580);
+        assert_eq!(rect.height(), 636);
     }
 
     #[test]

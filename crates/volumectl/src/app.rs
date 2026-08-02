@@ -38,6 +38,9 @@ use crate::hotkeys_win32::{
 };
 use crate::mixer::{Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET};
 use crate::overlay::Overlay;
+use crate::settings::{
+    Settings, SettingsAppearance, WM_APP_SETTINGS_APPLY, WM_APP_SETTINGS_CANCEL, WM_APP_SETTINGS_RESET,
+};
 use crate::tray::{Tray, TrayCommand};
 use crate::ui::{AppAction, SurfaceId, SurfaceVisibility};
 
@@ -69,6 +72,11 @@ fn reload_config_if_changed(ctx: &mut AppContext) -> bool {
         new_cfg.overlay_duration_ms,
         new_cfg.modifier
     );
+    // An open settings window adopts the new baseline (preserving any
+    // in-progress edits) so it never shows a stale config.
+    if ctx.settings.is_open() {
+        ctx.settings.reload(&new_cfg);
+    }
     ctx.config = new_cfg;
 
     if modifier_changed {
@@ -88,6 +96,7 @@ struct AppContext {
     last_config_mtime: Option<std::time::SystemTime>,
     overlay: Overlay,
     mixer: Mixer,
+    settings: Settings,
     help: Help,
     tray: Tray,
     /// Shared confirmed UI state published to every renderer by
@@ -215,6 +224,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     install_wheel_hook(hwnd)?;
 
     let mixer = Mixer::new(hwnd)?;
+    let settings = Settings::new(hwnd)?;
     let help = Help::new()?;
 
     // Shared confirmed UI state starts from the audio snapshot and the
@@ -236,6 +246,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         last_config_mtime,
         overlay,
         mixer,
+        settings,
         help,
         tray,
         ui_state,
@@ -318,6 +329,26 @@ unsafe extern "system" fn host_wndproc(
         WM_APP_MIXER_RESET => {
             if !ctx.is_null() {
                 handle_action(&mut *ctx, AppAction::ResetVolume);
+            }
+            0
+        }
+        // ── Settings: the window posts draft intents; the host owns every
+        //    config/hotkey mutation and reports the result back. ──────────
+        WM_APP_SETTINGS_APPLY => {
+            if !ctx.is_null() {
+                handle_action(&mut *ctx, AppAction::ApplyConfig);
+            }
+            0
+        }
+        WM_APP_SETTINGS_CANCEL => {
+            if !ctx.is_null() {
+                handle_action(&mut *ctx, AppAction::CancelConfig);
+            }
+            0
+        }
+        WM_APP_SETTINGS_RESET => {
+            if !ctx.is_null() {
+                handle_action(&mut *ctx, AppAction::ResetConfig);
             }
             0
         }
@@ -429,6 +460,12 @@ fn mixer_appearance(ctx: &AppContext) -> MixerAppearance {
     MixerAppearance::resolve(&ctx.config, &ctx.caps, crate::ui::primitives::system_theme)
 }
 
+/// Resolve the settings window's adaptive appearance — one resolution point in
+/// the host, consumed blindly by the settings window (Task 10).
+fn settings_appearance(ctx: &AppContext) -> SettingsAppearance {
+    SettingsAppearance::resolve(&ctx.config, &ctx.caps, crate::ui::primitives::system_theme)
+}
+
 /// Re-read the audio state, update the audio-truth cache and the shared
 /// confirmed [`crate::ui::AppState`], then push the snapshot into every
 /// renderer (overlay, tray, mixer). `show_overlay` controls whether the
@@ -451,12 +488,18 @@ fn publish_confirmed_state(ctx: &mut AppContext, show_overlay: bool) {
     } else {
         SurfaceVisibility::Hidden
     };
+    ctx.ui_state.surfaces.settings = if ctx.settings.is_open() {
+        SurfaceVisibility::Visible
+    } else {
+        SurfaceVisibility::Hidden
+    };
 
     log::debug!(
-        "publish: state={}%% muted={} mixer_open={} show_overlay={}",
+        "publish: state={}%% muted={} mixer_open={} settings_open={} show_overlay={}",
         st.percent(),
         st.muted,
         ctx.mixer.is_open(),
+        ctx.settings.is_open(),
         show_overlay
     );
 
@@ -468,6 +511,9 @@ fn publish_confirmed_state(ctx: &mut AppContext, show_overlay: bool) {
     ctx.tray.set_volume(&st);
     if ctx.mixer.is_open() {
         ctx.mixer.sync(&st, &mixer_appearance(&*ctx));
+    }
+    if ctx.settings.is_open() {
+        ctx.settings.set_appearance(&settings_appearance(ctx));
     }
 }
 
@@ -491,6 +537,22 @@ fn tray_command_to_action(cmd: TrayCommand) -> AppAction {
         C::ApplyBlacklist => AppAction::ApplyRecommendedBlacklist,
         C::Exit => AppAction::Exit,
     }
+}
+
+/// Adopt a saved config as the running config, resync the mtime watch (so the
+/// 150ms poll does not immediately reload our own write), re-register hotkeys
+/// only when the modifier changed, and refresh every renderer.
+fn adopt_saved_config(ctx: &mut AppContext, saved: Config) {
+    let modifier_changed = saved.modifier != ctx.config.modifier;
+    ctx.config = saved;
+    ctx.last_config_mtime = config_mtime();
+    if modifier_changed {
+        log::info!("config: modifier changed — re-registering hotkeys");
+        if let Err(e) = ctx.hotkeys.register(ctx.config.modifier) {
+            log::warn!("hotkey re-register after modifier change failed: {e}");
+        }
+    }
+    publish_confirmed_state(ctx, false);
 }
 
 /// Central handler for every [`AppAction`] emitted by any surface. Owns all
@@ -638,24 +700,84 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
         A::Exit => unsafe {
             PostQuitMessage(0);
         },
-        // Settings draft/appearance intents are for Tasks 9/10; not wired yet.
-        A::ApplyConfig
-        | A::CancelConfig
-        | A::ResetConfig
-        | A::SetTheme(_)
-        | A::SetMaterial(_)
-        | A::SetMotion(_)
-        | A::AddBlacklistEntry(_)
-        | A::RemoveBlacklistEntry(_)
-        | A::ClearBlacklist => {
-            log::debug!("action stubbed for Settings (Tasks 9/10): {action:?}");
+        // ── Settings (Task 10): the host owns every config/hotkey mutation.
+        //    The window posts draft intents; the host drives the commit,
+        //    adopts the saved config, re-registers hotkeys only after a
+        //    successful modifier change, and reports the result back. ─────
+        A::ApplyConfig => {
+            let result = ctx.settings.apply();
+            match result {
+                Ok(saved) => {
+                    ctx.settings.on_apply_result(&Ok(saved.clone()));
+                    adopt_saved_config(ctx, saved);
+                }
+                Err(e) => {
+                    log::warn!("settings apply failed: {e}");
+                    ctx.settings.on_apply_result(&Err(e));
+                }
+            }
         }
-        // Surface toggles without a native surface yet (Settings/Overlay/Tray
-        // show-hide from future renderers).
-        A::ShowSurface(S::Settings)
-        | A::HideSurface(S::Settings)
-        | A::ToggleSurface(S::Settings)
-        | A::ShowSurface(S::Overlay)
+        A::CancelConfig => {
+            ctx.settings.cancel();
+            ctx.ui_state.surfaces.settings = SurfaceVisibility::Hidden;
+        }
+        A::ResetConfig => {
+            ctx.settings.reset();
+        }
+        // Direct appearance intents for external callers (e.g. a future tray
+        // preview). The settings window drives appearance through ApplyConfig,
+        // which persists every appearance field together.
+        A::SetTheme(theme) => {
+            ctx.config.appearance.theme = theme;
+            match crate::config::save_validated(&ctx.config) {
+                Ok(saved) => adopt_saved_config(ctx, saved),
+                Err(e) => log::warn!("theme persist failed: {e}"),
+            }
+        }
+        A::SetMaterial(material) => {
+            ctx.config.appearance.material = material;
+            match crate::config::save_validated(&ctx.config) {
+                Ok(saved) => adopt_saved_config(ctx, saved),
+                Err(e) => log::warn!("material persist failed: {e}"),
+            }
+        }
+        A::SetMotion(motion) => {
+            ctx.config.appearance.motion = motion;
+            match crate::config::save_validated(&ctx.config) {
+                Ok(saved) => adopt_saved_config(ctx, saved),
+                Err(e) => log::warn!("motion persist failed: {e}"),
+            }
+        }
+        // Blacklist edits from external callers update the settings window's
+        // in-memory draft; nothing touches disk until the user applies.
+        A::AddBlacklistEntry(name) => ctx.settings.add_blacklist_entry(&name),
+        A::RemoveBlacklistEntry(name) => ctx.settings.remove_blacklist_entry(&name),
+        A::ClearBlacklist => ctx.settings.clear_blacklist(),
+        // ── Settings surface show/hide/toggle ────────────────────────────
+        A::ShowSurface(S::Settings) => {
+            if !ctx.settings.is_open() {
+                ctx.settings.show(&ctx.config, &settings_appearance(ctx));
+                ctx.ui_state.surfaces.settings = SurfaceVisibility::Visible;
+            }
+        }
+        A::HideSurface(S::Settings) => {
+            if ctx.settings.is_open() {
+                ctx.settings.hide();
+            }
+            ctx.ui_state.surfaces.settings = SurfaceVisibility::Hidden;
+        }
+        A::ToggleSurface(S::Settings) => {
+            if ctx.settings.is_open() {
+                ctx.settings.hide();
+                ctx.ui_state.surfaces.settings = SurfaceVisibility::Hidden;
+            } else {
+                ctx.settings.show(&ctx.config, &settings_appearance(ctx));
+                ctx.ui_state.surfaces.settings = SurfaceVisibility::Visible;
+            }
+        }
+        // Surface toggles without a native surface yet (Overlay/Tray show-hide
+        // from future renderers).
+        A::ShowSurface(S::Overlay)
         | A::HideSurface(S::Overlay)
         | A::ToggleSurface(S::Overlay)
         | A::ShowSurface(S::Tray)

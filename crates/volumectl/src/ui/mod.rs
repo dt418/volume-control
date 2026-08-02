@@ -19,7 +19,7 @@ pub use model::{
 };
 pub use settings::SettingsDraft;
 pub use surface::{
-    place_mixer_above_overlay, place_overlay, SurfaceRect, SurfaceSize, WorkArea,
+    place_centered, place_mixer_above_overlay, place_overlay, SurfaceRect, SurfaceSize, WorkArea,
 };
 pub use theme::{
     accent_color, tokens_for, AnimationTokens, EasingPolicy, ElevationTokens, ErrorTokens,

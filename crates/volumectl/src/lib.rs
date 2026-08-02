@@ -24,6 +24,8 @@ pub mod mixer;
 #[cfg(target_os = "windows")]
 pub mod overlay;
 #[cfg(target_os = "windows")]
+pub mod settings;
+#[cfg(target_os = "windows")]
 pub mod tray;
 
 /// CLI fallback for non-Windows platforms (also handy for testing).
