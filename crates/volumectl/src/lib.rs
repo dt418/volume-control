@@ -8,6 +8,7 @@ pub mod audio;
 pub mod config;
 pub mod core;
 pub mod hotkeys;
+pub mod ui;
 
 #[cfg(target_os = "windows")]
 pub mod app;
@@ -29,7 +30,8 @@ pub mod tray;
 #[cfg(not(target_os = "windows"))]
 pub mod cli;
 
-/// Requested application state — the single place the GUI layer reads from.
+/// Legacy application state retained for callers of the original public API.
+/// New UI code should use [`ui::AppState`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AppState {
     pub volume: f32,
