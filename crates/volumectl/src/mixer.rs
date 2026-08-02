@@ -22,10 +22,7 @@ use windows_sys::Win32::{
         BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, SetBkMode, SetTextColor,
         HBRUSH, HDC, PAINTSTRUCT, TRANSPARENT,
     },
-    System::{
-        LibraryLoader::GetModuleHandleW,
-        Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
-    },
+    System::LibraryLoader::GetModuleHandleW,
     UI::Controls::{InitCommonControlsEx, SetWindowTheme, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX},
     UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, GetSystemMetrics, GetWindowLongPtrW,
@@ -64,7 +61,9 @@ struct MixerTheme {
 
 impl MixerTheme {
     fn system() -> Self {
-        let dark = system_prefers_dark();
+        // Relocated from the local `system_prefers_dark` into the shared
+        // Windows primitives; `None` (unreadable) falls back to light.
+        let dark = crate::ui::primitives::system_theme().unwrap_or(false);
         Self {
             dark,
             background: if dark {
@@ -83,27 +82,6 @@ impl MixerTheme {
                 rgb(0x5F, 0x5F, 0x5F)
             },
         }
-    }
-}
-
-/// Read the Windows app theme preference. A missing or unreadable value uses
-/// the light theme, keeping the mixer usable on older Windows versions.
-fn system_prefers_dark() -> bool {
-    unsafe {
-        let mut value = 1u32;
-        let mut size = std::mem::size_of::<u32>() as u32;
-        RegGetValueW(
-            HKEY_CURRENT_USER,
-            windows_sys::core::w!(
-                "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"
-            ),
-            windows_sys::core::w!("AppsUseLightTheme"),
-            RRF_RT_REG_DWORD,
-            std::ptr::null_mut(),
-            &mut value as *mut u32 as *mut _,
-            &mut size,
-        ) == 0
-            && value == 0
     }
 }
 

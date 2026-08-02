@@ -1,11 +1,15 @@
 //! Shared, platform-neutral UI contracts.
 //!
-//! Renderer and host integrations are intentionally kept out of this module.
+//! Renderer and host integrations are intentionally kept out of this module;
+//! platform-specific primitives live under [`platform`] and are re-exported
+//! only on Windows.
 
 mod capabilities;
 mod model;
 mod surface;
 mod theme;
+
+pub mod platform;
 
 pub use capabilities::{resolve_material, ResolvedMaterial, UiCapabilities};
 pub use model::{
@@ -20,3 +24,7 @@ pub use theme::{
     FocusTokens, HitTargetTokens, MaterialIntent, RadiusTokens, Rgba, SpacingTokens, TextRole,
     ThemeTokens, TypographyTokens, VolumeThresholdColors,
 };
+
+/// Windows rendering primitives (compile-gated; absent on other targets).
+#[cfg(target_os = "windows")]
+pub use platform::primitives;
