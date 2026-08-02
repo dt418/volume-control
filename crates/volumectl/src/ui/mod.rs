@@ -6,6 +6,7 @@
 
 mod capabilities;
 mod model;
+mod settings;
 mod surface;
 mod theme;
 
@@ -16,6 +17,7 @@ pub use model::{
     AccentMode, AppAction, AppState, MaterialMode, MotionMode, SurfaceId, SurfaceVisibility,
     SurfaceVisibilityState, ThemeMode, UiStatus,
 };
+pub use settings::SettingsDraft;
 pub use surface::{
     place_mixer_above_overlay, place_overlay, SurfaceRect, SurfaceSize, WorkArea,
 };
