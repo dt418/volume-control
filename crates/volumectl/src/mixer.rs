@@ -416,10 +416,17 @@ impl Mixer {
     fn destroy(&mut self) {
         unsafe {
             let d = &mut *(GetWindowLongPtrW(self.hwnd, GWLP_USERDATA) as *mut MixerData);
+            // Destroy the window (and its subclassed children) BEFORE freeing
+            // `d`: `DestroyWindow` sends teardown messages through the still
+            // installed child subclass proc, which reads the parent's
+            // `GWLP_USERDATA` via `original_proc`. Freeing first would make
+            // that a dangling dereference (use-after-free on every drop).
+            // GDI brushes are process-owned, so deleting them after the window
+            // is gone is safe.
+            DestroyWindow(self.hwnd);
             DeleteObject(d.accent);
             DeleteObject(d.background);
             drop(Box::from_raw(d));
-            DestroyWindow(self.hwnd);
         }
     }
 }
@@ -740,5 +747,19 @@ mod tests {
         // percentage with primary text, so they must differ.
         let a = appearance(ThemeMode::Light, MaterialMode::Opaque, false);
         assert_ne!(a.tokens.text_primary, a.tokens.text_secondary);
+    }
+
+    #[test]
+    fn mixer_constructs_and_drops_without_crashing() {
+        // Smoke guard for the Drop path. `destroy()` must destroy the
+        // subclassed child controls (whose teardown messages route through the
+        // child subclass proc, which dereferences the parent's MixerData via
+        // `original_proc`) BEFORE freeing that state — freeing first would be a
+        // use-after-free on every `Mixer` drop. Constructing a real (hidden)
+        // Win32 window and dropping it exercises that exact path; a hard crash
+        // would need an allocator with guard pages or a live app run, but this
+        // still verifies construct→drop end to end deterministically.
+        let mixer = Mixer::new(0).expect("mixer window creates");
+        drop(mixer);
     }
 }
