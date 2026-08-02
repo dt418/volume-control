@@ -5,9 +5,9 @@
 - Repository root: D:\Projects\volume-control
 - Standard startup path: `scripts/win-build.bat run` or `cargo run` (workspace default member = crates/volumectl) — MUST run through vcvars (MSVC env)
 - Standard verification path: `scripts/win-build.bat build` then `scripts/win-build.bat test`
-- Current highest-priority unfinished feature: vol-006 (config live reload + external sync)
+- Current highest-priority unfinished feature: vol-007 (macOS/Linux scaffolds + docs)
 - Current blocker: none
-- PASSING with recorded evidence: vol-001..vol-005 (workspace, audio, hotkeys, overlay, tray)
+- PASSING with recorded evidence: vol-001..vol-006 (workspace, audio, hotkeys, overlay, tray, config live reload + sync)
 
 ## Session Log
 
@@ -33,6 +33,6 @@
   - Ctrl+Alt+M/R/V conflict with the running VolumePro AHK script (same default modifier) — handled gracefully (logged + skipped); user can change modifier in config.json.
   - overlay.rs COMPLETE + verified (vol-004 passing): GDI-painted Win32 popup, bottom-right, threshold colors, click-through (WS_EX_LAYERED|TRANSPARENT), auto-hide timer. Verified via EnumWindows visibility transitions + screenshot.
   - tray.rs COMPLETE + verified (vol-005 passing): tray-icon + muda menu (Volume % live label, Mute check, Reset 50%, separator, Exit). Tray icon found via UIA; menu captured in screenshot (Reset to 50% / Exit items); clean exit verified via WM_QUIT (same path as menu Exit). Added Ctrl+Alt+Shift+M OpenMenu hotkey (reachable even when icon is in the overflow flyout). NOTE: automated menu clicking is flaky on Windows 11 tray virtualization — items confirmed visually instead.
-  - Config live reload (vol-006) not yet implemented — watcher pending.
+  - Config live reload COMPLETE + verified (vol-006 passing): mtime watch in the 150ms timer; volume_step 2->10 mid-run produced 10%/press deltas (88->86->76); modifier change re-registers hotkeys; load() save-if-changed avoids reload loops.
   - superpowers plugin SessionStart hook + rtk PreToolUse hook activate on a fresh Claude Code session.
-- Next best step: implement config live reload + external sync (vol-006) — poll config.json mtime in the 150ms timer, re-register hotkeys + re-apply steps when changed (external volume sync already works via the timer).
+- Next best step: vol-007 — README.md (EN + VI), macOS/Linux compile-gated scaffolds status (cli.rs fallback exists; audio/hotkeys mac/linux stubs pending), then vol-008 final end-to-end verify + release build.

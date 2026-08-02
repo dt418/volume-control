@@ -35,18 +35,55 @@ use crate::tray::{Tray, TrayCommand};
 const ID_TIMER_POLL: usize = 1;
 const POLL_MS: u32 = 150;
 
+/// Last-modified time of the config file (None if it doesn't exist yet).
+fn config_mtime() -> Option<std::time::SystemTime> {
+    std::fs::metadata(crate::config::config_path())
+        .and_then(|m| m.modified())
+        .ok()
+}
+
+/// Reload the config when the file changed on disk. Re-registers hotkeys when
+/// the modifier combo changed. Returns true if a reload happened.
+fn reload_config_if_changed(ctx: &mut AppContext) -> bool {
+    let mtime = config_mtime();
+    if mtime == ctx.last_config_mtime {
+        return false;
+    }
+    ctx.last_config_mtime = mtime;
+
+    let new_cfg = crate::config::load();
+    let modifier_changed = new_cfg.modifier != ctx.config.modifier;
+    log::info!(
+        "config reloaded (step={}, step_large={}, overlay_ms={}, modifier={:?})",
+        new_cfg.volume_step,
+        new_cfg.volume_step_large,
+        new_cfg.overlay_duration_ms,
+        new_cfg.modifier
+    );
+    ctx.config = new_cfg;
+
+    if modifier_changed {
+        if let Err(e) = ctx.hotkeys.register(ctx.config.modifier) {
+            log::warn!("hotkey re-register after config change failed: {e}");
+        }
+    }
+    true
+}
+
 /// Heap-allocated state that lives in the window's GWLP_USERDATA.
 struct AppContext {
     audio: WindowsAudio,
-    _hotkeys: Win32Hotkeys,
+    hotkeys: Win32Hotkeys,
     config: Config,
     last_state: VolumeState,
+    last_config_mtime: Option<std::time::SystemTime>,
     overlay: Overlay,
     tray: Tray,
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = crate::config::load();
+    let last_config_mtime = config_mtime();
     let audio = WindowsAudio::new()?;
     let overlay = Overlay::new()?;
     let tray = Tray::new()?;
@@ -90,14 +127,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     log::debug!("host hwnd=0x{:x}", hwnd);
 
     // Hotkeys are registered against the host window.
-    let _hotkeys = Win32Hotkeys::new(hwnd, config.modifier)?;
+    let hotkeys = Win32Hotkeys::new(hwnd, config.modifier)?;
 
     // Store context in GWLP_USERDATA.
     let ctx = Box::into_raw(Box::new(AppContext {
         audio,
-        _hotkeys,
+        hotkeys,
         config,
         last_state,
+        last_config_mtime,
         overlay,
         tray,
     }));
@@ -159,11 +197,14 @@ unsafe extern "system" fn host_wndproc(
             }
             0
         }
-        // ── Periodic poll: tray menu events + external volume changes ────
+        // ── Periodic poll: config reload + tray menu + external changes ──
         WM_TIMER => {
             let ctx = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppContext;
             if !ctx.is_null() {
                 let ctx = &mut *ctx;
+
+                // Live config reload (mtime watch).
+                let reloaded = reload_config_if_changed(ctx);
 
                 // Tray menu commands.
                 while let Some(cmd) = ctx.tray.poll() {
@@ -172,6 +213,10 @@ unsafe extern "system" fn host_wndproc(
 
                 // External volume changes (media keys, other apps).
                 if let Ok(st) = ctx.audio.get_state() {
+                    if reloaded {
+                        // Thresholds may have changed — re-show the overlay.
+                        ctx.overlay.show(&st, &ctx.config);
+                    }
                     ctx.tray.set_volume(&st);
                     if st != ctx.last_state {
                         log::debug!("ext change: {}% muted={}", st.percent(), st.muted);

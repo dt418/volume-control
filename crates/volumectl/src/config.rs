@@ -24,7 +24,7 @@ pub enum HotkeyModifier {
 }
 
 /// App-level configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     /// Small step percent (default 2).
@@ -43,7 +43,7 @@ pub struct Config {
 
 /// Colour legend thresholds, matching VolumePro's (0 grey, ≤40 green,
 /// ≤75 blue, else orange-red).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ColorThresholds {
     pub green_up_to: u8,
     pub blue_up_to: u8,
@@ -87,14 +87,18 @@ pub fn config_path() -> PathBuf {
 }
 
 /// Load the config; on absence/parse/validation failure write default and re-save.
+///
+/// Only writes the file back when normalisation actually changed values, so
+/// the app's live-reload watcher (mtime based) doesn't loop on its own writes.
 pub fn load() -> Config {
     let path = config_path();
     match std::fs::read_to_string(&path) {
         Ok(raw) => match serde_json::from_str::<Config>(&raw) {
-            Ok(cfg) => {
-                let cfg = validate(cfg);
-                // persist any normalisation done during validation
-                let _ = save(&cfg);
+            Ok(orig) => {
+                let cfg = validate(orig.clone());
+                if cfg != orig {
+                    let _ = save(&cfg);
+                }
                 cfg
             }
             Err(e) => {

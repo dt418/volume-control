@@ -117,13 +117,18 @@
       "area": "config",
       "title": "Config live reload + external sync",
       "user_visible_behavior": "Editing config.json reloads hotkeys/steps without restart; external volume changes sync the overlay.",
-      "status": "not_started",
+      "status": "passing",
       "verification": [
         "Edit config.json volume_step and confirm the new step applies.",
         "Change volume via the OS media keys and confirm the overlay updates."
       ],
-      "evidence": [],
-      "notes": ""
+      "evidence": [
+        "Live reload: while app ran, volume_step 2 -> 10 in config.json; log shows 'config reloaded (step=10, step_large=11...)'; volume deltas changed 2%/press -> 10%/press (current sequence 88 -> 86 -> 76)",
+        "step_large auto-normalized to > step (10->11) per validation clamp",
+        "External sync (pre-existing): 150ms timer polls audio state, updates tray label; overlay is shown for app hotkeys only (media keys keep native flyout, matching VolumePro)",
+        "load() only writes file back when normalization changed values (avoids reload loop on own writes)"
+      ],
+      "notes": "Implementations in crates/volumectl/src/app.rs (reload_config_if_changed in WM_TIMER) + config.rs (mtime watch, save-if-changed)."
     },
     {
       "id": "vol-007",
