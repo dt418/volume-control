@@ -36,7 +36,7 @@ use crate::hotkeys::HotkeyAction;
 use crate::hotkeys_win32::{
     hotkey_action, install_wheel_hook, uninstall_wheel_hook, Win32Hotkeys, WM_APP_WHEEL,
 };
-use crate::mixer::{Mixer, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET};
+use crate::mixer::{Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET};
 use crate::overlay::Overlay;
 use crate::tray::{Tray, TrayCommand};
 use crate::ui::{AppAction, SurfaceId, SurfaceVisibility};
@@ -423,6 +423,12 @@ fn overlay_appearance(ctx: &AppContext) -> crate::overlay::OverlayAppearance {
     )
 }
 
+/// Resolve the mixer's adaptive appearance the same way — one resolution point
+/// in the host, consumed blindly by the mixer (Task 8, mirrors the overlay).
+fn mixer_appearance(ctx: &AppContext) -> MixerAppearance {
+    MixerAppearance::resolve(&ctx.config, &ctx.caps, crate::ui::primitives::system_theme)
+}
+
 /// Re-read the audio state, update the audio-truth cache and the shared
 /// confirmed [`crate::ui::AppState`], then push the snapshot into every
 /// renderer (overlay, tray, mixer). `show_overlay` controls whether the
@@ -461,7 +467,7 @@ fn publish_confirmed_state(ctx: &mut AppContext, show_overlay: bool) {
     }
     ctx.tray.set_volume(&st);
     if ctx.mixer.is_open() {
-        ctx.mixer.sync(&st);
+        ctx.mixer.sync(&st, &mixer_appearance(&*ctx));
     }
 }
 
@@ -549,15 +555,15 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
         A::ShowSurface(S::Mixer) => {
             if !ctx.mixer.is_open() {
                 if let Ok(st) = ctx.audio.get_state() {
-                    ctx.mixer.sync(&st);
+                    ctx.mixer.sync(&st, &mixer_appearance(ctx));
                 }
-                ctx.mixer.toggle();
+                ctx.mixer.toggle(&mixer_appearance(ctx));
             }
             publish_confirmed_state(ctx, false);
         }
         A::HideSurface(S::Mixer) => {
             if ctx.mixer.is_open() {
-                ctx.mixer.toggle();
+                ctx.mixer.toggle(&mixer_appearance(ctx));
             }
             publish_confirmed_state(ctx, false);
         }
@@ -566,10 +572,10 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
             // when it appears (mirrors the original hotkey/tray behavior).
             if !ctx.mixer.is_open() {
                 if let Ok(st) = ctx.audio.get_state() {
-                    ctx.mixer.sync(&st);
+                    ctx.mixer.sync(&st, &mixer_appearance(ctx));
                 }
             }
-            ctx.mixer.toggle();
+            ctx.mixer.toggle(&mixer_appearance(ctx));
             publish_confirmed_state(ctx, false);
         }
         A::ShowSurface(S::Help) => {

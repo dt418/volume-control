@@ -1,12 +1,24 @@
 //! Volume Mixer — a Win11-style flyout with a native trackbar slider.
 //!
-//! Captionless, always-on-top tool window (bottom-right), DWM-styled like the
-//! system flyout: rounded corners (33), immersive dark mode (20), and the
-//! system backdrop (38). Contains:
+//! Captionless, always-on-top tool window, DWM-styled like the system flyout:
+//! rounded corners (33), immersive dark mode (20), and the system backdrop
+//! (38) — all driven by the shared adaptive tokens and the capability-resolved
+//! material treatment (Tasks 3–5) instead of local hardcoded colours. Contains:
 //!   - a small accent bar along the top
 //!   - "System Volume" + live percentage labels
 //!   - a trackbar (0–100, no ticks) — dragging changes volume live
 //!   - Mute / Unmute and Reset to 50% buttons
+//!   - a visible `×` close button that hides (not destroys) the flyout
+//!
+//! Placement is the bottom-right of the *monitor work area* hosting the window,
+//! computed through [`crate::ui::surface::place_mixer_above_overlay`] so the
+//! mixer shares the overlay's right edge and sits exactly 16px above its top.
+//!
+//! Keyboard navigation: the interactive controls (slider + three buttons) are
+//! subclassed so that Escape hides the flyout, Tab/Shift+Tab move focus among
+//! them, Enter/Space activate the focused button (native `BN_CLICKED`), and
+//! focus changes repaint the parent which draws a token-coloured focus ring
+//! around the focused control.
 //!
 //! User interaction (slider drag, buttons) posts [`WM_APP_MIXER_*`] messages
 //! to the host window, which owns the audio backend. The host maps each
@@ -16,28 +28,32 @@
 
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
-    Graphics::Dwm::{
-        DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMWA_SYSTEMBACKDROP_TYPE,
-        DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
-    },
     Graphics::Gdi::{
-        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, SetBkMode, SetTextColor,
-        HBRUSH, HDC, PAINTSTRUCT, TRANSPARENT,
+        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, FrameRect, InvalidateRect,
+        MapWindowPoints, SetBkMode, SetTextColor, TextOutW, HBRUSH, HDC, PAINTSTRUCT, TRANSPARENT,
     },
     System::LibraryLoader::GetModuleHandleW,
-    UI::Controls::{InitCommonControlsEx, SetWindowTheme, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX},
+    UI::Controls::{InitCommonControlsEx, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX},
+    UI::Input::KeyboardAndMouse::{GetFocus, GetKeyState, SetFocus, VK_ESCAPE, VK_SHIFT, VK_TAB},
     UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, GetSystemMetrics, GetWindowLongPtrW,
-        PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW, SetWindowPos,
-        SetWindowTextW, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GWLP_USERDATA, HWND_TOPMOST,
-        SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WM_CLOSE, WM_COMMAND,
-        WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_HSCROLL, WM_PAINT, WM_USER, WNDCLASSW, WS_CHILD,
-        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
+        CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetAncestor,
+        GetWindowLongPtrW, GetWindowRect, PostMessageW, RegisterClassW, SendMessageW,
+        SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, BN_CLICKED, CW_USEDEFAULT,
+        GA_PARENT, GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SWP_NOACTIVATE, SWP_SHOWWINDOW,
+        SW_HIDE, WM_CLOSE, WM_COMMAND, WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_HSCROLL, WM_KEYDOWN,
+        WM_KILLFOCUS, WM_PAINT, WM_SETFOCUS, WM_SYSKEYDOWN, WM_USER, WNDCLASSW, WNDPROC, WS_CHILD,
+        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE,
     },
 };
 
 use crate::audio::VolumeState;
-use crate::overlay::{OVERLAY_HEIGHT, OVERLAY_MARGIN_X, OVERLAY_MARGIN_Y};
+use crate::config::Config;
+use crate::overlay::{OVERLAY_HEIGHT, OVERLAY_MARGIN_X, OVERLAY_MARGIN_Y, OVERLAY_WIDTH};
+use crate::ui::primitives::{apply_backdrop, colorref, theme_controls, work_area_for};
+use crate::ui::{
+    place_mixer_above_overlay, resolve_material, tokens_for, AccentMode, ResolvedMaterial,
+    SurfaceSize, ThemeMode, ThemeTokens, UiCapabilities,
+};
 
 /// Custom messages the mixer posts to the host window (see `app.rs`).
 pub const WM_APP_MIXER_CHANGE: u32 = WM_USER + 11; // wparam = new volume %
@@ -53,42 +69,60 @@ const ID_BTN_MUTE: usize = 1;
 const ID_BTN_RESET: usize = 2;
 const ID_BTN_CLOSE: usize = 3;
 
-#[derive(Clone, Copy)]
-struct MixerTheme {
-    dark: bool,
-    background: u32,
-    text: u32,
-    secondary_text: u32,
+// Indexes into `MixerData::orig_procs`, kept in sync with the tab order
+// (slider -> mute -> reset -> close).
+const IDX_SLIDER: usize = 0;
+const IDX_MUTE: usize = 1;
+const IDX_RESET: usize = 2;
+const IDX_CLOSE: usize = 3;
+
+/// The window-proc signature of the subclassed interactive controls.
+type ChildWndProc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT;
+
+/// Adaptive appearance resolved by the host and applied by the mixer.
+///
+/// The host resolves this once per `sync`/`toggle` from the confirmed
+/// appearance preferences and the display-session capability snapshot, so the
+/// mixer stays a dumb consumer with a single resolution point in `app.rs` —
+/// the same seam Task 7 established for the overlay.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MixerAppearance {
+    /// Resolved palette tokens (theme + high-contrast + accent).
+    pub tokens: ThemeTokens,
+    /// Capability-resolved material treatment (blur/translucent/opaque).
+    pub material: ResolvedMaterial,
 }
 
-impl MixerTheme {
-    fn system() -> Self {
-        // Relocated from the local `system_prefers_dark` into the shared
-        // Windows primitives; `None` (unreadable) falls back to light.
-        let dark = crate::ui::primitives::system_theme().unwrap_or(false);
+impl MixerAppearance {
+    /// Resolve the adaptive appearance from `config.appearance` against `caps`.
+    ///
+    /// `system_is_dark` is consulted only for [`ThemeMode::System`]; it lets
+    /// tests inject the darkness decision while the host passes the shared
+    /// [`crate::ui::primitives::system_theme`] helper.
+    pub fn resolve(
+        config: &Config,
+        caps: &UiCapabilities,
+        system_is_dark: impl Fn() -> Option<bool>,
+    ) -> Self {
+        let appearance = &config.appearance;
+        let tokens = tokens_for(
+            appearance.theme,
+            caps.high_contrast,
+            appearance.accent,
+            system_is_dark,
+        );
+        let material = resolve_material(appearance.material, caps);
+        Self { tokens, material }
+    }
+
+    /// Placeholder used before the first `sync`/`toggle` (the window is hidden
+    /// then, so this is never painted).
+    fn placeholder() -> Self {
         Self {
-            dark,
-            background: if dark {
-                rgb(0x20, 0x20, 0x20)
-            } else {
-                rgb(0xF9, 0xF9, 0xF9)
-            },
-            text: if dark {
-                rgb(0xF5, 0xF5, 0xF5)
-            } else {
-                rgb(0x1A, 0x1A, 0x1A)
-            },
-            secondary_text: if dark {
-                rgb(0xB8, 0xB8, 0xB8)
-            } else {
-                rgb(0x5F, 0x5F, 0x5F)
-            },
+            tokens: tokens_for(ThemeMode::System, false, AccentMode::System, || None),
+            material: ResolvedMaterial::Opaque,
         }
     }
-}
-
-fn rgb(r: u8, g: u8, b: u8) -> u32 {
-    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16)
 }
 
 // Trackbar messages (TBM_*) — canonical Win32 values (WM_USER-based,
@@ -107,27 +141,31 @@ struct MixerData {
     slider: HWND,
     percent_label: HWND,
     mute_btn: HWND,
-    _reset_btn: HWND,
-    _close_btn: HWND,
+    reset_btn: HWND,
+    close_btn: HWND,
+    /// Original window procs of the subclassed interactive controls, saved so
+    /// [`mixer_child_wndproc`] can forward everything it does not handle.
+    orig_procs: [Option<ChildWndProc>; 4],
     accent: HBRUSH,
     background: HBRUSH,
-    theme: MixerTheme,
+    appearance: MixerAppearance,
     muted: bool,
     open: bool,
 }
 
 impl MixerData {
-    fn placeholder(host: HWND, theme: MixerTheme) -> Self {
+    fn placeholder(host: HWND) -> Self {
         Self {
             host,
             slider: 0,
             percent_label: 0,
             mute_btn: 0,
-            _reset_btn: 0,
-            _close_btn: 0,
+            reset_btn: 0,
+            close_btn: 0,
+            orig_procs: [None; 4],
             accent: 0,
             background: 0,
-            theme,
+            appearance: MixerAppearance::placeholder(),
             muted: false,
             open: false,
         }
@@ -174,17 +212,16 @@ impl Mixer {
             if hwnd == 0 {
                 return Err("mixer CreateWindowEx failed".into());
             }
-            let theme = MixerTheme::system();
-            Self::style(hwnd, theme.dark);
-            let data = Box::into_raw(Box::new(MixerData::placeholder(host, theme)));
+            let data = Box::into_raw(Box::new(MixerData::placeholder(host)));
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, data as isize);
 
-            // Trackbar slider.
+            // Trackbar slider. WS_TABSTOP makes it part of the keyboard focus
+            // order (Tab navigation via the child subclass).
             let slider = CreateWindowExW(
                 0,
                 windows_sys::core::w!("msctls_trackbar32"),
                 windows_sys::core::w!("slider"),
-                WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS,
+                WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS | WS_TABSTOP,
                 18,
                 88,
                 324,
@@ -194,7 +231,7 @@ impl Mixer {
                 hinst,
                 std::ptr::null(),
             );
-            // Live percentage label.
+            // Live percentage label (STATIC — not focusable).
             let percent_label = CreateWindowExW(
                 0,
                 windows_sys::core::w!("STATIC"),
@@ -209,12 +246,12 @@ impl Mixer {
                 hinst,
                 std::ptr::null(),
             );
-            // Mute / Reset buttons.
+            // Mute / Reset buttons. WS_TABSTOP keeps them in the focus order.
             let mute_btn = CreateWindowExW(
                 0,
                 windows_sys::core::w!("Button"),
                 windows_sys::core::w!("  Mute"),
-                WS_CHILD | WS_VISIBLE,
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                 18,
                 128,
                 150,
@@ -228,7 +265,7 @@ impl Mixer {
                 0,
                 windows_sys::core::w!("Button"),
                 windows_sys::core::w!("  Reset to 50%"),
-                WS_CHILD | WS_VISIBLE,
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                 186,
                 128,
                 156,
@@ -244,7 +281,7 @@ impl Mixer {
                 0,
                 windows_sys::core::w!("Button"),
                 windows_sys::core::w!("×"),
-                WS_CHILD | WS_VISIBLE,
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                 WIN_W - 42,
                 12,
                 28,
@@ -262,18 +299,6 @@ impl Mixer {
             {
                 return Err("mixer child control failed".into());
             }
-
-            // Use the dark Explorer theme only for dark mode; the default
-            // theme gives light mode the native light button/trackbar styling.
-            if theme.dark {
-                for ctl in [mute_btn, reset_btn, close_btn, slider] {
-                    SetWindowTheme(
-                        ctl,
-                        windows_sys::core::w!("DarkMode_Explorer"),
-                        std::ptr::null(),
-                    );
-                }
-            }
             set_window_text(close_btn, "×");
 
             // Range 0–100, position 50.
@@ -283,66 +308,70 @@ impl Mixer {
             SendMessageW(slider, TBM_SETRANGE, 1, (100isize) << 16);
             SendMessageW(slider, TBM_SETPOS, 1, 50);
 
-            let accent = CreateSolidBrush(0x00_00_78_D4); // 0x00BBGGRR — blue
-            let background = CreateSolidBrush(theme.background);
-
             let d = &mut *data;
             d.slider = slider;
             d.percent_label = percent_label;
             d.mute_btn = mute_btn;
-            d._reset_btn = reset_btn;
-            d._close_btn = close_btn;
-            d.accent = accent;
-            d.background = background;
+            d.reset_btn = reset_btn;
+            d.close_btn = close_btn;
+
+            // Subclass the interactive controls: keyboard navigation
+            // (Tab/Shift+Tab/Escape) plus focus-change repaints for the ring.
+            subclass(d, slider, IDX_SLIDER);
+            subclass(d, mute_btn, IDX_MUTE);
+            subclass(d, reset_btn, IDX_RESET);
+            subclass(d, close_btn, IDX_CLOSE);
+
+            // Initial adaptive styling from the placeholder appearance. The
+            // resolved appearance is applied (and the brushes rebuilt) on the
+            // first `sync`/`toggle`, so this only matters while hidden.
+            let appearance = MixerAppearance::placeholder();
+            d.accent = CreateSolidBrush(colorref(appearance.tokens.accent));
+            d.background = CreateSolidBrush(colorref(appearance.tokens.background));
+            apply_backdrop(hwnd, appearance.material, appearance.tokens.is_dark);
+            theme_controls(
+                &[slider, mute_btn, reset_btn, close_btn],
+                appearance.tokens.is_dark,
+            );
 
             Ok(Mixer { hwnd })
         }
     }
 
-    /// Apply the Win11 DWM styling (rounded corners, theme-aware backdrop).
-    fn style(hwnd: HWND, dark: bool) {
-        unsafe {
-            let v: i32 = DWMWCP_ROUND;
-            DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
-                &v as *const _ as *const _,
-                4,
-            );
-            let v: i32 = if dark { 1 } else { 0 };
-            DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_USE_IMMERSIVE_DARK_MODE as u32,
-                &v as *const _ as *const _,
-                4,
-            );
-            let v: i32 = DWMSBT_MAINWINDOW;
-            DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_SYSTEMBACKDROP_TYPE as u32,
-                &v as *const _ as *const _,
-                4,
-            );
-        }
-    }
-
     /// Show (synced first) or hide. The app calls this from the mixer hotkey.
-    pub fn toggle(&mut self) {
+    ///
+    /// `appearance` is the host-resolved adaptive appearance; it is applied
+    /// (rebuilding brushes/styling only when it changed) before the window is
+    /// positioned and shown.
+    pub fn toggle(&mut self, appearance: &MixerAppearance) {
         unsafe {
             let d = &mut *(GetWindowLongPtrW(self.hwnd, GWLP_USERDATA) as *mut MixerData);
             if d.open {
                 ShowWindow(self.hwnd, SW_HIDE);
                 d.open = false;
             } else {
-                let sw = GetSystemMetrics(SM_CXSCREEN);
-                let sh = GetSystemMetrics(SM_CYSCREEN);
+                apply_appearance(self.hwnd, d, *appearance);
+
+                // Bottom-right of the monitor work area hosting the mixer,
+                // directly above the volume overlay (shared right edge, 16px
+                // vertical gap). Task 7 moved the overlay onto the same work
+                // area, so the two surfaces stay aligned.
+                let work_area = work_area_for(self.hwnd);
+                let rect = place_mixer_above_overlay(
+                    work_area,
+                    SurfaceSize::new(WIN_W, WIN_H),
+                    SurfaceSize::new(OVERLAY_WIDTH, OVERLAY_HEIGHT),
+                    OVERLAY_MARGIN_X,
+                    OVERLAY_MARGIN_Y,
+                    OVERLAY_GAP,
+                );
                 SetWindowPos(
                     self.hwnd,
                     HWND_TOPMOST,
-                    sw - WIN_W - OVERLAY_MARGIN_X,
-                    sh - WIN_H - OVERLAY_HEIGHT - OVERLAY_GAP - OVERLAY_MARGIN_Y,
-                    WIN_W,
-                    WIN_H,
+                    rect.left,
+                    rect.top,
+                    rect.width(),
+                    rect.height(),
                     SWP_NOACTIVATE | SWP_SHOWWINDOW,
                 );
                 d.open = true;
@@ -359,9 +388,13 @@ impl Mixer {
 
     /// Push the current audio state into the controls (poll sync).
     /// `TBM_SETPOS` does not emit `WM_HSCROLL`, so no feedback loop.
-    pub fn sync(&self, state: &VolumeState) {
+    ///
+    /// Also carries the host-resolved adaptive appearance so the palette,
+    /// material, and control theming track the confirmed preferences.
+    pub fn sync(&self, state: &VolumeState, appearance: &MixerAppearance) {
         unsafe {
             let d = &mut *(GetWindowLongPtrW(self.hwnd, GWLP_USERDATA) as *mut MixerData);
+            apply_appearance(self.hwnd, d, *appearance);
             d.muted = state.muted;
             let pct = state.percent() as isize;
             let cur = SendMessageW(d.slider, TBM_GETPOS, 0, 0);
@@ -389,6 +422,109 @@ impl Mixer {
             DestroyWindow(self.hwnd);
         }
     }
+}
+
+/// Apply a resolved adaptive appearance: rebuild the token-coloured brushes,
+/// re-apply the DWM material treatment, re-theme the child controls, and
+/// repaint. Skipped when nothing changed so the 150ms poll sync stays cheap.
+unsafe fn apply_appearance(hwnd: HWND, d: &mut MixerData, appearance: MixerAppearance) {
+    if d.appearance == appearance {
+        return;
+    }
+    if d.background != 0 {
+        DeleteObject(d.background);
+    }
+    if d.accent != 0 {
+        DeleteObject(d.accent);
+    }
+    d.appearance = appearance;
+    d.accent = CreateSolidBrush(colorref(appearance.tokens.accent));
+    d.background = CreateSolidBrush(colorref(appearance.tokens.background));
+
+    // Material fallback: request the DWM treatment (blur/translucent/opaque).
+    // The mixer always paints its own opaque fill, so a missing system backdrop
+    // (Windows 10) simply keeps the painted fill.
+    apply_backdrop(hwnd, appearance.material, appearance.tokens.is_dark);
+
+    // Dark-mode child controls follow the resolved palette.
+    theme_controls(
+        &[d.slider, d.mute_btn, d.reset_btn, d.close_btn],
+        appearance.tokens.is_dark,
+    );
+
+    InvalidateRect(hwnd, std::ptr::null(), 0);
+}
+
+/// Save the original window proc of an interactive control and install the
+/// shared [`mixer_child_wndproc`] subclass.
+unsafe fn subclass(d: &mut MixerData, ctl: HWND, idx: usize) {
+    let orig = GetWindowLongPtrW(ctl, GWLP_WNDPROC);
+    d.orig_procs[idx] = Some(std::mem::transmute::<isize, ChildWndProc>(orig));
+    let subclass_proc = mixer_child_wndproc as ChildWndProc;
+    SetWindowLongPtrW(ctl, GWLP_WNDPROC, subclass_proc as usize as isize);
+}
+
+/// Recover the saved original window proc for a subclassed control.
+unsafe fn original_proc(parent: HWND, ctl: HWND) -> WNDPROC {
+    let d = &*(GetWindowLongPtrW(parent, GWLP_USERDATA) as *const MixerData);
+    let idx = if ctl == d.slider {
+        IDX_SLIDER
+    } else if ctl == d.mute_btn {
+        IDX_MUTE
+    } else if ctl == d.reset_btn {
+        IDX_RESET
+    } else {
+        IDX_CLOSE
+    };
+    d.orig_procs[idx]
+}
+
+/// Shared subclass proc for the interactive mixer controls.
+///
+/// Native Win32 behaviour is preserved for everything not handled here:
+/// buttons respond to Enter/Space (generating `BN_CLICKED`) and the trackbar
+/// responds to the arrow keys (`WM_HSCROLL`). This subclass adds:
+///   - Escape hides the flyout (identical semantics to `WM_CLOSE`);
+///   - Tab / Shift+Tab move focus among the interactive controls;
+///   - focus changes repaint the parent so it can draw/clear the token focus
+///     ring around the focused control.
+unsafe extern "system" fn mixer_child_wndproc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    let parent = GetAncestor(hwnd, GA_PARENT);
+    if parent == 0 {
+        return DefWindowProcW(hwnd, msg, wparam, lparam);
+    }
+
+    // Escape closes the flyout without destroying it (same as WM_CLOSE).
+    if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && (wparam as u32) == (VK_ESCAPE as u32) {
+        SendMessageW(parent, WM_CLOSE, 0, 0);
+        return 0;
+    }
+
+    // Tab / Shift+Tab move focus among the interactive controls in creation
+    // (tab) order, wrapping at the ends.
+    if msg == WM_KEYDOWN && (wparam as u32) == (VK_TAB as u32) {
+        let d = &*(GetWindowLongPtrW(parent, GWLP_USERDATA) as *const MixerData);
+        let order = [d.slider, d.mute_btn, d.reset_btn, d.close_btn];
+        let cur = order.iter().position(|&c| c == hwnd).unwrap_or(0);
+        let backwards = GetKeyState(VK_SHIFT as i32) < 0;
+        let next = if backwards { (cur + 3) % 4 } else { (cur + 1) % 4 };
+        SetFocus(order[next]);
+        return 0;
+    }
+
+    let result = CallWindowProcW(original_proc(parent, hwnd), hwnd, msg, wparam, lparam);
+
+    // Focus changes repaint the parent so the token focus ring tracks the
+    // newly focused control (see `paint_focus_ring`).
+    if msg == WM_SETFOCUS || msg == WM_KILLFOCUS {
+        InvalidateRect(parent, std::ptr::null(), 0);
+    }
+    result
 }
 
 unsafe extern "system" fn mixer_wndproc(
@@ -420,10 +556,12 @@ unsafe extern "system" fn mixer_wndproc(
             };
             0
         }
+        // The live percentage label paints with the token primary text colour
+        // and the token background brush.
         WM_CTLCOLORSTATIC => {
             let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
             SetBkMode(wparam as HDC, TRANSPARENT as i32);
-            SetTextColor(wparam as HDC, d.theme.text);
+            SetTextColor(wparam as HDC, colorref(d.appearance.tokens.text_primary));
             d.background as LRESULT
         }
         WM_ERASEBKGND => 1,
@@ -439,19 +577,35 @@ unsafe extern "system" fn mixer_wndproc(
             };
             FillRect(hdc, &rect, d.background);
             SetBkMode(hdc, TRANSPARENT as i32);
-            SetTextColor(hdc, d.theme.secondary_text);
+            SetTextColor(hdc, colorref(d.appearance.tokens.text_secondary));
             let label: Vec<u16> = "System volume"
                 .encode_utf16()
                 .chain(std::iter::once(0))
                 .collect();
-            windows_sys::Win32::Graphics::Gdi::TextOutW(
+            TextOutW(
                 hdc,
                 18,
                 20,
                 label.as_ptr(),
                 (label.len() - 1) as i32,
             );
+            paint_focus_ring(hwnd, hdc, d);
             EndPaint(hwnd, &ps);
+            0
+        }
+        // ── Keyboard navigation when the flyout window itself has focus ──
+        // (When a child control has focus, the subclass forwards these.)
+        WM_KEYDOWN | WM_SYSKEYDOWN if (wparam as u32) == (VK_ESCAPE as u32) => {
+            // Same hide-only semantics as WM_CLOSE below.
+            let d = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut MixerData);
+            d.open = false;
+            ShowWindow(hwnd, SW_HIDE);
+            0
+        }
+        WM_KEYDOWN if (wparam as u32) == (VK_TAB as u32) => {
+            // Tab moves into the first interactive control.
+            let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
+            SetFocus(d.slider);
             0
         }
         // ── Close (Esc / close) just hides ───────────────────────────────
@@ -465,15 +619,126 @@ unsafe extern "system" fn mixer_wndproc(
     }
 }
 
+/// Draw a focus ring around the currently focused interactive control.
+///
+/// Uses the shared [`crate::ui::theme::FocusTokens`] (`ring` colour + width).
+/// The ring is drawn in the mixer's client background, just outside the
+/// focused control's window rect, so it stays visible around the child window.
+unsafe fn paint_focus_ring(hwnd: HWND, hdc: HDC, d: &MixerData) {
+    let focused = GetFocus();
+    if focused == 0
+        || (focused != d.slider
+            && focused != d.mute_btn
+            && focused != d.reset_btn
+            && focused != d.close_btn)
+    {
+        return;
+    }
+
+    let focus = d.appearance.tokens.focus;
+    let mut rc: RECT = std::mem::zeroed();
+    if GetWindowRect(focused, &mut rc) == 0 {
+        return;
+    }
+    // Map the control's screen-space window rect into the mixer's client
+    // coordinates (RECT doubles as two POINTs for MapWindowPoints).
+    MapWindowPoints(0, hwnd, &mut rc as *mut RECT as *mut _, 2);
+
+    let gap = focus.ring_gap_px.round() as i32;
+    let width = (focus.ring_width_px.round() as i32).max(1);
+    let ring = CreateSolidBrush(colorref(focus.ring));
+    for i in 0..width {
+        let r = RECT {
+            left: rc.left - gap - i,
+            top: rc.top - gap - i,
+            right: rc.right + gap + i,
+            bottom: rc.bottom + gap + i,
+        };
+        FrameRect(hdc, &r, ring);
+    }
+    DeleteObject(ring);
+}
+
 impl Drop for Mixer {
     fn drop(&mut self) {
         self.destroy();
     }
 }
+
 /// Set the text of a child control (UTF-16).
 fn set_window_text(hwnd: HWND, text: &str) {
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     unsafe {
         SetWindowTextW(hwnd, wide.as_ptr());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use crate::ui::{MaterialMode, ThemeMode, WorkArea};
+
+    fn caps(compositor: bool, high_contrast: bool) -> UiCapabilities {
+        UiCapabilities {
+            compositor,
+            blur: compositor,
+            high_contrast,
+            reduced_motion: false,
+            dpi_scale: 1.0,
+            work_area: WorkArea::new(0, 0, 2560, 1400),
+        }
+    }
+
+    fn appearance(
+        theme: ThemeMode,
+        material: MaterialMode,
+        high_contrast: bool,
+    ) -> MixerAppearance {
+        let mut cfg = Config::default();
+        cfg.appearance.theme = theme;
+        cfg.appearance.material = material;
+        MixerAppearance::resolve(&cfg, &caps(true, high_contrast), || None)
+    }
+
+    #[test]
+    fn dark_appearance_resolves_dark_tokens_and_blurred_material() {
+        let a = appearance(ThemeMode::Dark, MaterialMode::Auto, false);
+        assert!(a.tokens.is_dark);
+        assert_eq!(a.material, ResolvedMaterial::Blurred);
+    }
+
+    #[test]
+    fn system_theme_resolves_through_the_system_is_dark_callback() {
+        let mut cfg = Config::default();
+        cfg.appearance.theme = ThemeMode::System;
+
+        let dark = MixerAppearance::resolve(&cfg, &caps(true, false), || Some(true));
+        assert!(dark.tokens.is_dark);
+
+        let light = MixerAppearance::resolve(&cfg, &caps(true, false), || Some(false));
+        assert!(!light.tokens.is_dark);
+    }
+
+    #[test]
+    fn high_contrast_forces_opaque_material_and_hc_tokens() {
+        let a = appearance(ThemeMode::System, MaterialMode::Auto, true);
+        assert!(a.material.is_opaque());
+        assert!(a.tokens.high_contrast);
+        assert!(a.tokens.background.is_opaque());
+    }
+
+    #[test]
+    fn explicit_opaque_resolves_opaque_even_with_best_capabilities() {
+        let a = appearance(ThemeMode::Dark, MaterialMode::Opaque, false);
+        assert_eq!(a.material, ResolvedMaterial::Opaque);
+    }
+
+    #[test]
+    fn text_roles_are_distinguishable_for_label_vs_percent() {
+        // The "System volume" label is painted with secondary text and the live
+        // percentage with primary text, so they must differ.
+        let a = appearance(ThemeMode::Light, MaterialMode::Opaque, false);
+        assert_ne!(a.tokens.text_primary, a.tokens.text_secondary);
     }
 }
