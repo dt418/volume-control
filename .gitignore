@@ -1,0 +1,12 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Local runtime
+config.json
+*.log

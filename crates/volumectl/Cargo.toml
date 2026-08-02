@@ -1,0 +1,29 @@
+[package]
+name = "volumectl"
+version = "0.1.0"
+edition = "2021"
+description = "Native multiplatform volume controller with global hotkeys and overlay"
+license = "MIT"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+pretty_env_logger = { workspace = true }
+
+# Cross-platform system volume via platform-native APIs.
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+volumecontrol = "0.1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { workspace = true }
+tray-icon = { workspace = true }
+muda = { workspace = true }
+
+[lib]
+name = "volumectl_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "volumectl"
+path = "src/main.rs"

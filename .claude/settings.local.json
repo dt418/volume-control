@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Thanh/.cargo/**)",
+      "Read(//c/Users/Thanh/.cargo/registry/**)",
+      "Bash(claude --version)",
+      "Bash(claude plugin *)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(npm --version)",
+      "Bash('C:\\\\Users\\\\Thanh/.cargo/bin/cargo' --version)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//c/Users/Thanh/.claude/plugins/**)",
+      "Read(//c/Users/Thanh/.claude/plugins/marketplaces/**)",
+      "Bash(git init *)",
+      "Bash('C:\\\\Users\\\\Thanh/.cargo/bin/cargo' install *)"
+    ]
+  }
+}

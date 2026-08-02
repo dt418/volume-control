@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = ["crates/volumectl"]
+default-members = ["crates/volumectl"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Low-level Win32 FFI — predictable signatures for WASAPI COM + RegisterHotKey.
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_Media_Audio",
+    "Win32_Graphics_Gdi",
+] }
+# system tray
+tray-icon = "0.24"
+muda = "0.19"
+# native window / event loop for overlay
+winit = "0.30"
+# serialization for config
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# logging
+log = "0.4"
+pretty_env_logger = "0.5"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
