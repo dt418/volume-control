@@ -95,7 +95,6 @@ struct AppContext {
     ui_state: crate::ui::AppState,
     /// Display-session capabilities measured once at startup. Consumed by the
     /// adaptive renderers (Tasks 7/8).
-    #[allow(dead_code)]
     caps: crate::ui::UiCapabilities,
 }
 
@@ -412,6 +411,18 @@ fn hotkey_to_action(action: HotkeyAction, step: i16, step_large: i16) -> AppActi
     }
 }
 
+/// Resolve the overlay's adaptive appearance from the confirmed appearance
+/// preferences and the startup display-session capability snapshot. One
+/// resolution point for the overlay: it stays a dumb consumer of the resolved
+/// tokens + material.
+fn overlay_appearance(ctx: &AppContext) -> crate::overlay::OverlayAppearance {
+    crate::overlay::OverlayAppearance::resolve(
+        &ctx.config,
+        &ctx.caps,
+        crate::ui::primitives::system_theme,
+    )
+}
+
 /// Re-read the audio state, update the audio-truth cache and the shared
 /// confirmed [`crate::ui::AppState`], then push the snapshot into every
 /// renderer (overlay, tray, mixer). `show_overlay` controls whether the
@@ -445,7 +456,8 @@ fn publish_confirmed_state(ctx: &mut AppContext, show_overlay: bool) {
 
     if show_overlay {
         ctx.ui_state.surfaces.overlay = SurfaceVisibility::Visible;
-        ctx.overlay.show(&st, &ctx.config);
+        ctx.overlay
+            .show(&st, &ctx.config, &overlay_appearance(&*ctx));
     }
     ctx.tray.set_volume(&st);
     if ctx.mixer.is_open() {
@@ -589,13 +601,17 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
         }
         A::OpenConfigLocation => {
             crate::config::open_in_editor();
-            ctx.overlay
-                .show_text("Editing config — changes reload automatically", &ctx.config);
+            ctx.overlay.show_text(
+                "Editing config — changes reload automatically",
+                &ctx.config,
+                &overlay_appearance(&*ctx),
+            );
         }
         A::ReloadConfig => {
             ctx.last_config_mtime = None; // force
             reload_config_if_changed(ctx);
-            ctx.overlay.show_text("Config reloaded", &ctx.config);
+            ctx.overlay
+                .show_text("Config reloaded", &ctx.config, &overlay_appearance(&*ctx));
         }
         A::ApplyRecommendedBlacklist => {
             let recommended = crate::config::recommended_blacklist(ctx.config.modifier);
@@ -610,7 +626,8 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
                 "Blacklist already up to date".to_string()
             };
             log::info!("{msg}");
-            ctx.overlay.show_text(&msg, &ctx.config);
+            ctx.overlay
+                .show_text(&msg, &ctx.config, &overlay_appearance(&*ctx));
         }
         A::Exit => unsafe {
             PostQuitMessage(0);
