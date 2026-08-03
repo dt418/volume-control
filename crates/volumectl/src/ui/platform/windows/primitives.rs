@@ -13,9 +13,9 @@
 use windows_sys::Win32::{
     Foundation::{BOOL, HWND},
     Graphics::Dwm::{
-        DwmIsCompositionEnabled, DwmSetWindowAttribute, DWMSBT_NONE, DWMSBT_TRANSIENTWINDOW,
-        DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE,
-        DWMWCP_ROUND,
+        DwmGetWindowAttribute, DwmIsCompositionEnabled, DwmSetWindowAttribute, DWMSBT_NONE,
+        DWMSBT_TRANSIENTWINDOW, DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
+        DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
     },
     Graphics::Gdi::{
         GetDC, GetDeviceCaps, GetMonitorInfoW, MonitorFromWindow, ReleaseDC, LOGPIXELSX,
@@ -178,6 +178,38 @@ pub fn dpi_scale_for(hwnd: HWND) -> f32 {
 /// surface and always works (see [`PaintCanvas::begin_paint`]).
 fn is_layered(hwnd: HWND) -> bool {
     unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED as isize != 0 }
+}
+
+/// Whether `hwnd` has a DWM system backdrop active (a Windows 11 acrylic /
+/// mica attribute such as `DWMSBT_TRANSIENTWINDOW`).
+///
+/// Backdrop windows are composed by DWM the same way layered windows are —
+/// the backdrop is drawn into the window's own composited surface — and
+/// `ID2D1HwndRenderTarget` presents do not land there either (live-verified
+/// on Windows 11: the mixer with a transient-window backdrop rendered a
+/// uniform blur-tinted surface under D2D while the same window painted
+/// correctly via GDI). See [`PaintCanvas::begin_paint`] for the shared rule.
+fn backdrop_active(hwnd: HWND) -> bool {
+    unsafe {
+        let mut value: i32 = 0;
+        DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_SYSTEMBACKDROP_TYPE as u32,
+            &mut value as *mut i32 as *mut _,
+            std::mem::size_of::<i32>() as u32,
+        ) == 0
+            && value != DWMSBT_NONE
+    }
+}
+
+/// Whether D2D hwnd render targets can present into `hwnd` at all.
+///
+/// DWM-owned surfaces (layered windows and system-backdrop windows) never
+/// show `ID2D1HwndRenderTarget` output; GDI paints straight into them and
+/// always works, so the canvas selects the GDI path for both (see
+/// [`PaintCanvas::begin_paint`]).
+fn d2d_present_supported(hwnd: HWND) -> bool {
+    !is_layered(hwnd) && !backdrop_active(hwnd)
 }
 
 /// Monitor work area for the display nearest `hwnd`.
@@ -560,24 +592,27 @@ impl<'a> PaintCanvas<'a> {
                 return None;
             }
             let dpi = DpiMetrics::new(dpi_scale_for(hwnd));
-            // D2D mode is all-or-nothing per paint (see module docs). Layered
-            // windows (WS_EX_LAYERED, e.g. the click-through volume overlay)
-            // skip D2D entirely: an ID2D1HwndRenderTarget presents through a
-            // redirection path that never lands in the layered window's own
-            // surface (live-verified on Windows 11: the layered overlay
+            // D2D mode is all-or-nothing per paint (see module docs).
+            // DWM-owned surfaces skip D2D entirely: on layered windows
+            // (WS_EX_LAYERED, e.g. the click-through volume overlay) and on
+            // system-backdrop windows (Windows 11 acrylic, e.g. the mixer), an
+            // ID2D1HwndRenderTarget presents through a redirection path that
+            // never lands in the window's own surface (live-verified on
+            // Windows 11: both the layered overlay and the backdrop mixer
             // rendered a stale uniform surface under D2D while the same
-            // window painted correctly via GDI, which writes straight into
-            // the layered DIB). GDI remains the always-working baseline.
-            let d2d = if is_layered(hwnd) {
-                log::debug!(
-                    "PaintCanvas: {hwnd:?} is layered; hwnd render targets cannot \
-                     present into layered surfaces — painting via GDI"
-                );
-                None
-            } else {
+            // windows painted correctly via GDI, which writes straight into
+            // the surface). GDI remains the always-working baseline.
+            let d2d = if d2d_present_supported(hwnd) {
                 Direct2dContext::get()
                     .and_then(|context| context.render_target(hwnd))
                     .and_then(|mut target| if target.begin() { Some(target) } else { None })
+            } else {
+                log::debug!(
+                    "PaintCanvas: {hwnd:?} has a DWM-owned surface (layered or \
+                     system backdrop); hwnd render targets cannot present into \
+                     it — painting via GDI"
+                );
+                None
             };
             if d2d.is_none() {
                 log::debug!("PaintCanvas: D2D unavailable for {hwnd:?}; painting via GDI");
@@ -1293,6 +1328,58 @@ mod drawing_tests {
             assert!(
                 !canvas.d2d_active(),
                 "layered windows must paint via GDI, never an hwnd render target"
+            );
+            drop(canvas);
+            DestroyWindow(hwnd);
+        }
+    }
+
+    #[test]
+    fn paint_canvas_uses_gdi_for_backdrop_windows() {
+        // Windows 11 system-backdrop windows (DWMWA_SYSTEMBACKDROP_TYPE, e.g.
+        // the acrylic mixer) own a DWM-composited surface that hwnd render
+        // targets cannot present into (live-verified: the backdrop mixer
+        // rendered a uniform blur-tinted surface under D2D and painted
+        // correctly via GDI). The canvas must select the GDI path for them.
+        init_com();
+        unsafe {
+            let class = WNDCLASSW {
+                lpfnWndProc: Some(DefWindowProcW),
+                hInstance: windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(
+                    std::ptr::null(),
+                ),
+                lpszClassName: windows_sys::core::w!("VolCtlBackdropTestWnd"),
+                ..std::mem::zeroed()
+            };
+            RegisterClassW(&class);
+            let hwnd = CreateWindowExW(
+                0,
+                windows_sys::core::w!("VolCtlBackdropTestWnd"),
+                windows_sys::core::w!("backdrop canvas test"),
+                windows_sys::Win32::UI::WindowsAndMessaging::WS_OVERLAPPED,
+                0,
+                0,
+                200,
+                100,
+                0,
+                0,
+                class.hInstance,
+                std::ptr::null(),
+            );
+            assert_ne!(hwnd, 0, "test window creation");
+            let backdrop_set = apply_backdrop(hwnd, crate::ui::ResolvedMaterial::Blurred, false);
+            if !backdrop_set {
+                // Pre-Windows 11 (or a session without DWM backdrops): the
+                // attribute could not be applied, so this window legitimately
+                // has no DWM-owned surface — nothing to assert.
+                DestroyWindow(hwnd);
+                return;
+            }
+            assert!(backdrop_active(hwnd), "the window must report its backdrop");
+            let canvas = PaintCanvas::begin_paint(hwnd).expect("BeginPaint");
+            assert!(
+                !canvas.d2d_active(),
+                "backdrop windows must paint via GDI, never an hwnd render target"
             );
             drop(canvas);
             DestroyWindow(hwnd);

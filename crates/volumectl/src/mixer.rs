@@ -1,24 +1,33 @@
-//! Volume Mixer — a Win11-style flyout with a native trackbar slider.
+//! Volume Mixer — the Signal Glass precision control card (spec §6).
 //!
-//! Captionless, always-on-top tool window, DWM-styled like the system flyout:
-//! rounded corners (33), immersive dark mode (20), and the system backdrop
-//! (38) — all driven by the shared adaptive tokens and the capability-resolved
-//! material treatment (Tasks 3–5) instead of local hardcoded colours. Contains:
-//!   - a small accent bar along the top
-//!   - "System Volume" + live percentage labels
-//!   - a trackbar (0–100, no ticks) — dragging changes volume live
-//!   - Mute / Unmute and Reset to 50% buttons
-//!   - a visible `×` close button that hides (not destroys) the flyout
+//! A 400x224 (logical) captionless, always-on-top tool window, DWM-styled
+//! like the system flyout: rounded corners (33), immersive dark mode (20),
+//! and the system backdrop (38) — all driven by the shared adaptive tokens
+//! and the capability-resolved material treatment (Tasks 3–5). The card
+//! shows `VOLUME MIXER`, `System output`, a right-aligned 28px live value,
+//! and the shared Signal Rail paired with a native trackbar:
 //!
-//! Placement is the bottom-right of the *monitor work area* hosting the window,
-//! computed through [`crate::ui::surface::place_mixer_above_overlay`] so the
-//! mixer shares the overlay's right edge and sits exactly 16px above its top.
+//!   - the **trackbar remains the interactive control** — drag, arrows,
+//!     Home/End (all `WM_HSCROLL` → `WM_APP_MIXER_CHANGE`), and UIA
+//!     semantics — while its chrome is suppressed, so the custom-drawn rail
+//!     (threshold fill + thumb/diamond marker) is the single visible volume
+//!     visualization and a painted mirror of the confirmed slider position;
+//!   - Mute / Unmute and Reset to 50% native buttons;
+//!   - a visible `×` close button that hides (not destroys) the flyout;
+//!   - a two-layer focus ring (outer accent + inner contrast) around the
+//!     focused control.
+//!
+//! Placement is the bottom-right of the *monitor work area* hosting the
+//! window, computed through [`crate::ui::surface::place_mixer_above_overlay`]
+//! with PHYSICAL (DPI-scaled) sizes for both surfaces, so the mixer shares
+//! the overlay's right edge and sits exactly 16px above its top at every
+//! scale (100/125/150%).
 //!
 //! Keyboard navigation: the interactive controls (slider + three buttons) are
 //! subclassed so that Escape hides the flyout, Tab/Shift+Tab move focus among
 //! them, Enter/Space activate the focused button (native `BN_CLICKED`), and
-//! focus changes repaint the parent which draws a token-coloured focus ring
-//! around the focused control.
+//! focus changes repaint the parent which draws the token focus ring around
+//! the focused control.
 //!
 //! User interaction (slider drag, buttons) posts [`WM_APP_MIXER_*`] messages
 //! to the host window, which owns the audio backend. The host maps each
@@ -27,32 +36,34 @@
 //! handler, which mutates audio and publishes confirmed state.
 
 use windows_sys::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
-    Graphics::Gdi::{
-        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, FrameRect, InvalidateRect,
-        MapWindowPoints, SetBkMode, SetTextColor, TextOutW, HBRUSH, HDC, PAINTSTRUCT, TRANSPARENT,
-    },
+    Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+    Graphics::Gdi::{CreateSolidBrush, DeleteObject, InvalidateRect, ValidateRect, HBRUSH},
     System::LibraryLoader::GetModuleHandleW,
     UI::Controls::{InitCommonControlsEx, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX},
     UI::Input::KeyboardAndMouse::{GetFocus, GetKeyState, SetFocus, VK_ESCAPE, VK_SHIFT, VK_TAB},
     UI::WindowsAndMessaging::{
         CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetAncestor,
-        GetWindowLongPtrW, GetWindowRect, PostMessageW, RegisterClassW, SendMessageW,
-        SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, BN_CLICKED, CW_USEDEFAULT,
-        GA_PARENT, GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SWP_NOACTIVATE, SWP_SHOWWINDOW,
-        SW_HIDE, WM_CLOSE, WM_COMMAND, WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_HSCROLL, WM_KEYDOWN,
-        WM_KILLFOCUS, WM_PAINT, WM_SETFOCUS, WM_SYSKEYDOWN, WM_USER, WNDCLASSW, WNDPROC, WS_CHILD,
+        GetWindowLongPtrW, PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW,
+        SetWindowPos, SetWindowTextW, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GA_PARENT,
+        GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW,
+        SW_HIDE, WM_CLOSE, WM_COMMAND, WM_ERASEBKGND, WM_HSCROLL, WM_KEYDOWN, WM_KILLFOCUS,
+        WM_PAINT, WM_SETFOCUS, WM_SYSKEYDOWN, WM_USER, WNDCLASSW, WNDPROC, WS_CHILD,
         WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE,
     },
 };
 
 use crate::audio::VolumeState;
-use crate::config::Config;
+use crate::config::{ColorThresholds, Config};
 use crate::overlay::{OVERLAY_HEIGHT, OVERLAY_MARGIN_X, OVERLAY_MARGIN_Y, OVERLAY_WIDTH};
-use crate::ui::primitives::{apply_backdrop, colorref, theme_controls, work_area_for};
+use crate::ui::platform::windows::text::{TextAlign, TextLayout};
+use crate::ui::primitives::{
+    apply_backdrop, colorref, dpi_scale_for, theme_controls, work_area_for, DpiMetrics,
+    PaintCanvas, PointF, RectF,
+};
 use crate::ui::{
-    place_mixer_above_overlay, resolve_material, tokens_for, AccentMode, ResolvedMaterial,
-    SurfaceSize, ThemeMode, ThemeTokens, UiCapabilities,
+    place_mixer_above_overlay, rail_geometry, resolve_material, tokens_for, AccentMode,
+    MarkerGeometry, ResolvedMaterial, SignalRail, SurfaceSize, ThemeMode, ThemeTokens, TrackRect,
+    UiCapabilities,
 };
 
 /// Custom messages the mixer posts to the host window (see `app.rs`).
@@ -60,10 +71,17 @@ pub const WM_APP_MIXER_CHANGE: u32 = WM_USER + 11; // wparam = new volume %
 pub const WM_APP_MIXER_MUTE: u32 = WM_USER + 12;
 pub const WM_APP_MIXER_RESET: u32 = WM_USER + 13;
 
-const WIN_W: i32 = 360;
-const WIN_H: i32 = 178;
+/// Logical width of the precision control card (spec §6.1).
+const WIN_W: i32 = 400;
+/// Logical height of the precision control card (spec §6.1).
+const WIN_H: i32 = 224;
 /// Gap between the mixer card and the transient volume overlay.
 const OVERLAY_GAP: i32 = 16;
+
+/// Rail thumb diameter 12px → 6px radius (spec §6.2, same as the overlay).
+const THUMB_RADIUS: f32 = 6.0;
+/// Muted diamond half-size 6px — same extent as the thumb (spec §6.2).
+const MUTED_DIAMOND_HALF_SIZE: f32 = 6.0;
 
 const ID_BTN_MUTE: usize = 1;
 const ID_BTN_RESET: usize = 2;
@@ -78,6 +96,110 @@ const IDX_CLOSE: usize = 3;
 
 /// The window-proc signature of the subclassed interactive controls.
 type ChildWndProc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRESULT;
+
+/// Logical layout of the mixer card (all values in logical px, spec §6.2).
+///
+/// Vertical rhythm on the 4px grid: 16 top padding; row 1 eyebrow
+/// `VOLUME MIXER` (label role) at y 16; row 2 `System output` (caption) at
+/// y 40; row 3 air (y 52..84); row 4 the 28px display value (y 84..112,
+/// right-aligned); row 5 the Signal Rail band (8px track, center y 128); row
+/// 6 air (y 132..172); row 7 the 36px button row (y 172..208) with 16px
+/// bottom padding. The native trackbar occupies the same x range as the rail
+/// with a 28px-tall hit area centered on the rail band (y 114..142).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MixerLayout {
+    /// `VOLUME MIXER` eyebrow box (label role, secondary text), left at 16.
+    eyebrow_rect: RectF,
+    /// `System output` caption box at y 40.
+    output_rect: RectF,
+    /// Live value box ending at `width - 16`; the value is right-aligned
+    /// inside it via [`TextAlign::Right`] origin math (`rect.right -
+    /// text_width`, never space padding).
+    value_rect: RectF,
+    /// Signal Rail track: spans x 16..=width-16, 8px tall, centered on the
+    /// rail band (center y 128).
+    track: TrackRect,
+    /// Native trackbar hit area: full rail width, 28px tall, centered on the
+    /// rail band so the (chrome-suppressed) thumb x positions agree with the
+    /// painted marker.
+    slider_rect: RectF,
+    mute_rect: RectF,
+    reset_rect: RectF,
+    /// Close hit target: 32x32 at the top-right, right edge at `width - 16`.
+    close_rect: RectF,
+}
+
+impl MixerLayout {
+    fn new(w: f32, h: f32) -> Self {
+        let content_right = w - 16.0;
+        let track_center_y = 128.0;
+        let track_half = 4.0;
+        // Bottom-anchored button row: 36px tall with 16px bottom padding
+        // (y 172..208 for the 224px card).
+        let buttons_bottom = h - 16.0;
+        let buttons_top = buttons_bottom - 36.0;
+        Self {
+            eyebrow_rect: RectF::new(16.0, 16.0, content_right, 32.0),
+            output_rect: RectF::new(16.0, 40.0, content_right, 52.0),
+            value_rect: RectF::new(16.0, 84.0, content_right, 112.0),
+            track: TrackRect {
+                left: 16.0,
+                right: content_right,
+                top: track_center_y - track_half,
+                bottom: track_center_y + track_half,
+            },
+            slider_rect: RectF::new(
+                16.0,
+                track_center_y - 14.0,
+                content_right,
+                track_center_y + 14.0,
+            ),
+            // Mute (secondary) left, Reset (quiet) right-aligned, ≥8px apart.
+            mute_rect: RectF::new(16.0, buttons_top, 148.0, buttons_bottom),
+            reset_rect: RectF::new(228.0, buttons_top, content_right, buttons_bottom),
+            close_rect: RectF::new(content_right - 32.0, 12.0, content_right, 44.0),
+        }
+    }
+}
+
+/// Pure paint plan for one mixer frame.
+///
+/// The plan is the single testable decision point: the logical layout, the
+/// rail state (with the user's `config.color_thresholds` band boundaries),
+/// and the resolved rail geometry are computed here without a window.
+/// [`paint`] only executes the plan through the canvas.
+struct MixerPlan {
+    width: f32,
+    height: f32,
+    layout: MixerLayout,
+    rail: SignalRail,
+    geometry: crate::ui::SignalRailGeometry,
+}
+
+/// Resolve the frame plan for `data` in a `w x h` logical surface.
+///
+/// The rail carries the user's `config.color_thresholds` band boundaries
+/// (`green_up_to`/`blue_up_to`) and the token palette, so
+/// [`SignalRail::fill_color`] mirrors the authoritative
+/// `core::volume_color_rgb` semantics for any config.
+fn paint_plan(d: &MixerData, w: f32, h: f32) -> MixerPlan {
+    let layout = MixerLayout::new(w, h);
+    let rail = SignalRail::new(
+        d.percent,
+        d.muted,
+        d.appearance.tokens.volume_threshold,
+        d.thresholds.green_up_to,
+        d.thresholds.blue_up_to,
+    );
+    let geometry = rail_geometry(&rail, layout.track, THUMB_RADIUS, MUTED_DIAMOND_HALF_SIZE);
+    MixerPlan {
+        width: w,
+        height: h,
+        layout,
+        rail,
+        geometry,
+    }
+}
 
 /// Adaptive appearance resolved by the host and applied by the mixer.
 ///
@@ -139,7 +261,6 @@ const TBS_NOTICKS: u32 = 0x10;
 struct MixerData {
     host: HWND,
     slider: HWND,
-    percent_label: HWND,
     mute_btn: HWND,
     reset_btn: HWND,
     close_btn: HWND,
@@ -149,7 +270,15 @@ struct MixerData {
     accent: HBRUSH,
     background: HBRUSH,
     appearance: MixerAppearance,
+    /// Confirmed volume percent the painted rail mirrors (set by `sync`).
+    percent: u8,
     muted: bool,
+    /// User `config.color_thresholds` band boundaries for the rail fill
+    /// (carried by the host via [`Mixer::set_thresholds`]).
+    thresholds: ColorThresholds,
+    /// DPI scale the window and children were last laid out at (1.0 before
+    /// the first `toggle`).
+    dpi: f32,
     open: bool,
 }
 
@@ -158,7 +287,6 @@ impl MixerData {
         Self {
             host,
             slider: 0,
-            percent_label: 0,
             mute_btn: 0,
             reset_btn: 0,
             close_btn: 0,
@@ -166,7 +294,10 @@ impl MixerData {
             accent: 0,
             background: 0,
             appearance: MixerAppearance::placeholder(),
+            percent: 0,
             muted: false,
+            thresholds: Config::default().color_thresholds,
+            dpi: 1.0,
             open: false,
         }
     }
@@ -215,34 +346,27 @@ impl Mixer {
             let data = Box::into_raw(Box::new(MixerData::placeholder(host)));
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, data as isize);
 
+            // The native controls are laid out in LOGICAL pixels; `toggle`
+            // repositions them to PHYSICAL pixels for the window's DPI before
+            // the first show (the same rects the rail and focus ring use).
+            let layout = MixerLayout::new(WIN_W as f32, WIN_H as f32);
+
             // Trackbar slider. WS_TABSTOP makes it part of the keyboard focus
-            // order (Tab navigation via the child subclass).
+            // order (Tab navigation via the child subclass). Its chrome is
+            // suppressed by the subclass so the painted Signal Rail is the
+            // visible volume visualization; the control itself stays fully
+            // interactive (drag, arrows, Home/End, UIA).
             let slider = CreateWindowExW(
                 0,
                 windows_sys::core::w!("msctls_trackbar32"),
                 windows_sys::core::w!("slider"),
                 WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS | WS_TABSTOP,
-                18,
-                88,
-                324,
-                28,
+                layout.slider_rect.left as i32,
+                layout.slider_rect.top as i32,
+                layout.slider_rect.width() as i32,
+                layout.slider_rect.height() as i32,
                 hwnd,
                 0, // id (unused)
-                hinst,
-                std::ptr::null(),
-            );
-            // Live percentage label (STATIC — not focusable).
-            let percent_label = CreateWindowExW(
-                0,
-                windows_sys::core::w!("STATIC"),
-                windows_sys::core::w!("100%"),
-                WS_CHILD | WS_VISIBLE,
-                18,
-                44,
-                200,
-                30,
-                hwnd,
-                0,
                 hinst,
                 std::ptr::null(),
             );
@@ -250,12 +374,12 @@ impl Mixer {
             let mute_btn = CreateWindowExW(
                 0,
                 windows_sys::core::w!("Button"),
-                windows_sys::core::w!("  Mute"),
+                windows_sys::core::w!("Mute"),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                18,
-                128,
-                150,
-                30,
+                layout.mute_rect.left as i32,
+                layout.mute_rect.top as i32,
+                layout.mute_rect.width() as i32,
+                layout.mute_rect.height() as i32,
                 hwnd,
                 ID_BTN_MUTE as isize,
                 hinst,
@@ -264,12 +388,12 @@ impl Mixer {
             let reset_btn = CreateWindowExW(
                 0,
                 windows_sys::core::w!("Button"),
-                windows_sys::core::w!("  Reset to 50%"),
+                windows_sys::core::w!("Reset to 50%"),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                186,
-                128,
-                156,
-                30,
+                layout.reset_rect.left as i32,
+                layout.reset_rect.top as i32,
+                layout.reset_rect.width() as i32,
+                layout.reset_rect.height() as i32,
                 hwnd,
                 ID_BTN_RESET as isize,
                 hinst,
@@ -282,21 +406,16 @@ impl Mixer {
                 windows_sys::core::w!("Button"),
                 windows_sys::core::w!("×"),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                WIN_W - 42,
-                12,
-                28,
-                28,
+                layout.close_rect.left as i32,
+                layout.close_rect.top as i32,
+                layout.close_rect.width() as i32,
+                layout.close_rect.height() as i32,
                 hwnd,
                 ID_BTN_CLOSE as isize,
                 hinst,
                 std::ptr::null(),
             );
-            if slider == 0
-                || percent_label == 0
-                || mute_btn == 0
-                || reset_btn == 0
-                || close_btn == 0
-            {
+            if slider == 0 || mute_btn == 0 || reset_btn == 0 || close_btn == 0 {
                 return Err("mixer child control failed".into());
             }
             set_window_text(close_btn, "×");
@@ -310,13 +429,13 @@ impl Mixer {
 
             let d = &mut *data;
             d.slider = slider;
-            d.percent_label = percent_label;
             d.mute_btn = mute_btn;
             d.reset_btn = reset_btn;
             d.close_btn = close_btn;
 
             // Subclass the interactive controls: keyboard navigation
-            // (Tab/Shift+Tab/Escape) plus focus-change repaints for the ring.
+            // (Tab/Shift+Tab/Escape), slider chrome suppression, plus
+            // focus-change repaints for the ring.
             subclass(d, slider, IDX_SLIDER);
             subclass(d, mute_btn, IDX_MUTE);
             subclass(d, reset_btn, IDX_RESET);
@@ -343,6 +462,11 @@ impl Mixer {
     /// `appearance` is the host-resolved adaptive appearance; it is applied
     /// (rebuilding brushes/styling only when it changed) before the window is
     /// positioned and shown.
+    ///
+    /// DPI: the window's PHYSICAL size and every child control are scaled
+    /// exactly once from the logical design size (like the overlay, Task 5).
+    /// The overlay's physical size is scaled the same way, so the 16px
+    /// placement gap holds in physical space at any scale.
     pub fn toggle(&mut self, appearance: &MixerAppearance) {
         unsafe {
             let d = &mut *(GetWindowLongPtrW(self.hwnd, GWLP_USERDATA) as *mut MixerData);
@@ -352,15 +476,25 @@ impl Mixer {
             } else {
                 apply_appearance(self.hwnd, d, *appearance);
 
+                let dpi = DpiMetrics::new(dpi_scale_for(self.hwnd));
+                if d.dpi != dpi.scale() {
+                    d.dpi = dpi.scale();
+                    layout_children(d, dpi);
+                }
+
                 // Bottom-right of the monitor work area hosting the mixer,
                 // directly above the volume overlay (shared right edge, 16px
-                // vertical gap). Task 7 moved the overlay onto the same work
-                // area, so the two surfaces stay aligned.
+                // vertical gap) in physical pixels for both surfaces.
                 let work_area = work_area_for(self.hwnd);
+                let mixer_size = SurfaceSize::new(dpi.to_physical(WIN_W), dpi.to_physical(WIN_H));
+                let overlay_size = SurfaceSize::new(
+                    dpi.to_physical(OVERLAY_WIDTH),
+                    dpi.to_physical(OVERLAY_HEIGHT),
+                );
                 let rect = place_mixer_above_overlay(
                     work_area,
-                    SurfaceSize::new(WIN_W, WIN_H),
-                    SurfaceSize::new(OVERLAY_WIDTH, OVERLAY_HEIGHT),
+                    mixer_size,
+                    overlay_size,
                     OVERLAY_MARGIN_X,
                     OVERLAY_MARGIN_Y,
                     OVERLAY_GAP,
@@ -390,11 +524,19 @@ impl Mixer {
     /// `TBM_SETPOS` does not emit `WM_HSCROLL`, so no feedback loop.
     ///
     /// Also carries the host-resolved adaptive appearance so the palette,
-    /// material, and control theming track the confirmed preferences.
+    /// material, and control theming track the confirmed preferences, and
+    /// repaints the parent so the painted Signal Rail mirrors the confirmed
+    /// trackbar position — the rail and the trackbar never disagree.
+    ///
+    /// Focus stability: `sync` never steals focus or resets the focused
+    /// control (it only moves the slider position, sets button text, and
+    /// invalidates paint regions — none of which change focus; covered by
+    /// tests).
     pub fn sync(&self, state: &VolumeState, appearance: &MixerAppearance) {
         unsafe {
             let d = &mut *(GetWindowLongPtrW(self.hwnd, GWLP_USERDATA) as *mut MixerData);
             apply_appearance(self.hwnd, d, *appearance);
+            d.percent = state.percent();
             d.muted = state.muted;
             let pct = state.percent() as isize;
             let cur = SendMessageW(d.slider, TBM_GETPOS, 0, 0);
@@ -407,8 +549,26 @@ impl Mixer {
                 );
                 SendMessageW(d.slider, TBM_SETPOS, 1, pct);
             }
-            set_window_text(d.percent_label, &format!("{}%", state.percent()));
-            set_window_text(d.mute_btn, if state.muted { "  Unmute" } else { "  Mute" });
+            set_window_text(d.mute_btn, if state.muted { "Unmute" } else { "Mute" });
+            // The rail repaints from confirmed state (the paint reads
+            // `d.percent`/`d.muted`); the slider's own chrome never paints,
+            // so the rail is the single visible visualization.
+            InvalidateRect(self.hwnd, std::ptr::null(), 0);
+        }
+    }
+
+    /// Carry the user's `config.color_thresholds` band boundaries into the
+    /// rail fill — the same values the overlay receives per-show. The
+    /// mixer's `sync`/`toggle` signatures are preserved, so the thresholds
+    /// travel on their own seam; the host calls this on every confirmed-state
+    /// publication (before `sync`).
+    pub fn set_thresholds(&mut self, thresholds: ColorThresholds) {
+        unsafe {
+            let d = &mut *(GetWindowLongPtrW(self.hwnd, GWLP_USERDATA) as *mut MixerData);
+            if d.thresholds != thresholds {
+                d.thresholds = thresholds;
+                InvalidateRect(self.hwnd, std::ptr::null(), 0);
+            }
         }
     }
 
@@ -462,6 +622,28 @@ unsafe fn apply_appearance(hwnd: HWND, d: &mut MixerData, appearance: MixerAppea
     InvalidateRect(hwnd, std::ptr::null(), 0);
 }
 
+/// Position the native controls at PHYSICAL coordinates for `dpi`. The
+/// controls' logical layout rects come from [`MixerLayout`] — the same rects
+/// the rail and the focus ring use — scaled exactly once.
+unsafe fn layout_children(d: &MixerData, dpi: DpiMetrics) {
+    let layout = MixerLayout::new(WIN_W as f32, WIN_H as f32);
+    let place = |ctl: HWND, rect: RectF| {
+        SetWindowPos(
+            ctl,
+            0,
+            dpi.to_physical(rect.left.round() as i32),
+            dpi.to_physical(rect.top.round() as i32),
+            dpi.to_physical(rect.width().round() as i32),
+            dpi.to_physical(rect.height().round() as i32),
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+    };
+    place(d.slider, layout.slider_rect);
+    place(d.mute_btn, layout.mute_rect);
+    place(d.reset_btn, layout.reset_rect);
+    place(d.close_btn, layout.close_rect);
+}
+
 /// Save the original window proc of an interactive control and install the
 /// shared [`mixer_child_wndproc`] subclass.
 unsafe fn subclass(d: &mut MixerData, ctl: HWND, idx: usize) {
@@ -490,7 +672,12 @@ unsafe fn original_proc(parent: HWND, ctl: HWND) -> WNDPROC {
 ///
 /// Native Win32 behaviour is preserved for everything not handled here:
 /// buttons respond to Enter/Space (generating `BN_CLICKED`) and the trackbar
-/// responds to the arrow keys (`WM_HSCROLL`). This subclass adds:
+/// responds to the arrow keys / Home / End / drag (`WM_HSCROLL`). This
+/// subclass additionally:
+///   - suppresses the native trackbar's chrome (the mixer paints the Signal
+///     Rail over the slider's band, so the rail is the single visible volume
+///     visualization while the control stays fully interactive: mouse drag,
+///     arrows/Home/End via `WM_HSCROLL`, and UIA semantics);
 ///   - Escape hides the flyout (identical semantics to `WM_CLOSE`);
 ///   - Tab / Shift+Tab move focus among the interactive controls;
 ///   - focus changes repaint the parent so it can draw/clear the token focus
@@ -505,6 +692,21 @@ unsafe extern "system" fn mixer_child_wndproc(
     if parent == 0 {
         return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
+    let d = &*(GetWindowLongPtrW(parent, GWLP_USERDATA) as *const MixerData);
+
+    // Native trackbar chrome suppression: swallow its paint (validating the
+    // update region so no repaint storm) so the parent's painted rail stays
+    // visible over the slider's band.
+    if hwnd == d.slider {
+        match msg {
+            WM_ERASEBKGND => return 1,
+            WM_PAINT => {
+                ValidateRect(hwnd, std::ptr::null());
+                return 0;
+            }
+            _ => {}
+        }
+    }
 
     // Escape closes the flyout without destroying it (same as WM_CLOSE).
     if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) && (wparam as u32) == (VK_ESCAPE as u32) {
@@ -515,7 +717,6 @@ unsafe extern "system" fn mixer_child_wndproc(
     // Tab / Shift+Tab move focus among the interactive controls in creation
     // (tab) order, wrapping at the ends.
     if msg == WM_KEYDOWN && (wparam as u32) == (VK_TAB as u32) {
-        let d = &*(GetWindowLongPtrW(parent, GWLP_USERDATA) as *const MixerData);
         let order = [d.slider, d.mute_btn, d.reset_btn, d.close_btn];
         let cur = order.iter().position(|&c| c == hwnd).unwrap_or(0);
         let backwards = GetKeyState(VK_SHIFT as i32) < 0;
@@ -567,35 +768,20 @@ unsafe extern "system" fn mixer_wndproc(
             };
             0
         }
-        // The live percentage label paints with the token primary text colour
-        // and the token background brush.
-        WM_CTLCOLORSTATIC => {
-            let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
-            SetBkMode(wparam as HDC, TRANSPARENT as i32);
-            SetTextColor(wparam as HDC, colorref(d.appearance.tokens.text_primary));
-            d.background as LRESULT
-        }
         WM_ERASEBKGND => 1,
         WM_PAINT => {
-            let mut ps: PAINTSTRUCT = std::mem::zeroed();
-            let hdc = BeginPaint(hwnd, &mut ps);
-            let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
-            let rect = RECT {
-                left: 0,
-                top: 0,
-                right: WIN_W,
-                bottom: WIN_H,
-            };
-            FillRect(hdc, &rect, d.background);
-            SetBkMode(hdc, TRANSPARENT as i32);
-            SetTextColor(hdc, colorref(d.appearance.tokens.text_secondary));
-            let label: Vec<u16> = "System volume"
-                .encode_utf16()
-                .chain(std::iter::once(0))
-                .collect();
-            TextOutW(hdc, 18, 20, label.as_ptr(), (label.len() - 1) as i32);
-            paint_focus_ring(hwnd, hdc, d);
-            EndPaint(hwnd, &ps);
+            // Paint through the resource-safe canvas (Task 3): it owns the
+            // BeginPaint/EndPaint pair, selects ONE paint path per frame
+            // (Direct2D when available, GDI otherwise), and deletes every
+            // per-call GDI object. If BeginPaint itself fails, paint nothing
+            // and invalidate so the next WM_PAINT retries.
+            if let Some(mut canvas) = PaintCanvas::begin_paint(hwnd) {
+                let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
+                paint(&mut canvas, d);
+            } else {
+                log::debug!("mixer: BeginPaint failed; invalidating for a retry");
+                InvalidateRect(hwnd, std::ptr::null(), 0);
+            }
             0
         }
         // ── Keyboard navigation when the flyout window itself has focus ──
@@ -624,44 +810,173 @@ unsafe extern "system" fn mixer_wndproc(
     }
 }
 
-/// Draw a focus ring around the currently focused interactive control.
+/// Draw the mixer contents from the resolved [`MixerPlan`]: adaptive
+/// background, optional opaque-mode border, the eyebrow/caption/value rows,
+/// the Signal Rail (threshold fill + thumb/diamond marker — the painted
+/// mirror of the native trackbar, whose chrome is suppressed), and the
+/// two-layer focus ring. All coordinates are logical; the canvas scales them
+/// to physical pixels exactly once via its DPI metrics.
 ///
-/// Uses the shared [`crate::ui::theme::FocusTokens`] (`ring` colour + width).
-/// The ring is drawn in the mixer's client background, just outside the
-/// focused control's window rect, so it stays visible around the child window.
-unsafe fn paint_focus_ring(hwnd: HWND, hdc: HDC, d: &MixerData) {
+/// The parent's full-client fill covers the native controls; the buttons are
+/// invalidated at the end so they repaint their chrome on top. The slider is
+/// chrome-suppressed, so the painted rail stays the visible visualization.
+unsafe fn paint(canvas: &mut PaintCanvas, d: &MixerData) {
+    let tokens = &d.appearance.tokens;
+    let plan = paint_plan(d, WIN_W as f32, WIN_H as f32);
+    let layout = &plan.layout;
+
+    // Background: always-painted opaque token fill. This renderer fill is the
+    // material fallback — the surface stays fully readable even when no DWM
+    // backdrop is available (Windows 10 / unsupported backdrop attribute).
+    // The card corners are rounded by the DWM corner preference requested in
+    // `apply_backdrop`.
+    canvas.fill_rect(
+        RectF::new(0.0, 0.0, plan.width, plan.height),
+        tokens.background,
+    );
+
+    // 1px border in opaque mode (same policy as the overlay, spec §5.2).
+    // Blurred/translucent modes draw no border: the DWM backdrop provides the
+    // surface edge. High contrast always resolves to opaque, so it always
+    // gets the border.
+    if d.appearance.material.is_opaque() {
+        canvas.stroke_rounded_rect(
+            RectF::new(0.5, 0.5, plan.width - 0.5, plan.height - 0.5),
+            tokens.radii.surface_px,
+            tokens.border,
+            1.0,
+        );
+    }
+
+    // Row 1: eyebrow (label role, secondary text).
+    canvas.draw_text(&TextLayout {
+        text: "VOLUME MIXER",
+        rect: layout.eyebrow_rect,
+        align: TextAlign::Left,
+        role: tokens.typography.label,
+        color: tokens.text_secondary,
+    });
+
+    // Row 2: output identity.
+    canvas.draw_text(&TextLayout {
+        text: "System output",
+        rect: layout.output_rect,
+        align: TextAlign::Left,
+        role: tokens.typography.caption,
+        color: tokens.text_secondary,
+    });
+
+    // Row 4: live value, right-aligned by real alignment math
+    // (`TextAlign::Right` origin = rect.right - text_width, never space
+    // padding). Muted renders as the `Muted` status cue in the muted legend
+    // colour (the text status cue from spec §6.3); the shape cue below
+    // (MutedDiamond) pairs with the text so the state never relies on colour
+    // alone.
+    let value = if plan.rail.muted {
+        "Muted".to_string()
+    } else {
+        format!("{}%", plan.rail.percent)
+    };
+    canvas.draw_text(&TextLayout {
+        text: &value,
+        rect: layout.value_rect,
+        align: TextAlign::Right,
+        role: if plan.rail.muted {
+            tokens.typography.label
+        } else {
+            tokens.typography.display_value
+        },
+        color: if plan.rail.muted {
+            tokens.volume_threshold.muted
+        } else {
+            tokens.text_primary
+        },
+    });
+
+    // Row 5: Signal Rail — track, threshold fill, marker. The fill honours
+    // the user's `config.color_thresholds` band boundaries through the rail
+    // (Task 4, proven identical to `core::volume_color_rgb` for any config).
+    let t = plan.geometry.track;
+    canvas.fill_rect(RectF::new(t.left, t.top, t.right, t.bottom), tokens.border);
+    if plan.geometry.fill_right > t.left {
+        canvas.fill_rect(
+            RectF::new(t.left, t.top, plan.geometry.fill_right, t.bottom),
+            plan.rail.fill_color(),
+        );
+    }
+    match plan.geometry.marker {
+        MarkerGeometry::Thumb {
+            center_x,
+            center_y,
+            radius,
+        } => {
+            let center = PointF::new(center_x, center_y);
+            // Filled surface circle with a strong outline: the thumb stays
+            // visible against both the fill and the track.
+            canvas.fill_circle(center, radius, tokens.surface);
+            canvas.stroke_circle(center, radius, tokens.signal_glass().border_strong, 1.0);
+        }
+        MarkerGeometry::MutedDiamond {
+            center_x,
+            center_y,
+            half_size,
+        } => {
+            // Outline diamond (◇), never a filled grey copy of the thumb: the
+            // shape carries the muted state in high contrast.
+            canvas.stroke_diamond(
+                PointF::new(center_x, center_y),
+                half_size,
+                tokens.text_primary,
+                1.0,
+            );
+        }
+    }
+
+    // Two-layer focus ring around the focused interactive control.
+    paint_focus_ring(canvas, d, layout);
+
+    // The parent's full-client fill covers the native buttons; repaint them
+    // on top so their chrome is never wiped by a sync repaint. (InvalidateRect
+    // never changes focus, so the focused control stays stable.) The slider
+    // is chrome-suppressed, so the painted rail remains the visible volume
+    // visualization.
+    for ctl in [d.mute_btn, d.reset_btn, d.close_btn] {
+        InvalidateRect(ctl, std::ptr::null(), 0);
+    }
+}
+
+/// Draw the two-layer focus ring around the currently focused interactive
+/// control (Task 1 cross-task follow-up: BOTH layers — the outer accent ring
+/// and the inner contrast ring — via [`PaintCanvas::draw_focus_ring`]).
+///
+/// The control rects come from the logical [`MixerLayout`] — the same rects
+/// the native controls are positioned at (scaled by the same DPI) — so the
+/// ring always lands exactly around the focused control without window-rect
+/// mapping.
+unsafe fn paint_focus_ring(canvas: &mut PaintCanvas, d: &MixerData, layout: &MixerLayout) {
+    let Some(rect) = focused_control_rect(d, layout) else {
+        return;
+    };
+    canvas.draw_focus_ring(rect, &d.appearance.tokens.focus);
+}
+
+/// The logical rect of the focused interactive control, if any.
+unsafe fn focused_control_rect(d: &MixerData, layout: &MixerLayout) -> Option<RectF> {
     let focused = GetFocus();
-    if focused == 0
-        || (focused != d.slider
-            && focused != d.mute_btn
-            && focused != d.reset_btn
-            && focused != d.close_btn)
-    {
-        return;
+    if focused == 0 {
+        return None;
     }
-
-    let focus = d.appearance.tokens.focus;
-    let mut rc: RECT = std::mem::zeroed();
-    if GetWindowRect(focused, &mut rc) == 0 {
-        return;
+    if focused == d.slider {
+        Some(layout.slider_rect)
+    } else if focused == d.mute_btn {
+        Some(layout.mute_rect)
+    } else if focused == d.reset_btn {
+        Some(layout.reset_rect)
+    } else if focused == d.close_btn {
+        Some(layout.close_rect)
+    } else {
+        None
     }
-    // Map the control's screen-space window rect into the mixer's client
-    // coordinates (RECT doubles as two POINTs for MapWindowPoints).
-    MapWindowPoints(0, hwnd, &mut rc as *mut RECT as *mut _, 2);
-
-    let gap = focus.ring_gap_px.round() as i32;
-    let width = (focus.ring_width_px.round() as i32).max(1);
-    let ring = CreateSolidBrush(colorref(focus.ring));
-    for i in 0..width {
-        let r = RECT {
-            left: rc.left - gap - i,
-            top: rc.top - gap - i,
-            right: rc.right + gap + i,
-            bottom: rc.bottom + gap + i,
-        };
-        FrameRect(hdc, &r, ring);
-    }
-    DeleteObject(ring);
 }
 
 impl Drop for Mixer {
@@ -682,7 +997,10 @@ fn set_window_text(hwnd: HWND, text: &str) {
 mod tests {
     use super::*;
     use crate::config::Config;
+    use crate::ui::platform::windows::text::text_x_origin;
+    use crate::ui::primitives::focus_ring_rects;
     use crate::ui::{MaterialMode, ThemeMode, WorkArea};
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowTextW;
 
     fn caps(compositor: bool, high_contrast: bool) -> UiCapabilities {
         UiCapabilities {
@@ -704,6 +1022,41 @@ mod tests {
         cfg.appearance.theme = theme;
         cfg.appearance.material = material;
         MixerAppearance::resolve(&cfg, &caps(true, high_contrast), || None)
+    }
+
+    /// A mixer frame plan for the given state and thresholds (pure; no window).
+    fn plan_with(percent: u8, muted: bool, thresholds: ColorThresholds) -> MixerPlan {
+        let data = MixerData {
+            host: 0,
+            slider: 0,
+            mute_btn: 0,
+            reset_btn: 0,
+            close_btn: 0,
+            orig_procs: [None; 4],
+            accent: 0,
+            background: 0,
+            appearance: appearance(ThemeMode::Dark, MaterialMode::Opaque, false),
+            percent,
+            muted,
+            thresholds,
+            dpi: 1.0,
+            open: false,
+        };
+        paint_plan(&data, WIN_W as f32, WIN_H as f32)
+    }
+
+    /// A mixer frame plan with the default VolumePro band boundaries.
+    fn plan(percent: u8, muted: bool) -> MixerPlan {
+        plan_with(percent, muted, Config::default().color_thresholds)
+    }
+
+    /// Read a child control's text (UTF-16 → UTF-8).
+    fn window_text(hwnd: HWND) -> String {
+        unsafe {
+            let mut buf = [0u16; 128];
+            let n = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+            String::from_utf16_lossy(&buf[..n.max(0) as usize])
+        }
     }
 
     #[test]
@@ -741,10 +1094,276 @@ mod tests {
 
     #[test]
     fn text_roles_are_distinguishable_for_label_vs_percent() {
-        // The "System volume" label is painted with secondary text and the live
-        // percentage with primary text, so they must differ.
+        // The `System output` caption is painted with secondary text and the
+        // live percentage with primary text, so they must differ.
         let a = appearance(ThemeMode::Light, MaterialMode::Opaque, false);
         assert_ne!(a.tokens.text_primary, a.tokens.text_secondary);
+    }
+
+    // ── DPI scaling (pure math) ─────────────────────────────────────────────
+
+    #[test]
+    fn dpi_scales_the_400x224_mixer_to_physical_pixels() {
+        // The window logical size is the spec card; physical size comes from a
+        // single DpiMetrics conversion (the same path `toggle` and the canvas
+        // use).
+        assert_eq!((WIN_W, WIN_H), (400, 224));
+        let at_100 = DpiMetrics::new(1.0);
+        assert_eq!(
+            (at_100.to_physical(WIN_W), at_100.to_physical(WIN_H)),
+            (400, 224)
+        );
+        let at_125 = DpiMetrics::new(1.25);
+        assert_eq!(
+            (at_125.to_physical(WIN_W), at_125.to_physical(WIN_H)),
+            (500, 280)
+        );
+        let at_150 = DpiMetrics::new(1.5);
+        assert_eq!(
+            (at_150.to_physical(WIN_W), at_150.to_physical(WIN_H)),
+            (600, 336)
+        );
+    }
+
+    #[test]
+    fn physical_16px_gap_holds_at_125_and_150_percent() {
+        // The mixer placement consumes PHYSICAL sizes for both surfaces (the
+        // overlay scales its own 336x88 the same way), so the 16px gap holds
+        // in physical space at every scale (Task 5 cross-task follow-up).
+        let work_area = WorkArea::new(0, 0, 2560, 1400);
+        for scale in [1.25f32, 1.5] {
+            let dpi = DpiMetrics::new(scale);
+            let mixer_size = SurfaceSize::new(dpi.to_physical(WIN_W), dpi.to_physical(WIN_H));
+            let overlay_size = SurfaceSize::new(
+                dpi.to_physical(OVERLAY_WIDTH),
+                dpi.to_physical(OVERLAY_HEIGHT),
+            );
+            let mixer = place_mixer_above_overlay(
+                work_area,
+                mixer_size,
+                overlay_size,
+                OVERLAY_MARGIN_X,
+                OVERLAY_MARGIN_Y,
+                OVERLAY_GAP,
+            );
+            let overlay = crate::ui::place_overlay(
+                work_area,
+                overlay_size,
+                OVERLAY_MARGIN_X,
+                OVERLAY_MARGIN_Y,
+            );
+            assert_eq!(
+                mixer.bottom + OVERLAY_GAP,
+                overlay.top,
+                "16px physical gap at {scale}x"
+            );
+            assert_eq!(mixer.right, overlay.right, "shared right edge at {scale}x");
+            assert_eq!(mixer.width(), dpi.to_physical(WIN_W), "width at {scale}x");
+            assert_eq!(mixer.height(), dpi.to_physical(WIN_H), "height at {scale}x");
+            assert_eq!(
+                overlay.width(),
+                dpi.to_physical(OVERLAY_WIDTH),
+                "overlay width at {scale}x"
+            );
+        }
+    }
+
+    // ── layout ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn mixer_layout_matches_the_spec_rows() {
+        let l = MixerLayout::new(WIN_W as f32, WIN_H as f32);
+        // Eyebrow top-left at the 16px padding.
+        assert_eq!(l.eyebrow_rect.left, 16.0);
+        assert_eq!(l.eyebrow_rect.top, 16.0);
+        // Close: >=32x32 hit target at the top-right.
+        assert_eq!(l.close_rect.width(), 32.0);
+        assert_eq!(l.close_rect.height(), 32.0);
+        assert_eq!(l.close_rect.right, WIN_W as f32 - 16.0);
+        // Value right-anchored at width - 16, aligned by math, never padded.
+        assert_eq!(l.value_rect.right, WIN_W as f32 - 16.0);
+        assert_eq!(
+            text_x_origin(l.value_rect, TextAlign::Right, 0.0),
+            l.value_rect.right
+        );
+        assert_eq!(
+            text_x_origin(l.value_rect, TextAlign::Right, 42.0),
+            l.value_rect.right - 42.0
+        );
+        // Rail: full content width, 8px tall, centered in the rail band.
+        assert_eq!(l.track.left, 16.0);
+        assert_eq!(l.track.right, WIN_W as f32 - 16.0);
+        assert_eq!(l.track.height(), 8.0);
+        // The slider's hit area is centered on the rail band.
+        assert_eq!(
+            (l.slider_rect.top + l.slider_rect.bottom) * 0.5,
+            l.track.center_y()
+        );
+        assert_eq!(l.slider_rect.height(), 28.0);
+        // Buttons: 36px tall, at least 8px apart, fully inside the surface.
+        assert_eq!(l.mute_rect.height(), 36.0);
+        assert_eq!(l.reset_rect.height(), 36.0);
+        assert!(
+            l.reset_rect.left - l.mute_rect.right >= 8.0,
+            "button gap {}",
+            l.reset_rect.left - l.mute_rect.right
+        );
+        assert!(l.mute_rect.left >= 16.0 && l.reset_rect.right <= WIN_W as f32);
+        assert!(l.mute_rect.bottom <= WIN_H as f32 && l.mute_rect.top >= 0.0);
+    }
+
+    // ── rail integration (pure paint plan) ───────────────────────────────────
+
+    #[test]
+    fn mixer_plan_rail_matches_0_50_100_and_muted() {
+        let t = plan(50, false).layout.track;
+        for (percent, expected) in [
+            (0u8, t.left),
+            (50, t.left + t.width() * 0.5),
+            (100, t.right),
+        ] {
+            let p = plan(percent, false);
+            assert_eq!(p.geometry.fill_right, expected, "percent {percent}");
+            let MarkerGeometry::Thumb {
+                center_x, radius, ..
+            } = p.geometry.marker
+            else {
+                panic!("percent {percent} must be a thumb");
+            };
+            assert_eq!(radius, THUMB_RADIUS);
+            assert_eq!(center_x, expected.clamp(t.left + radius, t.right - radius));
+        }
+        // Threshold fill colours for 0/50/100 (default VolumePro bands).
+        let (p0, p50, p100) = (plan(0, false), plan(50, false), plan(100, false));
+        assert_eq!(p0.rail.fill_color(), p0.rail.thresholds.muted);
+        assert_eq!(p50.rail.fill_color(), p50.rail.thresholds.medium);
+        assert_eq!(p100.rail.fill_color(), p100.rail.thresholds.high);
+        // Muted: the marker must be a diamond (never a thumb) at the same
+        // center, with the muted grey fill.
+        let normal = plan(50, false);
+        let muted = plan(50, true);
+        let MarkerGeometry::Thumb { center_x, .. } = normal.geometry.marker else {
+            panic!("normal marker must be a thumb");
+        };
+        let MarkerGeometry::MutedDiamond {
+            center_x: dx,
+            half_size,
+            ..
+        } = muted.geometry.marker
+        else {
+            panic!("muted marker must be a diamond");
+        };
+        assert_eq!(dx, center_x, "same marker center as the thumb");
+        assert_eq!(half_size, MUTED_DIAMOND_HALF_SIZE);
+        assert_ne!(
+            normal.geometry.marker, muted.geometry.marker,
+            "muted marker must differ from the thumb"
+        );
+        assert_eq!(muted.rail.fill_color(), muted.rail.thresholds.muted);
+    }
+
+    #[test]
+    fn rail_carries_user_threshold_boundaries_into_the_mixer_fill() {
+        // A custom band config (green 25 / blue 60) must drive the rail fill
+        // through the paint plan, matching core::volume_color_rgb semantics.
+        let mut cfg = Config::default();
+        cfg.color_thresholds.green_up_to = 25;
+        cfg.color_thresholds.blue_up_to = 60;
+        // 26% is the medium band only under the custom config.
+        let p = plan_with(26, false, cfg.color_thresholds);
+        assert_eq!(p.rail.green_up_to, 25);
+        assert_eq!(p.rail.blue_up_to, 60);
+        assert_eq!(p.rail.fill_color(), p.rail.thresholds.medium);
+    }
+
+    // ── two-layer focus ring ─────────────────────────────────────────────────
+
+    #[test]
+    fn focus_ring_has_two_distinct_layers_for_every_mixer_control() {
+        // Task 1 cross-task follow-up: the mixer draws BOTH layers of the
+        // two-layer FocusTokens ring. Each control rect must yield distinct
+        // nested layers with distinct colours and widths.
+        let a = appearance(ThemeMode::Dark, MaterialMode::Opaque, false);
+        let focus = a.tokens.focus;
+        assert_ne!(focus.ring, focus.inner_ring, "layer colours must differ");
+        assert_ne!(
+            focus.ring_width_px, focus.inner_ring_width_px,
+            "layer widths must differ"
+        );
+        let l = MixerLayout::new(WIN_W as f32, WIN_H as f32);
+        for rect in [l.slider_rect, l.mute_rect, l.reset_rect, l.close_rect] {
+            let (outer, inner) = focus_ring_rects(rect, &focus);
+            assert_ne!(outer, inner, "{rect:?}: layers must be distinct boxes");
+            assert!(outer.contains(inner), "{rect:?}: outer must contain inner");
+            assert!(
+                inner.contains(rect),
+                "{rect:?}: inner must surround the control"
+            );
+            assert!(
+                outer.left >= 0.0 && outer.right <= WIN_W as f32,
+                "{rect:?} ring in bounds"
+            );
+        }
+    }
+
+    // ── sync / focus stability (real hidden window) ──────────────────────────
+
+    #[test]
+    fn sync_pushes_confirmed_state_into_the_trackbar_and_keeps_focus() {
+        // Real-window test (hidden): sync() must move the trackbar to the
+        // confirmed state, flip the mute button label, and never steal focus
+        // from the focused control.
+        let mixer = Mixer::new(0).expect("mixer window creates");
+        unsafe {
+            let d = &*(GetWindowLongPtrW(mixer.hwnd, GWLP_USERDATA) as *const MixerData);
+            let a = appearance(ThemeMode::Dark, MaterialMode::Opaque, false);
+
+            let normal = VolumeState {
+                volume: 0.42,
+                muted: false,
+            };
+            mixer.sync(&normal, &a);
+            assert_eq!(SendMessageW(d.slider, TBM_GETPOS, 0, 0), 42);
+            assert_eq!(window_text(d.mute_btn), "Mute");
+            assert_eq!(window_text(d.reset_btn), "Reset to 50%");
+
+            let muted = VolumeState {
+                volume: 0.42,
+                muted: true,
+            };
+            mixer.sync(&muted, &a);
+            assert_eq!(
+                SendMessageW(d.slider, TBM_GETPOS, 0, 0),
+                42,
+                "mute never changes the slider position"
+            );
+            assert_eq!(window_text(d.mute_btn), "Unmute");
+
+            // Focus stability invariant: sync() must not steal focus or reset
+            // the focused control (it only moves the slider, sets button
+            // text, and invalidates paint regions). SetFocus works on the
+            // hidden window (this thread owns it), so the invariant is
+            // actually exercised.
+            let _ = SetFocus(d.slider);
+            assert_eq!(
+                GetFocus(),
+                d.slider,
+                "SetFocus must work on the hidden mixer window"
+            );
+            mixer.sync(&muted, &a);
+            assert_eq!(
+                GetFocus(),
+                d.slider,
+                "sync must not move focus off the focused control"
+            );
+            mixer.sync(&normal, &a);
+            assert_eq!(
+                GetFocus(),
+                d.slider,
+                "sync must not move focus after a state change"
+            );
+        }
+        drop(mixer);
     }
 
     #[test]

@@ -548,6 +548,11 @@ fn publish_confirmed_state(ctx: &mut AppContext, show_overlay: bool) {
     }
     ctx.tray.set_volume(&st);
     if ctx.mixer.is_open() {
+        // The rail fill honours the user's colour-band boundaries; they
+        // travel on their own seam so the mixer's sync/toggle signatures
+        // stay unchanged (the overlay receives them per-show via config).
+        ctx.mixer
+            .set_thresholds(ctx.config.color_thresholds.clone());
         ctx.mixer.sync(&st, &mixer_appearance(&*ctx));
     }
     if ctx.settings.is_open() {

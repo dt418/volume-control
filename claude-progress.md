@@ -1,5 +1,62 @@
 # Progress Log
 
+## Session 004 (2026-08-03) — Task 6: Signal Glass mixer redesign
+
+- Goal: redesign the Windows mixer as the 400x224 Signal Glass precision card
+  (spec §6): `VOLUME MIXER` eyebrow, `System output` caption, right-aligned
+  28px live value, Signal Rail synchronized with the native trackbar, Mute /
+  Reset to 50% buttons, 32px close target, two-layer focus ring, DPI scaling.
+- Changed: `crates/volumectl/src/mixer.rs` (layout/paint/DPI/rail sync/focus
+  ring), `crates/volumectl/src/app.rs` (thresholds seam), and
+  `crates/volumectl/src/ui/platform/windows/primitives.rs` (canvas fix, below).
+
+### Fresh build + test evidence
+- `cargo fmt --all -- --check` → PASS.
+- `cargo build` (via scripts/win-build.bat) → Finished dev profile, 0 warnings.
+- `cargo test -p volumectl` → **173 passed; 0 failed; 0 ignored** (165 baseline
+  + 8 new: DPI physical sizes 400x224/500x280/600x336, 16px physical gap at
+  125/150%, spec layout rows, rail plan 0/50/100 + muted marker ≠ thumb, custom
+  threshold boundaries, two-layer focus rings for every control, sync pushes
+  state into the trackbar and keeps focus; plus the backdrop-canvas test).
+- `git diff --check` → clean.
+
+### Live-verified on Windows (100% DPI, dark system theme, probe-driven)
+- Mixer rect [2140,1024,2540,1248] = **400x224**; overlay rect
+  [2204,1264,2540,1352] = **336x88**; **vertical gap exactly 16px**, shared
+  right edge (2540). (Mixer placement now consumes PHYSICAL sizes for both
+  surfaces, so the gap holds at 125/150% by construction — unit-tested.)
+- Mixer pixels at 50%: background 0x101319≈token 0x10131A, rail fill
+  0x0078D4 (medium threshold, exact), thumb 0x171C24 (surface, exact), track
+  0x344052 (border, exact); eyebrow/caption/value text rows all render.
+- Rail ↔ trackbar mirror: posted VK_RIGHT to the native trackbar → `mixer
+  hscroll: pos=51` → `mixer change: request=51%` → TBM_GETPOS 51 and the
+  painted rail moved (pixel at (196,128) flipped thumb-cover 0x171C24 → fill
+  0x0078D4). VK_HOME → 0, VK_END → 100, both via the host path, restored 50.
+- Muted: rail fill 0x888888 (muted grey, exact), hollow diamond outline (24 px
+  of 0xF5F7FA around an 0x888888 center — shape cue, not a filled copy),
+  `Muted` grey label (98 glyph px), button flips to `Unmute`.
+- Two-layer focus ring: Tab from the slider to Mute → 282 accent pixels +
+  129 inner-contrast pixels in the ring band (both layers visible).
+- Escape hides the mixer (visible=False) and the hotkey reopens it (True).
+- Volume restored to its starting value after every probe run.
+
+### Found + fixed (primitives canvas, live-verified)
+- The mixer initially rendered a uniform grey surface: `ID2D1HwndRenderTarget`
+  presents do NOT land in DWM-owned surfaces — the same class of problem the
+  canvas already guarded against for layered windows. Extended the canvas's
+  GDI gate to system-backdrop windows (`DWMWA_SYSTEMBACKDROP_TYPE` != NONE,
+  new `backdrop_active`/`d2d_present_supported` helpers + test). After the
+  fix, the acrylic mixer paints correctly via GDI (evidence above).
+
+### Notes
+- Native trackbar arrows move 1 tick (native behavior, unchanged from before);
+  the rail mirrors the confirmed state exactly as the task requires.
+- Button chrome renders light (0xF0F0F0) — A/B-verified identical on the
+  pre-redesign binary (same `theme_controls`/DarkMode_Explorer path); not a
+  regression from this task. Theming polish belongs to Task 10 verification.
+- feature_list.json left untouched: vol-011 stays `in_progress`; the Signal
+  Glass plan's Task 14 owns final feature-state updates.
+
 ## Session 003 (2026-08-03) — Task 13: Windows verification of the adaptive UI
 
 - Goal: run the adaptive cross-platform UI through its paces on Windows (live
