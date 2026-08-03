@@ -20,6 +20,7 @@ pub enum TrayCommand {
     Reset50,
     OpenMixer,
     Help,
+    Settings,
     EditConfig,
     ReloadConfig,
     ApplyBlacklist,
@@ -40,6 +41,7 @@ impl Tray {
         let mixer = MenuItem::with_id("mixer", "Volume Mixer", true, None);
         let mute_item = CheckMenuItem::with_id("mute", "Mute / Unmute", true, false, None);
         let help = MenuItem::with_id("help", "Help / Hotkeys", true, None);
+        let settings = MenuItem::with_id("settings", "Settings…", true, None);
         let sep1 = PredefinedMenuItem::separator();
         let edit = MenuItem::with_id("edit", "Edit Config", true, None);
         let reload = MenuItem::with_id("reload", "Reload Config", true, None);
@@ -50,8 +52,8 @@ impl Tray {
         let exit = MenuItem::with_id("exit", "Exit", true, None);
 
         menu.append_items(&[
-            &vol_label, &mixer, &mute_item, &help, &sep1, &edit, &reload, &sep2, &blacklist, &sep3,
-            &reset, &exit,
+            &vol_label, &mixer, &mute_item, &help, &settings, &sep1, &edit, &reload, &sep2,
+            &blacklist, &sep3, &reset, &exit,
         ])?;
 
         let tray = tray_icon::TrayIconBuilder::new()
@@ -78,6 +80,7 @@ impl Tray {
                         "reset" => Some(TrayCommand::Reset50),
                         "mixer" => Some(TrayCommand::OpenMixer),
                         "help" => Some(TrayCommand::Help),
+                        "settings" => Some(TrayCommand::Settings),
                         "edit" => Some(TrayCommand::EditConfig),
                         "reload" => Some(TrayCommand::ReloadConfig),
                         "blacklist" => Some(TrayCommand::ApplyBlacklist),

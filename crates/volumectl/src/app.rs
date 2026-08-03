@@ -31,10 +31,11 @@ use windows_sys::Win32::{
 use crate::audio::{AudioBackend, VolumeState};
 use crate::audio_windows::WindowsAudio;
 use crate::config::Config;
-use crate::help::Help;
+use crate::help::{Help, HelpAppearance, WM_APP_HELP_OPEN_CONFIG, WM_APP_HELP_SETTINGS};
 use crate::hotkeys::HotkeyAction;
 use crate::hotkeys_win32::{
-    hotkey_action, install_wheel_hook, uninstall_wheel_hook, Win32Hotkeys, WM_APP_WHEEL,
+    hotkey_action, install_wheel_hook, uninstall_wheel_hook, HotkeyRegResult, Win32Hotkeys,
+    WM_APP_WHEEL,
 };
 use crate::mixer::{Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET};
 use crate::overlay::Overlay;
@@ -84,6 +85,8 @@ fn reload_config_if_changed(ctx: &mut AppContext) -> bool {
         if let Err(e) = ctx.hotkeys.register(ctx.config.modifier) {
             log::warn!("hotkey re-register after config change failed: {e}");
         }
+        // Keep the per-action registration status fresh for the UI.
+        ctx.hotkey_status = ctx.hotkeys.status().to_vec();
     }
     true
 }
@@ -100,6 +103,9 @@ struct AppContext {
     settings: Settings,
     help: Help,
     tray: Tray,
+    /// Per-action hotkey registration status from the last (re)register,
+    /// exposed to the Help surface (see [`Win32Hotkeys::status`]).
+    hotkey_status: Vec<HotkeyRegResult>,
     /// Shared confirmed UI state published to every renderer by
     /// [`publish_confirmed_state`].
     ui_state: crate::ui::AppState,
@@ -222,11 +228,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Hotkeys + mouse-wheel hook, both targeted at the host window.
     let hotkeys = Win32Hotkeys::new(hwnd, config.modifier)?;
+    // Per-action registration status (registered / conflicted / hook-routed)
+    // from the initial registration, shown by the Help card.
+    let hotkey_status = hotkeys.status().to_vec();
     install_wheel_hook(hwnd)?;
 
     let mixer = Mixer::new(hwnd)?;
     let settings = Settings::new(hwnd)?;
-    let help = Help::new()?;
+    let help = Help::new(hwnd)?;
 
     // Shared confirmed UI state starts from the audio snapshot and the
     // appearance preferences loaded from config; `publish_confirmed_state`
@@ -250,6 +259,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         settings,
         help,
         tray,
+        hotkey_status,
         ui_state,
         caps,
     }));
@@ -356,6 +366,19 @@ unsafe extern "system" fn host_wndproc(
         WM_APP_SETTINGS_OPEN_CONFIG => {
             if !ctx.is_null() {
                 handle_action(&mut *ctx, AppAction::OpenConfigLocation);
+            }
+            0
+        }
+        // ── Help: the card posts its affordances; the host owns the action. ─
+        WM_APP_HELP_OPEN_CONFIG => {
+            if !ctx.is_null() {
+                handle_action(&mut *ctx, AppAction::OpenConfigLocation);
+            }
+            0
+        }
+        WM_APP_HELP_SETTINGS => {
+            if !ctx.is_null() {
+                handle_action(&mut *ctx, AppAction::ShowSurface(SurfaceId::Settings));
             }
             0
         }
@@ -473,6 +496,12 @@ fn settings_appearance(ctx: &AppContext) -> SettingsAppearance {
     SettingsAppearance::resolve(&ctx.config, &ctx.caps, crate::ui::primitives::system_theme)
 }
 
+/// Resolve the Help card's adaptive appearance — one resolution point in the
+/// host, consumed blindly by the card (Task 11, mirrors the other surfaces).
+fn help_appearance(ctx: &AppContext) -> HelpAppearance {
+    HelpAppearance::resolve(&ctx.config, &ctx.caps, crate::ui::primitives::system_theme)
+}
+
 /// Re-read the audio state, update the audio-truth cache and the shared
 /// confirmed [`crate::ui::AppState`], then push the snapshot into every
 /// renderer (overlay, tray, mixer). `show_overlay` controls whether the
@@ -539,6 +568,7 @@ fn tray_command_to_action(cmd: TrayCommand) -> AppAction {
         C::Reset50 => AppAction::ResetVolume,
         C::OpenMixer => AppAction::ToggleSurface(SurfaceId::Mixer),
         C::Help => AppAction::ShowSurface(SurfaceId::Help),
+        C::Settings => AppAction::ToggleSurface(SurfaceId::Settings),
         C::EditConfig => AppAction::OpenConfigLocation,
         C::ReloadConfig => AppAction::ReloadConfig,
         C::ApplyBlacklist => AppAction::ApplyRecommendedBlacklist,
@@ -558,6 +588,8 @@ fn adopt_saved_config(ctx: &mut AppContext, saved: Config) {
         if let Err(e) = ctx.hotkeys.register(ctx.config.modifier) {
             log::warn!("hotkey re-register after modifier change failed: {e}");
         }
+        // Keep the per-action registration status fresh for the UI.
+        ctx.hotkey_status = ctx.hotkeys.status().to_vec();
     }
     publish_confirmed_state(ctx, false);
 }
@@ -648,7 +680,8 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
             publish_confirmed_state(ctx, false);
         }
         A::ShowSurface(S::Help) => {
-            ctx.help.show(&ctx.config);
+            ctx.help
+                .show(&ctx.config, &ctx.hotkey_status, &help_appearance(ctx));
             ctx.ui_state.surfaces.help = SurfaceVisibility::Visible;
         }
         A::HideSurface(S::Help) => {
@@ -660,7 +693,8 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
                 ctx.help.hide();
                 ctx.ui_state.surfaces.help = SurfaceVisibility::Hidden;
             } else {
-                ctx.help.show(&ctx.config);
+                ctx.help
+                    .show(&ctx.config, &ctx.hotkey_status, &help_appearance(ctx));
                 ctx.ui_state.surfaces.help = SurfaceVisibility::Visible;
             }
         }
@@ -880,6 +914,10 @@ mod tests {
             AppAction::ShowSurface(SurfaceId::Help)
         );
         assert_eq!(
+            tray_command_to_action(C::Settings),
+            AppAction::ToggleSurface(SurfaceId::Settings)
+        );
+        assert_eq!(
             tray_command_to_action(C::EditConfig),
             AppAction::OpenConfigLocation
         );
@@ -904,6 +942,7 @@ mod tests {
             C::Reset50,
             C::OpenMixer,
             C::Help,
+            C::Settings,
             C::EditConfig,
             C::ReloadConfig,
             C::ApplyBlacklist,

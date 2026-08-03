@@ -17,7 +17,9 @@
 use std::sync::atomic::{AtomicI64, AtomicIsize, AtomicU8, Ordering};
 
 use windows_sys::Win32::{
-    Foundation::{BOOL, FALSE, HWND, LPARAM, LRESULT, WPARAM},
+    Foundation::{
+        BOOL, ERROR_HOTKEY_ALREADY_REGISTERED, FALSE, GetLastError, HWND, LPARAM, LRESULT, WPARAM,
+    },
     System::LibraryLoader::GetModuleHandleW,
     UI::Input::KeyboardAndMouse::{
         GetAsyncKeyState, RegisterHotKey, UnregisterHotKey, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
@@ -263,10 +265,77 @@ pub fn hotkey_action(id: i32) -> Option<HotkeyAction> {
     })
 }
 
+/// Win32 error captured when `RegisterHotKey` rejects a combo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HotkeyRegError {
+    /// The raw `GetLastError()` code from the failed `RegisterHotKey` call.
+    pub error_code: u32,
+    /// Human-readable description (includes the raw code).
+    pub message: String,
+}
+
+impl HotkeyRegError {
+    /// `ERROR_HOTKEY_ALREADY_REGISTERED`: the combo is already owned by
+    /// another process — the "in use by another app" case the UI surfaces.
+    pub fn already_registered(&self) -> bool {
+        self.error_code == ERROR_HOTKEY_ALREADY_REGISTERED
+    }
+}
+
+impl std::fmt::Display for HotkeyRegError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+/// Outcome of attempting to register one hotkey combo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HotkeyRegResult {
+    /// The action the combo triggers.
+    pub action: HotkeyAction,
+    /// Whether the combo is live, conflicted, or hook-routed.
+    pub status: HotkeyRegStatus,
+}
+
+/// Per-action registration status, reported to the Settings/Help surfaces.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HotkeyRegStatus {
+    /// The combo is live (registered via `RegisterHotKey`).
+    Registered,
+    /// `RegisterHotKey` rejected the combo (e.g. in use by another app).
+    /// Carries the Win32 error code + message so the UI can explain it.
+    Conflicted(HotkeyRegError),
+    /// Not registered via `RegisterHotKey` by design: the CapsLock modifier
+    /// routes combos through the low-level keyboard hook.
+    HookRouted,
+}
+
+/// The 8 hotkey combos as `(id, virtual key, action, shifted)`. One table
+/// consumed by both the `RegisterHotKey` path and the CapsLock keyboard-hook
+/// path so every combo reports the same per-action status set.
+const COMBOS: [(i32, VIRTUAL_KEY, HotkeyAction, bool); 8] = [
+    (ID_VOL_UP, VK_UP, HotkeyAction::VolumeUp, false),
+    (ID_VOL_DOWN, VK_DOWN, HotkeyAction::VolumeDown, false),
+    (ID_VOL_UP_LARGE, VK_UP, HotkeyAction::VolumeUpLarge, true),
+    (
+        ID_VOL_DOWN_LARGE,
+        VK_DOWN,
+        HotkeyAction::VolumeDownLarge,
+        true,
+    ),
+    (ID_MUTE, VK_M, HotkeyAction::ToggleMute, false),
+    (ID_RESET, VK_R, HotkeyAction::Reset50, false),
+    (ID_MIXER, VK_V, HotkeyAction::OpenMixer, false),
+    (ID_SHOW_MENU, VK_M, HotkeyAction::OpenMenu, true),
+];
+
 /// Registers/unregisters hotkeys against a window handle.
 pub struct Win32Hotkeys {
     hwnd: HWND,
     registered: Vec<i32>,
+    /// Status of every combo from the most recent [`Win32Hotkeys::register`]
+    /// call, read via [`Win32Hotkeys::status`] so the UI can report conflicts.
+    last_status: Vec<HotkeyRegResult>,
 }
 
 impl Win32Hotkeys {
@@ -274,19 +343,33 @@ impl Win32Hotkeys {
         let mut s = Self {
             hwnd,
             registered: Vec::new(),
+            last_status: Vec::new(),
         };
         s.register(modifier)?;
         Ok(s)
     }
 
-    fn reg(&mut self, id: i32, mods: u32, vk: VIRTUAL_KEY) -> Result<(), String> {
+    /// Per-action status of every combo from the last (re)registration.
+    ///
+    /// Mirrors the 8 combos implied by the modifier; see [`HotkeyRegStatus`]
+    /// for the possible states. Empty before the first [`Win32Hotkeys::register`].
+    pub fn status(&self) -> &[HotkeyRegResult] {
+        &self.last_status
+    }
+
+    fn reg(&mut self, id: i32, mods: u32, vk: VIRTUAL_KEY) -> Result<(), HotkeyRegError> {
         unsafe {
             // MOD_NOREPEAT: holding a combo shouldn't spam-apply.
             let ok: BOOL = RegisterHotKey(self.hwnd, id, mods | MOD_NOREPEAT, vk as u32);
             if ok == FALSE {
-                return Err(format!(
-                    "RegisterHotKey(id={id}, vk={vk:#x}) failed — maybe in use"
-                ));
+                let error_code = GetLastError();
+                return Err(HotkeyRegError {
+                    error_code,
+                    message: format!(
+                        "RegisterHotKey(id={id}, vk={vk:#x}) failed — maybe in use \
+                         (error {error_code:#x})"
+                    ),
+                });
             }
             self.registered.push(id);
             Ok(())
@@ -299,7 +382,14 @@ impl Win32Hotkeys {
     /// A combo that is already held by another application is *not* fatal:
     /// the conflict is logged and registration continues with the rest, so
     /// the app still starts and the user can change the modifier in config.
+    /// Each combo's outcome is recorded on `self` and readable via
+    /// [`Win32Hotkeys::status`].
     pub fn register(&mut self, modifier: HotkeyModifier) -> Result<(), String> {
+        self.last_status = self.do_register(modifier);
+        Ok(())
+    }
+
+    fn do_register(&mut self, modifier: HotkeyModifier) -> Vec<HotkeyRegResult> {
         for &id in &self.registered {
             unsafe {
                 UnregisterHotKey(self.hwnd, id);
@@ -315,26 +405,33 @@ impl Win32Hotkeys {
             // routed through the keyboard hook (key_proc). Registering the bare
             // keys here (mods = 0) would hijack Up/Down/M/R/V globally.
             log::debug!("CapsLock modifier: combos routed via keyboard hook");
-            return Ok(());
+            return COMBOS
+                .into_iter()
+                .map(|(_, _, action, _)| HotkeyRegResult {
+                    action,
+                    status: HotkeyRegStatus::HookRouted,
+                })
+                .collect();
         }
 
         let mb = |shifted: bool| modifier_bits(modifier, shifted);
-
-        for (id, mods, vk) in [
-            (ID_VOL_UP, mb(false), VK_UP),
-            (ID_VOL_DOWN, mb(false), VK_DOWN),
-            (ID_VOL_UP_LARGE, mb(true), VK_UP),
-            (ID_VOL_DOWN_LARGE, mb(true), VK_DOWN),
-            (ID_MUTE, mb(false), VK_M),
-            (ID_RESET, mb(false), VK_R),
-            (ID_MIXER, mb(false), VK_V),
-            (ID_SHOW_MENU, mb(true), VK_M),
-        ] {
-            if let Err(e) = self.reg(id, mods, vk) {
-                log::warn!("{e} — skipping this hotkey");
+        let mut results = Vec::with_capacity(COMBOS.len());
+        for (id, vk, action, shifted) in COMBOS {
+            match self.reg(id, mb(shifted), vk) {
+                Ok(()) => results.push(HotkeyRegResult {
+                    action,
+                    status: HotkeyRegStatus::Registered,
+                }),
+                Err(e) => {
+                    log::warn!("{e} — skipping this hotkey");
+                    results.push(HotkeyRegResult {
+                        action,
+                        status: HotkeyRegStatus::Conflicted(e),
+                    });
+                }
             }
         }
-        Ok(())
+        results
     }
 }
 
@@ -345,5 +442,65 @@ impl Drop for Win32Hotkeys {
                 UnregisterHotKey(self.hwnd, id);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_combo_table_id_decodes_to_the_action_it_claims() {
+        // Locks the 8-combo table: each id must round-trip through the
+        // WM_HOTKEY decoder to the action the status map reports.
+        for &(id, _, action, _) in &COMBOS {
+            assert_eq!(hotkey_action(id), Some(action));
+        }
+        // And the ids are distinct, so each action is covered exactly once.
+        let ids: std::collections::HashSet<i32> = COMBOS.iter().map(|&(id, _, _, _)| id).collect();
+        assert_eq!(ids.len(), COMBOS.len());
+    }
+
+    #[test]
+    fn unknown_hotkey_id_decodes_to_none() {
+        assert_eq!(hotkey_action(0), None);
+        assert_eq!(hotkey_action(0x7FFF), None);
+    }
+
+    #[test]
+    fn already_registered_detects_the_in_use_error_code() {
+        let in_use = HotkeyRegError {
+            error_code: ERROR_HOTKEY_ALREADY_REGISTERED,
+            message: "in use".into(),
+        };
+        assert!(in_use.already_registered());
+
+        let other = HotkeyRegError {
+            error_code: 5,
+            message: "access denied".into(),
+        };
+        assert!(!other.already_registered());
+    }
+
+    #[test]
+    fn caps_lock_path_reports_every_combo_as_hook_routed() {
+        // The CapsLock path reports all 8 combos as hook-routed (registered via
+        // the keyboard hook, not RegisterHotKey); the UI can rely on status
+        // always covering every combo for the active modifier.
+        let expected: Vec<HotkeyRegResult> = COMBOS
+            .into_iter()
+            .map(|(_, _, action, _)| HotkeyRegResult {
+                action,
+                status: HotkeyRegStatus::HookRouted,
+            })
+            .collect();
+        let mut hk = Win32Hotkeys {
+            hwnd: 0,
+            registered: Vec::new(),
+            last_status: Vec::new(),
+        };
+        hk.register(HotkeyModifier::CapsLock)
+            .expect("caps register");
+        assert_eq!(hk.status(), expected.as_slice());
     }
 }

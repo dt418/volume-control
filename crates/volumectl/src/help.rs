@@ -2,8 +2,20 @@
 //!
 //! GDI-painted, captionless, always-on-top tool window. Shows the current
 //! hotkey map (modifier-aware), tray entries, beep guide, blacklist count and
-//! a conflict note. Two clickable buttons: "Edit Config" and "Got it!".
-//! Hit-testing is done manually on `WM_LBUTTONDOWN` against fixed rects.
+//! a conflict note that reflects the *actual* `RegisterHotKey` outcome. Three
+//! clickable buttons: "Settings", "Edit Config" and "Got it!". Hit-testing is
+//! done manually on `WM_LBUTTONDOWN` against fixed rects.
+//!
+//! Theming uses the shared adaptive tokens (`tokens_for` +
+//! `primitives::colorref`) with one resolution point in the host, mirroring
+//! the overlay/mixer/settings seam: `app.rs` resolves a [`HelpAppearance`] and
+//! the card consumes it blindly. The card stays opaque in every mode (no
+//! material/backdrop treatment) so the refactor is behavior-preserving apart
+//! from the token colors and the added Settings affordance.
+//!
+//! Button activation is routed through the host window (`WM_APP_HELP_*`
+//! messages), so Settings and Edit Config dispatch through the central
+//! `handle_action` like every other surface. "Got it!" just hides.
 
 use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
@@ -14,14 +26,25 @@ use windows_sys::Win32::{
     },
     System::LibraryLoader::GetModuleHandleW,
     UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, GetSystemMetrics, GetWindowLongPtrW, RegisterClassW,
+        CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, PostMessageW, RegisterClassW,
         SetWindowLongPtrW, SetWindowPos, ShowWindow, CW_USEDEFAULT, GWLP_USERDATA, HWND_TOPMOST,
-        SM_CXSCREEN, SM_CYSCREEN, SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WM_CLOSE, WM_ERASEBKGND,
-        WM_LBUTTONDOWN, WM_PAINT, WNDCLASSW, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+        SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WM_CLOSE, WM_ERASEBKGND, WM_LBUTTONDOWN,
+        WM_PAINT, WM_USER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
     },
 };
 
 use crate::config::Config;
+use crate::hotkeys_win32::{HotkeyRegResult, HotkeyRegStatus};
+use crate::ui::primitives::{colorref, work_area_for};
+use crate::ui::{
+    place_overlay, tokens_for, AccentMode, SurfaceSize, ThemeMode, ThemeTokens, UiCapabilities,
+};
+
+/// Custom messages the Help card posts to the host window (see `app.rs`). The
+/// host owns the actions; these intents just tell it which affordance the user
+/// activated.
+pub const WM_APP_HELP_OPEN_CONFIG: u32 = WM_USER + 30;
+pub const WM_APP_HELP_SETTINGS: u32 = WM_USER + 31;
 
 const WIN_W: i32 = 480;
 const WIN_H: i32 = 380;
@@ -32,9 +55,51 @@ const MARGIN_Y: i32 = 48;
 const BTN_Y: i32 = WIN_H - 44;
 const BTN_H: i32 = 30;
 const BTN_EDIT: (i32, i32, i32, i32) = (16, BTN_Y, 150, BTN_H);
-const BTN_GOTIT: (i32, i32, i32, i32) = (176, BTN_Y, 130, BTN_H);
+const BTN_SETTINGS: (i32, i32, i32, i32) = (176, BTN_Y, 130, BTN_H);
+const BTN_GOTIT: (i32, i32, i32, i32) = (316, BTN_Y, 148, BTN_H);
 
-/// One painted text row: (text, color).
+/// Adaptive appearance resolved by the host and applied by the Help card.
+///
+/// Mirrors the overlay/mixer/settings seam (one resolution point in `app.rs`),
+/// but omits the material treatment: the reference card stays opaque in every
+/// mode so the refactor is behavior-preserving apart from the token colors.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HelpAppearance {
+    /// Resolved palette tokens (theme + high-contrast + accent).
+    pub tokens: ThemeTokens,
+}
+
+impl HelpAppearance {
+    /// Resolve the adaptive appearance from `config.appearance` against `caps`.
+    ///
+    /// `system_is_dark` is consulted only for [`ThemeMode::System`]; it lets
+    /// tests inject the darkness decision while the host passes the shared
+    /// [`crate::ui::primitives::system_theme`] helper.
+    pub fn resolve(
+        config: &Config,
+        caps: &UiCapabilities,
+        system_is_dark: impl Fn() -> Option<bool>,
+    ) -> Self {
+        let appearance = &config.appearance;
+        let tokens = tokens_for(
+            appearance.theme,
+            caps.high_contrast,
+            appearance.accent,
+            system_is_dark,
+        );
+        Self { tokens }
+    }
+
+    /// Placeholder used before the first `show` (the window is hidden then, so
+    /// this is never painted).
+    fn placeholder() -> Self {
+        Self {
+            tokens: tokens_for(ThemeMode::System, false, AccentMode::System, || None),
+        }
+    }
+}
+
+/// One painted text row: (text, COLORREF).
 struct Row {
     text: String,
     color: u32,
@@ -42,10 +107,14 @@ struct Row {
 }
 
 struct HelpData {
+    host: HWND,
     rows: Vec<Row>,
     hfont_body: HFONT,
     hfont_bold: HFONT,
+    appearance: HelpAppearance,
     bg: HBRUSH,
+    accent_brush: HBRUSH,
+    btn_brush: HBRUSH,
     open: bool,
 }
 
@@ -74,12 +143,28 @@ fn font(height: i32, bold: bool) -> HFONT {
     }
 }
 
-fn rgb(r: u8, g: u8, b: u8) -> u32 {
-    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16)
+/// Rebuild the token-colored brushes when the resolved appearance changed.
+unsafe fn apply_appearance(d: &mut HelpData, appearance: HelpAppearance) {
+    if d.appearance == appearance {
+        return;
+    }
+    if d.bg != 0 {
+        DeleteObject(d.bg);
+    }
+    if d.accent_brush != 0 {
+        DeleteObject(d.accent_brush);
+    }
+    if d.btn_brush != 0 {
+        DeleteObject(d.btn_brush);
+    }
+    d.appearance = appearance;
+    d.bg = CreateSolidBrush(colorref(appearance.tokens.background));
+    d.accent_brush = CreateSolidBrush(colorref(appearance.tokens.accent));
+    d.btn_brush = CreateSolidBrush(colorref(appearance.tokens.surface));
 }
 
 impl Help {
-    pub fn new() -> Result<Help, Box<dyn std::error::Error>> {
+    pub fn new(host: HWND) -> Result<Help, Box<dyn std::error::Error>> {
         unsafe {
             let hinst = GetModuleHandleW(std::ptr::null());
             let class = windows_sys::core::w!("VolCtlHelp");
@@ -107,11 +192,16 @@ impl Help {
                 return Err("help CreateWindowEx failed".into());
             }
 
+            let appearance = HelpAppearance::placeholder();
             let data = Box::into_raw(Box::new(HelpData {
+                host,
                 rows: Vec::new(),
                 hfont_body: font(12, false),
                 hfont_bold: font(12, true),
-                bg: CreateSolidBrush(rgb(0x1E, 0x1E, 0x1E)),
+                appearance,
+                bg: CreateSolidBrush(colorref(appearance.tokens.background)),
+                accent_brush: CreateSolidBrush(colorref(appearance.tokens.accent)),
+                btn_brush: CreateSolidBrush(colorref(appearance.tokens.surface)),
                 open: false,
             }));
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, data as isize);
@@ -120,10 +210,17 @@ impl Help {
         }
     }
 
-    /// Rebuild the content from the current config and show the window.
-    pub fn show(&mut self, config: &Config) {
+    /// Rebuild the content from the current config and the per-action hotkey
+    /// registration status, then show the window themed by `appearance`.
+    pub fn show(
+        &mut self,
+        config: &Config,
+        hotkey_status: &[HotkeyRegResult],
+        appearance: &HelpAppearance,
+    ) {
         unsafe {
             let d = &mut *(GetWindowLongPtrW(self.hwnd, GWLP_USERDATA) as *mut HelpData);
+            apply_appearance(d, *appearance);
 
             let mod_label = match config.modifier {
                 crate::config::HotkeyModifier::CtrlAlt => "Ctrl+Alt",
@@ -132,11 +229,23 @@ impl Help {
                 crate::config::HotkeyModifier::Ctrl => "Ctrl",
             };
 
-            let accent = rgb(0x00, 0x78, 0xD4);
-            let dim = rgb(0x88, 0x88, 0x88);
-            let body = rgb(0xCC, 0xCC, 0xCC);
-            let green = rgb(0x27, 0xAE, 0x60);
-            let gold = rgb(0xE0, 0xA8, 0x00);
+            let t = &d.appearance.tokens;
+            let accent = colorref(t.accent);
+            let dim = colorref(t.text_secondary);
+            let body = colorref(t.text_primary);
+            // Success/warning notes: the VolumePro palette encodes a green and a
+            // warm color, but high contrast collapses them to the primary text
+            // so no information is carried by tint alone.
+            let green = colorref(if t.high_contrast {
+                t.text_primary
+            } else {
+                t.volume_threshold.low
+            });
+            let gold = colorref(if t.high_contrast {
+                t.text_primary
+            } else {
+                t.volume_threshold.high
+            });
 
             let mut rows: Vec<Row> = Vec::new();
             rows.push(Row {
@@ -196,7 +305,10 @@ impl Help {
                 bold: false,
             });
 
-            let conflict = match config.modifier {
+            // The static note covers modifier-intrinsic conflicts; the dynamic
+            // note overrides it when RegisterHotKey actually rejected combos
+            // (the "in use by another app" case the status exposure surfaces).
+            let static_note = match config.modifier {
                 crate::config::HotkeyModifier::CtrlAlt | crate::config::HotkeyModifier::CapsLock => {
                     (String::from("\u{2705} No known conflicts"), green)
                 }
@@ -209,9 +321,25 @@ impl Help {
                     gold,
                 ),
             };
+            let conflicted: Vec<&HotkeyRegResult> = hotkey_status
+                .iter()
+                .filter(|r| matches!(r.status, HotkeyRegStatus::Conflicted(_)))
+                .collect();
+            let (note, note_color) = if conflicted.is_empty() {
+                static_note
+            } else {
+                let labels: Vec<&str> = conflicted.iter().map(|r| r.action.label()).collect();
+                (
+                    format!(
+                        "\u{26A0}\u{FE0F} In use by another app: {}",
+                        labels.join(", ")
+                    ),
+                    gold,
+                )
+            };
             rows.push(Row {
-                text: conflict.0,
-                color: conflict.1,
+                text: note,
+                color: note_color,
                 bold: false,
             });
 
@@ -240,7 +368,7 @@ impl Help {
                 bold: false,
             });
             rows.push(Row {
-                text: "Edit Config / Reload Config / Rec. Blacklist / Exit".into(),
+                text: "Settings / Edit Config / Reload Config / Rec. Blacklist / Exit".into(),
                 color: body,
                 bold: false,
             });
@@ -263,16 +391,23 @@ impl Help {
 
             d.rows = rows;
 
-            let sw = GetSystemMetrics(SM_CXSCREEN);
-            let sh = GetSystemMetrics(SM_CYSCREEN);
-            let h = WIN_H + 40;
+            // Bottom-right of the monitor work area hosting the window (the
+            // same shared placement the overlay/mixer use), so multi-monitor
+            // and taskbar changes are respected.
+            let work_area = work_area_for(self.hwnd);
+            let rect = place_overlay(
+                work_area,
+                SurfaceSize::new(WIN_W, WIN_H + 40),
+                MARGIN_X,
+                MARGIN_Y,
+            );
             SetWindowPos(
                 self.hwnd,
                 HWND_TOPMOST,
-                sw - WIN_W - MARGIN_X,
-                sh - h - MARGIN_Y,
-                WIN_W,
-                h,
+                rect.left,
+                rect.top,
+                rect.width(),
+                rect.height(),
                 SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
             d.open = true;
@@ -311,7 +446,14 @@ unsafe extern "system" fn help_wndproc(
             let in_rect =
                 |r: (i32, i32, i32, i32)| x >= r.0 && x <= r.0 + r.2 && y >= r.1 && y <= r.1 + r.3;
             if in_rect(BTN_EDIT) {
-                crate::config::open_in_editor();
+                // Routed through the host so Edit Config follows the same
+                // action path as every other surface (the host's
+                // OpenConfigLocation also shows the overlay toast).
+                PostMessageW(d.host, WM_APP_HELP_OPEN_CONFIG, 0, 0);
+                d.open = false;
+                ShowWindow(hwnd, SW_HIDE);
+            } else if in_rect(BTN_SETTINGS) {
+                PostMessageW(d.host, WM_APP_HELP_SETTINGS, 0, 0);
                 d.open = false;
                 ShowWindow(hwnd, SW_HIDE);
             } else if in_rect(BTN_GOTIT) {
@@ -332,6 +474,7 @@ unsafe extern "system" fn help_wndproc(
 
 unsafe fn paint(hdc: isize, hwnd: HWND) {
     let d = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut HelpData);
+    let t = &d.appearance.tokens;
 
     // Background.
     let bg_rect = RECT {
@@ -343,15 +486,13 @@ unsafe fn paint(hdc: isize, hwnd: HWND) {
     FillRect(hdc, &bg_rect, d.bg);
 
     // Accent bar on top.
-    let accent = CreateSolidBrush(rgb(0x00, 0x78, 0xD4));
     let acc_rect = RECT {
         left: 0,
         top: 0,
         right: WIN_W,
         bottom: 3,
     };
-    FillRect(hdc, &acc_rect, accent);
-    DeleteObject(accent);
+    FillRect(hdc, &acc_rect, d.accent_brush);
 
     SetBkMode(hdc, TRANSPARENT as i32);
 
@@ -367,17 +508,15 @@ unsafe fn paint(hdc: isize, hwnd: HWND) {
 
     // Buttons.
     let draw_btn = |r: (i32, i32, i32, i32), label: &str| {
-        let br = CreateSolidBrush(rgb(0x2D, 0x2D, 0x2D));
         let rect = RECT {
             left: r.0,
             top: r.1,
             right: r.0 + r.2,
             bottom: r.1 + r.3,
         };
-        FillRect(hdc, &rect, br);
-        DeleteObject(br);
+        FillRect(hdc, &rect, d.btn_brush);
         SelectObject(hdc, d.hfont_body);
-        SetTextColor(hdc, rgb(0xDD, 0xDD, 0xDD));
+        SetTextColor(hdc, colorref(t.text_primary));
         let text: Vec<u16> = label.encode_utf16().chain(std::iter::once(0)).collect();
         TextOutW(
             hdc,
@@ -388,5 +527,6 @@ unsafe fn paint(hdc: isize, hwnd: HWND) {
         );
     };
     draw_btn(BTN_EDIT, "\u{2699}\u{FE0F} Edit Config");
+    draw_btn(BTN_SETTINGS, "\u{1F527}\u{FE0F} Settings");
     draw_btn(BTN_GOTIT, "\u{2713} Got it!");
 }
