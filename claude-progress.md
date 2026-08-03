@@ -1,5 +1,84 @@
 # Progress Log
 
+## Session 006 (2026-08-04) — Task 8: Signal Glass Help redesign
+
+- Goal: redesign the Windows Help surface as the 520x500 logical
+  quick-reference card (spec §8): header band (accent bar + `VolumeControl` +
+  `Keyboard shortcuts` + custom-painted `×` close with hover surface), five
+  structured hotkey rows (keycap chips with `+` separators in a ~210px column,
+  action label, right-aligned status pill `Ready`/`Fallback`/`In use` mapped
+  from the REAL `RegisterHotKey` outcome), a conflict callout card (warning
+  triangle shape, conflicted combos as chips, `Change the modifier in
+  Settings.`) whenever any combo is in use by another app, and a sticky footer
+  with three native buttons (Edit config / Settings / Close).
+- Changed: `crates/volumectl/src/help.rs` (full redesign, 532 → ~1720 lines
+  incl. tests). Host contract unchanged: `WM_APP_HELP_OPEN_CONFIG`/`WM_APP_HELP_SETTINGS`
+  values, host routing in app.rs, and `Help::new/show/hide` signatures are all
+  byte-identical; `HelpAppearance` gained an additive `motion` field resolved
+  through `resolve_motion` (card is static — never animates, so Reduced/
+  Disabled motion is honored by construction). `app.rs` untouched.
+- Keyboard: native buttons give Tab/Shift+Tab + Enter/Space for free;
+  subclassed buttons cycle Edit config → Settings → Close (wrapping), Escape
+  hides (parent `WM_KEYDOWN`/`WM_SYSKEYDOWN` AND child subclass, same
+  semantics as `WM_CLOSE`), focus changes repaint the two-layer token focus
+  ring around the focused button.
+
+### Fresh build + test evidence
+- `cargo fmt --all` then `cargo fmt --all -- --check` → PASS.
+- `cargo build` (via scripts/win-build.bat) → Finished dev profile, 0 warnings.
+- `cargo test -p volumectl` → **215 passed; 0 failed; 0 ignored** (189 existing
+  + 26 new help tests: 5 spec rows + chips per modifier mode, badge mapping
+  incl. shift-variant sharing, spec tint mapping + high-contrast collapse with
+  distinct labels, callout None/Some/plural/dedupe semantics, WM_APP_HELP_*
+  constants + button-id→message mapping, DPI pure geometry at 100/125/150%
+  (physical size scales exactly once, all rects inside 520x500 without
+  overlap, chips fit the 210px column, pills never overlap the label column),
+  reduced-motion resolution + never-animates policy test, callout explanation
+  packing for 1-5 conflicts in all 4 modifier modes, two-layer focus ring for
+  every footer button, construct/drop + show-builds content and window size).
+- `git diff --check` → clean.
+
+### Live-verified on Windows (100% DPI, dark system theme, probe-driven)
+The probe drove the REAL app: shown via the REAL tray menu (OpenMenu hotkey
+→ TrackPopupMenu → keyboard selection of "Help / Hotkeys"), messages posted
+to the real window, and the window's own rendering captured + pixel-sampled:
+- Startup: card window exists hidden; shown at exactly 520x500 physical
+  (96 DPI) at the work-area bottom-right.
+- Header: accent bar 0x3AA8FF, elevated header 0x202735, background
+  0x10131A, title/subtitle + `×` rendered.
+- Rows: `Ctrl + Alt + ↑/↓/M/V/R` chips (surface fill 0x171C24, 1px border
+  0x536276, monospace text), spec labels, right-aligned green `Ready` pills
+  (0x27AE60 tint) — all five rows verified in a pixel scan + screenshot.
+- Focus ring: Tab moved focus onto the Edit config button (GetGUIThreadInfo);
+  vertical scan showed the outer accent ring 0x3AA8FF at the 3px gap + inner
+  contrast ring 0xF5F7FA — two distinct layers. Tab cycle through the footer
+  subclass verified Edit → Settings → Close → Edit (wrapping).
+- Escape hides; reopening via the tray menu works repeatedly.
+- Settings button (WM_COMMAND BN_CLICKED id=2) → card hides AND the Settings
+  surface opens — the full `WM_APP_HELP_SETTINGS` → host → `handle_action`
+  round trip. Close button (id=3) hides only. Edit config (id=1) hides and
+  posts the host intent (editor window attribution inconclusive — opens via
+  pre-existing `open_in_editor()`).
+- **Conflict path (genuine)**: a helper process registered Ctrl+Alt+M BEFORE
+  the app started, so the app's ToggleMute registration genuinely conflicted.
+  The card then showed: row 3 badge **In use** (warn tint 0xE05C00), the
+  callout card (surface_subtle 0x1C222D fill, warning triangle glyph, title
+  "Shortcut conflict", `Ctrl + Alt + M is used by another app.`, "Change the
+  modifier in Settings."), while rows 1/2/4/5 stayed green Ready. Screenshots
+  at %TEMP%\help-probe\ (1-help.png, 6-conflict.png).
+- Config untouched (no writes during the probe; processes cleaned up after).
+
+### Notes
+- Native footer buttons render with the light button face (0xF0F0F0) on the
+  dark card — identical to the mixer's buttons on this build (SetWindowTheme
+  dark-mode does not fully apply to BS_PUSHBUTTON here). Family-consistent,
+  pre-existing platform behavior; candidate for the tray-normalization /
+  accessibility tasks.
+- The header `×` is pointer-only (UIA naming deferred to the accessibility
+  task, as planned); Tab order documented: Edit config → Settings → Close.
+- UIA naming for the keycap chips/rows and the callout is follow-on
+  accessibility work (plan Task 10 / Verify accessibility).
+
 ## Session 005 (2026-08-04) — Task 7: Signal Glass Settings redesign
 
 - Goal: re-layout the Windows Settings surface as the 760x620 (min 620x520)
