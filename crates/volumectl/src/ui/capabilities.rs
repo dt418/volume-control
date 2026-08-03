@@ -108,25 +108,37 @@ mod tests {
     #[test]
     fn auto_resolves_blurred_when_compositor_supports_blur() {
         let c = caps(true, true, false);
-        assert_eq!(resolve_material(MaterialMode::Auto, &c), ResolvedMaterial::Blurred);
+        assert_eq!(
+            resolve_material(MaterialMode::Auto, &c),
+            ResolvedMaterial::Blurred
+        );
     }
 
     #[test]
     fn auto_resolves_translucent_when_compositor_cannot_blur() {
         let c = caps(true, false, false);
-        assert_eq!(resolve_material(MaterialMode::Auto, &c), ResolvedMaterial::Translucent);
+        assert_eq!(
+            resolve_material(MaterialMode::Auto, &c),
+            ResolvedMaterial::Translucent
+        );
     }
 
     #[test]
     fn auto_resolves_opaque_without_compositor() {
         let c = caps(false, false, false);
-        assert_eq!(resolve_material(MaterialMode::Auto, &c), ResolvedMaterial::Opaque);
+        assert_eq!(
+            resolve_material(MaterialMode::Auto, &c),
+            ResolvedMaterial::Opaque
+        );
     }
 
     #[test]
     fn explicit_opaque_forces_opaque_even_with_best_capabilities() {
         let c = caps(true, true, false);
-        assert_eq!(resolve_material(MaterialMode::Opaque, &c), ResolvedMaterial::Opaque);
+        assert_eq!(
+            resolve_material(MaterialMode::Opaque, &c),
+            ResolvedMaterial::Opaque
+        );
     }
 
     #[test]

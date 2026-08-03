@@ -372,7 +372,10 @@ mod tests {
         assert_eq!(draft.current(), &before, "edits stay intact");
         assert_eq!(draft.original(), &valid_config(), "baseline untouched");
         assert!(draft.is_dirty());
-        assert!(draft.error().is_none(), "IO errors are returned, not stored");
+        assert!(
+            draft.error().is_none(),
+            "IO errors are returned, not stored"
+        );
     }
 
     #[test]

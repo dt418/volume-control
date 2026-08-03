@@ -519,7 +519,11 @@ unsafe extern "system" fn mixer_child_wndproc(
         let order = [d.slider, d.mute_btn, d.reset_btn, d.close_btn];
         let cur = order.iter().position(|&c| c == hwnd).unwrap_or(0);
         let backwards = GetKeyState(VK_SHIFT as i32) < 0;
-        let next = if backwards { (cur + 3) % 4 } else { (cur + 1) % 4 };
+        let next = if backwards {
+            (cur + 3) % 4
+        } else {
+            (cur + 1) % 4
+        };
         SetFocus(order[next]);
         return 0;
     }
@@ -589,13 +593,7 @@ unsafe extern "system" fn mixer_wndproc(
                 .encode_utf16()
                 .chain(std::iter::once(0))
                 .collect();
-            TextOutW(
-                hdc,
-                18,
-                20,
-                label.as_ptr(),
-                (label.len() - 1) as i32,
-            );
+            TextOutW(hdc, 18, 20, label.as_ptr(), (label.len() - 1) as i32);
             paint_focus_ring(hwnd, hdc, d);
             EndPaint(hwnd, &ps);
             0

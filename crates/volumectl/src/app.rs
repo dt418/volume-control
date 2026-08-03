@@ -37,7 +37,9 @@ use crate::hotkeys_win32::{
     hotkey_action, install_wheel_hook, uninstall_wheel_hook, HotkeyRegResult, Win32Hotkeys,
     WM_APP_WHEEL,
 };
-use crate::mixer::{Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET};
+use crate::mixer::{
+    Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET,
+};
 use crate::overlay::Overlay;
 use crate::settings::{
     Settings, SettingsAppearance, WM_APP_SETTINGS_APPLY, WM_APP_SETTINGS_CANCEL,

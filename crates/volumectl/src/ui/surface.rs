@@ -154,12 +154,7 @@ mod tests {
     #[test]
     fn overlay_places_bottom_right_on_known_primary_work_area() {
         let work_area = WorkArea::new(0, 0, 2560, 1400);
-        let overlay = place_overlay(
-            work_area,
-            SurfaceSize::new(320, 64),
-            MARGIN_X,
-            MARGIN_Y,
-        );
+        let overlay = place_overlay(work_area, SurfaceSize::new(320, 64), MARGIN_X, MARGIN_Y);
 
         assert_eq!(overlay, SurfaceRect::new(2220, 1296, 2540, 1360));
         assert_eq!(overlay.width(), 320);
@@ -169,12 +164,7 @@ mod tests {
     #[test]
     fn mixer_places_above_overlay_with_exact_gap_and_aligned_edges() {
         let work_area = WorkArea::new(0, 0, 2560, 1400);
-        let overlay = place_overlay(
-            work_area,
-            SurfaceSize::new(320, 64),
-            MARGIN_X,
-            MARGIN_Y,
-        );
+        let overlay = place_overlay(work_area, SurfaceSize::new(320, 64), MARGIN_X, MARGIN_Y);
         let mixer = place_mixer_above_overlay(
             work_area,
             SurfaceSize::new(360, 178),
@@ -194,12 +184,7 @@ mod tests {
     #[test]
     fn placement_works_on_negative_origin_work_area() {
         let work_area = WorkArea::new(-1920, 0, 1920, 1040);
-        let overlay = place_overlay(
-            work_area,
-            SurfaceSize::new(320, 64),
-            MARGIN_X,
-            MARGIN_Y,
-        );
+        let overlay = place_overlay(work_area, SurfaceSize::new(320, 64), MARGIN_X, MARGIN_Y);
         let mixer = place_mixer_above_overlay(
             work_area,
             SurfaceSize::new(360, 178),

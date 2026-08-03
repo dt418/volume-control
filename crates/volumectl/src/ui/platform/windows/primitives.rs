@@ -18,8 +18,8 @@ use windows_sys::Win32::{
         DWMWCP_ROUND,
     },
     Graphics::Gdi::{
-        GetDC, GetDeviceCaps, GetMonitorInfoW, MonitorFromWindow, ReleaseDC, LOGPIXELSX, MONITORINFO,
-        MONITOR_DEFAULTTONEAREST,
+        GetDC, GetDeviceCaps, GetMonitorInfoW, MonitorFromWindow, ReleaseDC, LOGPIXELSX,
+        MONITORINFO, MONITOR_DEFAULTTONEAREST,
     },
     System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
     UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},

@@ -425,7 +425,10 @@ fn save_at_path(cfg: &Config, path: &Path) -> Result<(), ConfigError> {
 
 fn temporary_path(path: &Path) -> PathBuf {
     let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or("config");
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("config");
     path.with_file_name(format!(".{file_name}.tmp-{}-{counter}", std::process::id()))
 }
 
@@ -470,7 +473,9 @@ fn replace_file(temp_path: &Path, path: &Path) -> io::Result<()> {
     if moved != 0 {
         Ok(())
     } else {
-        Err(io::Error::from_raw_os_error(unsafe { GetLastError() } as i32))
+        Err(io::Error::from_raw_os_error(
+            unsafe { GetLastError() } as i32
+        ))
     }
 }
 

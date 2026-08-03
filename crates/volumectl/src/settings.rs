@@ -26,10 +26,10 @@ use windows_sys::Win32::{
     System::LibraryLoader::GetModuleHandleW,
     UI::Input::KeyboardAndMouse::{GetKeyState, SetFocus, VK_ESCAPE, VK_SHIFT, VK_TAB},
     UI::WindowsAndMessaging::{
-        CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetAncestor,
-        GetDlgCtrlID, GetWindowLongPtrW, PostMessageW, RegisterClassW, SendMessageW,
-        SetWindowLongPtrW, SetWindowPos, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GA_PARENT,
-        GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SW_HIDE, SWP_SHOWWINDOW, WM_CLOSE, WM_COMMAND,
+        CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetAncestor, GetDlgCtrlID,
+        GetWindowLongPtrW, PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW,
+        SetWindowPos, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GA_PARENT, GWLP_USERDATA,
+        GWLP_WNDPROC, HWND_TOPMOST, SWP_SHOWWINDOW, SW_HIDE, WM_CLOSE, WM_COMMAND,
         WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_KEYDOWN, WM_PAINT, WM_SYSKEYDOWN, WM_USER, WNDCLASSW,
         WS_CHILD, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
     },
@@ -360,98 +360,575 @@ impl Settings {
             d.hfont_body = font(12, false);
 
             // ── General (left column) ────────────────────────────────────
-            make_static(hwnd, hinst, w!("General"), 20, 16, 120, 20, ID_HDR_GENERAL, d.hfont_header);
-            make_static(hwnd, hinst, w!("Volume step (1-50):"), 20, 40, 145, 20, ID_LBL_VOL_STEP, d.hfont_body);
-            d.edit_volume_step = make_ctl(hwnd, hinst, w!("EDIT"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER, 168, 36, 112, 24, ID_VOL_STEP);
-            make_static(hwnd, hinst, w!("Large step (step+1..50):"), 20, 72, 145, 20, ID_LBL_VOL_STEP_LARGE, d.hfont_body);
-            d.edit_volume_step_large = make_ctl(hwnd, hinst, w!("EDIT"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER, 168, 68, 112, 24, ID_VOL_STEP_LARGE);
-            make_static(hwnd, hinst, w!("Overlay (ms):"), 20, 104, 145, 20, ID_LBL_OVERLAY, d.hfont_body);
-            d.edit_overlay_ms = make_ctl(hwnd, hinst, w!("EDIT"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER, 168, 100, 112, 24, ID_OVERLAY_MS);
+            make_static(
+                hwnd,
+                hinst,
+                w!("General"),
+                20,
+                16,
+                120,
+                20,
+                ID_HDR_GENERAL,
+                d.hfont_header,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Volume step (1-50):"),
+                20,
+                40,
+                145,
+                20,
+                ID_LBL_VOL_STEP,
+                d.hfont_body,
+            );
+            d.edit_volume_step = make_ctl(
+                hwnd,
+                hinst,
+                w!("EDIT"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                168,
+                36,
+                112,
+                24,
+                ID_VOL_STEP,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Large step (step+1..50):"),
+                20,
+                72,
+                145,
+                20,
+                ID_LBL_VOL_STEP_LARGE,
+                d.hfont_body,
+            );
+            d.edit_volume_step_large = make_ctl(
+                hwnd,
+                hinst,
+                w!("EDIT"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                168,
+                68,
+                112,
+                24,
+                ID_VOL_STEP_LARGE,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Overlay (ms):"),
+                20,
+                104,
+                145,
+                20,
+                ID_LBL_OVERLAY,
+                d.hfont_body,
+            );
+            d.edit_overlay_ms = make_ctl(
+                hwnd,
+                hinst,
+                w!("EDIT"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                168,
+                100,
+                112,
+                24,
+                ID_OVERLAY_MS,
+            );
 
             // ── Hotkeys / conflicts ──────────────────────────────────────
-            make_static(hwnd, hinst, w!("Hotkeys / Conflicts"), 20, 144, 180, 20, ID_HDR_HOTKEYS, d.hfont_header);
-            make_static(hwnd, hinst, w!("Modifier:"), 20, 168, 90, 20, ID_LBL_MODIFIER, d.hfont_body);
-            d.combo_modifier = make_ctl(hwnd, hinst, w!("COMBOBOX"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST, 120, 164, 160, 180, ID_COMBO_MODIFIER);
-            d.static_hotkey_status = make_static(hwnd, hinst, w!(""), 20, 198, 260, 28, ID_ST_HOTKEY_STATUS, d.hfont_body);
+            make_static(
+                hwnd,
+                hinst,
+                w!("Hotkeys / Conflicts"),
+                20,
+                144,
+                180,
+                20,
+                ID_HDR_HOTKEYS,
+                d.hfont_header,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Modifier:"),
+                20,
+                168,
+                90,
+                20,
+                ID_LBL_MODIFIER,
+                d.hfont_body,
+            );
+            d.combo_modifier = make_ctl(
+                hwnd,
+                hinst,
+                w!("COMBOBOX"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                120,
+                164,
+                160,
+                180,
+                ID_COMBO_MODIFIER,
+            );
+            d.static_hotkey_status = make_static(
+                hwnd,
+                hinst,
+                w!(""),
+                20,
+                198,
+                260,
+                28,
+                ID_ST_HOTKEY_STATUS,
+                d.hfont_body,
+            );
 
             // ── Appearance ───────────────────────────────────────────────
-            make_static(hwnd, hinst, w!("Appearance"), 20, 240, 120, 20, ID_HDR_APPEARANCE, d.hfont_header);
-            make_static(hwnd, hinst, w!("Theme:"), 20, 264, 80, 20, ID_LBL_THEME, d.hfont_body);
-            d.combo_theme = make_ctl(hwnd, hinst, w!("COMBOBOX"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST, 110, 260, 170, 170, ID_COMBO_THEME);
-            make_static(hwnd, hinst, w!("Material:"), 20, 296, 80, 20, ID_LBL_MATERIAL, d.hfont_body);
-            d.combo_material = make_ctl(hwnd, hinst, w!("COMBOBOX"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST, 110, 292, 170, 170, ID_COMBO_MATERIAL);
-            make_static(hwnd, hinst, w!("Motion:"), 20, 328, 80, 20, ID_LBL_MOTION, d.hfont_body);
-            d.combo_motion = make_ctl(hwnd, hinst, w!("COMBOBOX"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST, 110, 324, 170, 170, ID_COMBO_MOTION);
-            make_static(hwnd, hinst, w!("Accent:"), 20, 360, 80, 20, ID_LBL_ACCENT, d.hfont_body);
-            d.combo_accent = make_ctl(hwnd, hinst, w!("COMBOBOX"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST, 110, 356, 170, 170, ID_COMBO_ACCENT);
+            make_static(
+                hwnd,
+                hinst,
+                w!("Appearance"),
+                20,
+                240,
+                120,
+                20,
+                ID_HDR_APPEARANCE,
+                d.hfont_header,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Theme:"),
+                20,
+                264,
+                80,
+                20,
+                ID_LBL_THEME,
+                d.hfont_body,
+            );
+            d.combo_theme = make_ctl(
+                hwnd,
+                hinst,
+                w!("COMBOBOX"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                110,
+                260,
+                170,
+                170,
+                ID_COMBO_THEME,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Material:"),
+                20,
+                296,
+                80,
+                20,
+                ID_LBL_MATERIAL,
+                d.hfont_body,
+            );
+            d.combo_material = make_ctl(
+                hwnd,
+                hinst,
+                w!("COMBOBOX"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                110,
+                292,
+                170,
+                170,
+                ID_COMBO_MATERIAL,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Motion:"),
+                20,
+                328,
+                80,
+                20,
+                ID_LBL_MOTION,
+                d.hfont_body,
+            );
+            d.combo_motion = make_ctl(
+                hwnd,
+                hinst,
+                w!("COMBOBOX"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                110,
+                324,
+                170,
+                170,
+                ID_COMBO_MOTION,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Accent:"),
+                20,
+                360,
+                80,
+                20,
+                ID_LBL_ACCENT,
+                d.hfont_body,
+            );
+            d.combo_accent = make_ctl(
+                hwnd,
+                hinst,
+                w!("COMBOBOX"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST,
+                110,
+                356,
+                170,
+                170,
+                ID_COMBO_ACCENT,
+            );
 
             // ── Blacklist (right column) ─────────────────────────────────
-            make_static(hwnd, hinst, w!("Blacklist"), 300, 16, 120, 20, ID_HDR_BLACKLIST, d.hfont_header);
-            d.list_blacklist = make_ctl(hwnd, hinst, w!("LISTBOX"), w!(""),
+            make_static(
+                hwnd,
+                hinst,
+                w!("Blacklist"),
+                300,
+                16,
+                120,
+                20,
+                ID_HDR_BLACKLIST,
+                d.hfont_header,
+            );
+            d.list_blacklist = make_ctl(
+                hwnd,
+                hinst,
+                w!("LISTBOX"),
+                w!(""),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
-                300, 40, 260, 130, ID_LIST_BLACKLIST);
-            d.edit_blacklist_new = make_ctl(hwnd, hinst, w!("EDIT"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 300, 180, 155, 24, ID_EDIT_BLACKLIST);
-            d.btn_blacklist_add = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Add"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 463, 178, 97, 28, ID_BTN_BLACKLIST_ADD);
-            d.btn_blacklist_remove = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Remove"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 300, 214, 120, 28, ID_BTN_BLACKLIST_REMOVE);
-            d.btn_blacklist_clear = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Clear"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 426, 214, 134, 28, ID_BTN_BLACKLIST_CLEAR);
-            d.btn_blacklist_recommend = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Apply Recommended"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 300, 248, 260, 28, ID_BTN_BLACKLIST_RECOMMEND);
+                300,
+                40,
+                260,
+                130,
+                ID_LIST_BLACKLIST,
+            );
+            d.edit_blacklist_new = make_ctl(
+                hwnd,
+                hinst,
+                w!("EDIT"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+                300,
+                180,
+                155,
+                24,
+                ID_EDIT_BLACKLIST,
+            );
+            d.btn_blacklist_add = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Add"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                463,
+                178,
+                97,
+                28,
+                ID_BTN_BLACKLIST_ADD,
+            );
+            d.btn_blacklist_remove = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Remove"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                300,
+                214,
+                120,
+                28,
+                ID_BTN_BLACKLIST_REMOVE,
+            );
+            d.btn_blacklist_clear = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Clear"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                426,
+                214,
+                134,
+                28,
+                ID_BTN_BLACKLIST_CLEAR,
+            );
+            d.btn_blacklist_recommend = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Apply Recommended"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                300,
+                248,
+                260,
+                28,
+                ID_BTN_BLACKLIST_RECOMMEND,
+            );
 
             // ── Feedback ─────────────────────────────────────────────────
-            make_static(hwnd, hinst, w!("Feedback"), 300, 292, 120, 20, ID_HDR_FEEDBACK, d.hfont_header);
-            d.chk_beep = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Enable beep feedback"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 300, 316, 220, 24, ID_CHK_BEEP);
-            make_static(hwnd, hinst, w!("Blocked freq:"), 300, 348, 120, 20, ID_LBL_BLOCKED_FREQ, d.hfont_body);
-            d.edit_blocked_freq = make_ctl(hwnd, hinst, w!("EDIT"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER, 430, 344, 130, 24, ID_BLOCKED_FREQ);
-            make_static(hwnd, hinst, w!("Blocked ms:"), 300, 380, 120, 20, ID_LBL_BLOCKED_DUR, d.hfont_body);
-            d.edit_blocked_dur = make_ctl(hwnd, hinst, w!("EDIT"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER, 430, 376, 130, 24, ID_BLOCKED_DUR);
-            make_static(hwnd, hinst, w!("Limit freq:"), 300, 412, 120, 20, ID_LBL_LIMIT_FREQ, d.hfont_body);
-            d.edit_limit_freq = make_ctl(hwnd, hinst, w!("EDIT"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER, 430, 408, 130, 24, ID_LIMIT_FREQ);
-            make_static(hwnd, hinst, w!("Limit ms:"), 300, 444, 120, 20, ID_LBL_LIMIT_DUR, d.hfont_body);
-            d.edit_limit_dur = make_ctl(hwnd, hinst, w!("EDIT"), w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER, 430, 440, 130, 24, ID_LIMIT_DUR);
+            make_static(
+                hwnd,
+                hinst,
+                w!("Feedback"),
+                300,
+                292,
+                120,
+                20,
+                ID_HDR_FEEDBACK,
+                d.hfont_header,
+            );
+            d.chk_beep = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Enable beep feedback"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                300,
+                316,
+                220,
+                24,
+                ID_CHK_BEEP,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Blocked freq:"),
+                300,
+                348,
+                120,
+                20,
+                ID_LBL_BLOCKED_FREQ,
+                d.hfont_body,
+            );
+            d.edit_blocked_freq = make_ctl(
+                hwnd,
+                hinst,
+                w!("EDIT"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                430,
+                344,
+                130,
+                24,
+                ID_BLOCKED_FREQ,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Blocked ms:"),
+                300,
+                380,
+                120,
+                20,
+                ID_LBL_BLOCKED_DUR,
+                d.hfont_body,
+            );
+            d.edit_blocked_dur = make_ctl(
+                hwnd,
+                hinst,
+                w!("EDIT"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                430,
+                376,
+                130,
+                24,
+                ID_BLOCKED_DUR,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Limit freq:"),
+                300,
+                412,
+                120,
+                20,
+                ID_LBL_LIMIT_FREQ,
+                d.hfont_body,
+            );
+            d.edit_limit_freq = make_ctl(
+                hwnd,
+                hinst,
+                w!("EDIT"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                430,
+                408,
+                130,
+                24,
+                ID_LIMIT_FREQ,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Limit ms:"),
+                300,
+                444,
+                120,
+                20,
+                ID_LBL_LIMIT_DUR,
+                d.hfont_body,
+            );
+            d.edit_limit_dur = make_ctl(
+                hwnd,
+                hinst,
+                w!("EDIT"),
+                w!(""),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_NUMBER,
+                430,
+                440,
+                130,
+                24,
+                ID_LIMIT_DUR,
+            );
 
             // ── Storage / actions ────────────────────────────────────────
-            make_static(hwnd, hinst, w!("Storage"), 20, 488, 120, 20, ID_HDR_STORAGE, d.hfont_header);
-            make_static(hwnd, hinst, w!("Config:"), 20, 512, 52, 20, ID_LBL_CONFIG, d.hfont_body);
-            d.static_path = make_static(hwnd, hinst, w!(""), 76, 512, 484, 24, ID_ST_CONFIG_PATH, d.hfont_body);
-            d.btn_open_config = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Open Config"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 20, 544, 160, 28, ID_BTN_OPEN_CONFIG);
-            d.static_status = make_static(hwnd, hinst, w!(""), 20, 578, 540, 22, ID_ST_STATUS, d.hfont_body);
-            d.btn_apply = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Apply"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 20, 608, 88, 28, ID_BTN_APPLY);
-            d.btn_reset = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Reset"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 114, 608, 88, 28, ID_BTN_RESET);
-            d.btn_cancel = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Cancel"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 372, 608, 88, 28, ID_BTN_CANCEL);
-            d.btn_close = make_ctl(hwnd, hinst, w!("BUTTON"), w!("Close"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP, 466, 608, 88, 28, ID_BTN_CLOSE);
+            make_static(
+                hwnd,
+                hinst,
+                w!("Storage"),
+                20,
+                488,
+                120,
+                20,
+                ID_HDR_STORAGE,
+                d.hfont_header,
+            );
+            make_static(
+                hwnd,
+                hinst,
+                w!("Config:"),
+                20,
+                512,
+                52,
+                20,
+                ID_LBL_CONFIG,
+                d.hfont_body,
+            );
+            d.static_path = make_static(
+                hwnd,
+                hinst,
+                w!(""),
+                76,
+                512,
+                484,
+                24,
+                ID_ST_CONFIG_PATH,
+                d.hfont_body,
+            );
+            d.btn_open_config = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Open Config"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                20,
+                544,
+                160,
+                28,
+                ID_BTN_OPEN_CONFIG,
+            );
+            d.static_status = make_static(
+                hwnd,
+                hinst,
+                w!(""),
+                20,
+                578,
+                540,
+                22,
+                ID_ST_STATUS,
+                d.hfont_body,
+            );
+            d.btn_apply = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Apply"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                20,
+                608,
+                88,
+                28,
+                ID_BTN_APPLY,
+            );
+            d.btn_reset = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Reset"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                114,
+                608,
+                88,
+                28,
+                ID_BTN_RESET,
+            );
+            d.btn_cancel = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Cancel"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                372,
+                608,
+                88,
+                28,
+                ID_BTN_CANCEL,
+            );
+            d.btn_close = make_ctl(
+                hwnd,
+                hinst,
+                w!("BUTTON"),
+                w!("Close"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                466,
+                608,
+                88,
+                28,
+                ID_BTN_CLOSE,
+            );
 
             // A failed child leaves the window unusable; tear down cleanly.
             if [
-                d.edit_volume_step, d.edit_volume_step_large, d.edit_overlay_ms,
-                d.combo_modifier, d.combo_theme, d.combo_material, d.combo_motion,
-                d.combo_accent, d.list_blacklist, d.edit_blacklist_new,
-                d.btn_blacklist_add, d.btn_blacklist_remove, d.btn_blacklist_clear,
-                d.btn_blacklist_recommend, d.chk_beep, d.edit_blocked_freq,
-                d.edit_blocked_dur, d.edit_limit_freq, d.edit_limit_dur,
-                d.btn_open_config, d.btn_apply, d.btn_reset, d.btn_cancel, d.btn_close,
-                d.static_path, d.static_status,
+                d.edit_volume_step,
+                d.edit_volume_step_large,
+                d.edit_overlay_ms,
+                d.combo_modifier,
+                d.combo_theme,
+                d.combo_material,
+                d.combo_motion,
+                d.combo_accent,
+                d.list_blacklist,
+                d.edit_blacklist_new,
+                d.btn_blacklist_add,
+                d.btn_blacklist_remove,
+                d.btn_blacklist_clear,
+                d.btn_blacklist_recommend,
+                d.chk_beep,
+                d.edit_blocked_freq,
+                d.edit_blocked_dur,
+                d.edit_limit_freq,
+                d.edit_limit_dur,
+                d.btn_open_config,
+                d.btn_apply,
+                d.btn_reset,
+                d.btn_cancel,
+                d.btn_close,
+                d.static_path,
+                d.static_status,
             ]
             .iter()
             .any(|&c| c == 0)
@@ -463,13 +940,30 @@ impl Settings {
 
             // Focus order for Tab/Shift+Tab (visual order).
             for ctl in [
-                d.edit_volume_step, d.edit_volume_step_large, d.edit_overlay_ms,
-                d.combo_modifier, d.combo_theme, d.combo_material, d.combo_motion,
-                d.combo_accent, d.list_blacklist, d.edit_blacklist_new,
-                d.btn_blacklist_add, d.btn_blacklist_remove, d.btn_blacklist_clear,
-                d.btn_blacklist_recommend, d.chk_beep, d.edit_blocked_freq,
-                d.edit_blocked_dur, d.edit_limit_freq, d.edit_limit_dur,
-                d.btn_open_config, d.btn_apply, d.btn_reset, d.btn_cancel, d.btn_close,
+                d.edit_volume_step,
+                d.edit_volume_step_large,
+                d.edit_overlay_ms,
+                d.combo_modifier,
+                d.combo_theme,
+                d.combo_material,
+                d.combo_motion,
+                d.combo_accent,
+                d.list_blacklist,
+                d.edit_blacklist_new,
+                d.btn_blacklist_add,
+                d.btn_blacklist_remove,
+                d.btn_blacklist_clear,
+                d.btn_blacklist_recommend,
+                d.chk_beep,
+                d.edit_blocked_freq,
+                d.edit_blocked_dur,
+                d.edit_limit_freq,
+                d.edit_limit_dur,
+                d.btn_open_config,
+                d.btn_apply,
+                d.btn_reset,
+                d.btn_cancel,
+                d.btn_close,
             ] {
                 subclass(d, ctl);
             }
@@ -480,14 +974,20 @@ impl Settings {
             combo_add(d.combo_theme, &["System", "Light", "Dark"]);
             combo_add(d.combo_material, &["Auto", "Translucent", "Opaque"]);
             combo_add(d.combo_motion, &["Full", "Reduced", "Disabled"]);
-            combo_add(d.combo_accent, &["System", "Blue", "Green", "Purple", "Orange"]);
+            combo_add(
+                d.combo_accent,
+                &["System", "Blue", "Green", "Purple", "Orange"],
+            );
 
             // Seed from defaults so the hidden window is self-consistent before
             // the first `show(config)` re-seeds from the loaded config.
             d.draft = SettingsDraft::new(Config::default());
             populate_controls(d);
             set_status(d, StatusKind::None, "");
-            set_control_text(d.static_path, &crate::config::config_path().display().to_string());
+            set_control_text(
+                d.static_path,
+                &crate::config::config_path().display().to_string(),
+            );
 
             // Initial adaptive styling from the placeholder appearance.
             let appearance = SettingsAppearance::placeholder();
@@ -611,10 +1111,18 @@ impl Settings {
                         focus_field(d, ve.field);
                     }
                     ConfigError::Io(ie) => {
-                        set_status(d, StatusKind::Error, &format!("Could not save config: {ie}"));
+                        set_status(
+                            d,
+                            StatusKind::Error,
+                            &format!("Could not save config: {ie}"),
+                        );
                     }
                     ConfigError::Serialization(se) => {
-                        set_status(d, StatusKind::Error, &format!("Could not save config: {se}"));
+                        set_status(
+                            d,
+                            StatusKind::Error,
+                            &format!("Could not save config: {se}"),
+                        );
                     }
                 },
             }
@@ -777,7 +1285,12 @@ fn get_control_text(hwnd: HWND) -> String {
     unsafe {
         let len = SendMessageW(hwnd, WM_GETTEXTLENGTH, 0, 0) as usize;
         let mut buf = vec![0u16; len + 1];
-        SendMessageW(hwnd, WM_GETTEXT, (len + 1) as usize, buf.as_mut_ptr() as isize);
+        SendMessageW(
+            hwnd,
+            WM_GETTEXT,
+            (len + 1) as usize,
+            buf.as_mut_ptr() as isize,
+        );
         String::from_utf16_lossy(&buf[..len])
     }
 }
@@ -1027,13 +1540,19 @@ fn populate_controls(d: &SettingsData) {
     combo_set_index(d.combo_accent, accent_index(cfg.appearance.accent));
     set_checkbox(d.chk_beep, cfg.beep.enabled);
     set_control_text(d.edit_blocked_freq, &cfg.beep.blocked_freq.to_string());
-    set_control_text(d.edit_blocked_dur, &cfg.beep.blocked_duration_ms.to_string());
+    set_control_text(
+        d.edit_blocked_dur,
+        &cfg.beep.blocked_duration_ms.to_string(),
+    );
     set_control_text(d.edit_limit_freq, &cfg.beep.limit_freq.to_string());
     set_control_text(d.edit_limit_dur, &cfg.beep.limit_duration_ms.to_string());
     populate_blacklist(d);
     set_control_text(
         d.static_hotkey_status,
-        &format!("Modifier: {} — hotkeys re-register on Apply.", modifier_label(cfg.modifier)),
+        &format!(
+            "Modifier: {} — hotkeys re-register on Apply.",
+            modifier_label(cfg.modifier)
+        ),
     );
 }
 
@@ -1177,7 +1696,8 @@ fn static_color(d: &SettingsData, ctl: HWND) -> crate::ui::Rgba {
 /// [`settings_child_wndproc`] subclass.
 unsafe fn subclass(d: &mut SettingsData, ctl: HWND) {
     let orig = GetWindowLongPtrW(ctl, GWLP_WNDPROC);
-    d.orig_procs.push(Some(std::mem::transmute::<isize, ChildWndProc>(orig)));
+    d.orig_procs
+        .push(Some(std::mem::transmute::<isize, ChildWndProc>(orig)));
     d.tab_order.push(ctl);
     let subclass_proc = settings_child_wndproc as ChildWndProc;
     SetWindowLongPtrW(ctl, GWLP_WNDPROC, subclass_proc as usize as isize);
@@ -1212,7 +1732,11 @@ unsafe extern "system" fn settings_child_wndproc(
         if n > 0 {
             let cur = d.tab_order.iter().position(|&c| c == hwnd).unwrap_or(0);
             let backwards = GetKeyState(VK_SHIFT as i32) < 0;
-            let next = if backwards { (cur + n - 1) % n } else { (cur + 1) % n };
+            let next = if backwards {
+                (cur + n - 1) % n
+            } else {
+                (cur + 1) % n
+            };
             SetFocus(d.tab_order[next]);
         }
         return 0;
@@ -1483,7 +2007,11 @@ mod tests {
         for t in [ThemeMode::System, ThemeMode::Light, ThemeMode::Dark] {
             assert_eq!(theme_from_index(theme_index(t) as i32), t);
         }
-        for m in [MaterialMode::Auto, MaterialMode::Translucent, MaterialMode::Opaque] {
+        for m in [
+            MaterialMode::Auto,
+            MaterialMode::Translucent,
+            MaterialMode::Opaque,
+        ] {
             assert_eq!(material_from_index(material_index(m) as i32), m);
         }
         for m in [MotionMode::Full, MotionMode::Reduced, MotionMode::Disabled] {

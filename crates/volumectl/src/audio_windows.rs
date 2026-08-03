@@ -19,9 +19,7 @@ use std::ffi::c_void;
 use windows_sys::core::{GUID, PCWSTR};
 use windows_sys::Win32::{
     Media::Audio::{eConsole, eRender, EDataFlow, ERole},
-    System::Com::{
-        CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL,
-    },
+    System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL},
 };
 
 use crate::audio::{AudioBackend, AudioError, VolumeState};
@@ -37,7 +35,8 @@ type HRESULT = i32;
 #[repr(C)]
 struct IMMDeviceEnumeratorVtbl {
     // IUnknown
-    query_interface: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
+    query_interface:
+        unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
     add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
     release: unsafe extern "system" fn(*mut c_void) -> u32,
     // IMMDeviceEnumerator
@@ -53,11 +52,18 @@ struct IMMDeviceEnumeratorVtbl {
 #[repr(C)]
 struct IMMDeviceVtbl {
     // IUnknown
-    query_interface: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
+    query_interface:
+        unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
     add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
     release: unsafe extern "system" fn(*mut c_void) -> u32,
     // IMMDevice
-    activate: unsafe extern "system" fn(*mut c_void, *const GUID, u32, *mut c_void, *mut *mut c_void) -> HRESULT,
+    activate: unsafe extern "system" fn(
+        *mut c_void,
+        *const GUID,
+        u32,
+        *mut c_void,
+        *mut *mut c_void,
+    ) -> HRESULT,
     open_property_store: unsafe extern "system" fn(*mut c_void, u32, *mut *mut c_void) -> HRESULT,
     get_id: unsafe extern "system" fn(*mut c_void, *mut PCWSTR) -> HRESULT,
     get_state: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
@@ -66,25 +72,32 @@ struct IMMDeviceVtbl {
 #[repr(C)]
 struct IAudioEndpointVolumeVtbl {
     // IUnknown
-    query_interface: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
+    query_interface:
+        unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
     add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
     release: unsafe extern "system" fn(*mut c_void) -> u32,
     // IAudioEndpointVolume
     register_control_change_notify: unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
-    unregister_control_change_notify: unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
+    unregister_control_change_notify:
+        unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
     get_channel_count: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
     set_master_volume_level: unsafe extern "system" fn(*mut c_void, f32, *const GUID) -> HRESULT,
-    set_master_volume_level_scalar: unsafe extern "system" fn(*mut c_void, f32, *const GUID) -> HRESULT,
+    set_master_volume_level_scalar:
+        unsafe extern "system" fn(*mut c_void, f32, *const GUID) -> HRESULT,
     get_master_volume_level: unsafe extern "system" fn(*mut c_void, *mut f32) -> HRESULT,
     get_master_volume_level_scalar: unsafe extern "system" fn(*mut c_void, *mut f32) -> HRESULT,
-    set_channel_volume_level: unsafe extern "system" fn(*mut c_void, u32, f32, *const GUID) -> HRESULT,
-    set_channel_volume_level_scalar: unsafe extern "system" fn(*mut c_void, u32, f32, *const GUID) -> HRESULT,
+    set_channel_volume_level:
+        unsafe extern "system" fn(*mut c_void, u32, f32, *const GUID) -> HRESULT,
+    set_channel_volume_level_scalar:
+        unsafe extern "system" fn(*mut c_void, u32, f32, *const GUID) -> HRESULT,
     get_channel_volume_level: unsafe extern "system" fn(*mut c_void, u32, *mut f32) -> HRESULT,
-    get_channel_volume_level_scalar: unsafe extern "system" fn(*mut c_void, u32, *mut f32) -> HRESULT,
+    get_channel_volume_level_scalar:
+        unsafe extern "system" fn(*mut c_void, u32, *mut f32) -> HRESULT,
     set_mute: unsafe extern "system" fn(*mut c_void, i32, *const GUID) -> HRESULT,
     get_mute: unsafe extern "system" fn(*mut c_void, *mut i32) -> HRESULT,
     get_volume_step_info: unsafe extern "system" fn(*mut c_void, *mut u32, *mut u32) -> HRESULT,
-    get_volume_range: unsafe extern "system" fn(*mut c_void, *mut f32, *mut f32, *mut f32) -> HRESULT,
+    get_volume_range:
+        unsafe extern "system" fn(*mut c_void, *mut f32, *mut f32, *mut f32) -> HRESULT,
 }
 
 /// Access the vtable of an opaque COM pointer.
@@ -138,9 +151,7 @@ impl WindowsAudio {
             );
             if hr != 0 {
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                return Err(AudioError::Io(format!(
-                    "GetDefaultAudioEndpoint: 0x{hr:x}"
-                )));
+                return Err(AudioError::Io(format!("GetDefaultAudioEndpoint: 0x{hr:x}")));
             }
 
             let mut endpoint: *mut c_void = std::ptr::null_mut();
@@ -195,7 +206,9 @@ impl AudioBackend for WindowsAudio {
         let v = volume.clamp(0.0, 1.0);
         unsafe {
             let hr = (vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint)
-                .set_master_volume_level_scalar)(self.endpoint, v, std::ptr::null());
+                .set_master_volume_level_scalar)(
+                self.endpoint, v, std::ptr::null()
+            );
             if hr != 0 {
                 return Err(AudioError::Io(format!(
                     "SetMasterVolumeLevelScalar: 0x{hr:x}"

@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicI64, AtomicIsize, AtomicU8, Ordering};
 
 use windows_sys::Win32::{
     Foundation::{
-        BOOL, ERROR_HOTKEY_ALREADY_REGISTERED, FALSE, GetLastError, HWND, LPARAM, LRESULT, WPARAM,
+        GetLastError, BOOL, ERROR_HOTKEY_ALREADY_REGISTERED, FALSE, HWND, LPARAM, LRESULT, WPARAM,
     },
     System::LibraryLoader::GetModuleHandleW,
     UI::Input::KeyboardAndMouse::{

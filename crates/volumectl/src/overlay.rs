@@ -25,10 +25,9 @@ use windows_sys::Win32::{
     UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, KillTimer,
         RegisterClassW, SetLayeredWindowAttributes, SetTimer, SetWindowLongPtrW, SetWindowPos,
-        ShowWindow, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HWND_TOPMOST, LWA_ALPHA,
-        SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, WM_ERASEBKGND, WM_PAINT, WM_TIMER, WNDCLASSW,
-        WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
-        WS_POPUP,
+        ShowWindow, CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HWND_TOPMOST, LWA_ALPHA, SWP_NOACTIVATE,
+        SWP_SHOWWINDOW, SW_HIDE, WM_ERASEBKGND, WM_PAINT, WM_TIMER, WNDCLASSW, WS_EX_LAYERED,
+        WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
     },
 };
 
@@ -196,8 +195,11 @@ impl Overlay {
             // Material fallback: request the DWM treatment (blur/translucent/
             // opaque). The overlay always paints its own fill, so a missing
             // system backdrop (Windows 10) simply keeps the painted fill.
-            let backdrop_active =
-                apply_backdrop(self.hwnd, d.appearance.material, d.appearance.tokens.is_dark);
+            let backdrop_active = apply_backdrop(
+                self.hwnd,
+                d.appearance.material,
+                d.appearance.tokens.is_dark,
+            );
             log::debug!(
                 "overlay material={:?} backdrop_active={}",
                 d.appearance.material,

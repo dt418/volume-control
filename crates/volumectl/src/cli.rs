@@ -15,7 +15,9 @@ pub fn run() -> Result<ExitCode, String> {
 
     match cmd {
         "get" => {
-            let vol = device.get_vol().map_err(|e| format!("get_vol failed: {e}"))?;
+            let vol = device
+                .get_vol()
+                .map_err(|e| format!("get_vol failed: {e}"))?;
             println!("{}%", (vol * 100.0).round() as i32);
             Ok(ExitCode::SUCCESS)
         }
