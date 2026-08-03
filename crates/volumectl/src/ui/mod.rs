@@ -1,11 +1,12 @@
 //! Shared, platform-neutral UI contracts.
 //!
-//! Renderer and host integrations are intentionally kept out of this module;
-//! platform-specific primitives live under [`platform`] and are re-exported
-//! only on Windows.
+//! Platform-specific primitives live under [`platform`] and are re-exported
+//! only on Windows; the native renderer contract in [`renderer`] is shared
+//! by every platform adapter.
 
 mod capabilities;
 mod model;
+mod renderer;
 mod settings;
 mod surface;
 mod theme;
@@ -17,6 +18,7 @@ pub use model::{
     AccentMode, AppAction, AppState, MaterialMode, MotionMode, SurfaceId, SurfaceVisibility,
     SurfaceVisibilityState, ThemeMode, UiStatus,
 };
+pub use renderer::{HostHandle, NativeRenderer};
 pub use settings::SettingsDraft;
 pub use surface::{
     place_centered, place_mixer_above_overlay, place_overlay, SurfaceRect, SurfaceSize, WorkArea,
