@@ -75,10 +75,13 @@ pub fn font_candidates(role: TextRole) -> [&'static str; 3] {
 ///
 /// Walks [`font_candidates`] and verifies with `GetTextFaceW` that GDI
 /// actually honored the requested face (GDI silently substitutes unknown
-/// faces, so creation success alone is not a reliable check). The selected
-/// font is left selected in `hdc`; the caller restores the previous object
-/// and deletes the font. Returns 0 when every candidate failed.
-pub fn create_font_selected(hdc: HDC, role: TextRole, height_px: i32) -> HFONT {
+/// faces, so creation success alone is not a reliable check). On success the
+/// created font is left selected in `hdc` and the function returns it
+/// together with the object that previously occupied the font slot, so the
+/// caller can restore the slot BEFORE deleting the font — GDI refuses to
+/// delete an object that is still selected, so deleting first would leak one
+/// HFONT per call. Returns `(0, 0)` when every candidate failed.
+pub fn create_font_selected(hdc: HDC, role: TextRole, height_px: i32) -> (HFONT, HGDIOBJ) {
     let pitch_and_family = if role.monospace {
         u32::from(FIXED_PITCH | FF_MODERN)
     } else {
@@ -108,12 +111,15 @@ pub fn create_font_selected(hdc: HDC, role: TextRole, height_px: i32) -> HFONT {
             continue;
         }
         if name.is_empty() {
-            return font;
+            // Final fallback: the system default face always resolves. Select
+            // it and return the displaced slot object like any other success.
+            let previous = unsafe { SelectObject(hdc, font as HGDIOBJ) };
+            return (font, previous);
         }
         unsafe {
             let previous = SelectObject(hdc, font as HGDIOBJ);
             if previous != 0 && selected_face_matches(hdc, name) {
-                return font;
+                return (font, previous);
             }
             if previous != 0 {
                 SelectObject(hdc, previous);
@@ -123,7 +129,7 @@ pub fn create_font_selected(hdc: HDC, role: TextRole, height_px: i32) -> HFONT {
             DeleteObject(font as HGDIOBJ);
         }
     }
-    0
+    (0, 0)
 }
 
 /// Whether the face currently selected in `hdc` is `requested`
@@ -169,7 +175,7 @@ pub fn measure_text_gdi(text: &str, role: TextRole) -> Option<SizeF> {
             1.0
         };
         let height_px = (role.size_px * dc_scale).round() as i32;
-        let font = create_font_selected(hdc, role, height_px);
+        let (font, previous_font) = create_font_selected(hdc, role, height_px);
 
         let mut extent = SIZE { cx: 0, cy: 0 };
         let wide: Vec<u16> = text.encode_utf16().collect();
@@ -179,10 +185,15 @@ pub fn measure_text_gdi(text: &str, role: TextRole) -> Option<SizeF> {
             GetTextExtentPoint32W(hdc, wide.as_ptr(), wide.len() as i32, &mut extent) != 0
         };
 
+        // Restore the font slot before deleting the font (GDI refuses to
+        // delete a selected object); the bitmap slot is restored separately.
         if font != 0 {
-            let _ = SelectObject(hdc, previous_bitmap as HGDIOBJ); // deselect font
+            if previous_font != 0 {
+                let _ = SelectObject(hdc, previous_font);
+            }
             DeleteObject(font as HGDIOBJ);
-        } else if previous_bitmap != 0 {
+        }
+        if previous_bitmap != 0 {
             let _ = SelectObject(hdc, previous_bitmap as HGDIOBJ);
         }
         DeleteObject(bitmap as HGDIOBJ);
@@ -204,9 +215,99 @@ mod tests {
     use super::*;
     use crate::ui::platform::windows::primitives::RectF;
     use crate::ui::theme::{Rgba, TypographyTokens};
+    use windows_sys::Win32::Graphics::Gdi::{GetCurrentObject, OBJ_FONT};
 
     fn rect() -> RectF {
         RectF::new(10.0, 20.0, 110.0, 40.0)
+    }
+
+    /// A sentinel HFONT selected into the DC's font slot, to prove callers
+    /// restore the slot (a slot that still holds a created font cannot be
+    /// deleted, which is exactly the leak this guards against).
+    unsafe fn sentinel_font() -> HFONT {
+        let font = CreateFontW(
+            -13,
+            0,
+            0,
+            0,
+            400,
+            0,
+            0,
+            0,
+            u32::from(DEFAULT_CHARSET),
+            u32::from(OUT_DEFAULT_PRECIS),
+            u32::from(CLIP_DEFAULT_PRECIS),
+            u32::from(CLEARTYPE_QUALITY),
+            u32::from(DEFAULT_PITCH | FF_DONTCARE),
+            windows_sys::core::w!("Segoe UI"),
+        );
+        assert_ne!(font, 0, "sentinel font creation");
+        font
+    }
+
+    #[test]
+    fn measure_text_gdi_restores_the_dc_font_slot() {
+        unsafe {
+            let hdc = CreateCompatibleDC(0);
+            assert_ne!(hdc, 0, "memory DC");
+            let sentinel = sentinel_font();
+            let original = SelectObject(hdc, sentinel as HGDIOBJ);
+            assert_eq!(
+                GetCurrentObject(hdc, OBJ_FONT as u32),
+                sentinel as HGDIOBJ,
+                "sentinel must occupy the font slot before measuring"
+            );
+
+            let measured = measure_text_gdi("72%", TypographyTokens::default().body);
+
+            assert!(
+                measured.is_some(),
+                "measurement must succeed with the sentinel in the slot"
+            );
+            assert_eq!(
+                GetCurrentObject(hdc, OBJ_FONT as u32),
+                sentinel as HGDIOBJ,
+                "measure_text_gdi must restore the font slot it displaced"
+            );
+            // Restoring proves the measured font was deletable; deleting the
+            // sentinel proves it, too, is no longer selected.
+            SelectObject(hdc, original);
+            assert_eq!(
+                DeleteObject(sentinel as HGDIOBJ),
+                1,
+                "sentinel must be deletable after the slot is restored"
+            );
+            DeleteDC(hdc);
+        }
+    }
+
+    #[test]
+    fn create_font_selected_returns_the_replaced_font_slot_object() {
+        unsafe {
+            let hdc = CreateCompatibleDC(0);
+            assert_ne!(hdc, 0, "memory DC");
+            let sentinel = sentinel_font();
+            let original = SelectObject(hdc, sentinel as HGDIOBJ);
+
+            let (font, previous) = create_font_selected(hdc, TypographyTokens::default().body, 13);
+            assert_ne!(font, 0, "font creation must succeed");
+            assert_eq!(
+                previous, sentinel as HGDIOBJ,
+                "the helper must return the object it replaced in the font slot"
+            );
+            assert_eq!(GetCurrentObject(hdc, OBJ_FONT as u32), font as HGDIOBJ);
+
+            // Restore the slot, then both created fonts must be deletable.
+            SelectObject(hdc, previous);
+            assert_eq!(DeleteObject(font as HGDIOBJ), 1, "created font deletable");
+            SelectObject(hdc, original);
+            assert_eq!(
+                DeleteObject(sentinel as HGDIOBJ),
+                1,
+                "sentinel deletable after restore"
+            );
+            DeleteDC(hdc);
+        }
     }
 
     #[test]

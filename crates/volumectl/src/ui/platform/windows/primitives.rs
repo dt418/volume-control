@@ -872,11 +872,14 @@ impl<'a> PaintCanvas<'a> {
         unsafe {
             let wide: Vec<u16> = layout.text.encode_utf16().collect();
             let height_px = self.dpi.to_physical(layout.role.size_px.round() as i32);
-            let font = create_font_selected(self.hdc, layout.role, height_px);
+            let (font, previous) = create_font_selected(self.hdc, layout.role, height_px);
             if font == 0 {
                 return false;
             }
-            let previous = SelectObject(self.hdc, font as _);
+            // `create_font_selected` already selected the font into the DC.
+            // Restore the object it displaced BEFORE deleting the font — a
+            // selected object cannot be deleted, and deleting it anyway would
+            // leak one HFONT on every GDI text draw.
             SetTextColor(self.hdc, colorref(layout.color));
             SetBkMode(self.hdc, TRANSPARENT as i32);
             let mut rect = self.physical_rect(layout.rect);
@@ -892,7 +895,9 @@ impl<'a> PaintCanvas<'a> {
                 &mut rect,
                 DT_SINGLELINE | DT_NOPREFIX | align,
             );
-            SelectObject(self.hdc, previous);
+            if previous != 0 {
+                SelectObject(self.hdc, previous);
+            }
             DeleteObject(font as _);
             drawn != 0
         }
@@ -969,6 +974,7 @@ mod drawing_tests {
     use super::*;
     use crate::ui::model::{AccentMode, ThemeMode};
     use crate::ui::theme::{tokens_for, TypographyTokens};
+    use windows_sys::Win32::Graphics::Gdi::{GetCurrentObject, OBJ_FONT};
     use windows_sys::Win32::System::Com::CoInitializeEx;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassW, WNDCLASSW,
@@ -1216,6 +1222,44 @@ mod drawing_tests {
         assert!(dpi.scale() >= 1.0, "scale {}", dpi.scale());
         // Either mode is valid; the point is that it reports one coherent path.
         let _ = canvas.d2d_active();
+        drop(canvas);
+        unsafe {
+            DestroyWindow(hwnd);
+        }
+    }
+
+    #[test]
+    fn paint_canvas_draw_text_preserves_the_dc_font_slot() {
+        init_com();
+        let hwnd = hidden_window();
+        let mut canvas = PaintCanvas::begin_paint(hwnd).expect("BeginPaint");
+        let ty = TypographyTokens::default();
+
+        // The object occupying the DC font slot before the draw must still be
+        // there afterwards: in GDI mode `gdi_draw_text` creates and selects a
+        // per-call font, and restoring the slot is what makes that font
+        // deletable (deleting a still-selected font leaks one HFONT per draw).
+        // In D2D mode the GDI slot must be untouched entirely.
+        let font_slot_before = unsafe { GetCurrentObject(canvas.hdc, OBJ_FONT as u32) };
+        assert_ne!(
+            font_slot_before, 0,
+            "a window DC always has a font selected"
+        );
+
+        let drawn = canvas.draw_text(&TextLayout {
+            text: "72%",
+            rect: RectF::new(16.0, 16.0, 168.0, 45.0),
+            align: TextAlign::Right,
+            role: ty.display_value,
+            color: Rgba::from_rgb(0xF5, 0xF7, 0xFA),
+        });
+        assert!(drawn, "draw_text must succeed on the hidden window");
+
+        assert_eq!(
+            unsafe { GetCurrentObject(canvas.hdc, OBJ_FONT as u32) },
+            font_slot_before,
+            "draw_text must leave the DC font slot exactly as it found it"
+        );
         drop(canvas);
         unsafe {
             DestroyWindow(hwnd);
