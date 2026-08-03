@@ -26,8 +26,8 @@ use windows_sys::Win32::{
     UI::Controls::SetWindowTheme,
     UI::HiDpi::{GetDpiForSystem, GetDpiForWindow},
     UI::WindowsAndMessaging::{
-        GetSystemMetrics, GetWindowLongPtrW, SystemParametersInfoW, GWL_EXSTYLE,
-        SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+        GetAncestor, GetSystemMetrics, GetWindowLongPtrW, SystemParametersInfoW, GA_PARENT,
+        GWL_EXSTYLE, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
         SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, WS_EX_LAYERED,
     },
 };
@@ -208,8 +208,22 @@ fn backdrop_active(hwnd: HWND) -> bool {
 /// show `ID2D1HwndRenderTarget` output; GDI paints straight into them and
 /// always works, so the canvas selects the GDI path for both (see
 /// [`PaintCanvas::begin_paint`]).
+///
+/// The check walks the PARENT chain: a child window inside a layered or
+/// system-backdrop top-level window presents through the same DWM-owned
+/// surface, so its hwnd render target output never lands either (live-verified
+/// on Windows 11: the Settings surface's custom-painted preview child inside
+/// a transient-window backdrop rendered nothing under D2D while the same
+/// window painted correctly via GDI).
 fn d2d_present_supported(hwnd: HWND) -> bool {
-    !is_layered(hwnd) && !backdrop_active(hwnd)
+    let mut current = hwnd;
+    while current != 0 {
+        if is_layered(current) || backdrop_active(current) {
+            return false;
+        }
+        current = unsafe { GetAncestor(current, GA_PARENT) };
+    }
+    true
 }
 
 /// Monitor work area for the display nearest `hwnd`.
@@ -1209,34 +1223,37 @@ mod drawing_tests {
         }
     }
 
+    /// A FRESH hidden window per call.
+    ///
+    /// The canvas tests each destroy their window at the end, so a
+    /// process-wide shared window would race between the parallel tests
+    /// (a later `BeginPaint` on a destroyed handle fails). Re-registering the
+    /// class fails harmlessly once it exists.
     fn hidden_window() -> HWND {
         unsafe {
-            static WINDOW: std::sync::OnceLock<HWND> = std::sync::OnceLock::new();
-            *WINDOW.get_or_init(|| {
-                let class = WNDCLASSW {
-                    lpfnWndProc: Some(DefWindowProcW),
-                    hInstance: windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(
-                        std::ptr::null(),
-                    ),
-                    lpszClassName: windows_sys::core::w!("VolCtlCanvasTestWnd"),
-                    ..std::mem::zeroed()
-                };
-                RegisterClassW(&class);
-                CreateWindowExW(
-                    0,
-                    windows_sys::core::w!("VolCtlCanvasTestWnd"),
-                    windows_sys::core::w!("canvas test"),
-                    windows_sys::Win32::UI::WindowsAndMessaging::WS_OVERLAPPED,
-                    0,
-                    0,
-                    200,
-                    100,
-                    0,
-                    0,
-                    class.hInstance,
+            let class = WNDCLASSW {
+                lpfnWndProc: Some(DefWindowProcW),
+                hInstance: windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(
                     std::ptr::null(),
-                )
-            })
+                ),
+                lpszClassName: windows_sys::core::w!("VolCtlCanvasTestWnd"),
+                ..std::mem::zeroed()
+            };
+            RegisterClassW(&class);
+            CreateWindowExW(
+                0,
+                windows_sys::core::w!("VolCtlCanvasTestWnd"),
+                windows_sys::core::w!("canvas test"),
+                windows_sys::Win32::UI::WindowsAndMessaging::WS_OVERLAPPED,
+                0,
+                0,
+                200,
+                100,
+                0,
+                0,
+                class.hInstance,
+                std::ptr::null(),
+            )
         }
     }
 

@@ -1,5 +1,106 @@
 # Progress Log
 
+## Session 005 (2026-08-04) — Task 7: Signal Glass Settings redesign
+
+- Goal: re-layout the Windows Settings surface as the 760x620 (min 620x520)
+  Signal Glass surface (spec §7): header band, six-section navigation rail,
+  one-section-at-a-time content pane, draft-driven Appearance preview,
+  inline validation, sticky Apply/Cancel/Reset footer. `ui/settings.rs`
+  (SettingsDraft) untouched.
+- Changed: `crates/volumectl/src/settings.rs` (full redesign), plus two
+  shared fixes in `crates/volumectl/src/ui/platform/windows/primitives.rs`
+  (below). No host/action contract changes: `WM_APP_SETTINGS_*` routing,
+  `SettingsAppearance`, `show()/set_appearance()/on_apply_result()` signatures
+  and the draft state machine are all unchanged.
+- Responsive approach (documented in settings.rs): width >= 760 → vertical
+  rail (200px) + content pane + pinned footer; width < 760 (down to the 620
+  minimum, e.g. a work-area-clamped monitor) → the rail becomes a horizontal
+  stacked section selector strip and the content pane still swaps ONE section
+  at a time — no scrolling exists, so nothing can be clipped at any width, and
+  the Tab cycle (rail → active section → Reset/Cancel/Save → Close) is
+  identical in both layouts. Layout mode is decided from the actual client
+  width on WM_SIZE/relayout.
+
+### Fresh build + test evidence
+- `cargo fmt --all -- --check` → PASS.
+- `cargo build` (via scripts/win-build.bat) → Finished dev profile, 0 warnings.
+- `cargo clippy -p volumectl` → no settings.rs warnings (workspace has
+  pre-existing warnings in mixer/tray/hotkeys/audio modules, unchanged).
+- `cargo test -p volumectl` → **189 passed; 0 failed; 0 ignored** (173 baseline
+  + 16 new: section wrap, draft-preserving navigation + one-section visibility,
+  tab cycle rail→section→footer→close, inline error on failed Apply + edit
+  clears it, clean-draft no-error + save note, field→section table, preview
+  tokens from draft, draft accent changes preview without touching host config,
+  desktop/narrow geometry containment at WIN and MIN sizes, narrow-strip
+  layout, save-button clean/dirty tracking, blacklist op round trip, relayout
+  positions the preview card in both modes).
+- Ran the suite 4x — stable (a pre-existing race in the canvas tests'
+  shared hidden test window surfaced under the new scheduling and was fixed,
+  see below).
+- `git diff --check` → clean.
+
+### Live-verified on Windows (100% DPI, dark system theme, probe-driven)
+The probe drove the REAL window with real messages (WM_LBUTTONDOWN rail
+clicks, WM_SETTEXT, BM_CLICK, CB_SETCURSEL + CBN_SELCHANGE) through the real
+host contract (`WM_APP_SETTINGS_APPLY` → `apply()` → `on_apply_result()`), and
+captured the window's own rendering:
+- Desktop layout: 760x620 window, header (title/subtitle/accent bar/close ×),
+  rail with six entries (selected = accent fill + text), General section with
+  Volume step 2 / Large step 10 / Overlay 1800 + helpers, footer
+  Reset/Cancel/Save changes (Save DISABLED while the draft is clean).
+- Rail navigation: clicking Appearance hides the General controls and shows
+  the appearance combos + preview caption (visibility bits verified); pixel
+  evidence: rail selected entry fill 0x3AA8FF (accent), unselected 0x10131A.
+- Appearance preview (draft-driven, isolated): the mini card renders the
+  Signal Rail — border 0x344052, 60% threshold fill 0x0078D4, thumb
+  0x3AA8FF (System accent). Selecting Orange in the accent combo →
+  CBN_SELCHANGE → draft working copy accent = Orange → preview thumb pixel
+  flipped 0x3AA8FF → 0xCA5010 (Orange accent) WITHOUT touching the host config
+  (window accent bar stayed 0x3AA8FF; only Apply persists).
+- Inline validation: typed 30/29, clicked Save → `apply()` failed at the
+  validation gate (no disk write) → inline error visible next to Large step
+  ("must be greater than volume_step", error token red) + status line
+  "volume_step_large: must be greater than volume_step"; draft edits kept.
+- Navigation preserves the draft: switched to Blacklist and back — edits
+  still 30/29 in the controls.
+- Fix + Save: status "Changes saved.", inline error cleared, Save disabled
+  again (clean draft). Config file restored to its pre-probe values after the
+  run.
+- Close via the header hit target hides the window (WM_CLOSE path).
+
+### Found + fixed (live-verified)
+1. **Preview card stuck at (0,0)**: the window is created at its final size,
+   so `SetWindowPos` in `show()` never resends WM_SIZE and the layout never
+   ran (all other children matched the desktop layout by creation coords, so
+   this was invisible). Added an explicit `relayout()` after show (and reused
+   it from WM_SIZE) + a regression test that asserts the preview lands in the
+   Appearance slot in both layout modes.
+2. **Preview invisible under the backdrop**: the preview child painted via
+   D2D, whose hwnd-render-target presents don't land in the DWM-owned
+   (backdrop) surface — the same failure class the mixer hit live. Extended
+   `d2d_present_supported` to walk the PARENT chain (children of layered /
+   system-backdrop windows take the GDI path). After the fix the preview
+   renders correctly via GDI (pixel evidence above).
+3. **Preview did not track combo edits**: appearance combos only wrote to the
+   draft at Apply, so the preview could not follow the user's edits. Appearance
+   combo changes now mirror into the draft working copy immediately
+   (`apply_appearance_combo`, draft-only — Apply still persists) and repaint
+   the preview; the draft-dirty Save state follows.
+4. **Pre-existing canvas-test race**: the canvas smoke tests shared one
+   process-wide hidden test window and each destroyed it — under the new test
+   scheduling the later tests hit a destroyed handle ("BeginPaint failed").
+   `hidden_window()` now creates a fresh window per call.
+
+### Notes
+- The rail is custom-painted (keyboard: Up/Down + Enter; mouse: hit-tested
+  clicks) — UIA naming for the rail entries is follow-on accessibility work
+  (plan Task 10/Verify accessibility).
+- The close button is a 32x32 `×` in the header; the close UIA name is the
+  task's follow-on accessibility pass.
+- Config path static uses SS_ENDELLIPSIS; live verification restored
+  %APPDATA%\volume-control\config.json to its original values.
+- feature_list.json untouched (plan Task 14 owns final feature-state updates).
+
 ## Session 004 (2026-08-03) — Task 6: Signal Glass mixer redesign
 
 - Goal: redesign the Windows mixer as the 400x224 Signal Glass precision card
