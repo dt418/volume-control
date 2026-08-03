@@ -99,11 +99,13 @@
 - Repository root: D:\Projects\volume-control
 - Standard startup path: `scripts/win-build.bat run` or `cargo run` (workspace default member = crates/volumectl) — MUST run through vcvars (MSVC env)
 - Standard verification path: `scripts/win-build.bat build` then `scripts/win-build.bat test`
-- Current highest-priority unfinished feature: none on Windows — the adaptive UI
-  (tokens/capabilities/placement/host bridge + adaptive overlay/mixer/Settings/
-  Help) is implemented and verified live on Windows (see Session 003).
-- Current blocker: none on Windows (macOS/Linux native backends are compile-gated
-  scaffolds pending native hardware; crate compiles via CLI fallback).
+- Current active feature: **vol-011 (hybrid adaptive cross-platform UI)** — status
+  `in_progress`, NOT `passing`. It is implemented and verified live on Windows
+  (see Session 003), but the plan sets `passing` only after all required checks
+  pass, and the human-confirmation remainder is unverified.
+- Current blocker: none on Windows. macOS/Linux are **unverified follow-on work**:
+  the renderer seams compile by construction (cfg-gated) but no native macOS/
+  Linux UI is implemented or verified in this plan; needs a mac/Linux host or CI.
 - PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio), vol-003 (hotkeys), vol-004 (overlay), vol-005 (tray), vol-006 (config reload+sync), vol-007 (mac/Linux scaffolds+docs), vol-008 (release E2E), vol-009 (mixer/overlay placement fix), vol-010 (mixer close button + system theme)
 - Task 13 (Windows verification of the adaptive UI): 94/94 unit tests pass; live
   verification recorded in Session 003 (mixer slider/buttons, geometry/gap, DPI
@@ -111,6 +113,31 @@
   external sync, keyboard nav, dark/light rendering, tray presence, clean exit).
   Remaining: HC mode, reduced motion, 125/150% DPI, taskbar/secondary-monitor
   changes, acrylic look, and tray-menu clicks need human visual confirmation.
+
+### Task 14 (2026-08-03) — Tracking and final repository verification
+
+- Added vol-011 (area `adaptive-ui`, priority 11) to feature_list.json as
+  `in_progress` with evidence for what IS verified (94/94 tests, live-verified
+  scriptable paths, geometry/theme pixel evidence) and the human-confirmation
+  remainder + macOS/Linux-unverified follow-on recorded in `notes`. It is NOT
+  marked `passing` (required human checks remain unverified).
+- Whole-workspace `cargo fmt --all` normalization: the repo had ~13 pre-existing
+  rustfmt diffs (mostly missing trailing newlines in files earlier tasks did not
+  touch). Ran `cargo fmt --all`; reviewed the diff — it is formatting-only
+  (line re-wrapping, trailing-comma insertion, import sorting; strip-whitespace
+  comparison confirmed no semantic token changes). 17 source files under
+  crates/volumectl/src were normalized.
+- Final verification checks (all recorded, all PASS):
+  1. `cargo fmt --all -- --check` → PASS (exit 0).
+  2. `cargo build` (Windows) → Finished dev profile, 0 warnings.
+  3. `cargo test -p volumectl` → 94 passed; 0 failed; 0 ignored.
+  4. `git diff --check` → clean.
+  5. `git status --short` → only intended files staged (fmt-normalized source +
+     tracking files); `.claude/settings.local.json`, `.superpowers/`, runtime
+     config, scratch scripts, and target/ were NOT staged.
+- Commits: `style: rustfmt whole workspace` (formatting-only) + `docs: record
+  adaptive UI milestone and final verification` (feature_list.json +
+  claude-progress.md).
 
 ### Session 002 (2026-08-03)
 

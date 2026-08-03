@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-03T01:25",
+  "last_updated": "2026-08-03T08:13",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -208,6 +208,28 @@
         "Interactive screenshot/UIAutomation verification of close-click and both theme variants remains unverified."
       ],
       "notes": "Native Rust/Win32 implementation; no WinUI 3 or additional UI runtime introduced."
+    },
+    {
+      "id": "vol-011",
+      "priority": 11,
+      "area": "adaptive-ui",
+      "title": "Hybrid adaptive cross-platform UI (shared tokens, capabilities/placement, host bridge, adaptive surfaces, macOS/Linux seams)",
+      "user_visible_behavior": "The volume overlay, mixer, Settings, and Help adapt to the Windows system theme (light/dark), high-contrast mode, reduced-motion preference, DPI, and work-area/taskbar changes; hotkey-status is exposed and Settings is reachable from the tray; macOS/Linux renderer seams compile but are not yet implemented or verified on native hardware.",
+      "status": "in_progress",
+      "verification": [
+        "Run `cargo fmt --all -- --check` — must pass.",
+        "Run the Windows build (`cargo build`) — must be clean.",
+        "Run `cargo test -p volumectl` — all unit tests pass (94/94).",
+        "Live-verify on Windows: mixer slider/buttons, overlay+mixer geometry (16px gap), DPI 100% work-area placement, Settings Apply/Cancel/Reset/invalid-input error, config live reload, external volume sync, keyboard nav, dark/light theme rendering, tray presence, clean exit.",
+        "Human confirmation required (NOT yet verified): high-contrast mode, reduced-motion, 125%/150% DPI, taskbar/secondary-monitor work-area changes, backdrop/acrylic look, and tray-menu clicks."
+      ],
+      "evidence": [
+        "94/94 unit tests pass (mixer, settings, overlay, ui tokens/placement/surface/theme, hotkey-status tests).",
+        "cargo fmt --all -- --check passes after whole-workspace normalization (Task 14); Windows build finished with 0 warnings; git diff --check clean.",
+        "Session 003 live-verified: mixer slider TBM_SETPOS+WM_HSCROLL -> 42% with label convergence; Mute/Reset buttons; mixer rect [2180,1094,2540,1272] and overlay rect [2220,1288,2540,1352] with exactly 16px gap and shared right edge; settings centered at ((2560-580)/2, (1392-636)/2); Settings Apply persisted step 2->5 and showed inline errors for invalid values; config reload picked up external step 12 edit; external OS volume key synced 69->72; keyboard nav Tab/Escape/Space verified via subclass; theme pixel evidence dark body RGB(20,20,24)=0x141418, accent RGB(0,103,192)=0x0067C0, overlay fill RGB(0,120,212), light theme body RGB(255,255,255) under Opaque and Blurred materials; clean exit via WM_QUIT verified twice.",
+        "Tray Settings command exists and the underlying WM_APP actions were verified via posted messages; the actual tray menu click is Windows-11 virtualization-dependent and remains human-verification-only."
+      ],
+      "notes": "Status is `in_progress`, NOT `passing`: the plan states a feature becomes `passing` only after all required checks pass, and the human-confirmation remainder (high-contrast, reduced-motion, >100% DPI, taskbar/secondary-monitor, acrylic look, tray-menu clicks) is not yet verified. macOS/Linux are unverified follow-on work: the renderer seams compile by construction (cfg-gated) but no native macOS/Linux UI is implemented or verified in this plan. Windows is the only verified target."
     }
   ]
 }
