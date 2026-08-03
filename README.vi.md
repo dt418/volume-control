@@ -67,7 +67,10 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
 - **macOS / Linux**: chưa hoàn thiện — hiện binary chạy dạng CLI đơn giản
   (`volumectl get` / `set <0-100>`). Kiến trúc (trait `AudioBackend` / hotkey)
   đã sẵn sàng cho backend native: CoreAudio trên macOS, PulseAudio/PipeWire
-  trên Linux.
+  trên Linux. Hợp đồng UI thích ứng dùng chung và các seam renderer biên dịch
+  an toàn đã có, nhưng renderer AppKit và GTK/libadwaita là công việc ở giai
+  đoạn sau — **chưa** được triển khai và chưa có gì trên macOS/Linux được kiểm
+  chứng trong kế hoạch này.
 
 ## Trạng thái nền tảng
 
@@ -76,8 +79,11 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
 | Điều khiển âm lượng | ✅ WASAPI | 🔜 CoreAudio | 🔜 PulseAudio/PipeWire |
 | Phím tắt toàn cục | ✅ RegisterHotKey | 🔜 | 🔜 |
 | Overlay          | ✅ | 🔜 | 🔜 |
+| Mixer            | ✅ | 🔜 | 🔜 |
+| Cửa sổ Settings  | ✅ | 🔜 | 🔜 |
 | Khay hệ thống    | ✅ tray-icon | 🔜 | 🔜 |
 | Cấu hình trực tiếp | ✅ | — | — |
+| Renderer UI thích ứng | ✅ native Win32 | 🔜 AppKit (chỉ seam) | 🔜 GTK/libadwaita (chỉ seam) |
 
 ## Kiến trúc
 
@@ -92,12 +98,16 @@ crates/volumectl/
 │   ├── tray            tray-icon + menu muda
 │   ├── config          JSON, nạp lại trực tiếp theo mtime
 │   ├── core            logic dùng chung (clamp, ngưỡng màu) + unit tests
+│   ├── ui/             hợp đồng UI thích ứng dùng chung (model, theme,
+│   │                   capabilities, surface, settings) + các seam renderer
 │   └── cli             CLI fallback cho nền tảng khác
 ```
 
 Các module chỉ dành cho Windows được gate bằng `#[cfg(target_os = "windows")]`;
 crate vẫn biên dịch được trên macOS/Linux (dạng CLI), để thêm backend native
-từng bước.
+từng bước. Module `ui` định nghĩa hợp đồng renderer dùng chung;
+`ui/platform/macos` và `ui/platform/linux` là các seam biên dịch an toàn
+(hiện chỉ là stub) cho renderer AppKit và GTK/libadwaita ở giai đoạn sau.
 
 ## Giấy phép
 

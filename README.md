@@ -66,7 +66,10 @@ Requirements: Rust (stable) + a C toolchain:
 - **macOS / Linux**: not yet implemented — the binary currently falls back to
   a CLI volume utility (`volumectl get` / `set <0-100>`). The architecture
   (`AudioBackend` / hotkey traits) is ready for native backends:
-  CoreAudio on macOS, PulseAudio/PipeWire on Linux.
+  CoreAudio on macOS, PulseAudio/PipeWire on Linux. The shared adaptive UI
+  contract and compile-safe renderer seams exist, but the native AppKit and
+  GTK/libadwaita renderers are follow-on work — they are **not** implemented
+  and nothing on macOS/Linux is verified in this plan.
 
 ## Platform status
 
@@ -75,8 +78,11 @@ Requirements: Rust (stable) + a C toolchain:
 | Volume control   | ✅ WASAPI | 🔜 CoreAudio | 🔜 PulseAudio/PipeWire |
 | Global hotkeys   | ✅ RegisterHotKey | 🔜 | 🔜 |
 | Overlay          | ✅ | 🔜 | 🔜 |
+| Mixer            | ✅ | 🔜 | 🔜 |
+| Settings window  | ✅ | 🔜 | 🔜 |
 | System tray      | ✅ tray-icon | 🔜 | 🔜 |
 | Live config      | ✅ | — | — |
+| Adaptive UI renderer | ✅ native Win32 | 🔜 AppKit (seam only) | 🔜 GTK/libadwaita (seam only) |
 
 ## Architecture
 
@@ -91,12 +97,16 @@ crates/volumectl/
 │   ├── tray            tray-icon + muda context menu
 │   ├── config          JSON config, mtime live reload
 │   ├── core            shared volume/clamp/threshold logic (+ unit tests)
+│   ├── ui/             shared adaptive UI contract (model, theme, capabilities,
+│   │                   surface, settings) + platform renderer seams
 │   └── cli             non-Windows CLI fallback
 ```
 
 Windows-only modules are `#[cfg(target_os = "windows")]`-gated; the crate
 still compiles on macOS/Linux (as the CLI utility) so non-Windows backends
-can be added incrementally.
+can be added incrementally. The `ui` module defines the shared renderer
+contract; `ui/platform/macos` and `ui/platform/linux` are compile-safe seams
+(currently stubs) for the follow-on AppKit and GTK/libadwaita renderers.
 
 ## License
 
