@@ -317,3 +317,908 @@ mod tests {
         assert_eq!(scale_px(1.25, 1), 1); // 1.25 -> 1
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Signal Glass drawing primitives (Task 3): DPI metrics, float geometry,
+// pure shape helpers, and the resource-safe GDI/D2D paint canvas.
+// ─────────────────────────────────────────────────────────────────────────────
+
+use std::marker::PhantomData;
+
+use windows_sys::Win32::{
+    Foundation::{POINT, RECT},
+    Graphics::Gdi::{
+        BeginPaint, CreatePen, CreateSolidBrush, DeleteObject, DrawTextW, Ellipse, EndPaint,
+        FillRect, GetStockObject, InvalidateRect, Polygon, RoundRect, SelectObject, SetBkMode,
+        SetTextColor, DT_CENTER, DT_LEFT, DT_NOPREFIX, DT_RIGHT, DT_SINGLELINE, HDC, NULL_BRUSH,
+        NULL_PEN, PAINTSTRUCT, PS_SOLID, TRANSPARENT,
+    },
+};
+
+use crate::ui::theme::FocusTokens;
+
+use super::d2d::{Direct2dContext, HwndRenderTarget};
+use super::text::{create_font_selected, TextAlign, TextLayout};
+
+/// Rectangle with float coordinates in LOGICAL pixels.
+///
+/// Independent of the integer-pixel [`crate::ui::surface::SurfaceRect`] world:
+/// layout is authored in design pixels and scaled exactly once by
+/// [`DpiMetrics`] inside the canvas.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RectF {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+impl RectF {
+    pub const fn new(left: f32, top: f32, right: f32, bottom: f32) -> Self {
+        Self {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
+    pub const fn width(self) -> f32 {
+        self.right - self.left
+    }
+
+    pub const fn height(self) -> f32 {
+        self.bottom - self.top
+    }
+
+    /// Expand (or, with a negative amount, shrink) on all four sides.
+    pub fn inflated(self, amount: f32) -> Self {
+        Self {
+            left: self.left - amount,
+            top: self.top - amount,
+            right: self.right + amount,
+            bottom: self.bottom + amount,
+        }
+    }
+
+    /// Whether `other` lies fully inside `self` (inclusive edges).
+    pub fn contains(self, other: Self) -> bool {
+        other.left >= self.left
+            && other.top >= self.top
+            && other.right <= self.right
+            && other.bottom <= self.bottom
+    }
+
+    pub fn min_dimension(self) -> f32 {
+        self.width().min(self.height())
+    }
+}
+
+/// Point with float coordinates in LOGICAL pixels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PointF {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl PointF {
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
+/// Float size in LOGICAL pixels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SizeF {
+    pub width: f32,
+    pub height: f32,
+}
+
+impl SizeF {
+    pub const fn new(width: f32, height: f32) -> Self {
+        Self { width, height }
+    }
+}
+
+/// DPI scale metrics for one display.
+///
+/// The scale is clamped to the supported `[0.5, 4.0]` range (48–384 DPI);
+/// non-finite input (NaN, infinity) resolves to the identity scale 1.0 so a
+/// bad system query can never panic or produce degenerate geometry.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DpiMetrics {
+    scale: f32,
+}
+
+impl DpiMetrics {
+    /// Create metrics from a scale, clamped to `[0.5, 4.0]`.
+    pub fn new(scale: f32) -> Self {
+        let scale = if scale.is_finite() {
+            scale.clamp(0.5, 4.0)
+        } else {
+            1.0
+        };
+        Self { scale }
+    }
+
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    /// Convert LOGICAL pixels to PHYSICAL pixels (round-half-away-from-zero,
+    /// same semantics as [`scale_px`]).
+    pub fn to_physical(&self, logical: i32) -> i32 {
+        scale_px(self.scale, logical)
+    }
+
+    /// Convert PHYSICAL pixels to LOGICAL pixels (round-half-away-from-zero).
+    pub fn to_logical(&self, physical: i32) -> i32 {
+        (physical as f32 / self.scale).round() as i32
+    }
+}
+
+/// A rounded-rectangle geometry: rect plus corner radius.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RoundedRectPath {
+    pub rect: RectF,
+    pub radius_x: f32,
+    pub radius_y: f32,
+}
+
+/// Build a rounded rectangle path from a rect and a corner radius.
+///
+/// The radius is clamped to `[0, min(width, height) / 2]` so the corners can
+/// never swallow the shape; a negative radius becomes 0 (a plain rectangle).
+pub fn rounded_rect_path(rect: RectF, radius: f32) -> RoundedRectPath {
+    let radius = radius.max(0.0).min(rect.min_dimension() * 0.5);
+    RoundedRectPath {
+        rect,
+        radius_x: radius,
+        radius_y: radius,
+    }
+}
+
+/// Four corners of a diamond (muted-state rail marker) around `center`.
+///
+/// Points are top, right, bottom, left. `half_size` is clamped to `>= 0`; a
+/// zero-size diamond degenerates to all points at the center.
+pub fn diamond_points(center: PointF, half_size: f32) -> [PointF; 4] {
+    let half_size = half_size.max(0.0);
+    [
+        PointF::new(center.x, center.y - half_size),
+        PointF::new(center.x + half_size, center.y),
+        PointF::new(center.x, center.y + half_size),
+        PointF::new(center.x - half_size, center.y),
+    ]
+}
+
+/// Bounding boxes of the two focus-ring layers around `rect`.
+///
+/// Returns `(outer, inner)`: each box is `rect` inflated by the layer's
+/// `gap + width / 2` so a centered stroke of that width lands at the token
+/// gap from the control edge. The theme invariants (`inner_ring_gap +
+/// inner_ring_width < ring_gap`) guarantee the inner layer sits entirely
+/// inside the outer one with an air gap between the strokes.
+pub fn focus_ring_rects(rect: RectF, focus: &FocusTokens) -> (RectF, RectF) {
+    let outer = rect.inflated(focus.ring_gap_px + focus.ring_width_px * 0.5);
+    let inner = rect.inflated(focus.inner_ring_gap_px + focus.inner_ring_width_px * 0.5);
+    (outer, inner)
+}
+
+/// Corner radius for focus rings around a control: the 4px control radius,
+/// never exceeding half the control's smallest dimension.
+fn focus_ring_radius(rect: RectF) -> f32 {
+    (rect.min_dimension() * 0.5).min(4.0)
+}
+
+/// Resource-safe paint surface for one `WM_PAINT`.
+///
+/// `begin_paint` calls `BeginPaint` (RAII `EndPaint` on drop) and picks ONE
+/// paint path for the whole frame:
+///
+/// - **D2D mode** — a Direct2D hwnd render target was created for the window
+///   (alpha-capable, DWrite text). Every primitive routes through D2D.
+/// - **GDI mode** — the always-working baseline. Every primitive draws via
+///   GDI with per-call brushes/pen/fonts that are deleted immediately.
+///
+/// The paths are never mixed within one frame (a D2D `EndDraw` present would
+/// overwrite GDI front-buffer writes). If a D2D operation fails mid-paint the
+/// frame is abandoned and the window invalidated, so the next paint renders
+/// correctly — GDI if D2D is still unavailable — with a debug log.
+///
+/// All coordinates are LOGICAL pixels; scaling happens once via the window's
+/// [`DpiMetrics`].
+pub struct PaintCanvas<'a> {
+    hwnd: HWND,
+    hdc: HDC,
+    paint: PAINTSTRUCT,
+    dpi: DpiMetrics,
+    d2d: Option<HwndRenderTarget>,
+    d2d_broken: bool,
+    _lifetime: PhantomData<&'a ()>,
+}
+
+impl<'a> PaintCanvas<'a> {
+    /// Begin painting `hwnd`. `None` when `BeginPaint` itself fails.
+    pub fn begin_paint(hwnd: HWND) -> Option<Self> {
+        unsafe {
+            let mut paint: PAINTSTRUCT = std::mem::zeroed();
+            let hdc = BeginPaint(hwnd, &mut paint);
+            if hdc == 0 {
+                return None;
+            }
+            let dpi = DpiMetrics::new(dpi_scale_for(hwnd));
+            // D2D mode is all-or-nothing per paint (see module docs).
+            let d2d = Direct2dContext::get()
+                .and_then(|context| context.render_target(hwnd))
+                .and_then(|mut target| if target.begin() { Some(target) } else { None });
+            if d2d.is_none() {
+                log::debug!("PaintCanvas: D2D unavailable for {hwnd:?}; painting via GDI");
+            }
+            Some(Self {
+                hwnd,
+                hdc,
+                paint,
+                dpi,
+                d2d,
+                d2d_broken: false,
+                _lifetime: PhantomData,
+            })
+        }
+    }
+
+    /// The DPI scale this canvas converts logical coordinates with.
+    pub fn dpi(&self) -> DpiMetrics {
+        self.dpi
+    }
+
+    /// Whether this paint is routed through Direct2D.
+    pub fn d2d_active(&self) -> bool {
+        self.d2d.is_some() && !self.d2d_broken
+    }
+
+    pub fn fill_rect(&mut self, rect: RectF, color: crate::ui::theme::Rgba) {
+        if let Some(target) = &mut self.d2d {
+            if !self.d2d_broken && !target.fill_rect(rect, color) {
+                self.d2d_failed("fill_rect");
+            }
+            return;
+        }
+        self.gdi_fill_rect(rect, color);
+    }
+
+    pub fn fill_rounded_rect(&mut self, rect: RectF, radius: f32, color: crate::ui::theme::Rgba) {
+        if let Some(target) = &mut self.d2d {
+            if !self.d2d_broken && !target.fill_rounded_rect(rect, radius, color) {
+                self.d2d_failed("fill_rounded_rect");
+            }
+            return;
+        }
+        self.gdi_fill_rounded_rect(rect, radius, color);
+    }
+
+    pub fn stroke_rounded_rect(
+        &mut self,
+        rect: RectF,
+        radius: f32,
+        color: crate::ui::theme::Rgba,
+        width_px: f32,
+    ) {
+        if let Some(target) = &mut self.d2d {
+            if !self.d2d_broken && !target.stroke_rounded_rect(rect, radius, color, width_px) {
+                self.d2d_failed("stroke_rounded_rect");
+            }
+            return;
+        }
+        self.gdi_stroke_rounded_rect(rect, radius, color, width_px);
+    }
+
+    pub fn fill_circle(&mut self, center: PointF, radius: f32, color: crate::ui::theme::Rgba) {
+        if let Some(target) = &mut self.d2d {
+            if !self.d2d_broken && !target.fill_circle(center, radius, color) {
+                self.d2d_failed("fill_circle");
+            }
+            return;
+        }
+        self.gdi_fill_circle(center, radius, color);
+    }
+
+    pub fn stroke_circle(
+        &mut self,
+        center: PointF,
+        radius: f32,
+        color: crate::ui::theme::Rgba,
+        width_px: f32,
+    ) {
+        if let Some(target) = &mut self.d2d {
+            if !self.d2d_broken && !target.stroke_circle(center, radius, color, width_px) {
+                self.d2d_failed("stroke_circle");
+            }
+            return;
+        }
+        self.gdi_stroke_circle(center, radius, color, width_px);
+    }
+
+    pub fn fill_diamond(&mut self, center: PointF, half_size: f32, color: crate::ui::theme::Rgba) {
+        if let Some(target) = &mut self.d2d {
+            if !self.d2d_broken && !target.fill_diamond(center, half_size, color) {
+                self.d2d_failed("fill_diamond");
+            }
+            return;
+        }
+        self.gdi_fill_diamond(center, half_size, color);
+    }
+
+    pub fn stroke_diamond(
+        &mut self,
+        center: PointF,
+        half_size: f32,
+        color: crate::ui::theme::Rgba,
+        width_px: f32,
+    ) {
+        if let Some(target) = &mut self.d2d {
+            if !self.d2d_broken && !target.stroke_diamond(center, half_size, color, width_px) {
+                self.d2d_failed("stroke_diamond");
+            }
+            return;
+        }
+        self.gdi_stroke_diamond(center, half_size, color, width_px);
+    }
+
+    /// Draw the focus-visible indicator: BOTH layers of the two-layer
+    /// [`FocusTokens`] ring (outer accent ring + inner contrast ring), each
+    /// with its own color, width, and gap.
+    pub fn draw_focus_ring(&mut self, rect: RectF, focus: &FocusTokens) {
+        let (outer, inner) = focus_ring_rects(rect, focus);
+        let radius = focus_ring_radius(rect);
+        // Inner contrast layer first, then the outer accent layer.
+        self.stroke_rounded_rect(inner, radius, focus.inner_ring, focus.inner_ring_width_px);
+        self.stroke_rounded_rect(outer, radius, focus.ring, focus.ring_width_px);
+    }
+
+    /// Draw text. Returns `false` when the paint failed (D2D mode falls back
+    /// on the next paint; GDI mode returns `false` if no font could be made).
+    pub fn draw_text(&mut self, layout: &TextLayout) -> bool {
+        if let Some(target) = &mut self.d2d {
+            if self.d2d_broken {
+                return false;
+            }
+            if !target.draw_text(layout) {
+                self.d2d_failed("draw_text");
+                return false;
+            }
+            return true;
+        }
+        self.gdi_draw_text(layout)
+    }
+
+    /// Mark the D2D frame broken: abandon remaining draws and invalidate so
+    /// the next paint re-renders (via GDI if D2D is still unavailable).
+    fn d2d_failed(&mut self, op: &str) {
+        if self.d2d_broken {
+            return;
+        }
+        self.d2d_broken = true;
+        log::debug!("PaintCanvas: D2D {op} failed; next paint will fall back");
+        unsafe {
+            InvalidateRect(self.hwnd, std::ptr::null(), 0);
+        }
+    }
+
+    // ── GDI implementations (authoritative baseline) ──────────────────────
+
+    fn gdi_fill_rect(&self, rect: RectF, color: crate::ui::theme::Rgba) {
+        unsafe {
+            let brush = CreateSolidBrush(colorref(color));
+            if brush == 0 {
+                return;
+            }
+            let rect = self.physical_rect(rect);
+            FillRect(self.hdc, &rect, brush);
+            DeleteObject(brush as _);
+        }
+    }
+
+    fn gdi_fill_rounded_rect(&self, rect: RectF, radius: f32, color: crate::ui::theme::Rgba) {
+        let path = rounded_rect_path(rect, radius);
+        unsafe {
+            let brush = CreateSolidBrush(colorref(color));
+            if brush == 0 {
+                return;
+            }
+            let rect = self.physical_rect(path.rect);
+            let radii = self.round_rect_radii(path.radius_x);
+            let previous_brush = SelectObject(self.hdc, brush as _);
+            let previous_pen = SelectObject(self.hdc, GetStockObject(NULL_PEN));
+            RoundRect(
+                self.hdc,
+                rect.left,
+                rect.top,
+                rect.right,
+                rect.bottom,
+                radii.0,
+                radii.1,
+            );
+            SelectObject(self.hdc, previous_pen);
+            SelectObject(self.hdc, previous_brush);
+            DeleteObject(brush as _);
+        }
+    }
+
+    fn gdi_stroke_rounded_rect(
+        &self,
+        rect: RectF,
+        radius: f32,
+        color: crate::ui::theme::Rgba,
+        width_px: f32,
+    ) {
+        let path = rounded_rect_path(rect, radius);
+        unsafe {
+            let pen = CreatePen(
+                PS_SOLID,
+                self.physical_stroke_width(width_px),
+                colorref(color),
+            );
+            if pen == 0 {
+                return;
+            }
+            let rect = self.physical_rect(path.rect);
+            let radii = self.round_rect_radii(path.radius_x);
+            let previous_pen = SelectObject(self.hdc, pen as _);
+            let previous_brush = SelectObject(self.hdc, GetStockObject(NULL_BRUSH));
+            RoundRect(
+                self.hdc,
+                rect.left,
+                rect.top,
+                rect.right,
+                rect.bottom,
+                radii.0,
+                radii.1,
+            );
+            SelectObject(self.hdc, previous_brush);
+            SelectObject(self.hdc, previous_pen);
+            DeleteObject(pen as _);
+        }
+    }
+
+    fn gdi_fill_circle(&self, center: PointF, radius: f32, color: crate::ui::theme::Rgba) {
+        unsafe {
+            let brush = CreateSolidBrush(colorref(color));
+            if brush == 0 {
+                return;
+            }
+            let box_ = self.circle_bounds(center, radius);
+            let previous_brush = SelectObject(self.hdc, brush as _);
+            let previous_pen = SelectObject(self.hdc, GetStockObject(NULL_PEN));
+            Ellipse(self.hdc, box_.left, box_.top, box_.right, box_.bottom);
+            SelectObject(self.hdc, previous_pen);
+            SelectObject(self.hdc, previous_brush);
+            DeleteObject(brush as _);
+        }
+    }
+
+    fn gdi_stroke_circle(
+        &self,
+        center: PointF,
+        radius: f32,
+        color: crate::ui::theme::Rgba,
+        width_px: f32,
+    ) {
+        unsafe {
+            let pen = CreatePen(
+                PS_SOLID,
+                self.physical_stroke_width(width_px),
+                colorref(color),
+            );
+            if pen == 0 {
+                return;
+            }
+            let box_ = self.circle_bounds(center, radius);
+            let previous_pen = SelectObject(self.hdc, pen as _);
+            let previous_brush = SelectObject(self.hdc, GetStockObject(NULL_BRUSH));
+            Ellipse(self.hdc, box_.left, box_.top, box_.right, box_.bottom);
+            SelectObject(self.hdc, previous_brush);
+            SelectObject(self.hdc, previous_pen);
+            DeleteObject(pen as _);
+        }
+    }
+
+    fn gdi_fill_diamond(&self, center: PointF, half_size: f32, color: crate::ui::theme::Rgba) {
+        unsafe {
+            let brush = CreateSolidBrush(colorref(color));
+            if brush == 0 {
+                return;
+            }
+            let points = self.physical_points(diamond_points(center, half_size));
+            let previous_brush = SelectObject(self.hdc, brush as _);
+            let previous_pen = SelectObject(self.hdc, GetStockObject(NULL_PEN));
+            Polygon(self.hdc, points.as_ptr(), points.len() as i32);
+            SelectObject(self.hdc, previous_pen);
+            SelectObject(self.hdc, previous_brush);
+            DeleteObject(brush as _);
+        }
+    }
+
+    fn gdi_stroke_diamond(
+        &self,
+        center: PointF,
+        half_size: f32,
+        color: crate::ui::theme::Rgba,
+        width_px: f32,
+    ) {
+        unsafe {
+            let pen = CreatePen(
+                PS_SOLID,
+                self.physical_stroke_width(width_px),
+                colorref(color),
+            );
+            if pen == 0 {
+                return;
+            }
+            let points = self.physical_points(diamond_points(center, half_size));
+            let previous_pen = SelectObject(self.hdc, pen as _);
+            let previous_brush = SelectObject(self.hdc, GetStockObject(NULL_BRUSH));
+            Polygon(self.hdc, points.as_ptr(), points.len() as i32);
+            SelectObject(self.hdc, previous_brush);
+            SelectObject(self.hdc, previous_pen);
+            DeleteObject(pen as _);
+        }
+    }
+
+    fn gdi_draw_text(&mut self, layout: &TextLayout) -> bool {
+        if layout.text.is_empty() {
+            return true;
+        }
+        unsafe {
+            let wide: Vec<u16> = layout.text.encode_utf16().collect();
+            let height_px = self.dpi.to_physical(layout.role.size_px.round() as i32);
+            let font = create_font_selected(self.hdc, layout.role, height_px);
+            if font == 0 {
+                return false;
+            }
+            let previous = SelectObject(self.hdc, font as _);
+            SetTextColor(self.hdc, colorref(layout.color));
+            SetBkMode(self.hdc, TRANSPARENT as i32);
+            let mut rect = self.physical_rect(layout.rect);
+            let align = match layout.align {
+                TextAlign::Left => DT_LEFT,
+                TextAlign::Right => DT_RIGHT,
+                TextAlign::Center => DT_CENTER,
+            };
+            let drawn = DrawTextW(
+                self.hdc,
+                wide.as_ptr(),
+                wide.len() as i32,
+                &mut rect,
+                DT_SINGLELINE | DT_NOPREFIX | align,
+            );
+            SelectObject(self.hdc, previous);
+            DeleteObject(font as _);
+            drawn != 0
+        }
+    }
+
+    // ── coordinate helpers ────────────────────────────────────────────────
+
+    fn physical_rect(&self, rect: RectF) -> RECT {
+        RECT {
+            left: self.dpi.to_physical(rect.left.round() as i32),
+            top: self.dpi.to_physical(rect.top.round() as i32),
+            right: self.dpi.to_physical(rect.right.round() as i32),
+            bottom: self.dpi.to_physical(rect.bottom.round() as i32),
+        }
+    }
+
+    fn physical_point(&self, point: PointF) -> POINT {
+        POINT {
+            x: self.dpi.to_physical(point.x.round() as i32),
+            y: self.dpi.to_physical(point.y.round() as i32),
+        }
+    }
+
+    fn physical_points(&self, points: [PointF; 4]) -> [POINT; 4] {
+        [
+            self.physical_point(points[0]),
+            self.physical_point(points[1]),
+            self.physical_point(points[2]),
+            self.physical_point(points[3]),
+        ]
+    }
+
+    /// Physical stroke width, at least 1 px.
+    fn physical_stroke_width(&self, width_px: f32) -> i32 {
+        self.dpi.to_physical(width_px.round() as i32).max(1)
+    }
+
+    /// `RoundRect` ellipse width/height (diameters) for a logical radius.
+    fn round_rect_radii(&self, radius: f32) -> (i32, i32) {
+        let physical = self.dpi.to_physical(radius.round() as i32).max(0);
+        (physical * 2, physical * 2)
+    }
+
+    fn circle_bounds(&self, center: PointF, radius: f32) -> RECT {
+        let radius_px = self.dpi.to_physical(radius.round() as i32).max(0);
+        let center_px = self.physical_point(center);
+        RECT {
+            left: center_px.x - radius_px,
+            top: center_px.y - radius_px,
+            right: center_px.x + radius_px,
+            bottom: center_px.y + radius_px,
+        }
+    }
+}
+
+impl Drop for PaintCanvas<'_> {
+    fn drop(&mut self) {
+        if let Some(mut target) = self.d2d.take() {
+            if !self.d2d_broken && !target.end() {
+                log::debug!("PaintCanvas: D2D frame failed; invalidating for a repaint");
+                unsafe {
+                    InvalidateRect(self.hwnd, std::ptr::null(), 0);
+                }
+            }
+        }
+        unsafe {
+            EndPaint(self.hwnd, &mut self.paint);
+        }
+    }
+}
+
+#[cfg(test)]
+mod drawing_tests {
+    use super::*;
+    use crate::ui::model::{AccentMode, ThemeMode};
+    use crate::ui::theme::{tokens_for, TypographyTokens};
+    use windows_sys::Win32::System::Com::CoInitializeEx;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassW, WNDCLASSW,
+    };
+
+    // ── DpiMetrics ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn dpi_metrics_identity_at_100_percent() {
+        let dpi = DpiMetrics::new(1.0);
+        assert_eq!(dpi.scale(), 1.0);
+        assert_eq!(dpi.to_physical(336), 336);
+        assert_eq!(dpi.to_logical(336), 336);
+    }
+
+    #[test]
+    fn dpi_metrics_maps_125_and_150_percent() {
+        let at_125 = DpiMetrics::new(1.25);
+        assert_eq!(at_125.to_physical(336), 420);
+        assert_eq!(at_125.to_logical(420), 336);
+        let at_150 = DpiMetrics::new(1.5);
+        assert_eq!(at_150.to_physical(336), 504);
+        assert_eq!(at_150.to_logical(504), 336);
+    }
+
+    #[test]
+    fn dpi_metrics_keeps_32px_minimum_target() {
+        for scale in [1.0f32, 1.25, 1.5, 2.0] {
+            let dpi = DpiMetrics::new(scale);
+            assert!(
+                dpi.to_physical(32) >= 32,
+                "32px target shrank at {scale}x: {}",
+                dpi.to_physical(32)
+            );
+        }
+    }
+
+    #[test]
+    fn dpi_metrics_round_trips() {
+        // Exact round-trip holds when the intermediate physical value is
+        // integral; every scale above 100% keeps these values integral.
+        for scale in [1.0f32, 1.25, 1.5, 2.0, 4.0] {
+            let dpi = DpiMetrics::new(scale);
+            for logical in [0i32, 1, 4, 16, 32, 100, 336, 760] {
+                assert_eq!(
+                    dpi.to_logical(dpi.to_physical(logical)),
+                    logical,
+                    "round trip at {scale}x for {logical}"
+                );
+            }
+        }
+        // At 50% only even logical sizes land on integral physical pixels.
+        let half = DpiMetrics::new(0.5);
+        assert_eq!(half.to_logical(half.to_physical(336)), 336);
+        assert_eq!(half.to_logical(half.to_physical(4)), 4);
+    }
+
+    #[test]
+    fn dpi_metrics_clamps_to_supported_range() {
+        assert_eq!(DpiMetrics::new(0.25).scale(), 0.5);
+        assert_eq!(DpiMetrics::new(-1.0).scale(), 0.5);
+        assert_eq!(DpiMetrics::new(8.0).scale(), 4.0);
+        assert_eq!(DpiMetrics::new(f32::NAN).scale(), 1.0);
+        assert_eq!(DpiMetrics::new(f32::INFINITY).scale(), 1.0);
+        assert_eq!(DpiMetrics::new(f32::NEG_INFINITY).scale(), 1.0);
+    }
+
+    // ── focus rings ────────────────────────────────────────────────────────
+
+    fn control_rect() -> RectF {
+        RectF::new(100.0, 100.0, 132.0, 132.0) // 32x32 close target
+    }
+
+    fn focus() -> FocusTokens {
+        // Same values tokens_for produces (theme-independent of mode).
+        tokens_for(ThemeMode::Dark, false, AccentMode::System, || None).focus
+    }
+
+    #[test]
+    fn focus_ring_layers_are_distinct_and_nested() {
+        let rect = control_rect();
+        let (outer, inner) = focus_ring_rects(rect, &focus());
+        assert_ne!(outer, inner, "the two layers must be distinct boxes");
+        // Inner ring sits inside the outer ring.
+        assert!(
+            outer.contains(inner),
+            "{outer:?} does not contain {inner:?}"
+        );
+        // Both rings surround the control.
+        assert!(inner.contains(rect), "{inner:?} does not contain {rect:?}");
+    }
+
+    #[test]
+    fn focus_ring_bands_do_not_overlap_given_theme_invariants() {
+        // The stroke bands are [gap, gap + width] from the control edge.
+        // Theme invariants keep the inner band strictly inside the outer one.
+        let f = focus();
+        let inner_band_end = f.inner_ring_gap_px + f.inner_ring_width_px;
+        let outer_band_start = f.ring_gap_px;
+        assert!(
+            inner_band_end < outer_band_start,
+            "bands would overlap: {} vs {}",
+            inner_band_end,
+            outer_band_start
+        );
+        let (outer, inner) = focus_ring_rects(control_rect(), &f);
+        assert!(outer.left < inner.left && inner.left < control_rect().left);
+        assert!(inner.right < outer.right && control_rect().right < inner.right);
+    }
+
+    #[test]
+    fn focus_ring_rects_scale_with_control_size() {
+        let small = RectF::new(0.0, 0.0, 32.0, 32.0);
+        let big = RectF::new(0.0, 0.0, 64.0, 64.0);
+        let (outer_small, _) = focus_ring_rects(small, &focus());
+        let (outer_big, _) = focus_ring_rects(big, &focus());
+        assert!(outer_big.width() > outer_small.width());
+    }
+
+    // ── rounded rects ──────────────────────────────────────────────────────
+
+    #[test]
+    fn rounded_rect_path_clamps_radius_to_half_min_dimension() {
+        let rect = RectF::new(0.0, 0.0, 40.0, 20.0); // min dimension 20 -> max radius 10
+        let path = rounded_rect_path(rect, 100.0);
+        assert_eq!(path.radius_x, 10.0);
+        assert_eq!(path.radius_y, 10.0);
+        assert_eq!(path.rect, rect);
+    }
+
+    #[test]
+    fn rounded_rect_path_normal_radius_is_preserved() {
+        let rect = RectF::new(0.0, 0.0, 40.0, 20.0);
+        let path = rounded_rect_path(rect, 4.0);
+        assert_eq!(path.radius_x, 4.0);
+        assert_eq!(path.radius_y, 4.0);
+    }
+
+    #[test]
+    fn rounded_rect_path_negative_and_zero_radius_become_rect() {
+        let rect = RectF::new(0.0, 0.0, 40.0, 20.0);
+        assert_eq!(rounded_rect_path(rect, -3.0).radius_x, 0.0);
+        assert_eq!(rounded_rect_path(rect, 0.0).radius_x, 0.0);
+    }
+
+    // ── diamonds ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn diamond_points_are_symmetric_around_center() {
+        let center = PointF::new(10.0, 20.0);
+        let points = diamond_points(center, 6.0);
+        assert_eq!(points[0], PointF::new(10.0, 14.0)); // top
+        assert_eq!(points[1], PointF::new(16.0, 20.0)); // right
+        assert_eq!(points[2], PointF::new(10.0, 26.0)); // bottom
+        assert_eq!(points[3], PointF::new(4.0, 20.0)); // left
+    }
+
+    #[test]
+    fn diamond_points_degenerate_when_half_size_zero_or_negative() {
+        let center = PointF::new(5.0, 5.0);
+        assert_eq!(diamond_points(center, 0.0), [center; 4]);
+        assert_eq!(diamond_points(center, -4.0), [center; 4]);
+    }
+
+    // ── canvas smoke (headless hidden window) ──────────────────────────────
+
+    fn init_com() {
+        unsafe {
+            CoInitializeEx(std::ptr::null(), 0);
+        }
+    }
+
+    fn hidden_window() -> HWND {
+        unsafe {
+            static WINDOW: std::sync::OnceLock<HWND> = std::sync::OnceLock::new();
+            *WINDOW.get_or_init(|| {
+                let class = WNDCLASSW {
+                    lpfnWndProc: Some(DefWindowProcW),
+                    hInstance: windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(
+                        std::ptr::null(),
+                    ),
+                    lpszClassName: windows_sys::core::w!("VolCtlCanvasTestWnd"),
+                    ..std::mem::zeroed()
+                };
+                RegisterClassW(&class);
+                CreateWindowExW(
+                    0,
+                    windows_sys::core::w!("VolCtlCanvasTestWnd"),
+                    windows_sys::core::w!("canvas test"),
+                    windows_sys::Win32::UI::WindowsAndMessaging::WS_OVERLAPPED,
+                    0,
+                    0,
+                    200,
+                    100,
+                    0,
+                    0,
+                    class.hInstance,
+                    std::ptr::null(),
+                )
+            })
+        }
+    }
+
+    #[test]
+    fn paint_canvas_draws_every_primitive_without_error() {
+        init_com();
+        let hwnd = hidden_window();
+        let Some(mut canvas) = PaintCanvas::begin_paint(hwnd) else {
+            panic!("BeginPaint failed on the hidden test window");
+        };
+        let surface = Rgba::from_rgb(0x17, 0x1C, 0x24);
+        let accent = Rgba::from_rgb(0x3A, 0xA8, 0xFF);
+        let text = Rgba::from_rgb(0xF5, 0xF7, 0xFA);
+        let ty = TypographyTokens::default();
+
+        canvas.fill_rect(RectF::new(0.0, 0.0, 184.0, 61.0), surface);
+        canvas.fill_rounded_rect(RectF::new(16.0, 16.0, 168.0, 45.0), 8.0, surface);
+        canvas.stroke_rounded_rect(RectF::new(16.0, 16.0, 168.0, 45.0), 8.0, accent, 1.0);
+        canvas.fill_circle(PointF::new(28.0, 30.0), 5.0, accent);
+        canvas.stroke_circle(PointF::new(44.0, 30.0), 5.0, accent, 1.0);
+        canvas.fill_diamond(PointF::new(60.0, 30.0), 5.0, accent);
+        canvas.stroke_diamond(PointF::new(76.0, 30.0), 5.0, accent, 1.0);
+        canvas.draw_focus_ring(RectF::new(88.0, 14.0, 120.0, 46.0), &focus());
+        let drawn = canvas.draw_text(&TextLayout {
+            text: "72%",
+            rect: RectF::new(16.0, 16.0, 168.0, 45.0),
+            align: TextAlign::Right,
+            role: ty.display_value,
+            color: text,
+        });
+        assert!(drawn, "draw_text must succeed on the hidden window");
+        // Dropping the canvas runs EndPaint (and D2D EndDraw when active).
+        drop(canvas);
+        unsafe {
+            DestroyWindow(hwnd);
+        }
+    }
+
+    #[test]
+    fn paint_canvas_measures_dpi_and_reports_paint_mode() {
+        init_com();
+        let hwnd = hidden_window();
+        let canvas = PaintCanvas::begin_paint(hwnd).expect("BeginPaint");
+        let dpi = canvas.dpi();
+        assert!(dpi.scale() >= 1.0, "scale {}", dpi.scale());
+        // Either mode is valid; the point is that it reports one coherent path.
+        let _ = canvas.d2d_active();
+        drop(canvas);
+        unsafe {
+            DestroyWindow(hwnd);
+        }
+    }
+}
