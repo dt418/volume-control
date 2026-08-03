@@ -191,32 +191,9 @@ unsafe extern "system" fn key_proc(code: i32, wparam: WPARAM, lparam: LPARAM) ->
         let st = &*(lparam as *const KBDLLHOOKSTRUCT);
         let vk = st.vkCode as u32;
         let shift = shift_held();
-        let id = match vk {
-            v if v == VK_UP as u32 => {
-                if shift {
-                    ID_VOL_UP_LARGE
-                } else {
-                    ID_VOL_UP
-                }
-            }
-            v if v == VK_DOWN as u32 => {
-                if shift {
-                    ID_VOL_DOWN_LARGE
-                } else {
-                    ID_VOL_DOWN
-                }
-            }
-            v if v == VK_M as u32 => {
-                if shift {
-                    ID_SHOW_MENU
-                } else {
-                    ID_MUTE
-                }
-            }
-            v if v == VK_R as u32 => ID_RESET,
-            v if v == VK_V as u32 => ID_MIXER,
-            _ => -1,
-        };
+        // Resolved from the shared COMBOS table so hook routing can never
+        // desync from the reported per-action status.
+        let id = capslock_id(vk, shift);
         if id >= 0 {
             let now = st.time as i64;
             let prev = LAST_COMBO_KEY.load(Ordering::SeqCst);
@@ -310,24 +287,59 @@ pub enum HotkeyRegStatus {
     HookRouted,
 }
 
-/// The 8 hotkey combos as `(id, virtual key, action, shifted)`. One table
-/// consumed by both the `RegisterHotKey` path and the CapsLock keyboard-hook
-/// path so every combo reports the same per-action status set.
-const COMBOS: [(i32, VIRTUAL_KEY, HotkeyAction, bool); 8] = [
-    (ID_VOL_UP, VK_UP, HotkeyAction::VolumeUp, false),
-    (ID_VOL_DOWN, VK_DOWN, HotkeyAction::VolumeDown, false),
-    (ID_VOL_UP_LARGE, VK_UP, HotkeyAction::VolumeUpLarge, true),
+/// The 8 hotkey combos as `(id, virtual key, action, shift)`.
+///
+/// `shift` is the Shift requirement: `Some(true)` = Shift must be held,
+/// `Some(false)` = Shift must be absent, `None` = shift-agnostic. `None` is
+/// used only for combos that have no Shift variant (Reset, Mixer): the original
+/// CapsLock keyboard hook matched `VK_R`/`VK_V` without inspecting Shift, and
+/// `RegisterHotKey` cannot express a shift-agnostic combo (it registers the
+/// plain variant, exactly as the pre-Task-11 code did).
+///
+/// The single source of truth for every path: [`Win32Hotkeys::do_register`]
+/// registers each combo, the CapsLock path's [`capslock_id`] resolves hook
+/// input from the same table, and the reported per-action status is projected
+/// from it — so hook routing and the UI status can never desync.
+const COMBOS: [(i32, VIRTUAL_KEY, HotkeyAction, Option<bool>); 8] = [
+    (ID_VOL_UP, VK_UP, HotkeyAction::VolumeUp, Some(false)),
+    (ID_VOL_DOWN, VK_DOWN, HotkeyAction::VolumeDown, Some(false)),
+    (
+        ID_VOL_UP_LARGE,
+        VK_UP,
+        HotkeyAction::VolumeUpLarge,
+        Some(true),
+    ),
     (
         ID_VOL_DOWN_LARGE,
         VK_DOWN,
         HotkeyAction::VolumeDownLarge,
-        true,
+        Some(true),
     ),
-    (ID_MUTE, VK_M, HotkeyAction::ToggleMute, false),
-    (ID_RESET, VK_R, HotkeyAction::Reset50, false),
-    (ID_MIXER, VK_V, HotkeyAction::OpenMixer, false),
-    (ID_SHOW_MENU, VK_M, HotkeyAction::OpenMenu, true),
+    (ID_MUTE, VK_M, HotkeyAction::ToggleMute, Some(false)),
+    (ID_RESET, VK_R, HotkeyAction::Reset50, None),
+    (ID_MIXER, VK_V, HotkeyAction::OpenMixer, None),
+    (ID_SHOW_MENU, VK_M, HotkeyAction::OpenMenu, Some(true)),
 ];
+
+/// Resolve a CapsLock-hook `(vk, shifted)` into a hotkey id, or `-1` when the
+/// key is not part of the combo set.
+///
+/// Driven by the shared [`COMBOS`] table (linear scan over 8 entries), so the
+/// keyboard-hook path and the reported per-action status can never desync:
+/// adding/removing/renaming a combo updates the hook routing automatically.
+/// A combo with a `None` shift requirement matches regardless of Shift,
+/// preserving the original hook behavior for Reset/Mixer. Returns `-1` for
+/// keys outside the combo set; the caller still swallows those keys
+/// (CapsLock-held keys never reach the focused app).
+fn capslock_id(vk: u32, shifted: bool) -> i32 {
+    COMBOS
+        .into_iter()
+        .find(|&(_, table_vk, _, shift)| {
+            u32::from(table_vk) == vk && shift.is_none_or(|required| required == shifted)
+        })
+        .map(|(id, _, _, _)| id)
+        .unwrap_or(-1)
+}
 
 /// Registers/unregisters hotkeys against a window handle.
 pub struct Win32Hotkeys {
@@ -416,8 +428,10 @@ impl Win32Hotkeys {
 
         let mb = |shifted: bool| modifier_bits(modifier, shifted);
         let mut results = Vec::with_capacity(COMBOS.len());
-        for (id, vk, action, shifted) in COMBOS {
-            match self.reg(id, mb(shifted), vk) {
+        for (id, vk, action, shift) in COMBOS {
+            // A `None` shift requirement registers the plain variant (the
+            // pre-Task-11 behavior for Reset/Mixer).
+            match self.reg(id, mb(shift.unwrap_or(false)), vk) {
                 Ok(()) => results.push(HotkeyRegResult {
                     action,
                     status: HotkeyRegStatus::Registered,
@@ -502,5 +516,92 @@ mod tests {
         hk.register(HotkeyModifier::CapsLock)
             .expect("caps register");
         assert_eq!(hk.status(), expected.as_slice());
+    }
+
+    #[test]
+    fn capslock_id_matches_the_combos_table_entry_for_every_combo() {
+        // Pins the CapsLock hook path to the shared COMBOS table: every combo's
+        // (vk, shift) must resolve to its own id and decode to its action, so
+        // hook routing and the reported status can never silently desync.
+        for &(id, vk, action, shift) in &COMBOS {
+            match shift {
+                Some(required) => {
+                    assert_eq!(
+                        capslock_id(u32::from(vk), required),
+                        id,
+                        "capslock_id({vk}, shifted={required}) must resolve to id {id:#x}"
+                    );
+                }
+                None => {
+                    // Shift-agnostic combos match with or without Shift.
+                    assert_eq!(capslock_id(u32::from(vk), false), id);
+                    assert_eq!(capslock_id(u32::from(vk), true), id);
+                }
+            }
+            assert_eq!(hotkey_action(id), Some(action));
+        }
+    }
+
+    #[test]
+    fn capslock_reset_and_mixer_are_shift_agnostic_like_the_original_hook() {
+        // The pre-Task-11 key_proc matched VK_R and VK_V without inspecting
+        // Shift (only the arrow keys and M are shift-sensitive). The COMBOS
+        // table records these as `None` and capslock_id honors that, so the
+        // refactor is behavior-preserving.
+        assert_eq!(capslock_id(u32::from(VK_R), false), ID_RESET);
+        assert_eq!(capslock_id(u32::from(VK_R), true), ID_RESET);
+        assert_eq!(capslock_id(u32::from(VK_V), false), ID_MIXER);
+        assert_eq!(capslock_id(u32::from(VK_V), true), ID_MIXER);
+    }
+
+    #[test]
+    fn capslock_inputs_never_match_two_combos() {
+        // capslock_id does a linear find; no two COMBOS entries may match the
+        // same (vk, shifted) input, or the find would be order-dependent.
+        let combos = &COMBOS;
+        for &(_, vk, _, _) in combos {
+            for shift in [false, true] {
+                let matches = combos
+                    .iter()
+                    .filter(|&&(_, table_vk, _, requirement)| {
+                        u32::from(table_vk) == u32::from(vk)
+                            && requirement.map_or(true, |r| r == shift)
+                    })
+                    .count();
+                assert!(
+                    matches <= 1,
+                    "vk={vk:#x} shifted={shift} matched by {matches} combos"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn capslock_id_returns_negative_for_keys_outside_the_combo_set() {
+        // Keys not in the table resolve to -1 (the hook swallows them without
+        // posting), and the combo set is exactly the 8 table entries.
+        let mut combo_keys: Vec<u16> = COMBOS.iter().map(|&(_, vk, _, _)| vk).collect();
+        combo_keys.sort_unstable();
+        combo_keys.dedup();
+        for vk in [
+            0x41u16, /* VK_A */
+            0x50,    /* VK_P */
+            0x1B,    /* VK_ESCAPE */
+        ] {
+            assert_eq!(
+                capslock_id(u32::from(vk), false),
+                -1,
+                "vk={vk:#x} without shift"
+            );
+            assert_eq!(
+                capslock_id(u32::from(vk), true),
+                -1,
+                "vk={vk:#x} with shift"
+            );
+            assert!(
+                !combo_keys.contains(&vk),
+                "vk={vk:#x} must not be in COMBOS"
+            );
+        }
     }
 }
