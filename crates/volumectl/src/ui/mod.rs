@@ -8,6 +8,7 @@ mod capabilities;
 mod model;
 mod renderer;
 mod settings;
+mod signal_rail;
 mod surface;
 mod theme;
 
@@ -20,6 +21,10 @@ pub use model::{
 };
 pub use renderer::{HostHandle, NativeRenderer};
 pub use settings::SettingsDraft;
+pub use signal_rail::{
+    rail_apply_key, rail_geometry, MarkerGeometry, RailKey, SignalRail, SignalRailGeometry,
+    TrackRect,
+};
 pub use surface::{
     place_centered, place_mixer_above_overlay, place_overlay, SurfaceRect, SurfaceSize, WorkArea,
 };
