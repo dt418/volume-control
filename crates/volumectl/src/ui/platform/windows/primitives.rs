@@ -26,8 +26,9 @@ use windows_sys::Win32::{
     UI::Controls::SetWindowTheme,
     UI::HiDpi::{GetDpiForSystem, GetDpiForWindow},
     UI::WindowsAndMessaging::{
-        GetSystemMetrics, SystemParametersInfoW, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
-        SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST,
+        GetSystemMetrics, GetWindowLongPtrW, SystemParametersInfoW, GWL_EXSTYLE,
+        SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+        SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, WS_EX_LAYERED,
     },
 };
 
@@ -166,6 +167,17 @@ pub fn dpi_scale_for(hwnd: HWND) -> f32 {
         }
     };
     (dpi as f32 / 96.0).max(1.0)
+}
+
+/// Whether `hwnd` is a layered window (`WS_EX_LAYERED`).
+///
+/// Layered windows own a per-window surface (DIB) that the desktop compositor
+/// blends with the screen. `ID2D1HwndRenderTarget` presents through a
+/// redirection path that does not land in that surface, so D2D-drawn content
+/// never becomes visible on layered windows; GDI paints straight into the
+/// surface and always works (see [`PaintCanvas::begin_paint`]).
+fn is_layered(hwnd: HWND) -> bool {
+    unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_LAYERED as isize != 0 }
 }
 
 /// Monitor work area for the display nearest `hwnd`.
@@ -548,10 +560,25 @@ impl<'a> PaintCanvas<'a> {
                 return None;
             }
             let dpi = DpiMetrics::new(dpi_scale_for(hwnd));
-            // D2D mode is all-or-nothing per paint (see module docs).
-            let d2d = Direct2dContext::get()
-                .and_then(|context| context.render_target(hwnd))
-                .and_then(|mut target| if target.begin() { Some(target) } else { None });
+            // D2D mode is all-or-nothing per paint (see module docs). Layered
+            // windows (WS_EX_LAYERED, e.g. the click-through volume overlay)
+            // skip D2D entirely: an ID2D1HwndRenderTarget presents through a
+            // redirection path that never lands in the layered window's own
+            // surface (live-verified on Windows 11: the layered overlay
+            // rendered a stale uniform surface under D2D while the same
+            // window painted correctly via GDI, which writes straight into
+            // the layered DIB). GDI remains the always-working baseline.
+            let d2d = if is_layered(hwnd) {
+                log::debug!(
+                    "PaintCanvas: {hwnd:?} is layered; hwnd render targets cannot \
+                     present into layered surfaces — painting via GDI"
+                );
+                None
+            } else {
+                Direct2dContext::get()
+                    .and_then(|context| context.render_target(hwnd))
+                    .and_then(|mut target| if target.begin() { Some(target) } else { None })
+            };
             if d2d.is_none() {
                 log::debug!("PaintCanvas: D2D unavailable for {hwnd:?}; painting via GDI");
             }
@@ -1224,6 +1251,50 @@ mod drawing_tests {
         let _ = canvas.d2d_active();
         drop(canvas);
         unsafe {
+            DestroyWindow(hwnd);
+        }
+    }
+
+    #[test]
+    fn paint_canvas_uses_gdi_for_layered_windows() {
+        // Layered windows (WS_EX_LAYERED — the click-through overlay) cannot
+        // be painted by an hwnd render target: D2D presents never land in the
+        // layered surface, so the canvas must select the GDI path for them.
+        init_com();
+        unsafe {
+            static WINDOW: std::sync::OnceLock<HWND> = std::sync::OnceLock::new();
+            let hwnd = *WINDOW.get_or_init(|| {
+                let class = WNDCLASSW {
+                    lpfnWndProc: Some(DefWindowProcW),
+                    hInstance: windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(
+                        std::ptr::null(),
+                    ),
+                    lpszClassName: windows_sys::core::w!("VolCtlLayeredTestWnd"),
+                    ..std::mem::zeroed()
+                };
+                RegisterClassW(&class);
+                CreateWindowExW(
+                    windows_sys::Win32::UI::WindowsAndMessaging::WS_EX_LAYERED,
+                    windows_sys::core::w!("VolCtlLayeredTestWnd"),
+                    windows_sys::core::w!("layered canvas test"),
+                    windows_sys::Win32::UI::WindowsAndMessaging::WS_OVERLAPPED,
+                    0,
+                    0,
+                    200,
+                    100,
+                    0,
+                    0,
+                    class.hInstance,
+                    std::ptr::null(),
+                )
+            });
+            assert!(super::is_layered(hwnd), "test window must be layered");
+            let canvas = PaintCanvas::begin_paint(hwnd).expect("BeginPaint on layered window");
+            assert!(
+                !canvas.d2d_active(),
+                "layered windows must paint via GDI, never an hwnd render target"
+            );
+            drop(canvas);
             DestroyWindow(hwnd);
         }
     }

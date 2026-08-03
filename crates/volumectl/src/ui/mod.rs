@@ -14,7 +14,7 @@ mod theme;
 
 pub mod platform;
 
-pub use capabilities::{resolve_material, ResolvedMaterial, UiCapabilities};
+pub use capabilities::{resolve_material, resolve_motion, ResolvedMaterial, UiCapabilities};
 pub use model::{
     AccentMode, AppAction, AppState, MaterialMode, MotionMode, SurfaceId, SurfaceVisibility,
     SurfaceVisibilityState, ThemeMode, UiStatus,
