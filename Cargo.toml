@@ -7,7 +7,7 @@ default-members = ["crates/volumectl"]
 edition = "2021"
 version = "0.1.0"
 license = "MIT"
-rust-version = "1.75"
+rust-version = "1.82"
 
 [workspace.dependencies]
 # Low-level Win32 FFI — predictable signatures for WASAPI COM + RegisterHotKey.
