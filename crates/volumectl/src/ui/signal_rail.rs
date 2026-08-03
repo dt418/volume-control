@@ -21,22 +21,16 @@
 //! # Palette authority
 //!
 //! [`SignalRail::fill_color`] mirrors the authoritative
-//! [`crate::core::volume_color_rgb`] semantics (muted or 0% → muted grey,
-//! then low/medium/high threshold bands) using the VolumePro band limits
-//! from [`crate::config::ColorThresholds`]. The palette values themselves
-//! come from the caller-provided [`VolumeThresholdColors`]; the rail never
-//! carries its own color copy.
+//! [`crate::core::volume_color_rgb`] semantics: muted or 0% → muted grey,
+//! then low/medium/high threshold bands. The rail carries the band boundary
+//! values (`green_up_to` / `blue_up_to`) that
+//! [`crate::config::ColorThresholds`] supplies — the same values the overlay
+//! feeds into `core::volume_color_rgb` — so the rail agrees with the
+//! authoritative semantics for **any** user config, not just the VolumePro
+//! defaults. The palette values themselves come from the caller-provided
+//! [`VolumeThresholdColors`]; the rail never carries its own color copy.
 
 use crate::ui::theme::{Rgba, VolumeThresholdColors};
-
-/// Low band upper bound in percent (inclusive), mirroring the VolumePro
-/// default `green_up_to` in [`crate::config::ColorThresholds`]. Kept in one
-/// place so [`SignalRail::fill_color`] cannot fork the authoritative band
-/// semantics; the test suite asserts agreement with `core::volume_color_rgb`.
-const LOW_BAND_UP_TO: u8 = 40;
-/// Medium band upper bound in percent (inclusive), mirroring the VolumePro
-/// default `blue_up_to` in [`crate::config::ColorThresholds`].
-const MEDIUM_BAND_UP_TO: u8 = 75;
 
 /// Platform-neutral Signal Rail state.
 ///
@@ -49,14 +43,35 @@ pub struct SignalRail {
     pub percent: u8,
     pub muted: bool,
     pub thresholds: VolumeThresholdColors,
+    /// Low band upper bound in percent (inclusive) — the caller's
+    /// [`crate::config::ColorThresholds::green_up_to`] value. Drives
+    /// [`Self::fill_color`] so the rail agrees with the authoritative
+    /// `core::volume_color_rgb` for any config, not just the VolumePro
+    /// defaults.
+    pub green_up_to: u8,
+    /// Medium band upper bound in percent (inclusive) — the caller's
+    /// [`crate::config::ColorThresholds::blue_up_to`] value.
+    pub blue_up_to: u8,
 }
 
 impl SignalRail {
-    pub fn new(percent: u8, muted: bool, thresholds: VolumeThresholdColors) -> Self {
+    /// `green_up_to` / `blue_up_to` are the band boundary values from the
+    /// caller's [`crate::config::ColorThresholds`] (e.g. `config
+    /// .color_thresholds.green_up_to`), so `fill_color` mirrors
+    /// `core::volume_color_rgb` for that config.
+    pub fn new(
+        percent: u8,
+        muted: bool,
+        thresholds: VolumeThresholdColors,
+        green_up_to: u8,
+        blue_up_to: u8,
+    ) -> Self {
         Self {
             percent,
             muted,
             thresholds,
+            green_up_to,
+            blue_up_to,
         }
     }
 
@@ -104,14 +119,16 @@ impl SignalRail {
 
     /// Fill color for the current percent, mirroring the authoritative
     /// [`crate::core::volume_color_rgb`] semantics: muted (or 0%) uses the
-    /// muted grey; otherwise the low/medium/high threshold band applies. The
-    /// palette is the caller-provided `thresholds`, never a local copy.
+    /// muted grey; otherwise the low/medium/high threshold band applies, with
+    /// the band boundaries taken from the rail's `green_up_to`/`blue_up_to`
+    /// (the caller's [`crate::config::ColorThresholds`] values). The palette
+    /// is the caller-provided `thresholds`, never a local copy.
     pub fn fill_color(&self) -> Rgba {
         if self.muted || self.percent == 0 {
             self.thresholds.muted
-        } else if self.percent <= LOW_BAND_UP_TO {
+        } else if self.percent <= self.green_up_to {
             self.thresholds.low
-        } else if self.percent <= MEDIUM_BAND_UP_TO {
+        } else if self.percent <= self.blue_up_to {
             self.thresholds.medium
         } else {
             self.thresholds.high
@@ -277,8 +294,19 @@ mod tests {
     use crate::config::ColorThresholds;
     use crate::core::volume_color_rgb;
 
+    /// VolumePro default band boundaries (the values `Config::default()`
+    /// seeds into `color_thresholds`).
+    const DEFAULT_GREEN_UP_TO: u8 = 40;
+    const DEFAULT_BLUE_UP_TO: u8 = 75;
+
     fn rail(percent: u8, muted: bool) -> SignalRail {
-        SignalRail::new(percent, muted, VolumeThresholdColors::default())
+        SignalRail::new(
+            percent,
+            muted,
+            VolumeThresholdColors::default(),
+            DEFAULT_GREEN_UP_TO,
+            DEFAULT_BLUE_UP_TO,
+        )
     }
 
     /// Overlay-like track: 336px surface, 16px padding, 8px rail height.
@@ -451,44 +479,79 @@ mod tests {
 
     #[test]
     fn fill_color_matches_core_volume_color_rgb() {
-        // Representative percents (5/50/95), plus the 0% and band boundaries
-        // (40/41/75/76) — proves the rail does not fork the palette. Uses the
-        // VolumePro default thresholds (the same values `Config::default()`
-        // seeds), mirroring `core::volume_color_rgb` exactly.
-        let cfg = ColorThresholds {
-            green_up_to: 40,
-            blue_up_to: 75,
-            orange_up_to: 100,
-        };
-        for percent in [0u8, 5, 40, 41, 50, 75, 76, 95, 100] {
-            for muted in [false, true] {
-                let got = rail(percent, muted).fill_color();
-                let (r, g, b) = volume_color_rgb(percent, muted, &cfg);
-                assert_eq!(
-                    got,
-                    Rgba::from_rgb(r, g, b),
-                    "percent {percent}, muted {muted}"
-                );
+        // The rail must agree with `core::volume_color_rgb` for ANY
+        // ColorThresholds config: the VolumePro defaults and a custom
+        // serialized config (green_up_to 25 / blue_up_to 60). Percents cover
+        // 0%, representative values, and every band boundary crossing for
+        // both configs (24/25/26, 39/40/41, 59/60/61, 74/75/76).
+        let configs = [
+            ColorThresholds {
+                green_up_to: 40,
+                blue_up_to: 75,
+                orange_up_to: 100,
+            },
+            ColorThresholds {
+                green_up_to: 25,
+                blue_up_to: 60,
+                orange_up_to: 100,
+            },
+        ];
+        let percents = [
+            0u8, 5, 24, 25, 26, 39, 40, 41, 50, 59, 60, 61, 74, 75, 76, 95, 100,
+        ];
+        for cfg in configs {
+            for percent in percents {
+                for muted in [false, true] {
+                    let got = SignalRail::new(
+                        percent,
+                        muted,
+                        VolumeThresholdColors::default(),
+                        cfg.green_up_to,
+                        cfg.blue_up_to,
+                    )
+                    .fill_color();
+                    let (r, g, b) = volume_color_rgb(percent, muted, &cfg);
+                    assert_eq!(
+                        got,
+                        Rgba::from_rgb(r, g, b),
+                        "green_up_to {} blue_up_to {} percent {percent}, muted {muted}",
+                        cfg.green_up_to,
+                        cfg.blue_up_to
+                    );
+                }
             }
         }
     }
 
     #[test]
-    fn fill_color_uses_the_rails_own_threshold_palette() {
+    fn fill_color_uses_the_rails_own_palette_and_boundaries() {
+        // Custom palette AND custom band boundaries (green_up_to 25 /
+        // blue_up_to 60): both must drive the result — e.g. 26% is the
+        // medium band here even though the VolumePro default would make it
+        // low.
         let custom = VolumeThresholdColors {
             muted: Rgba::from_rgb(1, 2, 3),
             low: Rgba::from_rgb(4, 5, 6),
             medium: Rgba::from_rgb(7, 8, 9),
             high: Rgba::from_rgb(10, 11, 12),
         };
-        assert_eq!(SignalRail::new(0, false, custom).fill_color(), custom.muted);
-        assert_eq!(SignalRail::new(5, false, custom).fill_color(), custom.low);
-        assert_eq!(
-            SignalRail::new(50, false, custom).fill_color(),
-            custom.medium
-        );
-        assert_eq!(SignalRail::new(95, false, custom).fill_color(), custom.high);
-        assert_eq!(SignalRail::new(50, true, custom).fill_color(), custom.muted);
+        let cfg = ColorThresholds {
+            green_up_to: 25,
+            blue_up_to: 60,
+            orange_up_to: 100,
+        };
+        let r = |percent: u8, muted: bool| {
+            SignalRail::new(percent, muted, custom, cfg.green_up_to, cfg.blue_up_to)
+        };
+        assert_eq!(r(0, false).fill_color(), custom.muted);
+        assert_eq!(r(5, false).fill_color(), custom.low);
+        assert_eq!(r(25, false).fill_color(), custom.low);
+        assert_eq!(r(26, false).fill_color(), custom.medium);
+        assert_eq!(r(50, false).fill_color(), custom.medium);
+        assert_eq!(r(60, false).fill_color(), custom.medium);
+        assert_eq!(r(61, false).fill_color(), custom.high);
+        assert_eq!(r(95, false).fill_color(), custom.high);
+        assert_eq!(r(50, true).fill_color(), custom.muted);
     }
 
     // --- keyboard mapping ----------------------------------------------------------
@@ -539,5 +602,18 @@ mod tests {
             rail_apply_key(&muted, RailKey::ArrowDown, 2).thresholds,
             VolumeThresholdColors::default()
         );
+        // Band boundaries are part of the rail's identity and survive every
+        // mutation, so fill_color keeps agreeing with core::volume_color_rgb
+        // after stepping/home/end.
+        for stepped in [
+            muted.step_up(2),
+            muted.step_down(2),
+            muted.home(),
+            muted.end(),
+            rail_apply_key(&muted, RailKey::ArrowUp, 2),
+        ] {
+            assert_eq!(stepped.green_up_to, DEFAULT_GREEN_UP_TO);
+            assert_eq!(stepped.blue_up_to, DEFAULT_BLUE_UP_TO);
+        }
     }
 }
