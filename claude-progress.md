@@ -1,5 +1,71 @@
 # Progress Log
 
+## Session 007 (2026-08-04) — Task 9: Normalize tray experience (Signal Glass)
+
+- Goal: normalize the Windows tray menu to exactly the spec §9 figure — live
+  label `VolumeControl — {N}%` (non-clickable), separator, `Mute`
+  (CheckMenuItem), `Reset to 50%`, `Open mixer`, separator, `Settings`, `Help`,
+  `Reload configuration`, `Open config file`, separator, `Exit VolumeControl`
+  — removing the `Apply Recommended Blacklist` item, its poll arm, the
+  `TrayCommand::ApplyBlacklist` variant, and its `tray_command_to_action`
+  mapping. Menu ids (`"mute"`, `"reset"`, `"mixer"`, `"help"`, `"settings"`,
+  `"edit"`, `"reload"`, `"exit"`), tooltip, no-icon policy unchanged.
+- Changed: `crates/volumectl/src/tray.rs` (menu construction, label format in
+  `set_volume`, `TrayCommand` minus ApplyBlacklist, poll minus the blacklist
+  arm) and `crates/volumectl/src/app.rs` (`tray_command_to_action` minus the
+  ApplyBlacklist arm, both tray tests updated — 8 assertions each, with a
+  comment noting a separate exhaustiveness test would be redundant since
+  every remaining variant is enumerated). Untouched by design: `ui/model.rs`
+  (`AppAction::ApplyRecommendedBlacklist` stays as the public renderer
+  contract), its `handle_action` arm, mixer/help/settings/config.
+
+### Fresh build + test evidence
+- `cargo fmt --all` then `cargo fmt --all -- --check` → PASS.
+- `cargo build` (via scripts/win-build.bat) → Finished dev profile, 0 warnings.
+- `cargo test -p volumectl` → **215 passed; 0 failed; 0 ignored** (unchanged
+  count: this task removes a variant + a test entry, adds none).
+- `git diff --check` → clean.
+
+### Live-verified on Windows (probe-driven, Win11 25H2 build 26200, 100% DPI)
+The tray menu was opened from the REAL app and its structure dumped
+cross-process (MN_GETHMENU + GetMenuItemInfoW):
+- **12 entries in exact spec order**: `VolumeControl — 50%` (live label,
+  disabled/grayed fState=0x1 — non-clickable), SEP, `Mute` (unchecked), `Reset
+  to 50%`, `Open mixer`, SEP, `Settings`, `Help`, `Reload configuration`,
+  `Open config file`, SEP, `Exit VolumeControl`. Labels and grouping match
+  the spec §9 figure byte-for-byte (console shows the em dash as "-").
+- The live label content ("VolumeControl — 50%") is verified rendering at
+  runtime; the format change in `set_volume` is confirmed by the dump.
+
+### Not live-verified (environmental blockers, honest record)
+Item ACTIVATION (Mute checkmark flip, live % label update after a volume
+change, Open mixer / Settings / Exit routing) could not be driven this
+session. The tray icon lives in the overflow flyout (confirmed by
+screenshot; explorer persists the hidden state per-exe across relaunches),
+and on this 24H2 build right-clicking an overflow icon closes the flyout
+without forwarding the click to the app; the app's `show_menu` (used by the
+open-menu hotkey) silently no-ops when `Shell_NotifyIconGetRect` fails for a
+hidden icon; injected Shift no longer propagates in this session (hotkey
+combos with Shift never fire, verified against the app's own debug log);
+foreign-process `NIM_MODIFY` un-hide is rejected (E_FAIL); UIA tree walks
+became unreliable mid-session (Shell_TrayWnd vanished from the tree while a
+modal System Properties dialog was open). All of these are environmental —
+the affected code paths (menu-id → `TrayCommand` poll mapping, ids
+byte-identical to the pre-existing working menu, `tray_command_to_action`
+→ `AppAction` mapping, `publish_confirmed_state` → `set_volume` 150ms poll)
+are unchanged by this diff and the mapping is unit-tested for all 8
+variants (`every_tray_command_maps_to_intended_action`,
+`tray_commands_bypass_the_blacklist_gate`).
+
+### Notes
+- System volume restored to 50% (its state at session start; the probe's
+  wheel-step tests moved it +4 and back) and `%APPDATA%\volume-control\
+  config.json` verified byte-identical to its pre-probe backup. No app
+  instances left running; overflow flyout closed.
+- Session 003's pre-existing note about "automated menu clicking is flaky on
+  Windows 11 tray virtualization" is echoed here with more detail: overflow
+  icons on this build don't forward injected right-clicks at all.
+
 ## Session 006 (2026-08-04) — Task 8: Signal Glass Help redesign
 
 - Goal: redesign the Windows Help surface as the 520x500 logical
