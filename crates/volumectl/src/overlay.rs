@@ -420,11 +420,28 @@ mod tests {
     }
 
     #[test]
-    fn dark_appearance_preserves_the_legacy_overlay_colours() {
+    fn dark_appearance_uses_the_signal_glass_palette() {
         let a = appearance(ThemeMode::Dark, MaterialMode::Auto, false);
-        assert_eq!(a.tokens.background, Rgba::from_rgb(0x14, 0x14, 0x18));
-        assert_eq!(a.tokens.text_primary, Rgba::from_rgb(0xDD, 0xDD, 0xDD));
+        assert_eq!(a.tokens.background, Rgba::from_rgb(0x10, 0x13, 0x1A));
+        assert_eq!(a.tokens.text_primary, Rgba::from_rgb(0xF5, 0xF7, 0xFA));
         assert!(a.tokens.is_dark);
+    }
+
+    #[test]
+    fn appearance_exposes_signal_glass_tokens_to_the_renderer() {
+        // The resolved appearance consumed by `paint` must carry the approved
+        // Signal Glass state tokens, not just the legacy surface fields.
+        let dark = appearance(ThemeMode::Dark, MaterialMode::Auto, false);
+        let sg = dark.tokens.signal_glass();
+        assert_eq!(sg.surface_subtle, Rgba::from_rgb(0x1C, 0x22, 0x2D));
+        assert_eq!(sg.border_strong, Rgba::from_rgb(0x53, 0x62, 0x76));
+        assert_eq!(sg.accent_pressed, Rgba::from_rgb(0x19, 0x8F, 0xEA));
+
+        let light = appearance(ThemeMode::Light, MaterialMode::Auto, false);
+        let sg = light.tokens.signal_glass();
+        assert_eq!(sg.surface_subtle, Rgba::from_rgb(0xF1, 0xF4, 0xF8));
+        assert_eq!(sg.border_strong, Rgba::from_rgb(0xAE, 0xB9, 0xC8));
+        assert_eq!(sg.accent_pressed, Rgba::from_rgb(0x00, 0x4A, 0x8D));
     }
 
     #[test]

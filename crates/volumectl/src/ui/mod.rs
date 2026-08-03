@@ -22,9 +22,10 @@ pub use surface::{
     place_centered, place_mixer_above_overlay, place_overlay, SurfaceRect, SurfaceSize, WorkArea,
 };
 pub use theme::{
-    accent_color, tokens_for, AnimationTokens, EasingPolicy, ElevationTokens, ErrorTokens,
-    FocusTokens, HitTargetTokens, MaterialIntent, RadiusTokens, Rgba, SpacingTokens, TextRole,
-    ThemeTokens, TypographyTokens, VolumeThresholdColors,
+    accent_color, accent_color_for, tokens_for, AnimationTokens, EasingPolicy, ElevationTokens,
+    ErrorTokens, FocusTokens, HitTargetTokens, MaterialIntent, RadiusTokens, Rgba,
+    SignalGlassTokens, SpacingTokens, TextRole, ThemeTokens, TypographyTokens,
+    VolumeThresholdColors,
 };
 
 /// Windows rendering primitives (compile-gated; absent on other targets).
