@@ -48,6 +48,7 @@ use crate::ui::{
 pub const WM_APP_SETTINGS_APPLY: u32 = WM_USER + 20;
 pub const WM_APP_SETTINGS_CANCEL: u32 = WM_USER + 21;
 pub const WM_APP_SETTINGS_RESET: u32 = WM_USER + 22;
+pub const WM_APP_SETTINGS_OPEN_CONFIG: u32 = WM_USER + 23;
 
 // ── Layout (design pixels; system-DPI virtualization scales these) ─────────
 const WIN_W: i32 = 580;
@@ -1265,8 +1266,11 @@ unsafe extern "system" fn settings_wndproc(
                         return 0;
                     }
                     ID_BTN_OPEN_CONFIG => {
-                        crate::config::open_in_editor();
-                        set_status(d, StatusKind::Info, "Editing config — changes reload automatically");
+                        // Opening the config is a host-owned action (the host's
+                        // `OpenConfigLocation` also shows the overlay toast), so
+                        // it is routed through the host like every other intent
+                        // instead of being invoked from the window directly.
+                        PostMessageW(d.host, WM_APP_SETTINGS_OPEN_CONFIG, 0, 0);
                         return 0;
                     }
                     // Blacklist edits update the in-memory draft (the window's

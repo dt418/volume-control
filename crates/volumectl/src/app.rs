@@ -39,7 +39,8 @@ use crate::hotkeys_win32::{
 use crate::mixer::{Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET};
 use crate::overlay::Overlay;
 use crate::settings::{
-    Settings, SettingsAppearance, WM_APP_SETTINGS_APPLY, WM_APP_SETTINGS_CANCEL, WM_APP_SETTINGS_RESET,
+    Settings, SettingsAppearance, WM_APP_SETTINGS_APPLY, WM_APP_SETTINGS_CANCEL,
+    WM_APP_SETTINGS_OPEN_CONFIG, WM_APP_SETTINGS_RESET,
 };
 use crate::tray::{Tray, TrayCommand};
 use crate::ui::{AppAction, SurfaceId, SurfaceVisibility};
@@ -349,6 +350,12 @@ unsafe extern "system" fn host_wndproc(
         WM_APP_SETTINGS_RESET => {
             if !ctx.is_null() {
                 handle_action(&mut *ctx, AppAction::ResetConfig);
+            }
+            0
+        }
+        WM_APP_SETTINGS_OPEN_CONFIG => {
+            if !ctx.is_null() {
+                handle_action(&mut *ctx, AppAction::OpenConfigLocation);
             }
             0
         }
