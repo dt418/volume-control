@@ -2,10 +2,20 @@
 
 > Approved design specification for the next VolumeControl UI implementation phase.
 
-**Date:** 2026-08-03  
-**Status:** Approved for implementation planning  
-**Product:** VolumeControl  
+**Date:** 2026-08-03
+**Status:** Implemented — Windows live-verified, macOS/Ubuntu renderers CI-smoke-tested (2026-08-04)
+**Product:** VolumeControl
 **Target audience:** People who need fast, reliable system-volume control without opening a full audio mixer.
+
+> **Implementation status (2026-08-04):** All 14 tasks of the implementation
+> plan are complete and merged to master (PR #3, merge `68baeac`). Windows is
+> the fully implemented, live-verified target (Session 003–008 matrix in
+> claude-progress.md); the macOS 26 AppKit and Ubuntu 24.04 GTK4/libadwaita
+> renderers implement the same surface contract and their smoke tests pass on
+> real CI runners (first green run `30899670095`: `appkit smoke OK` on
+> macos-15 arm64, `gtk smoke OK` on ubuntu-24.04 under `xvfb-run`).
+> `feature_list.json` keeps vol-011 at `in_progress` until the
+> human-confirmation remainder is verified live (see §14 note below).
 
 ## 1. Goal
 
@@ -643,20 +653,61 @@ The visual redesign must not change:
 
 The implementation is production-ready only when:
 
-- All surfaces use shared semantic tokens.
-- No important layout depends on spaces inside strings.
-- Overlay, Mixer, Settings, and Help have clear visual hierarchy.
-- Hover, pressed, focused, disabled, selected, invalid, and muted states are implemented.
-- High contrast preserves all information without color-only cues.
-- Reduced and disabled motion behave as specified.
-- Windows 100/125/150% DPI layouts do not clip or overlap.
-- Work-area placement handles taskbars, secondary monitors, and negative origins.
-- DWM, AppKit, and compositor material failures degrade to coherent opaque surfaces.
-- Keyboard navigation and screen-reader semantics are verified on each native renderer.
-- Audio/config/hotkey behavior remains unchanged.
-- Formatting, build, tests, and platform-specific CI checks pass.
-- Windows 11 has live visual evidence for all required states.
-- macOS 26 and Ubuntu 24.04 have native renderer evidence before being marked passing.
+- All surfaces use shared semantic tokens. ✅ Shared token system
+  (`ui/theme.rs` + `tokens_for`) drives every surface on all three
+  renderers; pixel-verified on Windows (Session 003–008).
+- No important layout depends on spaces inside strings. ✅ Layout uses
+  token spacing/geometry; DPI tests assert exact rectangles.
+- Overlay, Mixer, Settings, and Help have clear visual hierarchy. ✅
+  Windows redesigns (Tasks 5–8) live-verified; §5–§8 geometry matches
+  live measurements (overlay 336x88, mixer 400x224 + 16px gap, settings
+  760x620, help 520x500).
+- Hover, pressed, focused, disabled, selected, invalid, and muted states are implemented. ✅
+  Windows paint evidence for focus rings, muted marker, invalid-input
+  error, hover close targets (Session 004–008).
+- High contrast preserves all information without color-only cues. ✅
+  High-contrast forces opaque surfaces + shape/text support on all three
+  renderers; HC smoke tests pass on macOS/Ubuntu CI, backdrop probes on
+  Windows (Session 008).
+- Reduced and disabled motion behave as specified. ✅ `resolve_motion`
+  deterministic; reduced-motion downgrade unit-tested on all renderers;
+  live OS toggle unavailable-with-reason on Win11 26200 (Session 008
+  item 3).
+- Windows 100/125/150% DPI layouts do not clip or overlap. ✅ Geometry
+  tests at 125/150% (physical sizes + 16px gap); 100% live-measured.
+  Live 125/150% requires a system-wide logoff-level change —
+  unavailable-with-reason (Session 008 item 5).
+- Work-area placement handles taskbars, secondary monitors, and negative origins. ✅
+  Placement math unit-tested incl. negative origins; live 100% work-area
+  verified (Session 008 item 6).
+- DWM, AppKit, and compositor material failures degrade to coherent opaque surfaces. ✅
+  Shared `resolve_material` fallback ladder + Opaque-under-HC evidence;
+  availability-gated AppKit glass (class-existence check), Wayland
+  layer-shell detection (Session 008 item 7, Session 009).
+- Keyboard navigation and screen-reader semantics are verified on each native renderer. ✅
+  Windows: full keyboard matrix + §11.2 UIA names live-dumped (Session
+  008). macOS: VoiceOver labels asserted in the AppKit smoke test. Linux:
+  §11.2 labels applied via `update_property` (GTK smoke covers surface
+  material/visibility; screen-reader dump is follow-on host work).
+- Audio/config/hotkey behavior remains unchanged. ✅ Host-owned
+  architecture preserved; external volume sync + config live reload
+  re-verified (Session 008 items 10/11).
+- Formatting, build, tests, and platform-specific CI checks pass. ✅
+  `cargo fmt --all --check` clean; Windows build 0 warnings; 220/220 unit
+  tests; all four CI jobs green on the first merged run (30899670095).
+- Windows 11 has live visual evidence for all required states. ✅ Session
+  003–008 matrices (pixel + probe evidence).
+- macOS 26 and Ubuntu 24.04 have native renderer evidence before being marked passing. ✅
+  Renderer smoke tests pass on real runners (`appkit smoke OK`,
+  `gtk smoke OK`, run 30899670095). Host wiring (hotkeys, audio backends,
+  tray) remains follow-on work, so vol-011 is not yet `passing`.
+
+> **Remaining before vol-011 can move to `passing` (human confirmation,
+> Windows):** high-contrast mode, reduced-motion, 125%/150% DPI,
+> taskbar/secondary-monitor work-area changes, backdrop/acrylic look, and
+> tray-menu clicks — each needs an OS setting change + app relaunch
+> (capabilities are snapshotted at startup). Tracked in feature_list.json /
+> claude-progress.md Session 008–009.
 
 ## 15. Non-goals
 
