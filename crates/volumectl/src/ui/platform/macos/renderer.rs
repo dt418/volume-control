@@ -258,6 +258,33 @@ impl NativeRenderer for MacosRenderer {
     }
 }
 
+/// Test helper: plan one surface with the default dark theme at 100% DPI.
+///
+/// Lives outside `mod tests` so the AppKit smoke tests (in `mod appkit`) and
+/// the pure planning tests can both assert against the same shared math.
+#[cfg(test)]
+fn plan_for(surface: &SurfaceId) -> SurfacePlan {
+    let tokens = crate::ui::tokens_for(
+        crate::ui::ThemeMode::Dark,
+        false,
+        crate::ui::AccentMode::System,
+        || Some(true),
+    );
+    let caps = UiCapabilities {
+        compositor: true,
+        blur: true,
+        high_contrast: false,
+        reduced_motion: false,
+        dpi_scale: 1.0,
+        work_area: WorkArea::new(0, 0, 2560, 1400),
+    };
+    let state = AppState::from_audio(50, false, Some("Speakers".into()));
+    plan_surfaces(&state, &tokens, &caps)
+        .into_iter()
+        .find(|p| &p.surface == surface)
+        .expect("planned surface")
+}
+
 /// AppKit surface code (macOS only).
 ///
 /// Real `NSPanel` construction with `NSVisualEffectView` material backing.
@@ -518,8 +545,7 @@ mod appkit {
                 for plan in &plans {
                     let mut panel = Panel::new();
                     panel.apply_plan(plan, &caps);
-                    // SAFETY: main thread inside the dispatch.
-                    let opaque = unsafe { panel.window.isOpaque() };
+                    let opaque = panel.window.isOpaque();
                     let label = panel.window.accessibilityLabel();
                     out.push((plan.surface, opaque, label.is_some()));
                 }
@@ -569,8 +595,7 @@ mod appkit {
                 for plan in &plans {
                     let mut panel = Panel::new();
                     panel.apply_plan(plan, &caps);
-                    // SAFETY: main thread inside the dispatch.
-                    let opaque = unsafe { panel.window.isOpaque() };
+                    let opaque = panel.window.isOpaque();
                     out.push((plan.surface, opaque));
                 }
             });
@@ -608,23 +633,6 @@ mod tests {
             motion: MotionMode::Full,
             status: crate::ui::UiStatus::Ready,
         }
-    }
-
-    /// Look up the plan for a surface (used by the appkit smoke tests).
-    #[cfg(target_os = "macos")]
-    fn plan_for(surface: &SurfaceId) -> SurfacePlan {
-        let tokens = crate::ui::tokens_for(
-            ThemeMode::Dark,
-            false,
-            crate::ui::AccentMode::System,
-            || Some(true),
-        );
-        let state = state();
-        let caps = caps(1.0);
-        plan_surfaces(&state, &tokens, &caps)
-            .into_iter()
-            .find(|p| &p.surface == surface)
-            .expect("planned surface")
     }
 
     #[test]

@@ -27,7 +27,7 @@ use crate::ui::model::{AppState, MotionMode, SurfaceId};
 #[cfg(feature = "gtk-renderer")]
 use crate::ui::renderer::{HostHandle, NativeRenderer};
 use crate::ui::theme::{MaterialIntent, Rgba, ThemeTokens};
-#[cfg(any(test, feature = "gtk-renderer"))]
+#[cfg(test)]
 use crate::ui::WorkArea;
 use crate::ui::{
     place_centered, place_mixer_above_overlay, place_overlay, resolve_material, resolve_motion,
@@ -308,7 +308,11 @@ impl NativeRenderer for LinuxRenderer {
 #[cfg(feature = "gtk-renderer")]
 mod gtk_surfaces {
     use super::*;
+    // The crates are `gtk4` and `libadwaita`; the C-family names (`gtk`,
+    // `adw`) are the aliases the gtk4-rs examples use throughout.
     use gtk::prelude::*;
+    use gtk4 as gtk;
+    use libadwaita as adw;
 
     /// Initialize GTK and the libadwaita stylesheet.
     ///
@@ -329,7 +333,7 @@ mod gtk_surfaces {
     pub fn layer_shell_available() -> bool {
         #[cfg(feature = "layer-shell")]
         {
-            gtk4_layer_shell::is_layer_shell_supported()
+            gtk4_layer_shell::is_supported()
         }
         #[cfg(not(feature = "layer-shell"))]
         {
@@ -465,7 +469,9 @@ mod gtk_surfaces {
                 ),
             };
             let provider = gtk::CssProvider::new();
-            provider.load_from_string(&css);
+            // `load_from_data` exists in every GTK 4.x (Ubuntu 24.04 ships
+            // 4.14; Debian 12 ships 4.6); `load_from_string` needs GTK ≥ 4.12.
+            provider.load_from_data(&css);
             self.window
                 .style_context()
                 .add_provider(&provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
