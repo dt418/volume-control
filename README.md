@@ -63,26 +63,59 @@ Requirements: Rust (stable) + a C toolchain:
   scripts\win-build.bat test
   ```
 
-- **macOS / Linux**: not yet implemented — the binary currently falls back to
-  a CLI volume utility (`volumectl get` / `set <0-100>`). The architecture
-  (`AudioBackend` / hotkey traits) is ready for native backends:
-  CoreAudio on macOS, PulseAudio/PipeWire on Linux. The shared adaptive UI
-  contract and compile-safe renderer seams exist, but the native AppKit and
-  GTK/libadwaita renderers are follow-on work — they are **not** implemented
-  and nothing on macOS/Linux is verified in this plan.
+- **macOS**: Rust (stable) + Xcode command-line tools:
+
+  ```bash
+  cargo build
+  cargo test    # includes the AppKit renderer smoke tests
+  ```
+
+- **Ubuntu 24.04** (or Debian 12+): Rust (stable) + GTK4/libadwaita dev
+  packages. Without them the binary builds as the CLI fallback
+  (`volumectl get` / `set <0-100>`); with them the native renderer builds:
+
+  ```bash
+  sudo apt-get install libgtk-4-dev libadwaita-1-dev libpulse-dev xvfb
+  cargo build                                    # CLI fallback
+  cargo build --features gtk-renderer            # native GTK4 surfaces
+  cargo build --features gtk-renderer,layer-shell  # + Wayland layer-shell overlay/mixer
+  xvfb-run -a cargo test --features gtk-renderer # renderer smoke tests
+  ```
+
+  The Wayland layer-shell path also needs `libgtk-4-layer-shell-dev`
+  (packaged on Ubuntu 24.04); without it surfaces fall back to X11-compatible
+  borderless windows.
 
 ## Platform status
 
-| Feature          | Windows | macOS | Linux |
-|------------------|:-------:|:-----:|:-----:|
-| Volume control   | ✅ WASAPI | 🔜 CoreAudio | 🔜 PulseAudio/PipeWire |
-| Global hotkeys   | ✅ RegisterHotKey | 🔜 | 🔜 |
-| Overlay          | ✅ | 🔜 | 🔜 |
-| Mixer            | ✅ | 🔜 | 🔜 |
-| Settings window  | ✅ | 🔜 | 🔜 |
-| System tray      | ✅ tray-icon | 🔜 | 🔜 |
-| Live config      | ✅ | — | — |
-| Adaptive UI renderer | ✅ native Win32 | 🔜 AppKit (seam only) | 🔜 GTK/libadwaita (seam only) |
+| Feature                | Windows | macOS | Linux |
+|------------------------|:-------:|:-----:|:-----:|
+| Volume control         | ✅ WASAPI | 🔜 CoreAudio | 🔜 PulseAudio/PipeWire |
+| Global hotkeys         | ✅ RegisterHotKey | 🔜 | 🔜 |
+| Overlay                | ✅ | 🔜 | 🔜 |
+| Mixer                  | ✅ | 🔜 | 🔜 |
+| Settings window        | ✅ | 🔜 | 🔜 |
+| System tray            | ✅ tray-icon | 🔜 | 🔜 |
+| Live config            | ✅ | — | — |
+| Adaptive UI renderer   | ✅ native Win32 | ✅ AppKit (surfaces + smoke-tested) | ✅ GTK4/libadwaita (surfaces, CI-tested under Xvfb) |
+
+The macOS and Linux renderers implement the same Signal Glass surface
+contract as Windows (placement, material ladder, motion policy, §11.2
+accessibility vocabulary) behind the shared `NativeRenderer` bridge; their
+host wiring (hotkeys, audio, tray) is follow-on work.
+
+## CI and releases
+
+GitHub Actions (`.github/workflows/`) verifies every push/PR:
+
+- **Windows** — build, full test suite, release artifact validation.
+- **macOS** — build and tests including the AppKit renderer smoke tests.
+- **Ubuntu 24.04** — CLI fallback build/test, GTK4/libadwaita build and
+  renderer smoke tests under Xvfb, and the Wayland layer-shell build.
+
+Pushing a `v*` tag builds release binaries on all three platforms and
+publishes a GitHub release with versioned archives and `SHA256SUMS.txt`
+(`scripts/package.sh`).
 
 ## Architecture
 

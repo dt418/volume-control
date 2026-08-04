@@ -14,14 +14,13 @@ fn main() {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn main() {
+fn main() -> std::process::ExitCode {
     volumectl_lib::init_logging();
-    let code = match volumectl_lib::cli::run() {
+    match volumectl_lib::cli::run() {
         Ok(code) => code,
         Err(e) => {
             eprintln!("volumectl: {e}");
-            std::process::exit(1);
+            std::process::ExitCode::FAILURE
         }
-    };
-    std::process::exit(code.code().unwrap_or(0) as i32);
+    }
 }

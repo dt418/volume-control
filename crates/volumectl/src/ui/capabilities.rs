@@ -5,7 +5,7 @@
 //! material via [`resolve_material`]; this module contains no platform
 //! imports and is fully deterministic given the capabilities.
 
-use crate::ui::model::MaterialMode;
+use crate::ui::model::{MaterialMode, MotionMode};
 use crate::ui::surface::WorkArea;
 
 /// Capabilities of the current display session, as detected by the host.
@@ -86,6 +86,24 @@ pub fn resolve_material(requested: MaterialMode, caps: &UiCapabilities) -> Resol
             }
         }
         MaterialMode::Opaque => ResolvedMaterial::Opaque,
+    }
+}
+
+/// Resolve the requested motion mode to what the display session honors.
+///
+/// A system preference for reduced motion (`caps.reduced_motion`, e.g. the
+/// Windows "Animation effects" toggle) downgrades [`MotionMode::Full`] to
+/// [`MotionMode::Reduced`] — the 120ms opacity-only variant — because the
+/// full mode's 4px translation is exactly the kind of movement reduced motion
+/// removes. An explicit [`MotionMode::Reduced`] request is preserved as-is,
+/// and [`MotionMode::Disabled`] always stays disabled: presentation is
+/// immediate regardless of the system preference, and no capability check can
+/// re-enable animation a user turned off.
+pub fn resolve_motion(requested: MotionMode, caps: &UiCapabilities) -> MotionMode {
+    match requested {
+        MotionMode::Full if caps.reduced_motion => MotionMode::Reduced,
+        MotionMode::Full => MotionMode::Full,
+        MotionMode::Reduced | MotionMode::Disabled => requested,
     }
 }
 
@@ -187,5 +205,57 @@ mod tests {
         assert!(!ResolvedMaterial::Opaque.is_translucent());
         assert!(ResolvedMaterial::Blurred.is_translucent());
         assert!(ResolvedMaterial::Translucent.is_translucent());
+    }
+
+    // --- motion resolution -------------------------------------------------------
+
+    fn motion_caps(reduced_motion: bool) -> UiCapabilities {
+        UiCapabilities {
+            compositor: true,
+            blur: true,
+            high_contrast: false,
+            reduced_motion,
+            dpi_scale: 1.0,
+            work_area: WorkArea::new(0, 0, 2560, 1400),
+        }
+    }
+
+    #[test]
+    fn full_motion_downgrades_to_reduced_when_system_prefers_reduced() {
+        // The system "Animation effects" toggle removes the 4px translation of
+        // full motion, leaving the 120ms opacity-only reduced variant.
+        assert_eq!(
+            resolve_motion(MotionMode::Full, &motion_caps(true)),
+            MotionMode::Reduced
+        );
+        assert_eq!(
+            resolve_motion(MotionMode::Full, &motion_caps(false)),
+            MotionMode::Full
+        );
+    }
+
+    #[test]
+    fn reduced_motion_is_preserved_regardless_of_capabilities() {
+        assert_eq!(
+            resolve_motion(MotionMode::Reduced, &motion_caps(false)),
+            MotionMode::Reduced
+        );
+        assert_eq!(
+            resolve_motion(MotionMode::Reduced, &motion_caps(true)),
+            MotionMode::Reduced
+        );
+    }
+
+    #[test]
+    fn disabled_motion_stays_disabled_even_with_reduced_motion_preference() {
+        // A user who disabled animation entirely never gets re-enabled by the
+        // system preference; immediate presentation is the deterministic end
+        // state for every capability combination.
+        for reduced in [false, true] {
+            assert_eq!(
+                resolve_motion(MotionMode::Disabled, &motion_caps(reduced)),
+                MotionMode::Disabled
+            );
+        }
     }
 }

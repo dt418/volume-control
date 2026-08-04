@@ -8,6 +8,16 @@
 
 **Tech Stack:** Rust 2021, Cargo workspace, `windows-sys`, Win32/GDI/DWM/common controls, WASAPI, `tray-icon`, `muda`, Serde/JSON, native AppKit/CoreAudio and GTK/libadwaita seams for later phases.
 
+## Status (2026-08-04) — fully executed
+
+All 14 tasks completed on 2026-08-03 (commits `021f745` → `ce5fff1`,
+`66079df`, `e917b39`), committed directly to master. Evidence of record:
+`claude-progress.md` Session 003–004 (94/94 tests, live Windows matrix) and
+`feature_list.json` vol-011. The UI direction was then superseded by the
+Signal Glass production design (docs/superpowers/specs/
+2026-08-03-signal-glass-production-ui-design.md), whose plan executed the
+Windows redesigns, native macOS/Linux renderers, CI, and release packaging.
+
 ## Global Constraints
 
 - Windows-only code remains behind `#[cfg(target_os = "windows")]`.
@@ -45,141 +55,141 @@
 
 ## Task 0: Establish baseline
 
-- [ ] Confirm repository root, read `claude-progress.md`, `feature_list.json`, and `git log --oneline -5`.
-- [ ] Run `./scripts/win-build.bat build` and `./scripts/win-build.bat test`.
-- [ ] Record baseline failures before implementation; do not overwrite unrelated changes.
+- [x] Confirm repository root, read `claude-progress.md`, `feature_list.json`, and `git log --oneline -5`.
+- [x] Run `./scripts/win-build.bat build` and `./scripts/win-build.bat test`.
+- [x] Record baseline failures before implementation; do not overwrite unrelated changes.
 
 ## Task 1: Shared UI state and action contract
 
 **Files:** create `ui/mod.rs`, `ui/model.rs`; modify `lib.rs`.
 
-- [ ] Add platform-neutral `SurfaceId`, `ThemeMode`, `MaterialMode`, `MotionMode`, `SurfaceVisibility`, `AppState`, `UiStatus`, and `AppAction`.
-- [ ] Include confirmed volume/mute/device state, surface visibility, appearance preferences, and host-directed actions for volume, mute, reset, surfaces, config apply/cancel/reset, appearance, config location, blacklist, and exit.
-- [ ] Add constructors, surface visibility helpers, normalization at action boundaries, and model-only unit tests.
-- [ ] Run `cargo test -p volumectl`; commit `feat: add shared UI state and action contract`.
+- [x] Add platform-neutral `SurfaceId`, `ThemeMode`, `MaterialMode`, `MotionMode`, `SurfaceVisibility`, `AppState`, `UiStatus`, and `AppAction`.
+- [x] Include confirmed volume/mute/device state, surface visibility, appearance preferences, and host-directed actions for volume, mute, reset, surfaces, config apply/cancel/reset, appearance, config location, blacklist, and exit.
+- [x] Add constructors, surface visibility helpers, normalization at action boundaries, and model-only unit tests.
+- [x] Run `cargo test -p volumectl`; commit `feat: add shared UI state and action contract`.
 
 ## Task 2: Configuration appearance preferences and validation
 
 **Files:** modify `config.rs`, `ui/model.rs`; add config tests.
 
-- [ ] Add serde-defaulted `AppearanceConfig` containing System/Light/Dark, Auto/Translucent/Opaque, Full/Reduced/Disabled, and System/Blue/Green/Purple/Orange accent choices.
-- [ ] Preserve old JSON compatibility and existing bounds.
-- [ ] Expose normalization and strict field-specific validation; add `save_validated` that validates, normalizes, persists, and returns the saved config.
-- [ ] Preserve stable mtime reload behavior and add compatibility/invalid-config tests.
-- [ ] Run focused config tests; commit `feat: add persisted adaptive UI preferences`.
+- [x] Add serde-defaulted `AppearanceConfig` containing System/Light/Dark, Auto/Translucent/Opaque, Full/Reduced/Disabled, and System/Blue/Green/Purple/Orange accent choices.
+- [x] Preserve old JSON compatibility and existing bounds.
+- [x] Expose normalization and strict field-specific validation; add `save_validated` that validates, normalizes, persists, and returns the saved config.
+- [x] Preserve stable mtime reload behavior and add compatibility/invalid-config tests.
+- [x] Run focused config tests; commit `feat: add persisted adaptive UI preferences`.
 
 ## Task 3: Shared design tokens
 
 **Files:** create `ui/theme.rs`; modify `ui/mod.rs`.
 
-- [ ] Add `Rgba`, `ThemeTokens`, spacing/radius/animation tokens, typography roles, hit target, focus/error, volume threshold, surface, border, and elevation tokens.
-- [ ] Implement light/dark/high-contrast token selection and accent selection.
-- [ ] Ensure high contrast uses opaque surfaces; add palette tests.
-- [ ] Run focused theme tests; commit `feat: add adaptive UI design tokens`.
+- [x] Add `Rgba`, `ThemeTokens`, spacing/radius/animation tokens, typography roles, hit target, focus/error, volume threshold, surface, border, and elevation tokens.
+- [x] Implement light/dark/high-contrast token selection and accent selection.
+- [x] Ensure high contrast uses opaque surfaces; add palette tests.
+- [x] Run focused theme tests; commit `feat: add adaptive UI design tokens`.
 
 ## Task 4: Capability fallback and placement contracts
 
 **Files:** create `ui/capabilities.rs`, `ui/surface.rs`; modify `ui/mod.rs`.
 
-- [ ] Add `WorkArea`, `SurfaceSize`, `SurfaceRect`, `UiCapabilities`, `ResolvedMaterial`, fallback resolution, and placement functions.
-- [ ] Implement fallback order: blurred/translucent, translucent, opaque, with high contrast forcing opaque.
-- [ ] Place against monitor work areas, including negative-origin monitors; preserve 16px mixer/overlay gap.
-- [ ] Add tests covering known 2560x1400 geometry and material resolution.
-- [ ] Run focused capability tests; commit `feat: add UI capabilities and monitor placement`.
+- [x] Add `WorkArea`, `SurfaceSize`, `SurfaceRect`, `UiCapabilities`, `ResolvedMaterial`, fallback resolution, and placement functions.
+- [x] Implement fallback order: blurred/translucent, translucent, opaque, with high contrast forcing opaque.
+- [x] Place against monitor work areas, including negative-origin monitors; preserve 16px mixer/overlay gap.
+- [x] Add tests covering known 2560x1400 geometry and material resolution.
+- [x] Run focused capability tests; commit `feat: add UI capabilities and monitor placement`.
 
 ## Task 5: Windows primitives
 
 **Files:** create `ui/platform/mod.rs`, `ui/platform/windows/mod.rs`, `ui/platform/windows/primitives.rs`; modify `Cargo.toml`, `lib.rs`.
 
-- [ ] Move registry theme lookup into shared Windows helper.
-- [ ] Detect DWM/composition, high contrast, reduced motion, DPI, and monitor work area using verified `windows-sys` APIs.
-- [ ] Add `colorref`, `scale_px`, `detect_capabilities`, `system_theme`, `work_area_for`, and surface styling helpers.
-- [ ] Keep all Windows imports gated; add only necessary feature flags.
-- [ ] Run Windows build/test; commit `feat: add Windows adaptive rendering primitives`.
+- [x] Move registry theme lookup into shared Windows helper.
+- [x] Detect DWM/composition, high contrast, reduced motion, DPI, and monitor work area using verified `windows-sys` APIs.
+- [x] Add `colorref`, `scale_px`, `detect_capabilities`, `system_theme`, `work_area_for`, and surface styling helpers.
+- [x] Keep all Windows imports gated; add only necessary feature flags.
+- [x] Run Windows build/test; commit `feat: add Windows adaptive rendering primitives`.
 
 ## Task 6: Host state/action bridge
 
 **Files:** modify `app.rs`, `ui/model.rs`, `mixer.rs`, `tray.rs`.
 
-- [ ] Add `AppState` and capabilities to `AppContext`.
-- [ ] Centralize confirmed-state publication so `last_state`, shared state, overlay, tray, mixer, Settings, and Help synchronize together.
-- [ ] Convert mixer messages, hotkeys, and tray commands into `AppAction` at the host boundary while keeping audio/config/hotkey mutation in the host.
-- [ ] Preserve blacklist/beep behavior and add action mapping tests.
-- [ ] Run Windows build/test; commit `refactor: centralize confirmed UI state and actions`.
+- [x] Add `AppState` and capabilities to `AppContext`.
+- [x] Centralize confirmed-state publication so `last_state`, shared state, overlay, tray, mixer, Settings, and Help synchronize together.
+- [x] Convert mixer messages, hotkeys, and tray commands into `AppAction` at the host boundary while keeping audio/config/hotkey mutation in the host.
+- [x] Preserve blacklist/beep behavior and add action mapping tests.
+- [x] Run Windows build/test; commit `refactor: centralize confirmed UI state and actions`.
 
 ## Task 7: Adaptive overlay
 
 **Files:** modify `overlay.rs`, `app.rs`, Windows primitives.
 
-- [ ] Replace local colors with shared tokens.
-- [ ] Preserve bottom-right, click-through, topmost/no-activate, threshold bar, toast, and auto-hide behavior.
-- [ ] Use monitor work areas and shared placement; apply material and motion fallback policy.
-- [ ] Keep geometry constants as the single source consumed by mixer placement.
-- [ ] Run Windows build/test; commit `refactor: apply adaptive tokens to volume overlay`.
+- [x] Replace local colors with shared tokens.
+- [x] Preserve bottom-right, click-through, topmost/no-activate, threshold bar, toast, and auto-hide behavior.
+- [x] Use monitor work areas and shared placement; apply material and motion fallback policy.
+- [x] Keep geometry constants as the single source consumed by mixer placement.
+- [x] Run Windows build/test; commit `refactor: apply adaptive tokens to volume overlay`.
 
 ## Task 8: Adaptive mixer
 
 **Files:** modify `mixer.rs`, `app.rs`, Windows primitives.
 
-- [ ] Replace local theme with shared tokens and Windows helpers.
-- [ ] Preserve canonical trackbar IDs/range, no feedback loop, synchronization, visible `×` close button, and host routing.
-- [ ] Use work-area placement and shared mixer-above-overlay math.
-- [ ] Add Tab/Enter/Space/Escape behavior and visible focus cues.
-- [ ] Run Windows build/test; commit `refactor: apply adaptive Fluent styling to mixer`.
+- [x] Replace local theme with shared tokens and Windows helpers.
+- [x] Preserve canonical trackbar IDs/range, no feedback loop, synchronization, visible `×` close button, and host routing.
+- [x] Use work-area placement and shared mixer-above-overlay math.
+- [x] Add Tab/Enter/Space/Escape behavior and visible focus cues.
+- [x] Run Windows build/test; commit `refactor: apply adaptive Fluent styling to mixer`.
 
 ## Task 9: Settings draft state machine
 
 **Files:** create `ui/settings.rs`; modify `ui/mod.rs`.
 
-- [ ] Add `SettingsDraft { original, current, dirty, error }` with `new`, `replace`, `reset`, `validate`, `commit`, and `cancel`.
-- [ ] Keep edits in memory until host persistence succeeds; add cancel/reset/validation tests.
-- [ ] Run focused Settings tests; commit `feat: add Settings draft and apply state machine`.
+- [x] Add `SettingsDraft { original, current, dirty, error }` with `new`, `replace`, `reset`, `validate`, `commit`, and `cancel`.
+- [x] Keep edits in memory until host persistence succeeds; add cancel/reset/validation tests.
+- [x] Run focused Settings tests; commit `feat: add Settings draft and apply state machine`.
 
 ## Task 10: Native Windows Settings
 
 **Files:** create `settings.rs`; modify `app.rs`, `lib.rs`, Windows primitives.
 
-- [ ] Build a modeless native Win32 Settings window using standard controls only.
-- [ ] Expose General, Hotkeys/conflicts, Appearance, Blacklist, Feedback, and Storage/actions sections.
-- [ ] Add controls for all existing config fields and appearance preferences, Apply/Save and Close/Cancel/Reset/Open Config actions.
-- [ ] Read controls into a draft; keep invalid drafts visible; persist only after validation succeeds; preserve edits on write failure.
-- [ ] Re-register hotkeys only after a successful modifier change; route all mutation through host; use shared theme/accessibility tokens.
-- [ ] Run Windows build/test; commit `feat: add native Windows Settings window`.
+- [x] Build a modeless native Win32 Settings window using standard controls only.
+- [x] Expose General, Hotkeys/conflicts, Appearance, Blacklist, Feedback, and Storage/actions sections.
+- [x] Add controls for all existing config fields and appearance preferences, Apply/Save and Close/Cancel/Reset/Open Config actions.
+- [x] Read controls into a draft; keep invalid drafts visible; persist only after validation succeeds; preserve edits on write failure.
+- [x] Re-register hotkeys only after a successful modifier change; route all mutation through host; use shared theme/accessibility tokens.
+- [x] Run Windows build/test; commit `feat: add native Windows Settings window`.
 
 ## Task 11: Hotkey status, Help, and Tray unification
 
 **Files:** modify `hotkeys_win32.rs`, `help.rs`, `tray.rs`, `app.rs`.
 
-- [ ] Expose per-action registration status and Win32 error codes without changing conflict policy.
-- [ ] Add Tray Settings command and route Mixer, Settings, Help, mute, reset, reload, blacklist, and Exit through host actions.
-- [ ] Refactor Help to shared light/dark/high-contrast tokens and add Settings affordance.
-- [ ] Run Windows build/test; commit `feat: expose hotkey status and unify surface actions`.
+- [x] Expose per-action registration status and Win32 error codes without changing conflict policy.
+- [x] Add Tray Settings command and route Mixer, Settings, Help, mute, reset, reload, blacklist, and Exit through host actions.
+- [x] Refactor Help to shared light/dark/high-contrast tokens and add Settings affordance.
+- [x] Run Windows build/test; commit `feat: expose hotkey status and unify surface actions`.
 
 ## Task 12: macOS/Linux renderer seams
 
 **Files:** create target-gated `ui/platform/macos/mod.rs` and `ui/platform/linux/mod.rs`; modify platform exports and bilingual README files.
 
-- [ ] Define a renderer boundary consuming only shared model/tokens/capabilities; do not import Windows APIs into shared code.
-- [ ] Keep current non-Windows CLI fallback and avoid adding unneeded runtime dependencies.
-- [ ] Document Windows as the verified renderer and macOS/Linux as follow-on native AppKit/CoreAudio and GTK/libadwaita/PulseAudio/PipeWire work.
-- [ ] Run available non-Windows compile check honestly; rerun Windows build/test; commit `feat: add macOS and Linux UI renderer seams`.
+- [x] Define a renderer boundary consuming only shared model/tokens/capabilities; do not import Windows APIs into shared code.
+- [x] Keep current non-Windows CLI fallback and avoid adding unneeded runtime dependencies.
+- [x] Document Windows as the verified renderer and macOS/Linux as follow-on native AppKit/CoreAudio and GTK/libadwaita/PulseAudio/PipeWire work.
+- [x] Run available non-Windows compile check honestly; rerun Windows build/test; commit `feat: add macOS and Linux UI renderer seams`.
 
 ## Task 13: Windows verification
 
-- [ ] Run fresh Windows build and test.
-- [ ] Verify light/dark/high-contrast/reduced-motion behavior, keyboard-only navigation, 100/125/150% DPI, primary/secondary work areas, taskbar changes, material fallback, and mixer/overlay separation.
-- [ ] Verify slider/readback convergence, external sync, close/toggle from button/hotkey/tray/Escape, Settings Apply/Cancel/Reset/error behavior, and resource/message-loop stability.
-- [ ] Record fresh evidence in `claude-progress.md`; do not reuse stale evidence for changed code.
+- [x] Run fresh Windows build and test.
+- [x] Verify light/dark/high-contrast/reduced-motion behavior, keyboard-only navigation, 100/125/150% DPI, primary/secondary work areas, taskbar changes, material fallback, and mixer/overlay separation.
+- [x] Verify slider/readback convergence, external sync, close/toggle from button/hotkey/tray/Escape, Settings Apply/Cancel/Reset/error behavior, and resource/message-loop stability.
+- [x] Record fresh evidence in `claude-progress.md`; do not reuse stale evidence for changed code.
 
 ## Task 14: Tracking and final repository verification
 
 **Files:** modify `feature_list.json`, `claude-progress.md`, and `session-handoff.md` if needed.
 
-- [ ] Add the adaptive UI feature as `in_progress`; only set `passing` after all required checks pass.
-- [ ] Record macOS/Linux as unverified follow-on work.
-- [ ] Run `cargo fmt --all -- --check`, Windows build/test, `git diff --check`, and `git status --short`.
-- [ ] Ensure `.superpowers/`, runtime config, and unrelated files are not staged.
-- [ ] Commit the verified milestone and leave a clean restart path.
+- [x] Add the adaptive UI feature as `in_progress`; only set `passing` after all required checks pass.
+- [x] Record macOS/Linux as unverified follow-on work.
+- [x] Run `cargo fmt --all -- --check`, Windows build/test, `git diff --check`, and `git status --short`.
+- [x] Ensure `.superpowers/`, runtime config, and unrelated files are not staged.
+- [x] Commit the verified milestone and leave a clean restart path.
 
 ## Follow-on plans
 

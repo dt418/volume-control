@@ -548,6 +548,11 @@ fn publish_confirmed_state(ctx: &mut AppContext, show_overlay: bool) {
     }
     ctx.tray.set_volume(&st);
     if ctx.mixer.is_open() {
+        // The rail fill honours the user's colour-band boundaries; they
+        // travel on their own seam so the mixer's sync/toggle signatures
+        // stay unchanged (the overlay receives them per-show via config).
+        ctx.mixer
+            .set_thresholds(ctx.config.color_thresholds.clone());
         ctx.mixer.sync(&st, &mixer_appearance(&*ctx));
     }
     if ctx.settings.is_open() {
@@ -573,7 +578,6 @@ fn tray_command_to_action(cmd: TrayCommand) -> AppAction {
         C::Settings => AppAction::ToggleSurface(SurfaceId::Settings),
         C::EditConfig => AppAction::OpenConfigLocation,
         C::ReloadConfig => AppAction::ReloadConfig,
-        C::ApplyBlacklist => AppAction::ApplyRecommendedBlacklist,
         C::Exit => AppAction::Exit,
     }
 }
@@ -905,6 +909,9 @@ mod tests {
     #[test]
     fn every_tray_command_maps_to_intended_action() {
         use TrayCommand as C;
+        // Together with `tray_commands_bypass_the_blacklist_gate` below, every
+        // remaining `TrayCommand` variant is enumerated (8/8), so a separate
+        // exhaustiveness test would be redundant.
         assert_eq!(tray_command_to_action(C::ToggleMute), AppAction::ToggleMute);
         assert_eq!(tray_command_to_action(C::Reset50), AppAction::ResetVolume);
         assert_eq!(
@@ -927,10 +934,6 @@ mod tests {
             tray_command_to_action(C::ReloadConfig),
             AppAction::ReloadConfig
         );
-        assert_eq!(
-            tray_command_to_action(C::ApplyBlacklist),
-            AppAction::ApplyRecommendedBlacklist
-        );
         assert_eq!(tray_command_to_action(C::Exit), AppAction::Exit);
     }
 
@@ -947,7 +950,6 @@ mod tests {
             C::Settings,
             C::EditConfig,
             C::ReloadConfig,
-            C::ApplyBlacklist,
             C::Exit,
         ] {
             let action = tray_command_to_action(cmd);

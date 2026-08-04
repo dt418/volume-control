@@ -1,0 +1,91 @@
+# Release packaging for VolumeControl.
+#
+# Triggered by a `v*` tag. Each platform builds its release binary and packs
+# it into `dist/` via scripts/package.sh (versioned name + SHA256SUMS.txt);
+# a final job assembles the GitHub release from every artifact.
+#
+# Platform notes:
+# - Windows: portable zip (native installer arrives with a follow-on
+#   packaging task; the artifact is the signed-ready exe + docs).
+# - macOS: zip of the release binary.
+# - Ubuntu 24.04: tar.gz of the release binary built with the GTK4/
+#   libadwaita renderer, plus the Wayland layer-shell feature when the
+#   system library is installed.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Package (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows, macos, ubuntu]
+        include:
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-15
+          - platform: ubuntu
+            os: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install GTK4/libadwaita (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev zip
+          sudo apt-get install -y libgtk-4-layer-shell-dev \
+            || echo "::warning::gtk4-layer-shell unavailable; Linux build falls back to X11 surfaces"
+      - name: Build release binary
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            FEATURES="gtk-renderer"
+            if pkg-config --exists gtk4-layer-shell; then FEATURES="gtk-renderer,layer-shell"; fi
+            echo "Building with features: $FEATURES"
+            cargo build --release --features "$FEATURES"
+          else
+            cargo build --release
+          fi
+      - name: Package artifacts
+        shell: bash
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: bash scripts/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: dist/
+
+  release:
+    name: Create GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Generate checksums
+        run: |
+          cd dist
+          find . -type f | sort | while read -r f; do
+            if [ "${f##*.}" != "txt" ]; then sha256sum "$f"; fi
+          done | tee SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*/* --title "VolumeControl $GITHUB_REF_NAME" --generate-notes

@@ -1,7 +1,7 @@
 # Fluent Mixer and Native Settings Design
 
 **Date:** 2026-08-03
-**Status:** Draft for review
+**Status:** Superseded (2026-08-03) — folded into the Hybrid Adaptive design, then the Signal Glass production design
 **Scope:** Windows native UI improvements for the existing Rust VolumeControl app
 
 ## Goals
