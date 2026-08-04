@@ -12,8 +12,9 @@
 //!     semantics — while its chrome is suppressed, so the custom-drawn rail
 //!     (threshold fill + thumb/diamond marker) is the single visible volume
 //!     visualization and a painted mirror of the confirmed slider position;
-//!   - Mute / Unmute and Reset to 50% native buttons;
-//!   - a visible `×` close button that hides (not destroys) the flyout;
+//!   - Mute / Unmute and `Reset volume to 50 percent` native buttons;
+//!   - a visible `×` close button (UIA name `Close mixer`) that hides (not
+//!     destroys) the flyout;
 //!   - a two-layer focus ring (outer accent + inner contrast) around the
 //!     focused control.
 //!
@@ -36,19 +37,27 @@
 //! handler, which mutates audio and publishes confirmed state.
 
 use windows_sys::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, WPARAM},
-    Graphics::Gdi::{CreateSolidBrush, DeleteObject, InvalidateRect, ValidateRect, HBRUSH},
+    Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
+    Graphics::Gdi::{
+        CreateSolidBrush, DeleteObject, InvalidateRect, UpdateWindow, ValidateRect, HBRUSH,
+    },
     System::LibraryLoader::GetModuleHandleW,
-    UI::Controls::{InitCommonControlsEx, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX},
-    UI::Input::KeyboardAndMouse::{GetFocus, GetKeyState, SetFocus, VK_ESCAPE, VK_SHIFT, VK_TAB},
+    UI::Controls::{
+        InitCommonControlsEx, DRAWITEMSTRUCT, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX, WM_MOUSELEAVE,
+    },
+    UI::Input::KeyboardAndMouse::{
+        GetFocus, GetKeyState, SetFocus, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT, VK_ESCAPE,
+        VK_SHIFT, VK_TAB,
+    },
     UI::WindowsAndMessaging::{
-        CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetAncestor,
-        GetWindowLongPtrW, PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW,
-        SetWindowPos, SetWindowTextW, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GA_PARENT,
-        GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW,
-        SW_HIDE, WM_CLOSE, WM_COMMAND, WM_ERASEBKGND, WM_HSCROLL, WM_KEYDOWN, WM_KILLFOCUS,
-        WM_PAINT, WM_SETFOCUS, WM_SYSKEYDOWN, WM_USER, WNDCLASSW, WNDPROC, WS_CHILD,
-        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE,
+        CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetAncestor, GetCursorPos,
+        GetWindowLongPtrW, GetWindowRect, KillTimer, PostMessageW, RegisterClassW, SendMessageW,
+        SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, BN_CLICKED,
+        BS_OWNERDRAW, CW_USEDEFAULT, GA_PARENT, GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST,
+        SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, WM_CLOSE, WM_COMMAND, WM_DRAWITEM,
+        WM_ERASEBKGND, WM_HSCROLL, WM_KEYDOWN, WM_KILLFOCUS, WM_MOUSEMOVE, WM_PAINT, WM_SETFOCUS,
+        WM_SYSKEYDOWN, WM_TIMER, WM_USER, WNDCLASSW, WNDPROC, WS_CHILD, WS_EX_TOOLWINDOW,
+        WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE,
     },
 };
 
@@ -57,8 +66,8 @@ use crate::config::{ColorThresholds, Config};
 use crate::overlay::{OVERLAY_HEIGHT, OVERLAY_MARGIN_X, OVERLAY_MARGIN_Y, OVERLAY_WIDTH};
 use crate::ui::platform::windows::text::{TextAlign, TextLayout};
 use crate::ui::primitives::{
-    apply_backdrop, colorref, dpi_scale_for, theme_controls, work_area_for, DpiMetrics,
-    PaintCanvas, PointF, RectF,
+    apply_backdrop, colorref, dpi_scale_for, paint_close_button, theme_controls, work_area_for,
+    DpiMetrics, PaintCanvas, PointF, RectF,
 };
 use crate::ui::{
     place_mixer_above_overlay, rail_geometry, resolve_material, tokens_for, AccentMode,
@@ -86,6 +95,16 @@ const MUTED_DIAMOND_HALF_SIZE: f32 = 6.0;
 const ID_BTN_MUTE: usize = 1;
 const ID_BTN_RESET: usize = 2;
 const ID_BTN_CLOSE: usize = 3;
+
+/// One-shot timer ID for the deferred DWM backdrop re-apply after a show
+/// (see the comment in [`Mixer::toggle`]).
+const BACKDROP_TIMER_ID: usize = 1;
+/// Delay (ms) between showing the window and re-asserting the resolved
+/// backdrop: DWM applies its High-Contrast backdrop override asynchronously
+/// after the show — measured on Windows 11 24H2, backdrop writes are
+/// clobbered back to AUTO for roughly the first second after the show, and
+/// stick once the composition settles. 2000ms lands safely past that window.
+const BACKDROP_REAPPLY_MS: u32 = 2000;
 
 // Indexes into `MixerData::orig_procs`, kept in sync with the tab order
 // (slider -> mute -> reset -> close).
@@ -286,6 +305,10 @@ struct MixerData {
     /// the first `toggle`).
     dpi: f32,
     open: bool,
+    /// Pointer hover over the owner-drawn close button (the owner paints the
+    /// hover face in `WM_DRAWITEM`; tracked via `WM_MOUSEMOVE`/`WM_MOUSELEAVE`
+    /// in the subclass, like the native hover the button had before).
+    close_hover: bool,
 }
 
 impl MixerData {
@@ -305,6 +328,7 @@ impl MixerData {
             thresholds: Config::default().color_thresholds,
             dpi: 1.0,
             open: false,
+            close_hover: false,
         }
     }
 }
@@ -365,7 +389,10 @@ impl Mixer {
             let slider = CreateWindowExW(
                 0,
                 windows_sys::core::w!("msctls_trackbar32"),
-                windows_sys::core::w!("slider"),
+                // Spec §11.2: the UIA name of the trackbar is its window text;
+                // Narrator reads `slider, System output volume, 72 percent`
+                // from the name plus the native value pattern.
+                windows_sys::core::w!("System output volume"),
                 WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS | WS_TABSTOP,
                 layout.slider_rect.left as i32,
                 layout.slider_rect.top as i32,
@@ -394,7 +421,8 @@ impl Mixer {
             let reset_btn = CreateWindowExW(
                 0,
                 windows_sys::core::w!("Button"),
-                windows_sys::core::w!("Reset to 50%"),
+                // Spec §11.2: the reset button's UIA name (its window text).
+                windows_sys::core::w!("Reset volume to 50 percent"),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                 layout.reset_rect.left as i32,
                 layout.reset_rect.top as i32,
@@ -406,12 +434,16 @@ impl Mixer {
                 std::ptr::null(),
             );
             // A visible close affordance hides the flyout without changing
-            // the existing hotkey/tray toggle behavior.
+            // the existing hotkey/tray toggle behavior. Spec §11.2: the
+            // button is OWNER-DRAWN so its window text (the UIA name) can be
+            // `Close mixer` while the owner paints the approved `×` visual
+            // (see `mixer_wndproc`'s WM_DRAWITEM and
+            // [`crate::ui::primitives::paint_close_button`]).
             let close_btn = CreateWindowExW(
                 0,
                 windows_sys::core::w!("Button"),
-                windows_sys::core::w!("×"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                windows_sys::core::w!("Close mixer"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW as u32,
                 layout.close_rect.left as i32,
                 layout.close_rect.top as i32,
                 layout.close_rect.width() as i32,
@@ -424,7 +456,6 @@ impl Mixer {
             if slider == 0 || mute_btn == 0 || reset_btn == 0 || close_btn == 0 {
                 return Err("mixer child control failed".into());
             }
-            set_window_text(close_btn, "×");
 
             // Range 0–100, position 50.
             // TBM_SETRANGE packs MAKELONG(min, max) = (max << 16) | min in the
@@ -514,8 +545,51 @@ impl Mixer {
                     rect.height(),
                     SWP_NOACTIVATE | SWP_SHOWWINDOW,
                 );
+                // DWM re-asserts DWMSBT_AUTO when a window is shown while
+                // High Contrast is active — asynchronously, AFTER the show
+                // (observed: the reset lands after any immediate re-apply).
+                // Re-apply the resolved backdrop on a one-shot timer once the
+                // composition has settled, so the opaque painted surface
+                // stays visible on screen.
+                SetTimer(self.hwnd, BACKDROP_TIMER_ID, BACKDROP_REAPPLY_MS, None);
+                // While High Contrast is active, DWM fills the freshly shown
+                // surface with the forced AUTO backdrop, which marks the
+                // client clean — the system then skips the first WM_PAINT and
+                // the painted content never lands (live-verified: under HC
+                // the mixer showed only its native child controls; a
+                // probe-side invalidation did not register either). Force the
+                // first paint so the opaque fill always draws, over whatever
+                // backdrop DWM keeps.
+                log::debug!("mixer toggle: invalidating + updating");
+                InvalidateRect(self.hwnd, std::ptr::null(), 0);
+                UpdateWindow(self.hwnd);
                 d.open = true;
+                // Sync the owner-drawn close button's hover state with the
+                // pointer (the cursor may already be over the button when the
+                // flyout reappears; no WM_MOUSEMOVE fires until it moves).
+                Self::sync_close_hover(d);
             }
+        }
+    }
+
+    /// Whether the pointer currently sits inside the close button's rect —
+    /// the owner-drawn hover state for the just-shown window.
+    fn sync_close_hover(d: &mut MixerData) {
+        unsafe {
+            let mut cursor: POINT = std::mem::zeroed();
+            if GetCursorPos(&mut cursor) == 0 {
+                d.close_hover = false;
+                return;
+            }
+            let mut rc: RECT = std::mem::zeroed();
+            if GetWindowRect(d.close_btn, &mut rc) == 0 {
+                d.close_hover = false;
+                return;
+            }
+            d.close_hover = cursor.x >= rc.left
+                && cursor.x < rc.right
+                && cursor.y >= rc.top
+                && cursor.y < rc.bottom;
         }
     }
 
@@ -700,6 +774,35 @@ unsafe extern "system" fn mixer_child_wndproc(
     }
     let d = &*(GetWindowLongPtrW(parent, GWLP_USERDATA) as *const MixerData);
 
+    // Owner-drawn close button hover tracking: the owner paints the hover
+    // face, so the button must repaint when the pointer enters/leaves (the
+    // native hover the button had before owner-drawing). The window proc runs
+    // on the owning thread, so mutating the per-window state here is safe.
+    if hwnd == d.close_btn {
+        match msg {
+            WM_MOUSEMOVE => {
+                if !d.close_hover {
+                    (&mut *(GetWindowLongPtrW(parent, GWLP_USERDATA) as *mut MixerData))
+                        .close_hover = true;
+                    InvalidateRect(hwnd, std::ptr::null(), 0);
+                    let mut tme: TRACKMOUSEEVENT = std::mem::zeroed();
+                    tme.cbSize = std::mem::size_of::<TRACKMOUSEEVENT>() as u32;
+                    tme.dwFlags = TME_LEAVE;
+                    tme.hwndTrack = hwnd;
+                    TrackMouseEvent(&mut tme);
+                }
+            }
+            WM_MOUSELEAVE => {
+                if d.close_hover {
+                    (&mut *(GetWindowLongPtrW(parent, GWLP_USERDATA) as *mut MixerData))
+                        .close_hover = false;
+                    InvalidateRect(hwnd, std::ptr::null(), 0);
+                }
+            }
+            _ => {}
+        }
+    }
+
     // Native trackbar chrome suppression: swallow its paint (validating the
     // update region so no repaint storm) so the parent's painted rail stays
     // visible over the slider's band.
@@ -775,7 +878,20 @@ unsafe extern "system" fn mixer_wndproc(
             0
         }
         WM_ERASEBKGND => 1,
+        WM_DRAWITEM => {
+            // The owner-drawn close button (spec §11.2): its window text
+            // carries the UIA name `Close mixer` while this paints the `×`
+            // visual (system button face + glyph + hover/pressed/focus states
+            // via `paint_close_button`).
+            let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
+            if paint_close_button(lparam as *const DRAWITEMSTRUCT, d.close_hover) {
+                0
+            } else {
+                DefWindowProcW(hwnd, msg, wparam, lparam)
+            }
+        }
         WM_PAINT => {
+            log::debug!("mixer WM_PAINT received hwnd={hwnd:?}");
             // Paint through the resource-safe canvas (Task 3): it owns the
             // BeginPaint/EndPaint pair, selects ONE paint path per frame
             // (Direct2D when available, GDI otherwise), and deletes every
@@ -810,6 +926,16 @@ unsafe extern "system" fn mixer_wndproc(
             let d = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut MixerData);
             d.open = false;
             ShowWindow(hwnd, SW_HIDE);
+            0
+        }
+        // Deferred backdrop re-apply armed by `toggle` (see the comment
+        // there): DWM re-asserts DWMSBT_AUTO after a show while High Contrast
+        // is active, so the resolved backdrop is re-asserted once the
+        // composition has settled, keeping the opaque painted surface visible.
+        WM_TIMER if (wparam as usize) == BACKDROP_TIMER_ID => {
+            KillTimer(hwnd, BACKDROP_TIMER_ID);
+            let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
+            apply_backdrop(hwnd, d.appearance.material, d.appearance.tokens.is_dark);
             0
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
@@ -1006,7 +1132,7 @@ mod tests {
     use crate::ui::platform::windows::text::text_x_origin;
     use crate::ui::primitives::focus_ring_rects;
     use crate::ui::{MaterialMode, ThemeMode, WorkArea};
-    use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowTextW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowTextW, GWL_STYLE};
 
     fn caps(compositor: bool, high_contrast: bool) -> UiCapabilities {
         UiCapabilities {
@@ -1047,6 +1173,7 @@ mod tests {
             thresholds,
             dpi: 1.0,
             open: false,
+            close_hover: false,
         };
         paint_plan(&data, WIN_W as f32, WIN_H as f32)
     }
@@ -1363,7 +1490,7 @@ mod tests {
             mixer.sync(&normal, &a);
             assert_eq!(SendMessageW(d.slider, TBM_GETPOS, 0, 0), 42);
             assert_eq!(window_text(d.mute_btn), "Mute");
-            assert_eq!(window_text(d.reset_btn), "Reset to 50%");
+            assert_eq!(window_text(d.reset_btn), "Reset volume to 50 percent");
 
             let muted = VolumeState {
                 volume: 0.42,
@@ -1399,6 +1526,51 @@ mod tests {
                 GetFocus(),
                 d.slider,
                 "sync must not move focus after a state change"
+            );
+        }
+        drop(mixer);
+    }
+
+    #[test]
+    fn mixer_controls_expose_spec_section_11_2_accessibility_names() {
+        // The UIA name of a native control IS its window text, so the window
+        // text asserts the names Narrator reads: the trackbar's name plus the
+        // native value pattern yield `slider, System output volume, 72
+        // percent`; the buttons carry their spec names. The close button is
+        // OWNER-DRAWN (the × visual is painted by the owner) so its window
+        // text can be the required `Close mixer`.
+        let mixer = Mixer::new(0).expect("mixer window creates");
+        unsafe {
+            let d = &*(GetWindowLongPtrW(mixer.hwnd, GWLP_USERDATA) as *const MixerData);
+            assert_eq!(
+                window_text(d.slider),
+                "System output volume",
+                "trackbar name (spec §11.2)"
+            );
+            assert_eq!(
+                window_text(d.reset_btn),
+                "Reset volume to 50 percent",
+                "reset button name (spec §11.2)"
+            );
+            assert_eq!(
+                window_text(d.close_btn),
+                "Close mixer",
+                "close button name (spec §11.2)"
+            );
+            assert_eq!(window_text(d.mute_btn), "Mute");
+            // The close button must be owner-drawn: the window text carries
+            // the name while the owner paints the × visual.
+            let style = GetWindowLongPtrW(d.close_btn, GWL_STYLE);
+            assert_ne!(
+                style & BS_OWNERDRAW as isize,
+                0,
+                "close button must be BS_OWNERDRAW"
+            );
+            let slider_style = GetWindowLongPtrW(d.slider, GWL_STYLE);
+            assert_eq!(
+                slider_style & BS_OWNERDRAW as isize,
+                0,
+                "the slider is not a button and must stay native"
             );
         }
         drop(mixer);

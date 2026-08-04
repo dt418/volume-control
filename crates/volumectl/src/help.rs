@@ -52,12 +52,12 @@ use windows_sys::Win32::{
     },
     UI::WindowsAndMessaging::{
         CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetAncestor,
-        GetWindowLongPtrW, PostMessageW, RegisterClassW, SendMessageW, SetWindowLongPtrW,
-        SetWindowPos, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GA_PARENT, GWLP_USERDATA,
-        GWLP_WNDPROC, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE,
-        WM_CLOSE, WM_COMMAND, WM_ERASEBKGND, WM_KEYDOWN, WM_KILLFOCUS, WM_LBUTTONDOWN,
-        WM_MOUSEMOVE, WM_PAINT, WM_SETFOCUS, WM_SYSKEYDOWN, WM_USER, WNDCLASSW, WNDPROC, WS_CHILD,
-        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE,
+        GetWindowLongPtrW, KillTimer, PostMessageW, RegisterClassW, SendMessageW, SetTimer,
+        SetWindowLongPtrW, SetWindowPos, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GA_PARENT,
+        GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW,
+        SW_HIDE, WM_CLOSE, WM_COMMAND, WM_ERASEBKGND, WM_KEYDOWN, WM_KILLFOCUS, WM_LBUTTONDOWN,
+        WM_MOUSEMOVE, WM_PAINT, WM_SETFOCUS, WM_SYSKEYDOWN, WM_TIMER, WM_USER, WNDCLASSW, WNDPROC,
+        WS_CHILD, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE,
     },
 };
 
@@ -66,8 +66,9 @@ use crate::hotkeys::HotkeyAction;
 use crate::hotkeys_win32::{HotkeyRegResult, HotkeyRegStatus};
 use crate::ui::platform::windows::text::{measure_text_gdi, TextAlign, TextLayout};
 use crate::ui::primitives::{
-    dpi_scale_for, theme_controls, work_area_for, DpiMetrics, PaintCanvas, RectF,
+    apply_backdrop, dpi_scale_for, theme_controls, work_area_for, DpiMetrics, PaintCanvas, RectF,
 };
+use crate::ui::ResolvedMaterial;
 use crate::ui::{
     place_overlay, resolve_motion, tokens_for, AccentMode, MotionMode, Rgba, SurfaceSize, TextRole,
     ThemeMode, ThemeTokens, UiCapabilities,
@@ -90,6 +91,16 @@ const MARGIN_Y: i32 = 48;
 const ID_BTN_EDIT_CONFIG: usize = 1;
 const ID_BTN_SETTINGS: usize = 2;
 const ID_BTN_CLOSE: usize = 3;
+
+/// One-shot timer ID for the deferred DWM backdrop re-apply after a show
+/// (see the comment in [`Help::show`]).
+const BACKDROP_TIMER_ID: usize = 1;
+/// Delay (ms) between showing the window and re-asserting DWMSBT_NONE: DWM
+/// applies its High-Contrast backdrop override asynchronously after the
+/// show — measured on Windows 11 24H2, backdrop writes are clobbered back to
+/// AUTO for roughly the first second after the show, and stick once the
+/// composition settles. 2000ms lands safely past that window.
+const BACKDROP_REAPPLY_MS: u32 = 2000;
 const IDX_EDIT: usize = 0;
 const IDX_SETTINGS: usize = 1;
 const IDX_CLOSE: usize = 2;
@@ -679,6 +690,13 @@ impl Help {
                 rect.height(),
                 SWP_NOACTIVATE | SWP_SHOWWINDOW,
             );
+            // DWM re-asserts DWMSBT_AUTO when a window is shown while High
+            // Contrast is active — asynchronously, AFTER the show (observed:
+            // the reset lands after any immediate re-apply). The Help card is
+            // opaque in every mode, so re-assert DWMSBT_NONE on a one-shot
+            // timer once the composition has settled, keeping the painted
+            // surface visible on screen.
+            SetTimer(self.hwnd, BACKDROP_TIMER_ID, BACKDROP_REAPPLY_MS, None);
             d.open = true;
             InvalidateRect(self.hwnd, std::ptr::null(), 0);
         }
@@ -909,6 +927,16 @@ unsafe extern "system" fn help_wndproc(
         WM_CLOSE => {
             let d = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut HelpData);
             hide_help(hwnd, d);
+            0
+        }
+        // Deferred backdrop re-apply armed by `show` (see the comment there):
+        // DWM re-asserts DWMSBT_AUTO after a show while High Contrast is
+        // active, so DWMSBT_NONE is re-asserted once the composition has
+        // settled, keeping the opaque painted surface visible.
+        WM_TIMER if (wparam as usize) == BACKDROP_TIMER_ID => {
+            KillTimer(hwnd, BACKDROP_TIMER_ID);
+            let d = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut HelpData);
+            apply_backdrop(hwnd, ResolvedMaterial::Opaque, d.appearance.tokens.is_dark);
             0
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),

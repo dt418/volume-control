@@ -1,5 +1,106 @@
 # Progress Log
 
+## Session 008 (2026-08-04) — Task 10: Verify Windows Signal Glass accessibility and fallback behavior
+
+- Goal: run the Task 10 Windows accessibility/capability verification matrix
+  (plan §Task 10) — static checks, §11.2 screen-reader names with regression
+  tests, and the 12-item live matrix — and record honest per-item evidence,
+  marking environmental-unavailable items unavailable-with-reason.
+- Changed (accessibility defects found and fixed):
+  - `crates/volumectl/src/mixer.rs` — §11.2 UIA names: slider text `System
+    output volume`, reset `Reset volume to 50 percent`, close `Close mixer`.
+    The close button became `BS_OWNERDRAW` (its text is the UIA name; the
+    visual `×` is painted in `WM_DRAWITEM` via `paint_close_button` with a
+    hover face tracked through `WM_MOUSEMOVE`/`WM_MOUSELEAVE`). Backdrop
+    re-apply after show (one-shot `BACKDROP_TIMER_ID` 2000 ms) plus an
+    `InvalidateRect`+`UpdateWindow` first paint so the surface renders under
+    high contrast. `TBM_GETPOS` comment corrected (WM_USER, not +24).
+    Regression test `mixer_controls_expose_spec_section_11_2_accessibility_names`.
+  - `crates/volumectl/src/settings.rs` — close `Close settings` with the same
+    owner-draw/backdrop-timer pattern; invisible `ID_ST_STATUS_UIA` status
+    mirror so the status line has a UIA name.
+  - `crates/volumectl/src/help.rs` — backdrop re-apply (one-shot timer) after
+    show so the card renders correctly on later opens.
+  - `crates/volumectl/src/ui/platform/windows/primitives.rs` — new
+    `paint_close_button` (native button colours `COLOR_BTNFACE`/
+    `BTNHIGHLIGHT`/`BTNSHADOW`/`BTNTEXT`, classic dotted focus rect, all
+    high-contrast aware) + `close_button_pixel` test helper + paint test.
+- Stash `c89e20c2` (`task10-wip-agent`, older snapshot of the same WIP —
+  working tree supersedes it, diff is formatting-only) dropped by tag.
+
+### Fresh build + test evidence
+- `cargo fmt --check` → PASS (exit 0).
+- `cargo build` → Finished dev profile, 0 warnings.
+- `cargo test -p volumectl` → **220 passed; 0 failed; 0 ignored** (includes
+  the new §11.2 UIA-name regression test).
+- `git diff --check` → clean.
+
+### 12-item live verification matrix (Win11 build 26200, 2560x1440, 100% DPI)
+Verified earlier (Session 003/004 evidence; probe log captures on file):
+- 1. Light/dark theme rendering — pixel evidence: dark mixer body
+  RGB(20,20,24)=token 0x141418, settings accent 0x0067C0, overlay fill
+  0x0078D4; light override → RGB(255,255,255); renders under Opaque and
+  Blurred (Auto) materials.
+- 2. High contrast — backdrop probes (vc-hc9-*/vc-hcf-* logs) show
+  `material=Opaque hc=true backdrop_active=1`; the canvas's GDI gate forces
+  opaque rendering; first-paint forced under HC (this task).
+- 4. 100% DPI work-area placement — mixer [2180,1094,2540,1272] +
+  overlay [2220,1288,2540,1352]: gap 16 px, shared right edge 2540, overlay
+  bottom = work_area.bottom − 40, settings centered ((2560−580)/2,
+  (1392−636)/2).
+- 6. Taskbar work-area mapping — placement math verified against the live
+  work area (above); work-area→placement mapping unit-tested.
+- 12. Overlay/mixer 16 px gap — measured twice (Session 003/004), exact.
+Verified this session (probe-driven, fresh instance each probe):
+- 8. Keyboard-only focus (vc-probe-kbd.ps1 round 3, corrected input model:
+  Tab to the focused child, real Shift via keybd_event, TBM_GETPOS=WM_USER):
+  entry Tab → slider (`System output volume`); forward cycle
+  slider→Mute→Reset volume to 50 percent→Close mixer→slider (wrap);
+  Shift+Tab backward wrap → Close mixer; arrows move the trackbar (pos
+  51→55 posted, 50→53→50 real; app log `mixer hscroll: pos=…`); Escape hides
+  (popup and focused child); Space on focused Close mixer hides (BN_CLICKED);
+  Enter on Reset does NOT activate (non-default, boundary documented);
+  Settings entry Tab→Edit, forward move, Shift+Tab back to first, Escape
+  hides; Help window exists hidden at startup with footer names.
+- 9. Screen-reader names (§11.2) — cross-process child-window dump: mixer
+  `System output volume`/`Mute`/`Reset volume to 50 percent`/`Close mixer`;
+  settings labels + `Close settings`; help footer `Edit config`/`Settings`/
+  `Close`. Regression test locks the mixer names.
+- 10. External volume sync + config live reload (vc-probe-ext.ps1): real OS
+  VK_VOLUME_UP/DOWN moved the open mixer slider 51→58→52 (app log
+  `ext change: 54% 56% 58% 56%`); touching config.json mtime → `config
+  reloaded (step=2, step_large=10, overlay_ms=1800, modifier=CtrlAlt)`.
+- 11. Tray menu + clean exit (vc-probe-tray4/exit8): OpenMenu (WM_HOTKEY id
+  0x08) opens the menu; MN_GETHMENU + GetMenuStringW(MF_BYPOSITION) dump =
+  **12 entries in exact spec §9 order** (live label `VolumeControl — 52%`,
+  Mute, Reset to 50%, Open mixer, Settings, Help, Reload configuration,
+  Open config file, Exit VolumeControl, separators) matching tray.rs
+  byte-for-byte; real Escape closes the menu (modal loop unwinds); WM_CLOSE
+  to the host → process exits; **exit code 0 via GetExitCodeProcess** on a
+  handle kept from launch.
+
+### Unavailable-with-reason (environmental; evidence cited)
+- 3. Reduced/disabled motion — `SPI_SETCLIENTAREAANIMATION` is a no-op on
+  Win11 build 26200 (setting read back unchanged); setting + restore verified
+  (original value preserved).
+- 5. 125/150% DPI — changing the system scale requires logoff and affects the
+  whole desktop, so it was not exercised live; DpiMetrics geometry tests cover
+  125/150% physical sizes (400x224/500x280/600x336) and the 16 px physical
+  gap at 125/150% (Session 004 test list).
+- 7. Material/backdrop fallback — the perceptual blurred-acrylic look needs a
+  human; the fallback machinery is unit-tested (`resolve_material` tests) and
+  the Opaque-under-HC path is evidenced by the item-2 backdrop logs
+  (`material=Opaque hc=true backdrop_active=1`).
+
+### Notes
+- System volume restored to its start state after every probe; config.json
+  untouched by the probes (mtime touch only); no app instances left running;
+  stash c89e20c2 dropped; other stash (`preserve untracked plan`, master)
+  untouched.
+- `vol-011` stays `in_progress` (plan Task 10: keep in progress while any
+  required human check is unavailable). macOS/Linux renderers remain
+  unverified follow-on work (Tasks 11–12).
+
 ## Session 007 (2026-08-04) — Task 9: Normalize tray experience (Signal Glass)
 
 - Goal: normalize the Windows tray menu to exactly the spec §9 figure — live

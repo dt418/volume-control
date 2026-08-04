@@ -18,17 +18,19 @@ use windows_sys::Win32::{
         DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
     },
     Graphics::Gdi::{
-        GetDC, GetDeviceCaps, GetMonitorInfoW, MonitorFromWindow, ReleaseDC, LOGPIXELSX,
-        MONITORINFO, MONITOR_DEFAULTTONEAREST,
+        DrawFocusRect, GetDC, GetDeviceCaps, GetMonitorInfoW, GetSysColor, MonitorFromWindow,
+        ReleaseDC, COLOR_BTNFACE, COLOR_BTNHIGHLIGHT, COLOR_BTNSHADOW, COLOR_BTNTEXT,
+        DEFAULT_GUI_FONT, DT_VCENTER, HFONT, LOGPIXELSX, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     },
     System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
     UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW},
-    UI::Controls::SetWindowTheme,
+    UI::Controls::{SetWindowTheme, DRAWITEMSTRUCT, ODS_FOCUS, ODS_SELECTED, ODT_BUTTON},
     UI::HiDpi::{GetDpiForSystem, GetDpiForWindow},
     UI::WindowsAndMessaging::{
-        GetAncestor, GetSystemMetrics, GetWindowLongPtrW, SystemParametersInfoW, GA_PARENT,
-        GWL_EXSTYLE, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
-        SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, WS_EX_LAYERED,
+        GetAncestor, GetSystemMetrics, GetWindowLongPtrW, SendMessageW, SystemParametersInfoW,
+        GA_PARENT, GWL_EXSTYLE, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+        SM_YVIRTUALSCREEN, SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, WM_GETFONT,
+        WS_EX_LAYERED,
     },
 };
 
@@ -192,13 +194,14 @@ fn is_layered(hwnd: HWND) -> bool {
 fn backdrop_active(hwnd: HWND) -> bool {
     unsafe {
         let mut value: i32 = 0;
-        DwmGetWindowAttribute(
+        let hr = DwmGetWindowAttribute(
             hwnd,
             DWMWA_SYSTEMBACKDROP_TYPE as u32,
             &mut value as *mut i32 as *mut _,
             std::mem::size_of::<i32>() as u32,
-        ) == 0
-            && value != DWMSBT_NONE
+        );
+        log::debug!("backdrop_active hwnd={hwnd:?} hr=0x{hr:08X} value={value}");
+        hr == 0 && value != DWMSBT_NONE
     }
 }
 
@@ -218,7 +221,10 @@ fn backdrop_active(hwnd: HWND) -> bool {
 fn d2d_present_supported(hwnd: HWND) -> bool {
     let mut current = hwnd;
     while current != 0 {
-        if is_layered(current) || backdrop_active(current) {
+        let layered = is_layered(current);
+        let backdrop = backdrop_active(current);
+        log::debug!("d2d_support walk: current={current:?} layered={layered} backdrop={backdrop}");
+        if layered || backdrop {
             return false;
         }
         current = unsafe { GetAncestor(current, GA_PARENT) };
@@ -283,17 +289,27 @@ pub fn detect_capabilities(hwnd: HWND) -> UiCapabilities {
 /// and `false` when the renderer must paint an opaque/translucent fill itself
 /// (Windows 10, where the attribute is unsupported and the call fails).
 pub fn apply_backdrop(hwnd: HWND, material: ResolvedMaterial, dark: bool) -> bool {
-    let _ = set_dwm_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, i32::from(dark));
-    let _ = set_dwm_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND);
-    match material {
+    log::debug!(
+        "apply_backdrop hwnd={:?} material={:?} dark={} hc={}",
+        hwnd,
+        material,
+        dark,
+        high_contrast_enabled()
+    );
+    let rd = set_dwm_attr(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, i32::from(dark));
+    let rc = set_dwm_attr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND);
+    let (rb, active) = match material {
         ResolvedMaterial::Blurred => {
-            set_dwm_attr(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_TRANSIENTWINDOW).is_ok()
+            let r = set_dwm_attr(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_TRANSIENTWINDOW);
+            (r, r.is_ok())
         }
         ResolvedMaterial::Translucent | ResolvedMaterial::Opaque => {
-            let _ = set_dwm_attr(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_NONE);
-            false
+            let r = set_dwm_attr(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_NONE);
+            (r, false)
         }
-    }
+    };
+    log::debug!("  dark={rd:?} corners={rc:?} backdrop={rb:?}");
+    active
 }
 
 /// Apply the immersive theme to standard common controls.
@@ -316,6 +332,78 @@ pub fn theme_controls(controls: &[HWND], dark: bool) {
             }
         }
     }
+}
+
+/// Paint an owner-drawn `×` close button (spec §11.2 accessible-name pattern).
+///
+/// The button's window text carries the UIA name (`Close mixer`, `Close
+/// settings`, …) while the owner paints the visual `×` glyph — the native
+/// button look the surfaces previously used, reproduced with the same system
+/// colours the button class itself draws: the face is `COLOR_BTNFACE` (hover
+/// `COLOR_BTNHIGHLIGHT`, pressed `COLOR_BTNSHADOW`, all high-contrast aware),
+/// the glyph is `COLOR_BTNTEXT` in the button's own font, and the classic
+/// dotted focus rect is drawn while the button is focused (matching the
+/// native focus state the other buttons still paint).
+///
+/// Returns `true` when the item was a button and was painted.
+pub unsafe fn paint_close_button(dis: *const DRAWITEMSTRUCT, hovered: bool) -> bool {
+    if dis.is_null() {
+        return false;
+    }
+    let dis = &*dis;
+    if dis.CtlType != ODT_BUTTON {
+        return false;
+    }
+    let hdc = dis.hDC;
+    let mut rc = dis.rcItem;
+    // The glyph nudges down-right 1px while pressed, like the native button.
+    let pressed = dis.itemState & ODS_SELECTED != 0;
+    if pressed {
+        rc.left += 1;
+        rc.top += 1;
+    }
+
+    let face = if pressed {
+        GetSysColor(COLOR_BTNSHADOW)
+    } else if hovered {
+        GetSysColor(COLOR_BTNHIGHLIGHT)
+    } else {
+        GetSysColor(COLOR_BTNFACE)
+    };
+    let brush = CreateSolidBrush(face);
+    FillRect(hdc, &rc, brush);
+    DeleteObject(brush);
+
+    // The `×` glyph in the button's own font (the native button drew the same
+    // character with the same font when its window text was `×`).
+    let font = SendMessageW(dis.hwndItem, WM_GETFONT, 0, 0) as HFONT;
+    let font = if font != 0 {
+        font
+    } else {
+        GetStockObject(DEFAULT_GUI_FONT)
+    };
+    let old = SelectObject(hdc, font);
+    SetBkMode(hdc, TRANSPARENT as i32);
+    SetTextColor(hdc, GetSysColor(COLOR_BTNTEXT));
+    DrawTextW(
+        hdc,
+        windows_sys::core::w!("\u{00D7}"),
+        -1,
+        &mut rc,
+        DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
+    );
+    SelectObject(hdc, old);
+
+    // The native dotted focus rect (the parent's token ring surrounds it).
+    if dis.itemState & ODS_FOCUS != 0 {
+        let mut fr = dis.rcItem;
+        fr.left += 3;
+        fr.top += 3;
+        fr.right -= 3;
+        fr.bottom -= 3;
+        DrawFocusRect(hdc, &fr);
+    }
+    true
 }
 
 /// Best-effort `DwmSetWindowAttribute` wrapper for 4-byte attributes.
@@ -1050,8 +1138,12 @@ mod drawing_tests {
     use super::*;
     use crate::ui::model::{AccentMode, ThemeMode};
     use crate::ui::theme::{tokens_for, TypographyTokens};
-    use windows_sys::Win32::Graphics::Gdi::{GetCurrentObject, OBJ_FONT};
+    use windows_sys::Win32::Graphics::Gdi::{
+        CreateCompatibleDC, CreateDIBSection, DeleteDC, GetCurrentObject, GetPixel, BITMAPINFO,
+        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, OBJ_FONT,
+    };
     use windows_sys::Win32::System::Com::CoInitializeEx;
+    use windows_sys::Win32::UI::Controls::ODA_DRAWENTIRE;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassW, WNDCLASSW,
     };
@@ -1439,5 +1531,135 @@ mod drawing_tests {
         unsafe {
             DestroyWindow(hwnd);
         }
+    }
+
+    // ── owner-drawn close button (spec §11.2 name pattern) ─────────────────
+
+    /// Paint [`paint_close_button`] into a memory DC and return the pixel at
+    /// `(x, y)` of the 32x32 item.
+    fn close_button_pixel(state: u32, hovered: bool, x: i32, y: i32) -> u32 {
+        unsafe {
+            let dc = CreateCompatibleDC(0);
+            assert_ne!(dc, 0, "CreateCompatibleDC");
+            // A 32bpp DIBSection (the same surface the app's PaintCanvas uses)
+            // — GDI writes into driver-created DDBs are not reliably readable
+            // back through GetPixel on some 32bpp display drivers.
+            let mut bmi: BITMAPINFO = std::mem::zeroed();
+            bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+            bmi.bmiHeader.biWidth = 32;
+            bmi.bmiHeader.biHeight = -32;
+            bmi.bmiHeader.biPlanes = 1;
+            bmi.bmiHeader.biBitCount = 32;
+            bmi.bmiHeader.biCompression = BI_RGB;
+            let mut bits: *mut core::ffi::c_void = std::ptr::null_mut();
+            let bmp = CreateDIBSection(dc, &bmi, DIB_RGB_COLORS, &mut bits, 0, 0);
+            assert_ne!(bmp, 0, "CreateDIBSection");
+            let old = SelectObject(dc, bmp);
+            let dis = DRAWITEMSTRUCT {
+                CtlType: ODT_BUTTON,
+                CtlID: 3,
+                itemID: 0,
+                itemAction: ODA_DRAWENTIRE,
+                itemState: state,
+                hwndItem: 0,
+                hDC: dc,
+                rcItem: RECT {
+                    left: 0,
+                    top: 0,
+                    right: 32,
+                    bottom: 32,
+                },
+                itemData: 0,
+            };
+            let painted = paint_close_button(&dis, hovered);
+            assert!(painted, "ODT_BUTTON must be painted");
+            let px = GetPixel(dc, x, y);
+            SelectObject(dc, old);
+            DeleteObject(bmp);
+            DeleteDC(dc);
+            px
+        }
+    }
+
+    #[test]
+    fn close_button_paints_the_native_face_and_glyph_colours() {
+        // The owner-drawn × must reproduce the native button visual: the
+        // system button face with the button-text glyph in the centre. The
+        // face colour adapts to the pressed/hover states exactly like the
+        // native button class (and follows high-contrast system colours).
+        let normal = close_button_pixel(0, false, 2, 2);
+        assert_eq!(normal, unsafe { GetSysColor(COLOR_BTNFACE) }, "face pixel");
+        let pressed = close_button_pixel(ODS_SELECTED, false, 2, 2);
+        assert_eq!(
+            pressed,
+            unsafe { GetSysColor(COLOR_BTNSHADOW) },
+            "pressed face"
+        );
+        let hover = close_button_pixel(0, true, 2, 2);
+        assert_eq!(
+            hover,
+            unsafe { GetSysColor(COLOR_BTNHIGHLIGHT) },
+            "hover face"
+        );
+        // The × glyph is drawn in the button text colour (a light face with a
+        // dark glyph is the approved visual). The fallback system font is
+        // small, so the thin glyph is fully anti-aliased — assert that the
+        // glyph region contains pixels that are clearly darker than the face
+        // (ink present), and that the darkest pixel is closer to the button
+        // text colour than to the face (the ink colour is BTNTEXT).
+        let face = unsafe { GetSysColor(COLOR_BTNFACE) };
+        let text = unsafe { GetSysColor(COLOR_BTNTEXT) };
+        let dist = |a: u32, b: u32| {
+            let da = a & 0xFF;
+            let db = b & 0xFF;
+            let ga = (a >> 8) & 0xFF;
+            let gb = (b >> 8) & 0xFF;
+            let ba = (a >> 16) & 0xFF;
+            let bb = (b >> 16) & 0xFF;
+            (i64::from(da) - i64::from(db)).abs()
+                + (i64::from(ga) - i64::from(gb)).abs()
+                + (i64::from(ba) - i64::from(bb)).abs()
+        };
+        let mut darkest = 0u32;
+        let mut max_dist = 0i64;
+        for y in 8..24 {
+            for x in 8..24 {
+                let px = close_button_pixel(0, false, x, y);
+                let d = dist(px, face);
+                if d > max_dist {
+                    max_dist = d;
+                    darkest = px;
+                }
+            }
+        }
+        assert!(
+            max_dist > 100,
+            "glyph region must contain ink (darkest pixel {darkest:#x}, distance {max_dist})"
+        );
+        assert!(
+            dist(darkest, text) < dist(darkest, face),
+            "ink must be the button text colour"
+        );
+        // Unrelated item types are not ours to paint.
+        let dis = DRAWITEMSTRUCT {
+            CtlType: ODT_BUTTON + 1,
+            CtlID: 0,
+            itemID: 0,
+            itemAction: ODA_DRAWENTIRE,
+            itemState: 0,
+            hwndItem: 0,
+            hDC: 0,
+            rcItem: RECT {
+                left: 0,
+                top: 0,
+                right: 1,
+                bottom: 1,
+            },
+            itemData: 0,
+        };
+        assert!(
+            !unsafe { paint_close_button(&dis, false) },
+            "non-button draw items must be ignored"
+        );
     }
 }

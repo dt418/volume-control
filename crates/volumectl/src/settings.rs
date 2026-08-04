@@ -60,21 +60,24 @@ use windows_sys::Win32::{
     Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
     Graphics::Gdi::{
         CreateFontW, CreateSolidBrush, DeleteObject, InvalidateRect, RedrawWindow, SetBkMode,
-        SetTextColor, HBRUSH, HDC, HFONT, RDW_ALLCHILDREN, RDW_ERASE, RDW_INVALIDATE, TRANSPARENT,
+        SetTextColor, HBRUSH, HDC, HFONT, RDW_ALLCHILDREN, RDW_ERASE, RDW_INVALIDATE,
+        RDW_UPDATENOW, TRANSPARENT,
     },
     System::LibraryLoader::GetModuleHandleW,
+    UI::Controls::{DRAWITEMSTRUCT, WM_MOUSELEAVE},
     UI::Input::KeyboardAndMouse::{
-        EnableWindow, GetFocus, GetKeyState, SetFocus, VK_DOWN, VK_ESCAPE, VK_LEFT, VK_RETURN,
-        VK_RIGHT, VK_SHIFT, VK_TAB, VK_UP,
+        EnableWindow, GetFocus, GetKeyState, SetFocus, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
+        VK_DOWN, VK_ESCAPE, VK_LEFT, VK_RETURN, VK_RIGHT, VK_SHIFT, VK_TAB, VK_UP,
     },
     UI::WindowsAndMessaging::{
         CallWindowProcW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetAncestor,
-        GetClientRect, GetDlgCtrlID, GetWindowLongPtrW, PostMessageW, RegisterClassW, SendMessageW,
-        SetWindowLongPtrW, SetWindowPos, ShowWindow, BN_CLICKED, CW_USEDEFAULT, GA_PARENT,
-        GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW,
-        SW_HIDE, SW_SHOW, WM_CLOSE, WM_COMMAND, WM_CTLCOLORSTATIC, WM_ERASEBKGND, WM_KEYDOWN,
-        WM_LBUTTONDOWN, WM_PAINT, WM_SIZE, WM_SYSKEYDOWN, WM_USER, WNDCLASSW, WS_CHILD,
-        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
+        GetClientRect, GetDlgCtrlID, GetWindowLongPtrW, KillTimer, PostMessageW, RegisterClassW,
+        SendMessageW, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, BN_CLICKED,
+        BS_OWNERDRAW, CW_USEDEFAULT, GA_PARENT, GWLP_USERDATA, GWLP_WNDPROC, HWND_TOPMOST,
+        SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW, WM_CLOSE, WM_COMMAND,
+        WM_CTLCOLORSTATIC, WM_DRAWITEM, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN, WM_MOUSEMOVE,
+        WM_PAINT, WM_SIZE, WM_SYSKEYDOWN, WM_TIMER, WM_USER, WNDCLASSW, WS_CHILD, WS_EX_TOOLWINDOW,
+        WS_EX_TOPMOST, WS_POPUP, WS_TABSTOP, WS_VISIBLE, WS_VSCROLL,
     },
 };
 
@@ -83,8 +86,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowRect, GWL_STYLE};
 
 use crate::config::{AppearanceConfig, Config, ConfigError, HotkeyModifier};
 use crate::ui::platform::windows::primitives::{
-    apply_backdrop, colorref, dpi_scale_for, theme_controls, work_area_for, DpiMetrics,
-    PaintCanvas, PointF, RectF,
+    apply_backdrop, colorref, dpi_scale_for, paint_close_button, theme_controls, work_area_for,
+    DpiMetrics, PaintCanvas, PointF, RectF,
 };
 use crate::ui::platform::windows::text::{TextAlign, TextLayout};
 use crate::ui::{
@@ -197,6 +200,16 @@ const ID_BTN_RESET: isize = 121;
 const ID_BTN_CANCEL: isize = 122;
 const ID_BTN_CLOSE: isize = 123;
 
+/// One-shot timer ID for the deferred DWM backdrop re-apply after a show
+/// (see the comment in [`Settings::show`]).
+const BACKDROP_TIMER_ID: usize = 1;
+/// Delay (ms) between showing the window and re-asserting the resolved
+/// backdrop: DWM applies its High-Contrast backdrop override asynchronously
+/// after the show — measured on Windows 11 24H2, backdrop writes are
+/// clobbered back to AUTO for roughly the first second after the show, and
+/// stick once the composition settles. 2000ms lands safely past that window.
+const BACKDROP_REAPPLY_MS: u32 = 2000;
+
 // ── Static control ids (coloring + font dispatch) ─────────────────────────
 const ID_HDR_GENERAL: isize = 200;
 const ID_HDR_HOTKEYS: isize = 201;
@@ -237,6 +250,9 @@ const ID_ST_PREVIEW_CAPTION: isize = 323;
 const ID_ST_BLACKLIST_EMPTY_1: isize = 324;
 const ID_ST_BLACKLIST_EMPTY_2: isize = 325;
 const ID_ST_STORAGE_STATUS: isize = 326;
+/// Invisible (off-client) UIA mirror of the footer status line: its window
+/// text is `Status: …` / `Alert: …` (spec §11.2).
+const ID_ST_STATUS_UIA: isize = 327;
 /// Inline validation errors, one per validatable field (see
 /// [`INLINE_ERROR_FIELDS`] for the field order).
 const ID_ERR_VOL_STEP: isize = 400;
@@ -831,10 +847,18 @@ struct SettingsData {
     btn_open_config: HWND,
     static_path: HWND,
     static_status: HWND,
+    /// Screen-reader mirror of the status line (spec §11.2): a native STATIC
+    /// whose window text is `Status: …` / `Alert: …`, parked OUTSIDE the
+    /// client area so it is invisible but stays in the UIA tree. The visible
+    /// status line (`static_status`) keeps painting the plain text.
+    static_status_uia: HWND,
     btn_apply: HWND,
     btn_reset: HWND,
     btn_cancel: HWND,
     btn_close: HWND,
+    /// Pointer hover over the owner-drawn close button (see
+    /// [`paint_close_button`]).
+    close_hover: bool,
     /// Every static (id, hwnd), used for layout positioning and painting.
     static_handles: Vec<(isize, HWND)>,
     /// Inline error statics in [`INLINE_ERROR_FIELDS`] order.
@@ -901,10 +925,12 @@ impl SettingsData {
             btn_open_config: 0,
             static_path: 0,
             static_status: 0,
+            static_status_uia: 0,
             btn_apply: 0,
             btn_reset: 0,
             btn_cancel: 0,
             btn_close: 0,
+            close_hover: false,
             static_handles: Vec::new(),
             error_statics: [0; 7],
             section_all: Vec::new(),
@@ -1534,6 +1560,25 @@ impl Settings {
             // ── Footer (sticky in both layouts) ──────────────────────────
             d.static_status =
                 reg_static!(w!(""), layout.status_rect, ID_ST_STATUS, d.hfont_body, true);
+            // Screen-reader mirror of the status line (spec §11.2): parked
+            // OUTSIDE the client area (1x1 at -200,-200) so it is never
+            // visible while staying WS_VISIBLE in the UIA tree; `set_status`
+            // writes `Status: …` / `Alert: …` into it. It is deliberately not
+            // in `static_handles`/`child_rects`, so relayout and the parent
+            // paint never move or repaint it.
+            d.static_status_uia = make_static(
+                hwnd,
+                hinst,
+                w!(""),
+                -200,
+                -200,
+                1,
+                1,
+                ID_ST_STATUS_UIA,
+                d.hfont_body,
+                true,
+            );
+            children.push(d.static_status_uia);
             // Footer + close are global (not owned by any section), so they
             // are created visible; section controls start hidden and are
             // shown by `apply_section_visibility`.
@@ -1558,10 +1603,13 @@ impl Settings {
                 layout.btn_apply,
                 ID_BTN_APPLY,
             );
+            // Owner-drawn close (spec §11.2): the window text is the UIA name
+            // `Close settings` while `settings_wndproc`'s WM_DRAWITEM paints
+            // the approved `×` visual via `paint_close_button`.
             d.btn_close = reg_ctl!(
                 w!("BUTTON"),
-                w!("×"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                w!("Close settings"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW as u32,
                 layout.close_rect,
                 ID_BTN_CLOSE,
             );
@@ -1657,6 +1705,25 @@ impl Settings {
                 phys_w,
                 phys_h,
                 SWP_SHOWWINDOW,
+            );
+            // DWM re-asserts DWMSBT_AUTO when a window is shown while High
+            // Contrast is active — asynchronously, AFTER the show (observed:
+            // the reset lands after any immediate re-apply). Re-apply the
+            // resolved backdrop on a one-shot timer once the composition has
+            // settled, so the opaque painted surface stays visible on screen.
+            SetTimer(self.hwnd, BACKDROP_TIMER_ID, BACKDROP_REAPPLY_MS, None);
+            // While High Contrast is active, DWM fills the freshly shown
+            // surface with the forced AUTO backdrop, which marks the client
+            // clean — the system then skips the first WM_PAINT and the
+            // painted content never lands (live-verified: under HC only the
+            // native child controls self-painted; a probe-side invalidation
+            // did not register either). Force the first paint so the opaque
+            // fill always draws, over whatever backdrop DWM keeps.
+            RedrawWindow(
+                self.hwnd,
+                std::ptr::null(),
+                0,
+                RDW_INVALIDATE | RDW_UPDATENOW,
             );
             d.open = true;
             // The window is created at its final size, so SetWindowPos does
@@ -2230,6 +2297,14 @@ fn populate_blacklist(d: &SettingsData) {
 fn set_status(d: &mut SettingsData, kind: StatusKind, text: &str) {
     d.status_kind = kind;
     set_control_text(d.static_status, text);
+    // Spec §11.2: the screen-reader mirror carries the `Status: …` /
+    // `Alert: …` phrasing (the visible line stays the plain text).
+    let prefix = match kind {
+        StatusKind::Error => "Alert: ",
+        StatusKind::Info => "Status: ",
+        StatusKind::None => "",
+    };
+    set_control_text(d.static_status_uia, &format!("{prefix}{text}"));
 }
 
 /// Every interactive control as (id, hwnd) pairs, in visual (tab) order.
@@ -2758,6 +2833,34 @@ unsafe extern "system" fn settings_child_wndproc(
     }
 
     let d = &*(GetWindowLongPtrW(parent, GWLP_USERDATA) as *const SettingsData);
+    // Owner-drawn close button hover tracking: the owner paints the hover
+    // face, so the button must repaint when the pointer enters/leaves (the
+    // native hover the button had before owner-drawing). The window proc runs
+    // on the owning thread, so mutating the per-window state here is safe.
+    if hwnd == d.btn_close {
+        match msg {
+            WM_MOUSEMOVE => {
+                if !d.close_hover {
+                    (&mut *(GetWindowLongPtrW(parent, GWLP_USERDATA) as *mut SettingsData))
+                        .close_hover = true;
+                    InvalidateRect(hwnd, std::ptr::null(), 0);
+                    let mut tme: TRACKMOUSEEVENT = std::mem::zeroed();
+                    tme.cbSize = std::mem::size_of::<TRACKMOUSEEVENT>() as u32;
+                    tme.dwFlags = TME_LEAVE;
+                    tme.hwndTrack = hwnd;
+                    TrackMouseEvent(&mut tme);
+                }
+            }
+            WM_MOUSELEAVE => {
+                if d.close_hover {
+                    (&mut *(GetWindowLongPtrW(parent, GWLP_USERDATA) as *mut SettingsData))
+                        .close_hover = false;
+                    InvalidateRect(hwnd, std::ptr::null(), 0);
+                }
+            }
+            _ => {}
+        }
+    }
     if let Some(idx) = d.tab_order.iter().position(|&c| c == hwnd) {
         if let Some(proc) = d.orig_procs[idx] {
             return CallWindowProcW(Some(proc), hwnd, msg, wparam, lparam);
@@ -3062,6 +3165,18 @@ unsafe extern "system" fn settings_wndproc(
             SetTextColor(hdc, colorref(static_color(d, ctl)));
             d.bg as LRESULT
         }
+        WM_DRAWITEM => {
+            // The owner-drawn close button (spec §11.2): its window text is
+            // the UIA name `Close settings`; this paints the approved `×`
+            // visual (system button face + glyph + hover/pressed/focus via
+            // `paint_close_button`).
+            let d = &*(userdata as *const SettingsData);
+            if paint_close_button(lparam as *const DRAWITEMSTRUCT, d.close_hover) {
+                0
+            } else {
+                DefWindowProcW(hwnd, msg, wparam, lparam)
+            }
+        }
         WM_ERASEBKGND => 1,
         WM_SIZE => {
             // The layout mode (desktop rail vs stacked selector strip) and
@@ -3134,6 +3249,16 @@ unsafe extern "system" fn settings_wndproc(
             let d = &mut *(userdata as *mut SettingsData);
             d.open = false;
             ShowWindow(hwnd, SW_HIDE);
+            0
+        }
+        // Deferred backdrop re-apply armed by `show` (see the comment there):
+        // DWM re-asserts DWMSBT_AUTO after a show while High Contrast is
+        // active, so the resolved backdrop is re-asserted once the composition
+        // has settled, keeping the opaque painted surface visible.
+        WM_TIMER if (wparam as usize) == BACKDROP_TIMER_ID => {
+            KillTimer(hwnd, BACKDROP_TIMER_ID);
+            let d = &mut *(userdata as *mut SettingsData);
+            apply_backdrop(hwnd, d.appearance.material, d.appearance.tokens.is_dark);
             0
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
@@ -3590,6 +3715,97 @@ mod tests {
         }
         assert_eq!(d.status_kind, StatusKind::Info);
         assert_eq!(get_control_text(d.static_status), "Changes saved.");
+    }
+
+    #[test]
+    fn status_line_exposes_status_and_alert_semantics_for_screen_readers() {
+        // Spec §11.2: the status line must be readable as
+        // `Status: Changes saved` / `Alert: Volume step must be lower than
+        // large volume step`. The UIA mirror is a native STATIC parked
+        // outside the client area: it stays in the UIA tree (WS_VISIBLE)
+        // without painting anything, while the visible line keeps the plain
+        // text.
+        let mut settings = hidden_window();
+        let d = data(&settings);
+        assert_eq!(
+            get_control_text(d.static_status_uia),
+            "",
+            "no status yet → no announcement"
+        );
+        // The mirror is a visible (UIA-tree) child parked outside the client
+        // area: in the tree, never painted.
+        assert!(
+            child_visible(d.static_status_uia),
+            "mirror must be WS_VISIBLE"
+        );
+        unsafe {
+            let mut mirror_rc: RECT = std::mem::zeroed();
+            let mut parent_rc: RECT = std::mem::zeroed();
+            assert_ne!(GetWindowRect(d.static_status_uia, &mut mirror_rc), 0);
+            assert_ne!(GetWindowRect(settings.hwnd, &mut parent_rc), 0);
+            assert!(
+                mirror_rc.right <= parent_rc.left
+                    || mirror_rc.left >= parent_rc.right
+                    || mirror_rc.bottom <= parent_rc.top
+                    || mirror_rc.top >= parent_rc.bottom,
+                "mirror must sit outside the client area"
+            );
+        }
+
+        // A failed Apply reports the failure as an Alert...
+        {
+            let d = data_mut(&mut settings);
+            set_control_text(d.edit_volume_step, "30");
+            set_control_text(d.edit_volume_step_large, "29");
+        }
+        let error = settings.apply().expect_err("invalid draft must fail");
+        settings.on_apply_result(&Err(error));
+        let d = data(&settings);
+        assert_eq!(d.status_kind, StatusKind::Error);
+        assert_eq!(
+            get_control_text(d.static_status_uia),
+            "Alert: volume_step_large: must be greater than volume_step",
+            "the alert phrasing mirrors the error (spec §11.2)"
+        );
+        // ...while the visible status line keeps the plain text.
+        assert_eq!(
+            get_control_text(d.static_status),
+            "volume_step_large: must be greater than volume_step"
+        );
+
+        // A successful Apply reports the saved note as a Status.
+        let saved = data(&settings).draft.current().clone();
+        settings.on_apply_result(&Ok(saved));
+        let d = data(&settings);
+        assert_eq!(d.status_kind, StatusKind::Info);
+        assert_eq!(
+            get_control_text(d.static_status_uia),
+            "Status: Changes saved.",
+            "the status phrasing (spec §11.2)"
+        );
+        assert_eq!(get_control_text(d.static_status), "Changes saved.");
+    }
+
+    #[test]
+    fn close_button_exposes_its_accessibility_name_and_owner_draw_style() {
+        // Spec §11.2: the header close button exposes a real name while the
+        // owner paints the `×` visual (BS_OWNERDRAW keeps the window text —
+        // the UIA name — free of the glyph).
+        let settings = hidden_window();
+        let d = data(&settings);
+        assert_eq!(
+            get_control_text(d.btn_close),
+            "Close settings",
+            "close button UIA name"
+        );
+        unsafe {
+            let style = GetWindowLongPtrW(d.btn_close, GWL_STYLE);
+            assert_ne!(
+                style & BS_OWNERDRAW as isize,
+                0,
+                "close button must be BS_OWNERDRAW"
+            );
+        }
     }
 
     #[test]
