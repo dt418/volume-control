@@ -258,33 +258,6 @@ impl NativeRenderer for MacosRenderer {
     }
 }
 
-/// Test helper: plan one surface with the default dark theme at 100% DPI.
-///
-/// Lives outside `mod tests` so the AppKit smoke tests (in `mod appkit`) and
-/// the pure planning tests can both assert against the same shared math.
-#[cfg(test)]
-fn plan_for(surface: &SurfaceId) -> SurfacePlan {
-    let tokens = crate::ui::tokens_for(
-        crate::ui::ThemeMode::Dark,
-        false,
-        crate::ui::AccentMode::System,
-        || Some(true),
-    );
-    let caps = UiCapabilities {
-        compositor: true,
-        blur: true,
-        high_contrast: false,
-        reduced_motion: false,
-        dpi_scale: 1.0,
-        work_area: WorkArea::new(0, 0, 2560, 1400),
-    };
-    let state = AppState::from_audio(50, false, Some("Speakers".into()));
-    plan_surfaces(&state, &tokens, &caps)
-        .into_iter()
-        .find(|p| &p.surface == surface)
-        .expect("planned surface")
-}
-
 /// AppKit surface code (macOS only).
 ///
 /// Real `NSPanel` construction with `NSVisualEffectView` material backing.
@@ -293,10 +266,6 @@ fn plan_for(surface: &SurfaceId) -> SurfacePlan {
 #[cfg(target_os = "macos")]
 mod appkit {
     use super::*;
-    #[cfg(test)]
-    use core::ffi::{c_int, c_void};
-    #[cfg(test)]
-    use core::ptr::addr_of;
     use objc2::rc::Retained;
     use objc2::runtime::AnyClass;
     use objc2::{MainThreadMarker, MainThreadOnly};
@@ -438,173 +407,27 @@ mod appkit {
                 self.window.orderOut(None);
             }
         }
-    }
 
-    /// Run `f` on the main thread.
-    ///
-    /// `cargo test` runs test bodies on worker threads, and AppKit requires
-    /// the main thread. libSystem's GCD is a stable public API; we hand-declare
-    /// the two symbols we need plus the Apple block ABI for a stack block.
-    /// `dispatch_sync` copies the block (always) and runs it on the main
-    /// queue before returning, so the stack block stays valid for its whole
-    /// lifetime. The closure must capture only `Copy` data: `Block_copy` on a
-    /// helper-less block is a plain bitwise copy, which is only safe when the
-    /// captures are `Copy`.
-    ///
-    /// `f` must not panic: a panic would unwind across the C `dispatch_sync`
-    /// frame. Callers collect results and assert after dispatch returns.
-    #[cfg(test)]
-    unsafe fn on_main_thread<F: FnOnce() + Copy>(f: F) {
-        #[cfg(test)]
-        {
-            if MainThreadMarker::new().is_some() {
-                f();
-                return;
-            }
-
-            #[repr(C)]
-            struct BlockHeader {
-                isa: *const c_void,
-                flags: c_int,
-                reserved: c_int,
-                invoke: unsafe extern "C" fn(*mut c_void),
-                descriptor: *const BlockDescriptor,
-            }
-            #[repr(C)]
-            struct BlockDescriptor {
-                reserved: usize,
-                size: usize,
-            }
-            #[repr(C)]
-            struct Payload<F> {
-                header: BlockHeader,
-                payload: F,
-            }
-
-            unsafe extern "C" {
-                // Apple block runtime + libdispatch, both in libSystem.
-                static _NSConcreteStackBlock: c_void;
-                fn dispatch_get_main_queue() -> *mut c_void;
-                fn dispatch_sync(queue: *mut c_void, block: *const c_void);
-            }
-
-            unsafe extern "C" fn trampoline<F: FnOnce() + Copy>(block: *mut c_void) {
-                let payload = &*block.cast::<Payload<F>>();
-                (payload.payload)();
-            }
-
-            let payload = Payload {
-                header: BlockHeader {
-                    isa: addr_of!(_NSConcreteStackBlock).cast(),
-                    flags: 0,
-                    reserved: 0,
-                    invoke: trampoline::<F>,
-                    descriptor: &BlockDescriptor {
-                        reserved: 0,
-                        size: core::mem::size_of::<Payload<F>>(),
-                    },
-                },
-                payload: f,
-            };
-            dispatch_sync(dispatch_get_main_queue(), addr_of!(payload).cast());
+        /// Whether the panel is currently opaque (window-level opacity flag).
+        ///
+        /// Safe property read on the main thread; used by the harness-free
+        /// smoke test binary to assert the material ladder, and useful to
+        /// hosts that report the applied treatment.
+        pub fn is_opaque(&self) -> bool {
+            self.window.isOpaque()
         }
-    }
 
-    /// Smoke test: exercise the real AppKit path — panel creation, the
-    /// material ladder, and the VoiceOver label — on the main thread.
-    ///
-    /// This is the runtime evidence for spec §10.2. Results are collected
-    /// inside the main-thread block (no panics there) and asserted after
-    /// dispatch returns.
-    #[test]
-    fn appkit_panel_applies_material_kinds_and_labels() {
-        let mut results: Vec<(SurfaceId, bool, bool)> = Vec::new();
-        let results_ptr = &mut results as *mut Vec<(SurfaceId, bool, bool)>;
-        // SAFETY: `results_ptr` outlives the dispatch; the closure captures
-        // only Copy data; no panics inside the block.
-        unsafe {
-            on_main_thread(move || {
-                ensure_application();
-                let caps = UiCapabilities {
-                    compositor: true,
-                    blur: true,
-                    high_contrast: false,
-                    reduced_motion: false,
-                    dpi_scale: 1.0,
-                    work_area: WorkArea::new(0, 0, 2560, 1400),
-                };
-                let state = AppState::from_audio(50, false, Some("Speakers".into()));
-                let tokens = crate::ui::tokens_for(
-                    crate::ui::ThemeMode::Dark,
-                    false,
-                    crate::ui::AccentMode::System,
-                    || Some(true),
-                );
-                let plans = plan_surfaces(&state, &tokens, &caps);
-                let out = &mut *results_ptr;
-                for plan in &plans {
-                    let mut panel = Panel::new();
-                    panel.apply_plan(plan, &caps);
-                    let opaque = panel.window.isOpaque();
-                    let label = panel.window.accessibilityLabel();
-                    out.push((plan.surface, opaque, label.is_some()));
-                }
-            });
-        }
-        assert_eq!(results.len(), 4, "all four surfaces must produce panels");
-        for (surface, opaque, labelled) in results {
-            assert!(
-                labelled,
-                "every surface window must carry a VoiceOver label ({surface:?})"
-            );
-            // The material ladder: opaque only when the resolved treatment is
-            // Opaque; glass/translucent must leave the window translucent.
-            let expected = plan_for(&surface).appkit_material.is_opaque();
-            assert_eq!(
-                opaque, expected,
-                "opacity must match the resolved material for {surface:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn appkit_high_contrast_forces_opaque_panels() {
-        let mut results: Vec<(SurfaceId, bool)> = Vec::new();
-        let results_ptr = &mut results as *mut Vec<(SurfaceId, bool)>;
-        // SAFETY: as above; no panics inside the block.
-        unsafe {
-            on_main_thread(move || {
-                ensure_application();
-                let caps = UiCapabilities {
-                    compositor: true,
-                    blur: true,
-                    high_contrast: true,
-                    reduced_motion: false,
-                    dpi_scale: 1.0,
-                    work_area: WorkArea::new(0, 0, 2560, 1400),
-                };
-                let state = AppState::from_audio(50, false, Some("Speakers".into()));
-                let tokens = crate::ui::tokens_for(
-                    crate::ui::ThemeMode::Dark,
-                    true,
-                    crate::ui::AccentMode::System,
-                    || Some(true),
-                );
-                let plans = plan_surfaces(&state, &tokens, &caps);
-                let out = &mut *results_ptr;
-                for plan in &plans {
-                    let mut panel = Panel::new();
-                    panel.apply_plan(plan, &caps);
-                    let opaque = panel.window.isOpaque();
-                    out.push((plan.surface, opaque));
-                }
-            });
-        }
-        for (surface, opaque) in results {
-            assert!(opaque, "high contrast must force an opaque {surface:?}");
+        /// Whether the panel carries a VoiceOver accessibility label.
+        pub fn has_accessibility_label(&self) -> bool {
+            self.window.accessibilityLabel().is_some()
         }
     }
 }
+
+/// Re-exports for the harness-free AppKit smoke test binary
+/// (`tests/appkit_smoke.rs`), which links the library without `cfg(test)`.
+#[cfg(target_os = "macos")]
+pub use appkit::{ensure_application, Panel};
 
 #[cfg(test)]
 mod tests {

@@ -53,3 +53,21 @@ path = "src/lib.rs"
 [[bin]]
 name = "volumectl"
 path = "src/main.rs"
+
+# macOS AppKit smoke test: `harness = false` so its `main()` runs on the
+# process main thread — AppKit requires the main thread, and libtest would
+# run the body on a worker thread. The body is gated to `target_os = "macos"`
+# inside the file; on other targets the binary compiles as a no-op.
+[[test]]
+name = "appkit_smoke"
+path = "tests/appkit_smoke.rs"
+harness = false
+
+# Ubuntu GTK4/libadwaita smoke test: same harness-free main-thread pattern
+# (GTK panics off the main thread). `required-features` keeps the target out
+# of builds without the renderer feature; CI runs it under `xvfb-run`.
+[[test]]
+name = "gtk_smoke"
+path = "tests/gtk_smoke.rs"
+harness = false
+required-features = ["gtk-renderer"]

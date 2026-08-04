@@ -482,139 +482,32 @@ mod gtk_surfaces {
         pub fn set_visible(&mut self, visible: bool) {
             self.window.set_visible(visible);
         }
-    }
 
-    /// Smoke test: exercise the real GTK path — window creation, the
-    /// material ladder, the accessibility label, and visibility flips.
-    ///
-    /// This is the runtime evidence for spec §10.3. Requires a display
-    /// session (CI runs this under `xvfb-run`); without one the test skips
-    /// with a message so headless `cargo test` stays green.
-    #[cfg(test)]
-    pub(crate) mod tests {
-        use super::*;
-
-        /// Initialize GTK/libadwaita once; false when no display exists.
-        fn display_available() -> bool {
-            static READY: std::sync::OnceLock<Option<()>> = std::sync::OnceLock::new();
-            READY
-                .get_or_init(|| {
-                    if ensure_gtk_initialized().is_err() {
-                        return None;
-                    }
-                    Some(())
-                })
-                .is_some()
+        /// The material kind last applied.
+        ///
+        /// Used by the harness-free smoke test binary to assert the panel
+        /// carries the planned material; hosts may report the applied
+        /// treatment the same way.
+        pub fn material_kind(&self) -> GtkMaterialKind {
+            self.kind
         }
 
-        fn caps() -> UiCapabilities {
-            UiCapabilities {
-                compositor: true,
-                blur: true,
-                high_contrast: false,
-                reduced_motion: false,
-                dpi_scale: 1.0,
-                work_area: WorkArea::new(0, 0, 2560, 1400),
-            }
+        /// Window opacity (0.0–1.0) after the material treatment.
+        pub fn opacity(&self) -> f64 {
+            self.window.opacity()
         }
 
-        fn state() -> AppState {
-            AppState::from_audio(50, false, Some("Speakers".into()))
-        }
-
-        #[test]
-        fn gtk_surfaces_apply_material_kinds_labels_and_visibility() {
-            if !display_available() {
-                eprintln!("skipping GTK smoke test: no display (CI runs under xvfb-run)");
-                return;
-            }
-            let tokens = crate::ui::tokens_for(
-                crate::ui::ThemeMode::Dark,
-                false,
-                crate::ui::AccentMode::System,
-                || Some(true),
-            );
-            // Xvfb/X11: layer-shell is never available, so Blurred must land
-            // on the Translucent window (glass requires a Wayland session).
-            let plans = plan_surfaces(&state(), &tokens, &caps(), false);
-            assert_eq!(plans.len(), 4);
-            for plan in &plans {
-                let mut panel = GtkPanel::new(plan.surface, false);
-                panel.apply_plan(plan, &caps());
-                assert_eq!(
-                    panel.kind, plan.gtk_material,
-                    "panel must carry the planned material for {:?}",
-                    plan.surface
-                );
-                if plan.gtk_material.is_opaque() {
-                    assert_eq!(
-                        panel.window.opacity(),
-                        1.0,
-                        "opaque surface must be fully opaque ({:?})",
-                        plan.surface
-                    );
-                }
-                panel.set_visible(true);
-                assert!(
-                    panel.window.is_visible(),
-                    "surface window must be visible after show ({:?})",
-                    plan.surface
-                );
-                panel.set_visible(false);
-                assert!(
-                    !panel.window.is_visible(),
-                    "surface window must be hidden after hide ({:?})",
-                    plan.surface
-                );
-            }
-        }
-
-        #[test]
-        fn gtk_high_contrast_forces_opaque_surfaces() {
-            if !display_available() {
-                eprintln!("skipping GTK smoke test: no display (CI runs under xvfb-run)");
-                return;
-            }
-            let tokens = crate::ui::tokens_for(
-                crate::ui::ThemeMode::Dark,
-                true,
-                crate::ui::AccentMode::System,
-                || Some(true),
-            );
-            let mut caps = caps();
-            caps.high_contrast = true;
-            let plans = plan_surfaces(&state(), &tokens, &caps, true);
-            for plan in &plans {
-                let mut panel = GtkPanel::new(plan.surface, true);
-                panel.apply_plan(plan, &caps);
-                assert!(
-                    panel.kind.is_opaque(),
-                    "high contrast must force an opaque {:?}",
-                    plan.surface
-                );
-            }
-        }
-
-        #[test]
-        #[cfg(feature = "layer-shell")]
-        fn layer_shell_windows_are_never_created_under_x11() {
-            // On an X11/Xvfb display the layer-shell path is unreachable:
-            // detection returns false and plans fall back to Translucent.
-            assert!(!layer_shell_available());
-            let tokens = crate::ui::tokens_for(
-                crate::ui::ThemeMode::Dark,
-                false,
-                crate::ui::AccentMode::System,
-                || Some(true),
-            );
-            let plans = plan_surfaces(&state(), &tokens, &caps(), false);
-            assert!(
-                plans.iter().all(|p| !p.gtk_material.is_glass()),
-                "no Wayland glass without layer-shell support"
-            );
+        /// Whether the window is currently mapped.
+        pub fn is_visible(&self) -> bool {
+            self.window.is_visible()
         }
     }
 }
+
+/// Re-exports for the harness-free GTK smoke test binary
+/// (`tests/gtk_smoke.rs`), which links the library without `cfg(test)`.
+#[cfg(feature = "gtk-renderer")]
+pub use gtk_surfaces::{ensure_gtk_initialized, layer_shell_available, GtkPanel};
 
 #[cfg(test)]
 mod tests {
