@@ -1,0 +1,151 @@
+# Instincts generated from https://github.com/dt418/volume-control
+# Generated: 2026-08-04T08:49:10.857Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: volume-control-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: feat, fix, docs, test
+
+## Evidence
+
+- 15 commits analyzed
+- Detected conventional commit pattern
+- Examples: docs: specify Signal Glass production UI, feat: expand Signal Glass semantic tokens
+
+---
+id: volume-control-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Commit Length
+
+## Action
+
+Keep commit messages concise (~46 characters)
+
+## Evidence
+
+- Average commit message length: 46 chars
+- Based on 15 commits
+
+---
+id: volume-control-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: volume-control-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: volume-control-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: volume-control-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: volume-control-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~20x per month
+- Files: 
+
