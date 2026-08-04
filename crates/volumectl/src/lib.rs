@@ -5,6 +5,10 @@
 //! and wired in by `main.rs` via [`app`].
 
 pub mod audio;
+#[cfg(target_os = "linux")]
+pub mod audio_linux;
+#[cfg(target_os = "macos")]
+pub mod audio_macos;
 pub mod config;
 pub mod core;
 pub mod hotkeys;
