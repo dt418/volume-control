@@ -1,9 +1,11 @@
 //! System tray icon + context menu (Windows).
 //!
-//! Built on the Tauri ecosystem's `tray-icon` + `muda` crates. Menu items:
-//! live volume label, mute toggle (check item), reset to 50%, and Exit.
-//! Menu events are drained from the crate's global receiver with `try_recv`
-//! inside the app's 150 ms poll — no extra thread or event loop needed.
+//! Built on the Tauri ecosystem's `tray-icon` + `muda` crates. Menu (spec §9):
+//! live volume label, then volume actions (mute check item, reset, open
+//! mixer), surface actions (settings, help), configuration actions (reload,
+//! open config file), and Exit — each group separated. Menu events are
+//! drained from the crate's global receiver with `try_recv` inside the app's
+//! 150 ms poll — no extra thread or event loop needed.
 
 use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 
@@ -23,7 +25,6 @@ pub enum TrayCommand {
     Settings,
     EditConfig,
     ReloadConfig,
-    ApplyBlacklist,
     Exit,
 }
 
@@ -37,23 +38,24 @@ impl Tray {
     pub fn new() -> Result<Tray, Box<dyn std::error::Error>> {
         let menu = Menu::new();
 
-        let vol_label = MenuItem::with_id("volume", "Volume: --", false, None);
-        let mixer = MenuItem::with_id("mixer", "Volume Mixer", true, None);
-        let mute_item = CheckMenuItem::with_id("mute", "Mute / Unmute", true, false, None);
-        let help = MenuItem::with_id("help", "Help / Hotkeys", true, None);
-        let settings = MenuItem::with_id("settings", "Settings…", true, None);
+        // Live label (non-clickable), then volume actions, surface actions,
+        // configuration actions, and Exit — grouped per spec §9.
+        let vol_label = MenuItem::with_id("volume", "VolumeControl — --", false, None);
         let sep1 = PredefinedMenuItem::separator();
-        let edit = MenuItem::with_id("edit", "Edit Config", true, None);
-        let reload = MenuItem::with_id("reload", "Reload Config", true, None);
-        let sep2 = PredefinedMenuItem::separator();
-        let blacklist = MenuItem::with_id("blacklist", "Apply Recommended Blacklist", true, None);
-        let sep3 = PredefinedMenuItem::separator();
+        let mute_item = CheckMenuItem::with_id("mute", "Mute", true, false, None);
         let reset = MenuItem::with_id("reset", "Reset to 50%", true, None);
-        let exit = MenuItem::with_id("exit", "Exit", true, None);
+        let mixer = MenuItem::with_id("mixer", "Open mixer", true, None);
+        let sep2 = PredefinedMenuItem::separator();
+        let settings = MenuItem::with_id("settings", "Settings", true, None);
+        let help = MenuItem::with_id("help", "Help", true, None);
+        let reload = MenuItem::with_id("reload", "Reload configuration", true, None);
+        let edit = MenuItem::with_id("edit", "Open config file", true, None);
+        let sep3 = PredefinedMenuItem::separator();
+        let exit = MenuItem::with_id("exit", "Exit VolumeControl", true, None);
 
         menu.append_items(&[
-            &vol_label, &mixer, &mute_item, &help, &settings, &sep1, &edit, &reload, &sep2,
-            &blacklist, &sep3, &reset, &exit,
+            &vol_label, &sep1, &mute_item, &reset, &mixer, &sep2, &settings, &help, &reload, &edit,
+            &sep3, &exit,
         ])?;
 
         let tray = tray_icon::TrayIconBuilder::new()
@@ -83,7 +85,6 @@ impl Tray {
                         "settings" => Some(TrayCommand::Settings),
                         "edit" => Some(TrayCommand::EditConfig),
                         "reload" => Some(TrayCommand::ReloadConfig),
-                        "blacklist" => Some(TrayCommand::ApplyBlacklist),
                         "exit" => Some(TrayCommand::Exit),
                         _ => None,
                     };
@@ -99,7 +100,7 @@ impl Tray {
     /// Refresh the volume label and mute check state.
     pub fn set_volume(&self, state: &VolumeState) {
         self.vol_label
-            .set_text(&format!("Volume: {}%", state.percent()));
+            .set_text(&format!("VolumeControl — {}%", state.percent()));
         self.mute_item.set_checked(state.muted);
     }
 
