@@ -1,5 +1,9 @@
 {
   "enabledPlugins": {
     "superpowers@superpowers-marketplace": true
+  },
+  "env": {
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "900000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "90"
   }
 }
