@@ -38,7 +38,7 @@
   `cargo test -p volumectl` → 220 passed, 0 failed; `cargo build` clean.
   Runtime smoke evidence on a real macOS host is exercised by the new
   macOS CI job (macos-15 runner, `cargo test` includes the AppKit smoke
-  tests) — first run pending the branch push/PR.
+  tests) — first run completed green (see "CI verification" below).
 
 ### Task 12 — Ubuntu 24.04 renderer (`crates/volumectl/src/ui/platform/linux/{mod.rs,renderer.rs}`)
 - Dependency triple: `gtk4 0.8 + libadwaita 0.6 + gtk4-layer-shell 0.3`
@@ -84,8 +84,42 @@
   zipping uses PowerShell `Compress-Archive` (zip not guaranteed outside CI).
 - README.md + README.vi.md updated: macOS/Linux build instructions, platform
   status table (renderers now ✅), CI/release section.
-- First CI run is pending: the workflows were just committed; they execute
-  on push/PR from origin (branch push + PR in this session's wrap-up).
+- First CI run is completed and green (see "CI verification" below); it was
+  pending at the time the workflows were committed (they execute on push/PR
+  from origin).
+
+### CI verification (first run — PR #3, run 30899670095, merged 68baeac)
+- All four jobs green on the merged branch:
+  - **Format, diff gate, CLI fallback** (39s) — fmt check, forbidden-path
+    diff gate, non-Windows CLI-fallback build/test.
+  - **macOS (build + tests + renderer smoke)** (2m36s, macos-15 arm64) —
+    full suite plus `appkit smoke OK`: real `NSPanel` construction, the
+    AppKit material ladder (`NSVisualEffectView` HUDWindow glass vs
+    translucent vs opaque under high contrast), and VoiceOver labels on a
+    live runner. First real runtime evidence for spec §10.2.
+  - **Windows (build + tests + release artifact)** (1m44s) — 220/220 tests
+    + release artifact validation.
+  - **Ubuntu 24.04 (GTK4/libadwaita + layer-shell)** (2m36s) — CLI build,
+    gtk-renderer build, `gtk smoke OK` under `xvfb-run`: real `gtk::Window`
+    creation, material kinds, and visibility flips. First real runtime
+    evidence for spec §10.3. layer-shell build skipped with a documented
+    annotation: `libgtk-4-layer-shell-dev` is not in noble's repos (the
+    workflow's conditional fallback).
+- The two first-run failures were both main-thread/harness issues, fixed by
+  moving the renderer smoke tests into harness-free `[[test]]` binaries
+  (`tests/appkit_smoke.rs`, `tests/gtk_smoke.rs`, `harness = false`) whose
+  `main()` runs on the process main thread (commits e79ca23 + 7301236):
+  - macOS: the hand-rolled GCD block apparatus failed to link on arm64
+    (`_dispatch_get_main_queue` under `-nodefaultlibs`) and could deadlock
+    without a servicing runloop — deleted; the smoke binary runs directly
+    on the main thread.
+  - Ubuntu: libtest worker threads panicked ("GTK may only be used from the
+    main thread"); the gtk smoke binary is gated on
+    `required-features = ["gtk-renderer"]` and skips cleanly headless.
+- Cross-checks (local, all `--tests` so harnesses compile): macOS
+  `x86_64-apple-darwin` and Linux `x86_64-unknown-linux-gnu` (no features /
+  `gtk-renderer` / `gtk-renderer,layer-shell`) — all clean, 0 warnings.
+- PR #3 merged into master (merge 68baeac, 2026-08-04).
 
 ### Status
 - vol-011 stays `in_progress`: the plan requires every acceptance item to
@@ -93,8 +127,12 @@
   check, reduced-motion live check, 125/150% DPI live check,
   taskbar/secondary-monitor work areas, acrylic look, tray-menu clicks)
   remains unverified on a real Windows session. All machine-verifiable
-  evidence is recorded (Session 008 matrix + this session's renderer/CI
-  evidence).
+  evidence is recorded: Session 008's live Windows matrix, the macOS/Ubuntu
+  renderer runtime smoke evidence from the first green CI run (above), and
+  the Session 003–007 live checks.
+- macOS/Linux renderer smoke tests now carry real runtime evidence on CI
+  (macos-15 arm64 + Ubuntu 24.04 under xvfb-run); host wiring (hotkeys,
+  audio backends, tray) remains follow-on work.
 
 ## Session 008 (2026-08-04) — Task 10: Verify Windows Signal Glass accessibility and fallback behavior
 
@@ -603,9 +641,10 @@ captured the window's own rendering:
   `in_progress`, NOT `passing`. It is implemented and verified live on Windows
   (see Session 003), but the plan sets `passing` only after all required checks
   pass, and the human-confirmation remainder is unverified.
-- Current blocker: none on Windows. macOS/Linux are **unverified follow-on work**:
-  the renderer seams compile by construction (cfg-gated) but no native macOS/
-  Linux UI is implemented or verified in this plan; needs a mac/Linux host or CI.
+- Current blocker: none on Windows. macOS/Linux renderers (AppKit, GTK4/
+  libadwaita) are implemented and smoke-tested on CI (macos-15 arm64 +
+  Ubuntu 24.04 under xvfb-run — see Session 009 "CI verification"); host
+  wiring (hotkeys, audio backends, tray) is follow-on work.
 - PASSING with recorded evidence: vol-001 (workspace), vol-002 (audio), vol-003 (hotkeys), vol-004 (overlay), vol-005 (tray), vol-006 (config reload+sync), vol-007 (mac/Linux scaffolds+docs), vol-008 (release E2E), vol-009 (mixer/overlay placement fix), vol-010 (mixer close button + system theme)
 - Task 13 (Windows verification of the adaptive UI): 94/94 unit tests pass; live
   verification recorded in Session 003 (mixer slider/buttons, geometry/gap, DPI
