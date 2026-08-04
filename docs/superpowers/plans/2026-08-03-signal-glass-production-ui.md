@@ -8,6 +8,36 @@
 
 **Tech Stack:** Rust 2021, Cargo workspace, `windows-sys`, Win32/native controls, Direct2D/DirectWrite/DWM where available, AppKit/objc2, GTK4/libadwaita/gtk4-layer-shell, Serde/JSON, existing WASAPI/tray/hotkey integrations.
 
+## Status (2026-08-04) — all tasks complete and on master
+
+Tasks 1–10 were committed directly to master (2026-08-03–04); Tasks 11–14
+landed via PR #3 (merge `68baeac`; CI fixes `e79ca23`/`7301236` on the same
+branch). Windows unit suite 220/220, all four CI jobs green on the first
+merged run (`30899670095`). Evidence of record: `claude-progress.md`
+(Session 003–009), `feature_list.json` (vol-011), `session-handoff.md`.
+
+| # | Task | Commit(s) | Evidence |
+|---|------|-----------|----------|
+| 1 | Expand shared semantic tokens | `10b2447` | token tests, threshold colors unchanged |
+| 2 | Renderer/host bridge contracts | `c85b364` | `NativeRenderer` + `HostHandle` tests |
+| 3 | Windows drawing/DPI seams | `71be7ed`, `bc33590` | geometry tests 100/125/150%, negative origins |
+| 4 | Shared Signal Rail | `099e021`, `2eb74f0` | rail tests 0/50/100%, muted marker, thresholds |
+| 5 | Redesign Windows overlay | `38f6ed5` | live 336x88 placement, pixel evidence (Session 003/004) |
+| 6 | Redesign Windows mixer | `c893dc6`, `a6a4a25` | live 400x224 + 16px gap, rail↔trackbar sync (Session 004) |
+| 7 | Redesign Windows Settings | `e1855df` | live 760x620 rail/content, draft+preview (Session 005) |
+| 8 | Redesign Windows Help | `5061d79` | live 520x500 card, conflict callout (Session 006) |
+| 9 | Normalize tray experience | `510d8ba` | 12-entry menu dump = spec §9 (Session 007) |
+| 10 | Windows accessibility verification | `85dbab0` | §11.2 UIA names live-dumped + matrix (Session 008); human-confirmation remainder open |
+| 11 | macOS 26 AppKit renderer | `4598605`, `e79ca23`, `7301236` | `appkit smoke OK` on macos-15 arm64 (CI run 30899670095) |
+| 12 | Ubuntu 24.04 GTK4 renderer | `a2b331c`, `e79ca23`, `7301236` | `gtk smoke OK` under `xvfb-run` (CI run 30899670095); layer-shell build skipped (lib absent from noble) |
+| 13 | CI + release packaging | `31762ee` | 4-job matrix green; package.sh exercised with real artifacts |
+| 14 | Final evidence + tracking | `1737692`, `332689a` | Session 009 evidence; vol-011 stays `in_progress` |
+
+Open items (documented, not defects): human-confirmation remainder for
+vol-011 (high-contrast, reduced-motion, 125/150% DPI, taskbar/secondary
+monitors, acrylic look, tray-menu clicks) and macOS/Linux host wiring
+(hotkeys, audio backends, tray).
+
 ## Global Constraints
 
 - Keep Windows-only code behind `#[cfg(target_os = "windows")]`.
