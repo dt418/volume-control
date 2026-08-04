@@ -1,5 +1,40 @@
 # Progress Log
 
+## Session 010 (2026-08-04) — Linux + macOS host wiring: audio backends
+
+- Goal: start the host wiring for macOS/Linux (the last open Signal Glass
+  follow-on). Scoped this session to the **audio backends** — the concrete,
+  verifiable-from-Windows piece of that host — implemented behind the shared
+  [`AudioBackend`](crates/volumectl/src/audio/mod.rs) contract.
+- `volumecontrol` already selects a real native backend per target (PulseAudio
+  on Linux, CoreAudio on macOS) with no feature flags, so the backends are thin
+  adapters:
+  - `crates/volumectl/src/audio_linux.rs` — `LinuxAudio` (PulseAudio), gated
+    `#[cfg(target_os = "linux")]`.
+  - `crates/volumectl/src/audio_macos.rs` — `MacAudio` (CoreAudio), gated
+    `#[cfg(target_os = "macos")]`.
+  - `audio::default_backend()` factory returns `Box<dyn AudioBackend>` for each
+    OS; `cli.rs` (non-Windows CLI fallback) now routes `get` / `set <0-100>` /
+    `mute` through the trait instead of calling `volumecontrol` directly, so
+    every non-Windows build exercises the real backend.
+- Verification (honest):
+  - Windows: `cargo test -p volumectl` → **220 passed / 0 failed** (new modules
+    are cfg-gated off Windows; no behaviour change). `cargo fmt --all --check`
+    clean.
+  - macOS: `cargo check --target x86_64-apple-darwin` → Finished, **0 warnings**
+    (CoreAudio backend is pure `objc2-core-audio` FFI, cross-checkable from a
+    Windows host).
+  - Linux: PulseAudio needs a cross `libpulse` so the `x86_64-unknown-linux-gnu`
+    check cannot run on this Windows host (pkg-config cross error on
+    `libpulse-sys`); the `LinuxAudio` path is compiled by the Ubuntu 24.04 CI
+    job, which already installs `libpulse-dev`. Runtime volume/mute confirmation
+    still needs a real desktop session (matches the existing vol-011 gate).
+- Commit: `0a27bfa feat: add Linux and macOS audio backends via shared AudioBackend`.
+- **Still open** (unchanged, runtime-verified only): Linux/macOS **tray**,
+  **global hotkeys**, and the **renderer host event loop** that binds the
+  AppKit/GTK renderers — these need native system services + real-machine
+  runtime verification and are out of scope for a Windows-hosted session.
+
 ## Session 009 (2026-08-04) — Tasks 11–13: macOS 26 renderer, Ubuntu 24.04 renderer, CI + release packaging
 
 - Goal: implement the two native follow-on renderers from the Signal Glass
