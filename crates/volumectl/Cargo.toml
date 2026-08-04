@@ -15,6 +15,32 @@ pretty_env_logger = { workspace = true }
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 volumecontrol = "0.1"
 
+# Native AppKit renderer (spec §10.2): NSPanel/NSWindow surfaces, public
+# material APIs via NSVisualEffectView, VoiceOver semantics. Pure-Rust FFI
+# bindings; no C build. Compile-gated to macOS by the target section.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = "0.3"
+objc2-foundation = "0.3"
+
+# Native GTK4/libadwaita renderer (spec §10.3): GTK/libadwaita surfaces for
+# Settings/Help, layer-shell overlay/mixer on Wayland, X11-compatible
+# fallback. Optional so the plain CLI fallback still builds on Linux systems
+# without GTK4 development packages; CI enables `gtk-renderer` (+
+# `layer-shell`) on Ubuntu 24.04 where the system libraries exist.
+# Version pairing: gtk4 0.8 + libadwaita 0.6 + gtk4-layer-shell 0.3 all
+# resolve against gtk4-sys 0.8 (system GTK ≥ 4.0; Ubuntu 24.04 ships 4.14.1
+# and libadwaita 1.4.0, both satisfied).
+[features]
+default = []
+gtk-renderer = ["dep:gtk4", "dep:libadwaita"]
+layer-shell = ["dep:gtk4-layer-shell", "gtk-renderer"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk4 = { version = "0.8", optional = true }
+libadwaita = { version = "0.6", optional = true }
+gtk4-layer-shell = { version = "0.3", optional = true }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true }
 tray-icon = { workspace = true }
