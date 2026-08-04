@@ -101,11 +101,17 @@ type ChildWndProc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRES
 ///
 /// Vertical rhythm on the 4px grid: 16 top padding; row 1 eyebrow
 /// `VOLUME MIXER` (label role) at y 16; row 2 `System output` (caption) at
-/// y 40; row 3 air (y 52..84); row 4 the 28px display value (y 84..112,
+/// y 40; row 3 air (y 52..80); row 4 the 28px display value (y 80..108,
 /// right-aligned); row 5 the Signal Rail band (8px track, center y 128); row
 /// 6 air (y 132..172); row 7 the 36px button row (y 172..208) with 16px
 /// bottom padding. The native trackbar occupies the same x range as the rail
 /// with a 28px-tall hit area centered on the rail band (y 114..142).
+///
+/// The value row sits 2px above the slider hit area; the slider's outer
+/// focus ring (3px gap + 1.5px stroke → 3.75px outset) would cut through
+/// the value's ink at y 110.25..111.75, so the row is lifted 4px (bottom
+/// 108) to clear the ring band entirely — verified by
+/// `value_row_clears_the_slider_focus_ring`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct MixerLayout {
     /// `VOLUME MIXER` eyebrow box (label role, secondary text), left at 16.
@@ -141,7 +147,7 @@ impl MixerLayout {
         Self {
             eyebrow_rect: RectF::new(16.0, 16.0, content_right, 32.0),
             output_rect: RectF::new(16.0, 40.0, content_right, 52.0),
-            value_rect: RectF::new(16.0, 84.0, content_right, 112.0),
+            value_rect: RectF::new(16.0, 80.0, content_right, 108.0),
             track: TrackRect {
                 left: 16.0,
                 right: content_right,
@@ -1303,6 +1309,38 @@ mod tests {
                 outer.left >= 0.0 && outer.right <= WIN_W as f32,
                 "{rect:?} ring in bounds"
             );
+        }
+    }
+
+    #[test]
+    fn value_row_clears_the_slider_focus_ring() {
+        // Regression (user report 2026-08-04): with the slider focused, the
+        // outer focus ring (3px gap + 1.5px stroke → 3.75px outset) used to
+        // cut through the right-aligned value text — the value row ended at
+        // y 112, only 2px above the slider hit area (y 114), while the ring's
+        // top stroke landed at y 110.25..111.75, right across the value ink
+        // (live-verified: ring stroke pixels interleaved with the "51%" text
+        // on a real mixer). The row now sits at y 80..108, clearing the ring
+        // band for both the standard and high-contrast focus tokens.
+        for (high_contrast, label) in [(false, "standard"), (true, "high-contrast")] {
+            let focus = appearance(ThemeMode::Dark, MaterialMode::Opaque, high_contrast)
+                .tokens
+                .focus;
+            let l = MixerLayout::new(WIN_W as f32, WIN_H as f32);
+            assert_eq!(l.value_rect.height(), 28.0, "spec §6.2: 28px value row");
+            let (outer, inner) = focus_ring_rects(l.slider_rect, &focus);
+            for (layer, rect) in [("outer", outer), ("inner", inner)] {
+                assert!(
+                    rect.top >= l.value_rect.bottom,
+                    "{label} {layer} ring top ({}) must clear the value row bottom ({})",
+                    rect.top,
+                    l.value_rect.bottom
+                );
+                assert!(
+                    rect.top - l.value_rect.bottom >= 2.0,
+                    "{label} {layer} ring: at least 2px air below the value row"
+                );
+            }
         }
     }
 
