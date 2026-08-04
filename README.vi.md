@@ -64,13 +64,27 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
   scripts\win-build.bat test
   ```
 
-- **macOS / Linux**: chưa hoàn thiện — hiện binary chạy dạng CLI đơn giản
-  (`volumectl get` / `set <0-100>`). Kiến trúc (trait `AudioBackend` / hotkey)
-  đã sẵn sàng cho backend native: CoreAudio trên macOS, PulseAudio/PipeWire
-  trên Linux. Hợp đồng UI thích ứng dùng chung và các seam renderer biên dịch
-  an toàn đã có, nhưng renderer AppKit và GTK/libadwaita là công việc ở giai
-  đoạn sau — **chưa** được triển khai và chưa có gì trên macOS/Linux được kiểm
-  chứng trong kế hoạch này.
+- **macOS**: Rust (stable) + công cụ dòng lệnh Xcode:
+
+  ```bash
+  cargo build
+  cargo test    # bao gồm smoke test renderer AppKit
+  ```
+
+- **Ubuntu 24.04** (hoặc Debian 12+): Rust (stable) + gói dev GTK4/libadwaita.
+  Nếu không có chúng, binary chạy dạng CLI đơn giản (`volumectl get` /
+  `set <0-100>`); nếu có, renderer native được biên dịch:
+
+  ```bash
+  sudo apt-get install libgtk-4-dev libadwaita-1-dev libpulse-dev xvfb
+  cargo build                                    # CLI fallback
+  cargo build --features gtk-renderer            # surface GTK4 native
+  cargo build --features gtk-renderer,layer-shell  # + overlay/mixer layer-shell Wayland
+  xvfb-run -a cargo test --features gtk-renderer # smoke test renderer
+  ```
+
+  Đường dẫn layer-shell Wayland cũng cần `libgtk-4-layer-shell-dev` (có trong
+  Ubuntu 24.04); nếu thiếu, các surface dùng cửa sổ không viền tương thích X11.
 
 ## Trạng thái nền tảng
 
@@ -83,7 +97,25 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
 | Cửa sổ Settings  | ✅ | 🔜 | 🔜 |
 | Khay hệ thống    | ✅ tray-icon | 🔜 | 🔜 |
 | Cấu hình trực tiếp | ✅ | — | — |
-| Renderer UI thích ứng | ✅ native Win32 | 🔜 AppKit (chỉ seam) | 🔜 GTK/libadwaita (chỉ seam) |
+| Renderer UI thích ứng | ✅ native Win32 | ✅ AppKit (surface + smoke test) | ✅ GTK4/libadwaita (surface, CI test dưới Xvfb) |
+
+Renderer macOS và Linux triển khai cùng hợp đồng surface Signal Glass như
+Windows (vị trí, bậc vật liệu, chính sách chuyển động, từ vựng trợ năng
+§11.2) thông qua bridge `NativeRenderer` dùng chung; phần kết nối host
+(hotkey, audio, tray) là công việc tiếp theo.
+
+## CI và bản phát hành
+
+GitHub Actions (`.github/workflows/`) kiểm tra mọi push/PR:
+
+- **Windows** — build, toàn bộ test suite, kiểm tra artifact release.
+- **macOS** — build và test gồm cả smoke test renderer AppKit.
+- **Ubuntu 24.04** — build/test CLI fallback, build GTK4/libadwaita và smoke
+  test renderer dưới Xvfb, cùng build layer-shell Wayland.
+
+Push tag `v*` sẽ build binary release trên cả ba nền tảng và xuất bản GitHub
+release với archive đặt tên theo phiên bản và `SHA256SUMS.txt`
+(`scripts/package.sh`).
 
 ## Kiến trúc
 

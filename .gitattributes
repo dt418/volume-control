@@ -1,0 +1,5 @@
+# Shell scripts must stay LF even on Windows checkouts so the shebang works.
+*.sh text eol=lf
+*.bat text eol=crlf
+*.yml text eol=lf
+*.yaml text eol=lf

@@ -1,5 +1,101 @@
 # Progress Log
 
+## Session 009 (2026-08-04) — Tasks 11–13: macOS 26 renderer, Ubuntu 24.04 renderer, CI + release packaging
+
+- Goal: implement the two native follow-on renderers from the Signal Glass
+  plan (spec §10.2 AppKit, §10.3 GTK4/libadwaita) behind the shared
+  `NativeRenderer` contract, then add the cross-platform CI matrix and
+  versioned release packaging. Merged master (PR #2 ECC bundle, 3976e79)
+  first via `git merge --ff-only origin/master`.
+- Commits:
+  - `4598605 feat: add macOS 26 Signal Glass renderer` (Task 11)
+  - `a2b331c feat: add Ubuntu 24.04 Signal Glass renderer` (Task 12)
+  - `31762ee ci: add cross-platform UI build matrix and packaging` (Task 13)
+
+### Task 11 — macOS 26 renderer (`crates/volumectl/src/ui/platform/macos/renderer.rs`)
+- Dependency triple resolved against the vendored sources:
+  `objc2 0.6 + objc2-app-kit 0.3 + objc2-foundation 0.3` (resolve 0.6.4/
+  0.3.2/0.3.2), all default features on. No private APIs; the
+  `NSVisualEffectView` material path is availability-gated at runtime
+  (`AnyClass::get(c"NSVisualEffectView")`).
+- Structure mirrors the Windows adapter: pure planning (spec §5–§8 surface
+  sizes, shared placement math, material ladder, §11.2 labels) + macOS-only
+  AppKit layer (`NSPanel` borderless/non-activating at floating level,
+  `NSVisualEffectView` HUDWindow glass, translucent clear-color fallback,
+  opaque token background, VoiceOver labels, `setAnimations(&NSDictionary)`
+  for reduced/disabled motion).
+- Pre-existing non-Windows compile bugs fixed on the way (kept behavior
+  identical): `cli.rs` `u8 * 100.0` (E0277) and `set_vol(f32)` (E0308, API
+  takes `u8`); `main.rs` returned `std::process::ExitCode` directly (no
+  `.code()` on this toolchain).
+- AppKit smoke tests (`appkit_panel_applies_material_kinds_and_labels`,
+  `appkit_high_contrast_forces_opaque_panels`) dispatch to the real main
+  thread via a hand-rolled GCD block (stable public libSystem API); cargo
+  test worker threads have no main thread, and the tests cannot panic inside
+  the C dispatch frame.
+- Verification (fresh): `cargo check --target x86_64-apple-darwin -p
+  volumectl` → Finished, 0 warnings; `cargo fmt --all --check` clean;
+  `cargo test -p volumectl` → 220 passed, 0 failed; `cargo build` clean.
+  Runtime smoke evidence on a real macOS host is exercised by the new
+  macOS CI job (macos-15 runner, `cargo test` includes the AppKit smoke
+  tests) — first run pending the branch push/PR.
+
+### Task 12 — Ubuntu 24.04 renderer (`crates/volumectl/src/ui/platform/linux/{mod.rs,renderer.rs}`)
+- Dependency triple: `gtk4 0.8 + libadwaita 0.6 + gtk4-layer-shell 0.3`
+  (all resolve against gtk4-sys 0.8; system GTK ≥ 4.0 — Ubuntu 24.04 ships
+  4.14.1 + libadwaita 1.4.0). Features: `gtk-renderer` (GTK surfaces) and
+  `layer-shell` (Wayland overlay/mixer); the CLI fallback still builds with
+  neither.
+- Structure: pure planning (identical geometry/material/motion/a11y contract
+  as Windows/macOS) + feature-gated GTK layer: layer-shell overlay surfaces
+  for Overlay/Mixer on Wayland (anchors + margins reproduced from the shared
+  placement math, exclusive keyboard mode), borderless plain windows
+  elsewhere (X11/headless), libadwaita stylesheet loaded via `adw::init()`
+  with `view`/`card` classes on Settings/Help, CSS token background for
+  opaque, `set_opacity(surface_alpha)` for translucent, `update_property`
+  §11.2 labels, `window.set_visible` for show/hide.
+- Verification (fresh): `cargo check --target x86_64-unknown-linux-gnu -p
+  volumectl` (no features) → Finished, 0 warnings. The cross-check needs a
+  pkg-config stub on this Windows host (volumecontrol-linux's
+  libpulse-binding build-script probe; check does not link) — stub at
+  `/tmp/rtk-stub-bin/pkg-config`, `PKG_CONFIG_ALLOW_CROSS=1`; recorded as
+  an environment shim, not a code change. GTK4/libadwaita + layer-shell
+  compile and the Xvfb smoke tests run in the new ubuntu-24.04 CI job
+  (`xvfb-run -a cargo test --features gtk-renderer`); layer-shell runtime
+  behavior needs a real Wayland session (CI compiles it when
+  `libgtk-4-layer-shell-dev` is present). Windows tests unaffected: 220
+  passed, 0 failed.
+
+### Task 13 — CI + release packaging
+- `.github/workflows/ci.yml`: checks job (fmt, forbidden-diff-path gate via
+  `scripts/ci-diff-check.sh`, CLI-fallback build/test) + Windows
+  (build/test/release artifact validation) + macOS-15 (build/test with the
+  AppKit smoke tests + artifact validation) + ubuntu-24.04 (CLI build/test,
+  gtk-renderer build, Xvfb smoke tests, conditional layer-shell build,
+  release artifact).
+- `.github/workflows/release.yml`: `v*` tag → per-platform release build
+  (Linux: `gtk-renderer` + `layer-shell` when the system lib exists),
+  `scripts/package.sh` packs versioned archives + `SHA256SUMS.txt`, final
+  job creates the GitHub release with checksums.
+- `scripts/package.sh` locally exercised with real artifacts: Windows zip
+  (volumectl.exe 1,503,232 B + README, SHA256 recorded) and Ubuntu tar.gz
+  (volumectl + README, SHA256 recorded) — both pass. `sha256sum` is absent
+  on macOS runners, so the script falls back to `shasum -a 256`; Windows
+  zipping uses PowerShell `Compress-Archive` (zip not guaranteed outside CI).
+- README.md + README.vi.md updated: macOS/Linux build instructions, platform
+  status table (renderers now ✅), CI/release section.
+- First CI run is pending: the workflows were just committed; they execute
+  on push/PR from origin (branch push + PR in this session's wrap-up).
+
+### Status
+- vol-011 stays `in_progress`: the plan requires every acceptance item to
+  carry evidence, and the human-confirmation remainder (high-contrast live
+  check, reduced-motion live check, 125/150% DPI live check,
+  taskbar/secondary-monitor work areas, acrylic look, tray-menu clicks)
+  remains unverified on a real Windows session. All machine-verifiable
+  evidence is recorded (Session 008 matrix + this session's renderer/CI
+  evidence).
+
 ## Session 008 (2026-08-04) — Task 10: Verify Windows Signal Glass accessibility and fallback behavior
 
 - Goal: run the Task 10 Windows accessibility/capability verification matrix

@@ -18,7 +18,7 @@ pub fn run() -> Result<ExitCode, String> {
             let vol = device
                 .get_vol()
                 .map_err(|e| format!("get_vol failed: {e}"))?;
-            println!("{}%", (vol * 100.0).round() as i32);
+            println!("{vol}%");
             Ok(ExitCode::SUCCESS)
         }
         "set" => {
@@ -28,7 +28,7 @@ pub fn run() -> Result<ExitCode, String> {
                 .parse::<i32>()
                 .map_err(|_| "volume must be 0-100")?;
             device
-                .set_vol(pct.clamp(0, 100) as f32 / 100.0)
+                .set_vol(pct.clamp(0, 100) as u8)
                 .map_err(|e| format!("set_vol failed: {e}"))?;
             Ok(ExitCode::SUCCESS)
         }

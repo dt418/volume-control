@@ -1,42 +1,26 @@
-//! Linux renderer seam (compile-safe).
+//! Linux renderer (GTK4/libadwaita, spec §10.3).
 //!
-//! This module is the renderer boundary for a future native GTK/libadwaita
-//! build. It is deliberately a *seam*, not a renderer: no GTK, libadwaita,
-//! PulseAudio, or PipeWire code exists yet. It consumes only shared
-//! [`crate::ui`] types, so a Linux compile never needs a Windows import and
-//! shared code never leaks platform specifics.
+//! This module is the native Linux renderer boundary. It consumes only shared
+//! [`crate::ui`] types — the same [`crate::ui::NativeRenderer`] contract the
+//! Windows and macOS renderers implement — so a Linux compile never needs a
+//! Windows import and shared code never leaks platform specifics.
 //!
 //! Renderer contract
 //! -----------------
-//! A Linux renderer:
-//!
-//! - consumes confirmed [`crate::ui::AppState`] and [`crate::ui::ThemeTokens`],
-//!   resolves the material treatment from [`crate::ui::UiCapabilities`]
-//!   (Wayland/X11 composition, high contrast, reduced motion, DPI, work
-//!   area), and places surfaces against the shared work-area math;
+//! - consumes confirmed [`crate::ui::AppState`] and [`crate::ui::ThemeTokens`]
+//!   (light/dark/high-contrast plus the resolved accent), resolves the
+//!   material treatment from [`crate::ui::UiCapabilities`] (Wayland
+//!   layer-shell glass when available, translucent, or opaque fallback), and
+//!   places surfaces against the shared work-area math;
 //! - dispatches [`crate::ui::AppAction`] values to the application host; it
 //!   never mutates audio or writes configuration directly;
-//! - draws with GTK/libadwaita and reads volume through PulseAudio/PipeWire
-//!   in a follow-on plan.
+//! - draws with GTK4/libadwaita (layer-shell overlay/mixer on Wayland,
+//!   borderless windows elsewhere) and exposes §11.2 accessibility labels.
 //!
-//! Follow-on native work: GTK/libadwaita overlay/mixer/settings surfaces, a
-//! PulseAudio/PipeWire backend, global hotkeys, and a tray implementation.
+//! The GTK surface code is feature-gated (`gtk-renderer`, plus `layer-shell`
+//! for the Wayland path) so the plain CLI fallback still builds on Linux
+//! systems without GTK development packages. The [`renderer`] module's pure
+//! planning is feature-independent and unit-tested; the GTK smoke tests run
+//! under a display session (CI uses `xvfb-run`) and skip cleanly headless.
 
-use crate::ui::{AppAction, AppState, ThemeTokens, UiCapabilities};
-
-/// The shared UI contract a Linux renderer must consume.
-///
-/// Compile-time placeholder for the `render` entry point the GTK renderer
-/// will implement. It type-checks today — every type is platform-neutral —
-/// and will be replaced by real drawing and event wiring.
-#[allow(dead_code)]
-pub fn render_boundary(
-    state: &AppState,
-    tokens: &ThemeTokens,
-    capabilities: &UiCapabilities,
-) -> Vec<AppAction> {
-    // Nothing is drawn yet: the seam keeps the renderer contract compiling on
-    // `target_os = "linux"` without importing any platform API.
-    let _ = (state, tokens, capabilities);
-    Vec::new()
-}
+pub mod renderer;

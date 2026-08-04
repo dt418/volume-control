@@ -1,0 +1,116 @@
+# CI matrix for the VolumeControl Signal Glass UI.
+#
+# Windows: build + full test suite + release artifact validation.
+# macOS: build + tests (AppKit renderer smoke tests dispatch to the real
+#   main thread via GCD).
+# Ubuntu 24.04: CLI fallback build/test with no features, then the GTK4/
+#   libadwaita renderer build and smoke tests under Xvfb, and the Wayland
+#   layer-shell build when the system library is available.
+#
+# A shared "checks" job runs formatting and the forbidden-diff-path gate.
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Format, diff gate, CLI fallback
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install PulseAudio dev headers (volumecontrol probe)
+        run: sudo apt-get update && sudo apt-get install -y libpulse-dev
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Forbidden diff paths
+        run: bash scripts/ci-diff-check.sh
+      - name: Build (no GTK features — CLI fallback)
+        run: cargo build
+      - name: Test (no GTK features)
+        run: cargo test
+
+  windows:
+    name: Windows (build + tests + release artifact)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build
+      - name: Test
+        run: cargo test
+      - name: Build release and validate artifact
+        shell: bash
+        run: |
+          cargo build --release
+          test -s target/release/volumectl.exe && echo "volumectl.exe present and non-empty"
+          ls -la target/release/volumectl.exe
+          file target/release/volumectl.exe || true
+
+  macos:
+    name: macOS (build + tests + renderer smoke)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build
+      - name: Test (includes AppKit renderer smoke tests)
+        run: cargo test
+      - name: Build release and validate artifact
+        shell: bash
+        run: |
+          cargo build --release
+          test -s target/release/volumectl && echo "volumectl present and non-empty"
+          ls -la target/release/volumectl
+          file target/release/volumectl
+
+  ubuntu:
+    name: Ubuntu 24.04 (GTK4/libadwaita + layer-shell)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install GTK4/libadwaita/Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev xvfb
+          # Ubuntu 24.04 ships gtk4-layer-shell; when absent the layer-shell
+          # steps are skipped (the X11 fallback path still builds).
+          sudo apt-get install -y libgtk-4-layer-shell-dev \
+            || echo "::warning::gtk4-layer-shell system library unavailable; layer-shell build skipped"
+      - name: Build (no features — CLI fallback)
+        run: cargo build
+      - name: Test (no features — pure planning)
+        run: cargo test
+      - name: Build (gtk-renderer)
+        run: cargo build --features gtk-renderer
+      - name: Test (gtk-renderer smoke under Xvfb)
+        run: xvfb-run -a cargo test --features gtk-renderer
+      - name: Build (gtk-renderer + layer-shell)
+        run: |
+          if pkg-config --exists gtk4-layer-shell; then
+            cargo build --features gtk-renderer,layer-shell
+          else
+            echo "::warning::gtk4-layer-shell not installed; layer-shell build skipped"
+          fi
+      - name: Build release and validate artifact (gtk-renderer)
+        run: |
+          cargo build --release --features gtk-renderer
+          test -s target/release/volumectl && echo "volumectl present and non-empty"
+          ls -la target/release/volumectl
+          file target/release/volumectl
