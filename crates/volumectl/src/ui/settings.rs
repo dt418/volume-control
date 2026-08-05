@@ -170,17 +170,19 @@ mod tests {
     /// A working copy that fails strict validation (small step not strictly
     /// below the large step).
     fn invalid_config() -> Config {
-        let mut cfg = Config::default();
-        cfg.volume_step = 30;
-        cfg.volume_step_large = 29;
-        cfg
+        Config {
+            volume_step: 30,
+            volume_step_large: 29,
+            ..Config::default()
+        }
     }
 
     /// The last confirmed baseline changed by the caller.
     fn different_baseline() -> Config {
-        let mut cfg = Config::default();
-        cfg.overlay_duration_ms = 3000;
-        cfg
+        Config {
+            overlay_duration_ms: 3000,
+            ..Config::default()
+        }
     }
 
     #[test]
@@ -361,8 +363,7 @@ mod tests {
 
         let error = draft
             .commit_with(|_| {
-                Err(ConfigError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                Err(ConfigError::Io(std::io::Error::other(
                     "simulated disk failure",
                 )))
             })
@@ -388,7 +389,7 @@ mod tests {
         let error = draft
             .commit_with(|_| {
                 Err(ConfigError::Serialization(serde_json::Error::io(
-                    std::io::Error::new(std::io::ErrorKind::Other, "simulated encode failure"),
+                    std::io::Error::other("simulated encode failure"),
                 )))
             })
             .expect_err("serialization failure surfaces to the caller");

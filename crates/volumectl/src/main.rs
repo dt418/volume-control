@@ -48,6 +48,21 @@ fn main() -> std::process::ExitCode {
 #[cfg(not(all(target_os = "linux", feature = "gtk-renderer")))]
 fn main() -> std::process::ExitCode {
     volumectl_lib::init_logging();
+    // macOS and a Linux build without GTK still expose a useful background
+    // global-hotkey host when launched without a CLI command. Explicit
+    // `get`/`set`/`mute` invocations remain one-shot commands.
+    if std::env::args().nth(1).is_none() {
+        #[cfg(not(target_os = "windows"))]
+        {
+            return match volumectl_lib::hotkeys_rdev::run_headless() {
+                Ok(()) => std::process::ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("volumectl: global hotkey host unavailable ({e})");
+                    std::process::ExitCode::FAILURE
+                }
+            };
+        }
+    }
     match volumectl_lib::cli::run() {
         Ok(code) => code,
         Err(e) => {

@@ -563,9 +563,11 @@ mod tests {
 
     #[test]
     fn strict_validation_reports_invalid_step_relationship_by_field() {
-        let mut cfg = Config::default();
-        cfg.volume_step = 20;
-        cfg.volume_step_large = 10;
+        let cfg = Config {
+            volume_step: 20,
+            volume_step_large: 10,
+            ..Config::default()
+        };
 
         let error = validate(&cfg).expect_err("large step must be greater");
 
@@ -575,12 +577,17 @@ mod tests {
 
     #[test]
     fn normalize_preserves_bounds_and_repairs_step_relationship() {
-        let mut cfg = Config::default();
-        cfg.volume_step = 0;
-        cfg.volume_step_large = 0;
-        cfg.overlay_duration_ms = u64::MAX;
-        cfg.beep.blocked_freq = 0;
-        cfg.beep.blocked_duration_ms = 0;
+        let cfg = Config {
+            volume_step: 0,
+            volume_step_large: 0,
+            overlay_duration_ms: u64::MAX,
+            beep: BeepConfig {
+                blocked_freq: 0,
+                blocked_duration_ms: 0,
+                ..BeepConfig::default()
+            },
+            ..Config::default()
+        };
 
         let normalized = normalize(cfg);
 
@@ -594,9 +601,11 @@ mod tests {
 
     #[test]
     fn normalize_repairs_maximum_step_boundary() {
-        let mut cfg = Config::default();
-        cfg.volume_step = 50;
-        cfg.volume_step_large = 50;
+        let cfg = Config {
+            volume_step: 50,
+            volume_step_large: 50,
+            ..Config::default()
+        };
 
         let normalized = normalize(cfg);
 
@@ -646,9 +655,11 @@ mod tests {
 
     #[test]
     fn save_validated_rejects_invalid_config_before_writing() {
-        let mut cfg = Config::default();
-        cfg.volume_step = 30;
-        cfg.volume_step_large = 29;
+        let cfg = Config {
+            volume_step: 30,
+            volume_step_large: 29,
+            ..Config::default()
+        };
 
         let error = save_validated(&cfg).expect_err("invalid relationship must not save");
 

@@ -12,6 +12,7 @@ pub mod audio_macos;
 pub mod config;
 pub mod core;
 pub mod hotkeys;
+pub mod hotkeys_rdev;
 #[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
 pub mod linux_app;
 pub mod ui;
@@ -24,8 +25,6 @@ pub mod audio_windows;
 #[cfg(target_os = "windows")]
 pub mod help;
 #[cfg(target_os = "windows")]
-pub mod hotkeys_win32;
-#[cfg(target_os = "windows")]
 pub mod mixer;
 #[cfg(target_os = "windows")]
 pub mod overlay;
@@ -33,6 +32,8 @@ pub mod overlay;
 pub mod settings;
 #[cfg(target_os = "windows")]
 pub mod tray;
+#[cfg(target_os = "windows")]
+pub mod wheel_win32;
 
 /// CLI fallback for non-Windows platforms (also handy for testing).
 #[cfg(not(target_os = "windows"))]

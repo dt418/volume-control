@@ -100,7 +100,7 @@ impl Tray {
     /// Refresh the volume label and mute check state.
     pub fn set_volume(&self, state: &VolumeState) {
         self.vol_label
-            .set_text(&format!("VolumeControl — {}%", state.percent()));
+            .set_text(format!("VolumeControl — {}%", state.percent()));
         self.mute_item.set_checked(state.muted);
     }
 

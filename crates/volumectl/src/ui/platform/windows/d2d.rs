@@ -37,6 +37,7 @@ use crate::ui::theme::{Rgba, TextRole};
 use super::primitives::{dpi_scale_for, DpiMetrics, PointF, RectF, SizeF};
 use super::text::{TextAlign, TextLayout};
 
+#[allow(clippy::upper_case_acronyms)]
 type HRESULT = i32;
 const S_OK: HRESULT = 0;
 
