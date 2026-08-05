@@ -38,6 +38,7 @@ assert!(layout.mute_rect.right <= WIN_W as f32 - 16.0);
 assert!(layout.reset_rect.right <= WIN_W as f32 - 16.0);
 assert!(layout.mute_rect.right <= layout.reset_rect.left);
 assert!(layout.reset_rect.width() >= 200.0);
+assert!(layout.value_rect.bottom + 8.0 <= layout.slider_rect.top);
 ```
 
 - [ ] **Step 2: Run the focused test to verify it fails**
@@ -49,9 +50,10 @@ only 156 px wide.
 
 - [ ] **Step 3: Write the minimal implementation**
 
-Change only the reset rectangle in `MixerLayout::new`:
+Change the layout rectangles in `MixerLayout::new`:
 
 ```rust
+value_rect: RectF::new(16.0, 76.0, content_right, 104.0),
 reset_rect: RectF::new(164.0, buttons_top, content_right, buttons_bottom),
 ```
 

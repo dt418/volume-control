@@ -46,6 +46,15 @@ pub const ID_RESET: i32 = 0x06;
 pub const ID_MIXER: i32 = 0x07;
 pub const ID_SHOW_MENU: i32 = 0x08;
 
+/// Volume adjustments repeat while their shortcut is held; command shortcuts
+/// remain one-shot even when the keyboard emits auto-repeat keydown events.
+fn is_repeatable_hotkey_id(id: i32) -> bool {
+    matches!(
+        id,
+        ID_VOL_UP | ID_VOL_DOWN | ID_VOL_UP_LARGE | ID_VOL_DOWN_LARGE
+    )
+}
+
 /// Custom message posted to the host window by the mouse-wheel hook.
 /// `wparam` carries a [`HotkeyAction`] id, handled like `WM_HOTKEY`.
 pub const WM_APP_WHEEL: u32 = WM_APP + 2;
@@ -179,8 +188,8 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
 
 /// Low-level keyboard hook: routes the CapsLock combos (RegisterHotKey can't
 /// express a CapsLock modifier). While CapsLock is physically held, the target
-/// key is swallowed and the action posted to the host window. Autorepeat is
-/// suppressed (like the `MOD_NOREPEAT` flag on the keyboard combos).
+/// key is swallowed and the action posted to the host window. Volume actions
+/// are posted for auto-repeat keydowns; command actions remain one-shot.
 unsafe extern "system" fn key_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if code >= 0
         && active_modifier() == HotkeyModifier::CapsLock
@@ -201,7 +210,7 @@ unsafe extern "system" fn key_proc(code: i32, wparam: WPARAM, lparam: LPARAM) ->
             let same_key = (prev >> 32) == vk as i64;
             let repeat = same_key && (now - (prev & 0xFFFF_FFFF)) < 300;
             let hwnd = HOOK_HOST_HWND.load(Ordering::SeqCst);
-            if !repeat && hwnd != 0 {
+            if (!repeat || is_repeatable_hotkey_id(id)) && hwnd != 0 {
                 PostMessageW(hwnd as HWND, WM_APP_WHEEL, id as usize, 0);
             }
             // Swallow the key so it never reaches the focused app.
@@ -371,8 +380,14 @@ impl Win32Hotkeys {
 
     fn reg(&mut self, id: i32, mods: u32, vk: VIRTUAL_KEY) -> Result<(), HotkeyRegError> {
         unsafe {
-            // MOD_NOREPEAT: holding a combo shouldn't spam-apply.
-            let ok: BOOL = RegisterHotKey(self.hwnd, id, mods | MOD_NOREPEAT, vk as u32);
+            // Volume changes follow the keyboard's auto-repeat while command
+            // shortcuts remain one-shot.
+            let repeat_flag = if is_repeatable_hotkey_id(id) {
+                0
+            } else {
+                MOD_NOREPEAT
+            };
+            let ok: BOOL = RegisterHotKey(self.hwnd, id, mods | repeat_flag, vk as u32);
             if ok == FALSE {
                 let error_code = GetLastError();
                 return Err(HotkeyRegError {
@@ -479,6 +494,19 @@ mod tests {
     fn unknown_hotkey_id_decodes_to_none() {
         assert_eq!(hotkey_action(0), None);
         assert_eq!(hotkey_action(0x7FFF), None);
+    }
+
+    #[test]
+    fn only_volume_hotkeys_repeat_while_held() {
+        assert!(is_repeatable_hotkey_id(ID_VOL_UP));
+        assert!(is_repeatable_hotkey_id(ID_VOL_DOWN));
+        assert!(is_repeatable_hotkey_id(ID_VOL_UP_LARGE));
+        assert!(is_repeatable_hotkey_id(ID_VOL_DOWN_LARGE));
+
+        assert!(!is_repeatable_hotkey_id(ID_MUTE));
+        assert!(!is_repeatable_hotkey_id(ID_RESET));
+        assert!(!is_repeatable_hotkey_id(ID_MIXER));
+        assert!(!is_repeatable_hotkey_id(ID_SHOW_MENU));
     }
 
     #[test]

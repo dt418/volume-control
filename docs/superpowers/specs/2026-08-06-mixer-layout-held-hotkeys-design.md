@@ -22,11 +22,12 @@ Signal Glass value/focus-ring layout.
 
 ### Mixer layout
 
-Keep the 400x224 card, the 16 px content margins, the existing mute button,
-and the existing value/slider geometry. Move the reset button to x=164 and
-keep its right edge at x=384, giving it 220 px and a 16 px gap from Mute.
-Add a pure layout regression test proving both buttons remain inside the card
-and do not overlap.
+Keep the 400x224 card and 16 px content margins. Use a two-column button row:
+Mute is 132 px wide, the gap is 16 px, and Reset starts at x=164 and fills to
+x=384 (220 px). Move the 28 px value row to y=76..104, leaving 10 px before
+the slider hit area at y=114 and keeping the focus ring away from the text.
+Add pure layout regression tests proving the buttons remain inside the card,
+do not overlap, and the value has at least 8 px of air before the slider.
 
 ### Held volume hotkeys
 

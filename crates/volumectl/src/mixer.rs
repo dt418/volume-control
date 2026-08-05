@@ -120,16 +120,16 @@ type ChildWndProc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRES
 ///
 /// Vertical rhythm on the 4px grid: 16 top padding; row 1 eyebrow
 /// `VOLUME MIXER` (label role) at y 16; row 2 `System output` (caption) at
-/// y 40; row 3 air (y 52..80); row 4 the 28px display value (y 80..108,
+/// y 40; row 3 air (y 52..76); row 4 the 28px display value (y 76..104,
 /// right-aligned); row 5 the Signal Rail band (8px track, center y 128); row
 /// 6 air (y 132..172); row 7 the 36px button row (y 172..208) with 16px
 /// bottom padding. The native trackbar occupies the same x range as the rail
 /// with a 28px-tall hit area centered on the rail band (y 114..142).
 ///
-/// The value row sits 2px above the slider hit area; the slider's outer
+/// The value row sits 10px above the slider hit area; the slider's outer
 /// focus ring (3px gap + 1.5px stroke → 3.75px outset) would cut through
-/// the value's ink at y 110.25..111.75, so the row is lifted 4px (bottom
-/// 108) to clear the ring band entirely — verified by
+/// the value's ink at y 110.25..111.75, so the row is lifted 8px (bottom
+/// 104) to clear the ring band with visible air — verified by
 /// `value_row_clears_the_slider_focus_ring`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct MixerLayout {
@@ -154,34 +154,47 @@ struct MixerLayout {
     close_rect: RectF,
 }
 
+const CONTENT_MARGIN: f32 = 16.0;
+const BUTTON_GAP: f32 = 16.0;
+const MUTE_BUTTON_WIDTH: f32 = 132.0;
+const VALUE_ROW_HEIGHT: f32 = 28.0;
+const VALUE_SLIDER_AIR: f32 = 10.0;
+
 impl MixerLayout {
     fn new(w: f32, h: f32) -> Self {
-        let content_right = w - 16.0;
+        let content_left = CONTENT_MARGIN;
+        let content_right = w - CONTENT_MARGIN;
         let track_center_y = 128.0;
         let track_half = 4.0;
+        let slider_top = track_center_y - 14.0;
+        let value_bottom = slider_top - VALUE_SLIDER_AIR;
+        let value_top = value_bottom - VALUE_ROW_HEIGHT;
+        let mute_right = content_left + MUTE_BUTTON_WIDTH;
+        let reset_left = mute_right + BUTTON_GAP;
         // Bottom-anchored button row: 36px tall with 16px bottom padding
         // (y 172..208 for the 224px card).
         let buttons_bottom = h - 16.0;
         let buttons_top = buttons_bottom - 36.0;
         Self {
-            eyebrow_rect: RectF::new(16.0, 16.0, content_right, 32.0),
-            output_rect: RectF::new(16.0, 40.0, content_right, 52.0),
-            value_rect: RectF::new(16.0, 80.0, content_right, 108.0),
+            eyebrow_rect: RectF::new(content_left, 16.0, content_right, 32.0),
+            output_rect: RectF::new(content_left, 40.0, content_right, 52.0),
+            value_rect: RectF::new(content_left, value_top, content_right, value_bottom),
             track: TrackRect {
-                left: 16.0,
+                left: content_left,
                 right: content_right,
                 top: track_center_y - track_half,
                 bottom: track_center_y + track_half,
             },
             slider_rect: RectF::new(
-                16.0,
-                track_center_y - 14.0,
+                content_left,
+                slider_top,
                 content_right,
                 track_center_y + 14.0,
             ),
-            // Mute (secondary) left, Reset (quiet) right-aligned, ≥8px apart.
-            mute_rect: RectF::new(16.0, buttons_top, 148.0, buttons_bottom),
-            reset_rect: RectF::new(228.0, buttons_top, content_right, buttons_bottom),
+            // Mute gets a fixed comfortable width; Reset fills the remaining
+            // column so its full native label remains visible.
+            mute_rect: RectF::new(content_left, buttons_top, mute_right, buttons_bottom),
+            reset_rect: RectF::new(reset_left, buttons_top, content_right, buttons_bottom),
             close_rect: RectF::new(content_right - 32.0, 12.0, content_right, 44.0),
         }
     }
@@ -1345,6 +1358,21 @@ mod tests {
         assert!(l.mute_rect.bottom <= WIN_H as f32 && l.mute_rect.top >= 0.0);
     }
 
+    #[test]
+    fn buttons_fit_inside_card_without_overlap() {
+        let layout = MixerLayout::new(WIN_W as f32, WIN_H as f32);
+        let content_right = WIN_W as f32 - 16.0;
+
+        assert!(layout.mute_rect.right <= content_right);
+        assert!(layout.reset_rect.right <= content_right);
+        assert!(layout.mute_rect.right <= layout.reset_rect.left);
+        assert!(layout.reset_rect.width() >= 200.0);
+        assert!(
+            layout.value_rect.bottom + 8.0 <= layout.slider_rect.top,
+            "volume value must leave 8px of air before the slider"
+        );
+    }
+
     // ── rail integration (pure paint plan) ───────────────────────────────────
 
     #[test]
@@ -1443,12 +1471,13 @@ mod tests {
     fn value_row_clears_the_slider_focus_ring() {
         // Regression (user report 2026-08-04): with the slider focused, the
         // outer focus ring (3px gap + 1.5px stroke → 3.75px outset) used to
-        // cut through the right-aligned value text — the value row ended at
-        // y 112, only 2px above the slider hit area (y 114), while the ring's
-        // top stroke landed at y 110.25..111.75, right across the value ink
-        // (live-verified: ring stroke pixels interleaved with the "51%" text
-        // on a real mixer). The row now sits at y 80..108, clearing the ring
-        // band for both the standard and high-contrast focus tokens.
+        // cut through the right-aligned value text — the old value row ended
+        // at y 112, only 2px above the slider hit area (y 114), while the
+        // ring's top stroke landed at y 110.25..111.75, right across the
+        // value ink (live-verified: ring stroke pixels interleaved with the
+        // "51%" text on a real mixer). The row now sits at y 76..104,
+        // leaving visible air before the ring for both standard and
+        // high-contrast focus tokens.
         for (high_contrast, label) in [(false, "standard"), (true, "high-contrast")] {
             let focus = appearance(ThemeMode::Dark, MaterialMode::Opaque, high_contrast)
                 .tokens
