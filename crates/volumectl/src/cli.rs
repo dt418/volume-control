@@ -1,7 +1,10 @@
 //! Non-Windows CLI fallback.
 //!
-//! Until the native macOS/Linux backends land, the binary doubles as a simple
-//! volume utility: `volumes get` / `set <0-100>` / `mute`.
+//! Until the native macOS/Linux GUI host lands, the binary doubles as a simple
+//! volume utility: `volumes get` / `set <0-100>` / `mute`. All audio access
+//! routes through the shared [`AudioBackend`](crate::audio::AudioBackend)
+//! contract via [`crate::audio::default_backend`], so each platform exercises
+//! its real backend (PulseAudio on Linux, CoreAudio on macOS).
 
 use std::process::ExitCode;
 
@@ -9,16 +12,12 @@ pub fn run() -> Result<ExitCode, String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("get");
 
-    // The `volumecontrol` crate provides a cross-platform default device.
-    let device = volumecontrol::AudioDevice::from_default()
-        .map_err(|e| format!("cannot open default audio device: {e}"))?;
+    let device = crate::audio::default_backend().map_err(|e| e.to_string())?;
 
     match cmd {
         "get" => {
-            let vol = device
-                .get_vol()
-                .map_err(|e| format!("get_vol failed: {e}"))?;
-            println!("{vol}%");
+            let state = device.get_state().map_err(|e| e.to_string())?;
+            println!("{}%", state.percent());
             Ok(ExitCode::SUCCESS)
         }
         "set" => {
@@ -28,10 +27,16 @@ pub fn run() -> Result<ExitCode, String> {
                 .parse::<i32>()
                 .map_err(|_| "volume must be 0-100")?;
             device
-                .set_vol(pct.clamp(0, 100) as u8)
-                .map_err(|e| format!("set_vol failed: {e}"))?;
+                .set_volume(pct.clamp(0, 100) as f32 / 100.0)
+                .map_err(|e| e.to_string())?;
             Ok(ExitCode::SUCCESS)
         }
-        other => Err(format!("unknown command '{other}' (try: get, set <0-100>)")),
+        "mute" => {
+            device.toggle_mute().map_err(|e| e.to_string())?;
+            Ok(ExitCode::SUCCESS)
+        }
+        other => Err(format!(
+            "unknown command '{other}' (try: get, set <0-100>, mute)"
+        )),
     }
 }

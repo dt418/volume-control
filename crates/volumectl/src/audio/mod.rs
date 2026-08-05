@@ -22,6 +22,30 @@ impl VolumeState {
     }
 }
 
+/// Open the platform's default-output audio backend.
+///
+/// Resolves the concrete [`AudioBackend`] implementation for the current OS
+/// (PulseAudio on Linux, CoreAudio on macOS). Windows keeps its own Win32
+/// WASAPI host wiring and does not route through this factory.
+///
+/// # Errors
+///
+/// Returns [`AudioError::Init`] when no default output device can be opened.
+#[cfg(target_os = "linux")]
+pub fn default_backend() -> Result<Box<dyn AudioBackend>, AudioError> {
+    crate::audio_linux::LinuxAudio::new().map(|b| Box::new(b) as Box<dyn AudioBackend>)
+}
+
+/// Open the platform's default-output audio backend (CoreAudio on macOS).
+///
+/// # Errors
+///
+/// Returns [`AudioError::Init`] when no default output device can be opened.
+#[cfg(target_os = "macos")]
+pub fn default_backend() -> Result<Box<dyn AudioBackend>, AudioError> {
+    crate::audio_macos::MacAudio::new().map(|b| Box::new(b) as Box<dyn AudioBackend>)
+}
+
 /// Backend error type — intentionally coarse so each platform can map
 /// its native errors without leaking them across the trait boundary.
 #[derive(Debug, Clone)]

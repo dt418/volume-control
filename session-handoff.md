@@ -1,7 +1,8 @@
 # Session Handoff
 
 Handoff after Task 14 of the Signal Glass production UI plan (2026-08-03,
-executed 2026-08-04), refreshed after the CI wrap-up (PR #3 merged).
+executed 2026-08-04), refreshed after the CI wrap-up (PR #3 merged) and then
+again after Session 010 (Linux + macOS audio backends, commit `0a27bfa`).
 
 ## Where we are
 
@@ -46,9 +47,16 @@ executed 2026-08-04), refreshed after the CI wrap-up (PR #3 merged).
    high-contrast mode, reduced-motion, 125%/150% DPI, taskbar/secondary-monitor
    work-area changes, backdrop/acrylic look, tray-menu clicks. All need an OS
    setting change + app relaunch (capabilities are snapshotted at startup).
-2. **Host wiring for macOS/Linux** (hotkeys, audio backends, tray) is
-   follow-on work; the renderers are surface scaffolding + CI smoke tests
-   (which now pass on real runners).
+2. **Host wiring for macOS/Linux** — the **audio backends** are done (Session
+   010, commit `0a27bfa`): `audio_linux.rs` (PulseAudio), `audio_macos.rs`
+   (CoreAudio), both behind the shared `AudioBackend` trait via
+   `audio::default_backend()`, and `cli.rs` now routes `get`/`set`/`mute`
+   through the trait. macOS cross-checks clean on Windows; Linux compiles on the
+   Ubuntu CI job (`libpulse-dev`); runtime volume/mute still needs a real
+   desktop. **Remaining** in host wiring (runtime-verified only, need native
+   system services — out of scope for a Windows-hosted session): Linux/macOS
+   **tray**, **global hotkeys**, and the **renderer host event loop** that binds
+   the AppKit/GTK renderers.
 3. **Optional**: add `libgtk-4-layer-shell-dev` install to the Ubuntu job if
    it ever appears in noble repos, to get a real layer-shell compile+smoke
    on CI (currently skipped by design).

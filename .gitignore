@@ -16,3 +16,12 @@ config.json
 
 # CI release packaging output
 dist/
+
+# Local agent and WSL test artifacts
+.claude/worktrees/
+.freebuff/
+tmp_*.py
+tmp_*.rs
+wsl-*.sh
+wsl-*.out
+wsl-*.err
