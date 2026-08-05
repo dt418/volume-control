@@ -1,8 +1,9 @@
 # Release packaging for VolumeControl.
 #
-# Triggered by a `v*` tag. Each platform builds its release binary and packs
-# it into `dist/` via scripts/package.sh (versioned name + SHA256SUMS.txt);
-# a final job assembles the GitHub release from every artifact.
+# Triggered by a `v*` tag or from the Actions UI. Each platform builds its
+# release binary and packs it into `dist/` via scripts/package.sh (versioned
+# name + SHA256SUMS.txt); a final job assembles the GitHub release from every
+# artifact.
 #
 # Platform notes:
 # - Windows: portable zip (native installer arrives with a follow-on
@@ -17,6 +18,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.1.0"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -38,6 +45,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      - name: Resolve release tag
+        id: release-tag
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          release_tag="$REF_NAME"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            release_tag="$INPUT_TAG"
+          fi
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must match vMAJOR.MINOR.PATCH, for example v0.1.0" >&2
+            exit 1
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install GTK4/libadwaita (Ubuntu)
@@ -67,7 +91,7 @@ jobs:
         shell: bash
         env:
           RELEASE_PLATFORM: ${{ matrix.platform }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ steps.release-tag.outputs.release_tag }}
         run: bash scripts/package.sh
       - uses: actions/upload-artifact@v7
         with:
@@ -79,6 +103,23 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
+      - name: Resolve release tag
+        id: release-tag
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          release_tag="$REF_NAME"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            release_tag="$INPUT_TAG"
+          fi
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must match vMAJOR.MINOR.PATCH, for example v0.1.0" >&2
+            exit 1
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -92,5 +133,10 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release-tag.outputs.release_tag }}
+          RELEASE_TARGET: ${{ github.sha }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*/* --title "VolumeControl $GITHUB_REF_NAME" --generate-notes
+          gh release create "$RELEASE_TAG" dist/*/* \
+            --target "$RELEASE_TARGET" \
+            --title "VolumeControl $RELEASE_TAG" \
+            --generate-notes

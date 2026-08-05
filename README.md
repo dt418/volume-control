@@ -117,6 +117,10 @@ Pushing a `v*` tag builds release binaries on all three platforms and
 publishes a GitHub release with versioned archives and `SHA256SUMS.txt`
 (`scripts/package.sh`).
 
+You can also publish from the GitHub UI: open **Actions → Release → Run
+workflow**, select the source branch, enter a version tag such as `v0.1.0`,
+and run the workflow.
+
 ## Architecture
 
 ```
