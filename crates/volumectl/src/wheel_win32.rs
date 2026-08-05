@@ -87,7 +87,7 @@ pub fn install_wheel_hook(hwnd: HWND) -> Result<(), String> {
     if hook == 0 {
         return Err("SetWindowsHookEx(WH_MOUSE_LL) failed".into());
     }
-    HOST_HWND.store(hwnd as isize, Ordering::Release);
+    HOST_HWND.store(hwnd, Ordering::Release);
     HOOK.store(hook as isize, Ordering::Release);
     log::debug!("mouse wheel hook installed");
     Ok(())

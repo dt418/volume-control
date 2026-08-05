@@ -12,7 +12,7 @@
 //! repeat worker itself is always stopped and joined cleanly.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -368,10 +368,7 @@ impl RdevHotkeys {
 
     /// Return the next action, if the listener has queued one.
     pub fn try_recv(&self) -> Option<HotkeyAction> {
-        match self.rx.try_recv() {
-            Ok(action) => Some(action),
-            Err(TryRecvError::Empty | TryRecvError::Disconnected) => None,
-        }
+        self.rx.try_recv().ok()
     }
 
     /// The rdev listener owns all configured actions, so there is no per-key

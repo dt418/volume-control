@@ -384,7 +384,7 @@ unsafe extern "system" fn host_wndproc(
             if !ctx.is_null() {
                 let ctx = &mut *ctx;
 
-                if wparam as usize == ID_TIMER_HOTKEY {
+                if wparam == ID_TIMER_HOTKEY {
                     drain_hotkeys(ctx);
                     return 0;
                 }

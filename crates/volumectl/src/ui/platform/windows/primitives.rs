@@ -346,6 +346,10 @@ pub fn theme_controls(controls: &[HWND], dark: bool) {
 /// native focus state the other buttons still paint).
 ///
 /// Returns `true` when the item was a button and was painted.
+/// # Safety
+///
+/// The pointer must be null or point to a valid DRAWITEMSTRUCT supplied by
+/// the window manager for the owner-draw callback.
 pub unsafe fn paint_close_button(dis: *const DRAWITEMSTRUCT, hovered: bool) -> bool {
     if dis.is_null() {
         return false;
@@ -707,7 +711,7 @@ impl<'a> PaintCanvas<'a> {
             let d2d = if d2d_present_supported(hwnd) {
                 Direct2dContext::get()
                     .and_then(|context| context.render_target(hwnd))
-                    .and_then(|mut target| if target.begin() { Some(target) } else { None })
+                    .and_then(|mut target| target.begin().then_some(target))
             } else {
                 log::debug!(
                     "PaintCanvas: {hwnd:?} has a DWM-owned surface (layered or \
@@ -1128,7 +1132,7 @@ impl Drop for PaintCanvas<'_> {
             }
         }
         unsafe {
-            EndPaint(self.hwnd, &mut self.paint);
+            EndPaint(self.hwnd, &self.paint);
         }
     }
 }

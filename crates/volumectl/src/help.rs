@@ -230,7 +230,7 @@ struct ConflictCallout {
 /// Shift variants (`VolumeUpLarge` etc.) are deliberately not rows: the card
 /// documents the base combos, and the shift variants share the base action's
 /// registration status.
-const ACTION_ROWS: [(HotkeyAction, &'static str, &'static str); 5] = [
+const ACTION_ROWS: [(HotkeyAction, &str, &str); 5] = [
     (HotkeyAction::VolumeUp, "Increase volume", "\u{2191}"),
     (HotkeyAction::VolumeDown, "Decrease volume", "\u{2193}"),
     (HotkeyAction::ToggleMute, "Toggle mute", "M"),
@@ -634,7 +634,7 @@ impl Help {
             d.buttons[IDX_EDIT] = mk("Edit config", layout.btn_edit, ID_BTN_EDIT_CONFIG as isize);
             d.buttons[IDX_SETTINGS] = mk("Settings", layout.btn_settings, ID_BTN_SETTINGS as isize);
             d.buttons[IDX_CLOSE] = mk("Close", layout.btn_close, ID_BTN_CLOSE as isize);
-            if d.buttons.iter().any(|&b| b == 0) {
+            if d.buttons.contains(&0) {
                 return Err("help footer button failed".into());
             }
 
@@ -829,7 +829,7 @@ unsafe extern "system" fn help_wndproc(
         // ── Footer buttons → host intents / hide ─────────────────────────
         WM_COMMAND if (wparam >> 16) as u32 == BN_CLICKED => {
             let d = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut HelpData);
-            match button_action((wparam & 0xFFFF) as usize) {
+            match button_action(wparam & 0xFFFF) {
                 ButtonAction::OpenConfig => {
                     PostMessageW(d.host, WM_APP_HELP_OPEN_CONFIG, 0, 0);
                     hide_help(hwnd, d);
@@ -932,7 +932,7 @@ unsafe extern "system" fn help_wndproc(
         // DWM re-asserts DWMSBT_AUTO after a show while High Contrast is
         // active, so DWMSBT_NONE is re-asserted once the composition has
         // settled, keeping the opaque painted surface visible.
-        WM_TIMER if (wparam as usize) == BACKDROP_TIMER_ID => {
+        WM_TIMER if wparam == BACKDROP_TIMER_ID => {
             KillTimer(hwnd, BACKDROP_TIMER_ID);
             let d = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut HelpData);
             apply_backdrop(hwnd, ResolvedMaterial::Opaque, d.appearance.tokens.is_dark);
@@ -1268,9 +1268,10 @@ mod tests {
     }
 
     fn config_with(modifier: HotkeyModifier) -> Config {
-        let mut cfg = Config::default();
-        cfg.modifier = modifier;
-        cfg
+        Config {
+            modifier,
+            ..Config::default()
+        }
     }
 
     fn conflict() -> HotkeyRegStatus {
@@ -1284,7 +1285,7 @@ mod tests {
         entries
             .iter()
             .map(|(action, status)| HotkeyRegResult {
-                action: action.clone(),
+                action: *action,
                 status: status.clone(),
             })
             .collect()
@@ -1765,11 +1766,8 @@ mod tests {
         ] {
             let cfg = config_with(modifier);
             for n in 1..=5 {
-                let entries: Vec<(HotkeyAction, HotkeyRegStatus)> = base
-                    .iter()
-                    .take(n)
-                    .map(|a| (a.clone(), conflict()))
-                    .collect();
+                let entries: Vec<(HotkeyAction, HotkeyRegStatus)> =
+                    base.iter().take(n).map(|a| (*a, conflict())).collect();
                 let status = statuses(&entries);
                 let callout = conflict_callout(&cfg, &status).expect("n conflicts → callout");
                 assert_eq!(callout.combos.len(), n);

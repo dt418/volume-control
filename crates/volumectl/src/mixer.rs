@@ -291,7 +291,7 @@ impl MixerAppearance {
 // TBM_SETRANGE=WM_USER+6).
 const TBM_FIRST: u32 = 0x0400;
 const TBM_SETRANGE: u32 = TBM_FIRST + 6;
-const TBM_GETPOS: u32 = TBM_FIRST + 0;
+const TBM_GETPOS: u32 = TBM_FIRST;
 const TBM_SETPOS: u32 = TBM_FIRST + 5;
 const TBS_HORZ: u32 = 0;
 const TBS_NOTICKS: u32 = 0x10;
@@ -806,12 +806,10 @@ unsafe extern "system" fn mixer_child_wndproc(
                     TrackMouseEvent(&mut tme);
                 }
             }
-            WM_MOUSELEAVE => {
-                if d.close_hover {
-                    (&mut *(GetWindowLongPtrW(parent, GWLP_USERDATA) as *mut MixerData))
-                        .close_hover = false;
-                    InvalidateRect(hwnd, std::ptr::null(), 0);
-                }
+            WM_MOUSELEAVE if d.close_hover => {
+                (&mut *(GetWindowLongPtrW(parent, GWLP_USERDATA) as *mut MixerData)).close_hover =
+                    false;
+                InvalidateRect(hwnd, std::ptr::null(), 0);
             }
             _ => {}
         }
@@ -880,7 +878,7 @@ unsafe extern "system" fn mixer_wndproc(
         // ── Buttons → tell the host ──────────────────────────────────────
         WM_COMMAND if (wparam >> 16) as u32 == BN_CLICKED => {
             let d = &mut *(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut MixerData);
-            match (wparam & 0xFFFF) as usize {
+            match wparam & 0xFFFF {
                 ID_BTN_MUTE => PostMessageW(d.host, WM_APP_MIXER_MUTE, 0, 0),
                 ID_BTN_RESET => PostMessageW(d.host, WM_APP_MIXER_RESET, 0, 0),
                 ID_BTN_CLOSE => {
@@ -946,7 +944,7 @@ unsafe extern "system" fn mixer_wndproc(
         // there): DWM re-asserts DWMSBT_AUTO after a show while High Contrast
         // is active, so the resolved backdrop is re-asserted once the
         // composition has settled, keeping the opaque painted surface visible.
-        WM_TIMER if (wparam as usize) == BACKDROP_TIMER_ID => {
+        WM_TIMER if wparam == BACKDROP_TIMER_ID => {
             KillTimer(hwnd, BACKDROP_TIMER_ID);
             let d = &*(GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const MixerData);
             apply_backdrop(hwnd, d.appearance.material, d.appearance.tokens.is_dark);
