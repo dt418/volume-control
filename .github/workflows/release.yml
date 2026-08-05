@@ -68,7 +68,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev zip
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev libx11-dev libxi-dev libxtst-dev zip
           # GTK4 layer-shell is optional. Probe before installing so Ubuntu
           # releases without the package use the X11 fallback cleanly.
           if apt-cache show libgtk4-layer-shell-dev >/dev/null 2>&1; then
