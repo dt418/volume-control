@@ -28,6 +28,8 @@ mod gtk_host {
     use crate::audio::AudioBackend;
     use crate::audio_linux::LinuxAudio;
     use crate::config::Config;
+    use crate::hotkeys::HotkeyAction;
+    use crate::hotkeys_rdev::RdevHotkeys;
     use crate::ui::platform::linux::renderer::LinuxRenderer;
     use crate::ui::{
         tokens_for, AppAction, AppState, HostHandle, NativeRenderer, SurfaceVisibility,
@@ -37,6 +39,7 @@ mod gtk_host {
     /// Everything the GTK poll closure needs to drive the app on one thread.
     pub struct HostCtx {
         audio: LinuxAudio,
+        hotkeys: RdevHotkeys,
         renderer: LinuxRenderer,
         config: Config,
         state: AppState,
@@ -125,11 +128,34 @@ mod gtk_host {
         }
     }
 
+    fn hotkey_to_action(action: HotkeyAction, config: &Config) -> AppAction {
+        use HotkeyAction as H;
+        match action {
+            H::VolumeUp => AppAction::AdjustVolume {
+                delta_percent: config.volume_step as i16,
+            },
+            H::VolumeDown => AppAction::AdjustVolume {
+                delta_percent: -(config.volume_step as i16),
+            },
+            H::VolumeUpLarge => AppAction::AdjustVolume {
+                delta_percent: config.volume_step_large as i16,
+            },
+            H::VolumeDownLarge => AppAction::AdjustVolume {
+                delta_percent: -(config.volume_step_large as i16),
+            },
+            H::ToggleMute => AppAction::ToggleMute,
+            H::Reset50 => AppAction::ResetVolume,
+            H::OpenMixer => AppAction::ToggleSurface(crate::ui::SurfaceId::Mixer),
+            H::OpenMenu => AppAction::OpenTrayMenu,
+        }
+    }
+
     /// Run the Linux host to completion. Returns an error string on failure.
     pub fn run() -> Result<(), String> {
         crate::ui::platform::linux::renderer::ensure_gtk_initialized()?;
         let audio = LinuxAudio::new().map_err(|e| e.to_string())?;
         let config = crate::config::load();
+        let hotkeys = RdevHotkeys::new(config.modifier).map_err(|e| e.to_string())?;
         let caps = detect_caps();
 
         let (tx, rx) = channel::<AppAction>();
@@ -141,6 +167,7 @@ mod gtk_host {
 
         let mut ctx = HostCtx {
             audio,
+            hotkeys,
             renderer,
             config,
             state: AppState::default(),
@@ -167,6 +194,10 @@ mod gtk_host {
                         gtk::glib::timeout_future(Duration::from_millis(150)).await;
                         {
                             let mut c = ctx_rc.borrow_mut();
+                            while let Some(action) = c.hotkeys.try_recv() {
+                                let action = hotkey_to_action(action, &c.config);
+                                apply_action(&mut c, &action);
+                            }
                             while let Ok(action) = rx_rc.try_recv() {
                                 apply_action(&mut c, &action);
                             }

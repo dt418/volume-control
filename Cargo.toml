@@ -10,7 +10,8 @@ license = "MIT"
 rust-version = "1.82"
 
 [workspace.dependencies]
-# Low-level Win32 FFI — predictable signatures for WASAPI COM + RegisterHotKey.
+# Low-level Win32 FFI — predictable signatures for WASAPI COM and the native
+# Windows UI/mouse bridge.
 windows-sys = { version = "0.52", features = [
     "Win32_Foundation",
     "Win32_System_Com",
@@ -29,6 +30,9 @@ windows-sys = { version = "0.52", features = [
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dwm",
 ] }
+# Cross-platform global keyboard/mouse event listener. Keyboard Hold-to-Repeat
+# is implemented in our code rather than relying on native key-repeat.
+rdev = "0.5.3"
 # system tray
 tray-icon = "0.24"
 muda = "0.19"

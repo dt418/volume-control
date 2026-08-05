@@ -2851,12 +2851,10 @@ unsafe extern "system" fn settings_child_wndproc(
                     TrackMouseEvent(&mut tme);
                 }
             }
-            WM_MOUSELEAVE => {
-                if d.close_hover {
-                    (&mut *(GetWindowLongPtrW(parent, GWLP_USERDATA) as *mut SettingsData))
-                        .close_hover = false;
-                    InvalidateRect(hwnd, std::ptr::null(), 0);
-                }
+            WM_MOUSELEAVE if d.close_hover => {
+                (&mut *(GetWindowLongPtrW(parent, GWLP_USERDATA) as *mut SettingsData))
+                    .close_hover = false;
+                InvalidateRect(hwnd, std::ptr::null(), 0);
             }
             _ => {}
         }
@@ -3255,7 +3253,7 @@ unsafe extern "system" fn settings_wndproc(
         // DWM re-asserts DWMSBT_AUTO after a show while High Contrast is
         // active, so the resolved backdrop is re-asserted once the composition
         // has settled, keeping the opaque painted surface visible.
-        WM_TIMER if (wparam as usize) == BACKDROP_TIMER_ID => {
+        WM_TIMER if wparam == BACKDROP_TIMER_ID => {
             KillTimer(hwnd, BACKDROP_TIMER_ID);
             let d = &mut *(userdata as *mut SettingsData);
             apply_backdrop(hwnd, d.appearance.material, d.appearance.tokens.is_dark);
@@ -3396,7 +3394,7 @@ mod tests {
         assert_eq!(cfg.appearance.material, MaterialMode::Translucent);
         assert_eq!(cfg.appearance.motion, MotionMode::Reduced);
         assert_eq!(cfg.appearance.accent, AccentMode::Purple);
-        assert_eq!(cfg.beep.enabled, false);
+        assert!(!cfg.beep.enabled);
         assert_eq!(cfg.beep.blocked_freq, 500);
         assert_eq!(cfg.beep.blocked_duration_ms, 100);
         assert_eq!(cfg.beep.limit_freq, 700);
@@ -3896,7 +3894,7 @@ mod tests {
                 settings.hwnd,
                 WM_COMMAND,
                 ((CBN_SELCHANGE as usize) << 16) | (ID_COMBO_ACCENT as usize),
-                combo as isize,
+                combo,
             );
         }
         let d = data_mut(&mut settings);

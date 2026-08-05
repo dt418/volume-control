@@ -30,7 +30,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install PulseAudio dev headers (volumecontrol probe)
-        run: sudo apt-get update && sudo apt-get install -y libpulse-dev
+        run: sudo apt-get update && sudo apt-get install -y libpulse-dev libx11-dev libxi-dev libxtst-dev
       - name: Format
         run: cargo fmt --all --check
       - name: Forbidden diff paths
@@ -88,7 +88,7 @@ jobs:
       - name: Install GTK4/libadwaita/Xvfb
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev xvfb
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev libx11-dev libxi-dev libxtst-dev xvfb
           # GTK4 layer-shell is optional. Ubuntu 24.04 may not provide the
           # development package yet, so probe before installing and use the
           # X11 fallback without raising a CI warning when it is unavailable.

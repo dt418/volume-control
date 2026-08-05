@@ -82,7 +82,7 @@ pub enum UiStatus {
 }
 
 /// Confirmed state published by the application host to every renderer.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AppState {
     /// Confirmed default-output volume, normalized to an integer percentage.
     pub volume_percent: u8,
@@ -135,21 +135,6 @@ impl AppState {
         };
         self.set_visibility(surface, visibility);
         visibility
-    }
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            volume_percent: 0,
-            muted: false,
-            device: None,
-            surfaces: SurfaceVisibilityState::default(),
-            theme: ThemeMode::default(),
-            material: MaterialMode::default(),
-            motion: MotionMode::default(),
-            status: UiStatus::default(),
-        }
     }
 }
 

@@ -28,6 +28,7 @@ const CLSID_MMDEVICE_ENUMERATOR: GUID = GUID::from_u128(0xBCDE0395_E52F_467C_8E3
 const IID_IMMDEVICE_ENUMERATOR: GUID = GUID::from_u128(0xA95664D2_9614_4F35_A746_DE8DB63617E6);
 const IID_IAUDIO_ENDPOINT_VOLUME: GUID = GUID::from_u128(0x5CDF2C82_841E_4546_9722_0CF74078229A);
 
+#[allow(clippy::upper_case_acronyms)]
 type HRESULT = i32;
 
 // ── COM vtable layouts (IUnknown prefix then interface methods) ────────────
