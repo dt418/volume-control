@@ -136,13 +136,20 @@ jobs:
           RELEASE_TAG: ${{ steps.release-tag.outputs.release_tag }}
           RELEASE_TARGET: ${{ github.sha }}
         run: |
+          mapfile -d '' release_assets < <(
+            find dist -mindepth 2 -type f \
+              \( -name '*.zip' -o -name '*.tar.gz' \) \
+              -print0 | sort -z
+          )
+          release_assets+=(dist/SHA256SUMS.txt)
+
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $RELEASE_TAG already exists; uploading refreshed assets."
-            gh release upload "$RELEASE_TAG" dist/*/* \
+            gh release upload "$RELEASE_TAG" "${release_assets[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --clobber
           else
-            gh release create "$RELEASE_TAG" dist/*/* \
+            gh release create "$RELEASE_TAG" "${release_assets[@]}" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$RELEASE_TARGET" \
               --title "VolumeControl $RELEASE_TAG" \
