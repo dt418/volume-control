@@ -9,8 +9,8 @@
 #   packaging task; the artifact is the signed-ready exe + docs).
 # - macOS: zip of the release binary.
 # - Ubuntu 24.04: tar.gz of the release binary built with the GTK4/
-#   libadwaita renderer, plus the Wayland layer-shell feature when the
-#   system library is installed.
+#   libadwaita renderer, plus the optional Wayland layer-shell feature when
+#   the system library is installed.
 
 name: Release
 
@@ -37,7 +37,7 @@ jobs:
             os: ubuntu-24.04
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install GTK4/libadwaita (Ubuntu)
@@ -45,14 +45,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev zip
-          sudo apt-get install -y libgtk-4-layer-shell-dev \
-            || echo "::warning::gtk4-layer-shell unavailable; Linux build falls back to X11 surfaces"
+          # GTK4 layer-shell is optional. Probe before installing so Ubuntu
+          # releases without the package use the X11 fallback cleanly.
+          if apt-cache show libgtk4-layer-shell-dev >/dev/null 2>&1; then
+            sudo apt-get install -y libgtk4-layer-shell-dev
+          else
+            echo "GTK4 layer-shell development package unavailable; release uses the X11 fallback."
+          fi
       - name: Build release binary
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
             FEATURES="gtk-renderer"
-            if pkg-config --exists gtk4-layer-shell; then FEATURES="gtk-renderer,layer-shell"; fi
+            if pkg-config --exists gtk4-layer-shell-0; then FEATURES="gtk-renderer,layer-shell"; fi
             echo "Building with features: $FEATURES"
             cargo build --release --features "$FEATURES"
           else
@@ -64,7 +69,7 @@ jobs:
           RELEASE_PLATFORM: ${{ matrix.platform }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: bash scripts/package.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.platform }}
           path: dist/
@@ -74,7 +79,7 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
       - name: Generate checksums

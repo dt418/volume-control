@@ -12,6 +12,8 @@ pub mod audio_macos;
 pub mod config;
 pub mod core;
 pub mod hotkeys;
+#[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
+pub mod linux_app;
 pub mod ui;
 
 #[cfg(target_os = "windows")]

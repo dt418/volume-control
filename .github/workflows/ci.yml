@@ -4,8 +4,8 @@
 # macOS: build + tests (AppKit renderer smoke tests dispatch to the real
 #   main thread via GCD).
 # Ubuntu 24.04: CLI fallback build/test with no features, then the GTK4/
-#   libadwaita renderer build and smoke tests under Xvfb, and the Wayland
-#   layer-shell build when the system library is available.
+#   libadwaita renderer build and smoke tests under Xvfb, and the optional
+#   Wayland layer-shell build when the system library is available.
 #
 # A shared "checks" job runs formatting and the forbidden-diff-path gate.
 
@@ -24,7 +24,7 @@ jobs:
     name: Format, diff gate, CLI fallback
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
@@ -44,7 +44,7 @@ jobs:
     name: Windows (build + tests + release artifact)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build
@@ -63,7 +63,7 @@ jobs:
     name: macOS (build + tests + renderer smoke)
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build
@@ -82,17 +82,21 @@ jobs:
     name: Ubuntu 24.04 (GTK4/libadwaita + layer-shell)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install GTK4/libadwaita/Xvfb
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev xvfb
-          # Ubuntu 24.04 ships gtk4-layer-shell; when absent the layer-shell
-          # steps are skipped (the X11 fallback path still builds).
-          sudo apt-get install -y libgtk-4-layer-shell-dev \
-            || echo "::warning::gtk4-layer-shell system library unavailable; layer-shell build skipped"
+          # GTK4 layer-shell is optional. Ubuntu 24.04 may not provide the
+          # development package yet, so probe before installing and use the
+          # X11 fallback without raising a CI warning when it is unavailable.
+          if apt-cache show libgtk4-layer-shell-dev >/dev/null 2>&1; then
+            sudo apt-get install -y libgtk4-layer-shell-dev
+          else
+            echo "GTK4 layer-shell development package unavailable; using the X11 fallback."
+          fi
       - name: Build (no features — CLI fallback)
         run: cargo build
       - name: Test (no features — pure planning)
@@ -101,12 +105,12 @@ jobs:
         run: cargo build --features gtk-renderer
       - name: Test (gtk-renderer smoke under Xvfb)
         run: xvfb-run -a cargo test --features gtk-renderer
-      - name: Build (gtk-renderer + layer-shell)
+      - name: Build (gtk-renderer + layer-shell when available)
         run: |
-          if pkg-config --exists gtk4-layer-shell; then
+          if pkg-config --exists gtk4-layer-shell-0; then
             cargo build --features gtk-renderer,layer-shell
           else
-            echo "::warning::gtk4-layer-shell not installed; layer-shell build skipped"
+            echo "GTK4 layer-shell library unavailable; optional layer-shell build skipped."
           fi
       - name: Build release and validate artifact (gtk-renderer)
         run: |
