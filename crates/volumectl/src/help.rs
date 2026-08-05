@@ -62,8 +62,7 @@ use windows_sys::Win32::{
 };
 
 use crate::config::{Config, HotkeyModifier};
-use crate::hotkeys::HotkeyAction;
-use crate::hotkeys_win32::{HotkeyRegResult, HotkeyRegStatus};
+use crate::hotkeys::{HotkeyAction, HotkeyRegResult, HotkeyRegStatus};
 use crate::ui::platform::windows::text::{measure_text_gdi, TextAlign, TextLayout};
 use crate::ui::primitives::{
     apply_backdrop, dpi_scale_for, theme_controls, work_area_for, DpiMetrics, PaintCanvas, RectF,
@@ -1243,8 +1242,7 @@ unsafe fn paint(canvas: &mut PaintCanvas, d: &HelpData) {
 mod tests {
     use super::*;
     use crate::config::HotkeyModifier;
-    use crate::hotkeys::HotkeyAction;
-    use crate::hotkeys_win32::{HotkeyRegError, HotkeyRegResult};
+    use crate::hotkeys::{HotkeyAction, HotkeyRegError, HotkeyRegResult};
     use crate::ui::platform::windows::text::measure_text_gdi;
     use crate::ui::primitives::focus_ring_rects;
     use crate::ui::{ThemeMode, WorkArea};

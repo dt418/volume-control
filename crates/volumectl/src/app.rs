@@ -2,7 +2,6 @@
 //! audio, hotkeys, the mouse-wheel hook, tray, overlay, mixer and help.
 //!
 //! A hidden host window receives everything as messages:
-//!   - `WM_HOTKEY`        → custom keyboard combo fired
 //!   - `WM_APP_WHEEL`     → `Mod+Scroll` fired (from the low-level mouse hook)
 //!   - `WM_APP_MIXER_*`   → mixer slider / button interaction
 //!   - `WM_TIMER` (150ms) → config live reload, tray menu events, external
@@ -24,7 +23,7 @@ use windows_sys::Win32::{
         CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow, GetMessageW,
         GetWindowLongPtrW, GetWindowThreadProcessId, PostQuitMessage, RegisterClassW, SetTimer,
         SetWindowLongPtrW, TranslateMessage, CS_OWNDC, CW_USEDEFAULT, GWLP_USERDATA, MSG,
-        WM_DESTROY, WM_HOTKEY, WM_TIMER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
+        WM_DESTROY, WM_TIMER, WNDCLASSW, WS_EX_TOOLWINDOW, WS_POPUP,
     },
 };
 
@@ -32,11 +31,8 @@ use crate::audio::{AudioBackend, VolumeState};
 use crate::audio_windows::WindowsAudio;
 use crate::config::Config;
 use crate::help::{Help, HelpAppearance, WM_APP_HELP_OPEN_CONFIG, WM_APP_HELP_SETTINGS};
-use crate::hotkeys::HotkeyAction;
-use crate::hotkeys_win32::{
-    hotkey_action, install_wheel_hook, uninstall_wheel_hook, HotkeyRegResult, Win32Hotkeys,
-    WM_APP_WHEEL,
-};
+use crate::hotkeys::{hotkey_from_id, HotkeyAction, HotkeyRegResult};
+use crate::hotkeys_rdev::RdevHotkeys;
 use crate::mixer::{
     Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET,
 };
@@ -47,9 +43,14 @@ use crate::settings::{
 };
 use crate::tray::{Tray, TrayCommand};
 use crate::ui::{AppAction, SurfaceId, SurfaceVisibility};
+use crate::wheel_win32::{
+    install_wheel_hook, set_modifier as set_wheel_modifier, uninstall_wheel_hook, WM_APP_WHEEL,
+};
 
 const ID_TIMER_POLL: usize = 1;
+const ID_TIMER_HOTKEY: usize = 2;
 const POLL_MS: u32 = 150;
+const HOTKEY_POLL_MS: u32 = 15;
 
 /// Last-modified time of the config file (None if it doesn't exist yet).
 fn config_mtime() -> Option<std::time::SystemTime> {
@@ -84,9 +85,8 @@ fn reload_config_if_changed(ctx: &mut AppContext) -> bool {
     ctx.config = new_cfg;
 
     if modifier_changed {
-        if let Err(e) = ctx.hotkeys.register(ctx.config.modifier) {
-            log::warn!("hotkey re-register after config change failed: {e}");
-        }
+        ctx.hotkeys.set_modifier(ctx.config.modifier);
+        set_wheel_modifier(ctx.config.modifier);
         // Keep the per-action registration status fresh for the UI.
         ctx.hotkey_status = ctx.hotkeys.status().to_vec();
     }
@@ -96,7 +96,7 @@ fn reload_config_if_changed(ctx: &mut AppContext) -> bool {
 /// Heap-allocated state that lives in the window's GWLP_USERDATA.
 struct AppContext {
     audio: WindowsAudio,
-    hotkeys: Win32Hotkeys,
+    hotkeys: RdevHotkeys,
     config: Config,
     last_state: VolumeState,
     last_config_mtime: Option<std::time::SystemTime>,
@@ -105,8 +105,7 @@ struct AppContext {
     settings: Settings,
     help: Help,
     tray: Tray,
-    /// Per-action hotkey registration status from the last (re)register,
-    /// exposed to the Help surface (see [`Win32Hotkeys::status`]).
+    /// Per-action global-listener status exposed to the Help surface.
     hotkey_status: Vec<HotkeyRegResult>,
     /// Shared confirmed UI state published to every renderer by
     /// [`publish_confirmed_state`].
@@ -228,10 +227,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     log::debug!("host hwnd=0x{:x}", hwnd);
 
-    // Hotkeys + mouse-wheel hook, both targeted at the host window.
-    let hotkeys = Win32Hotkeys::new(hwnd, config.modifier)?;
-    // Per-action registration status (registered / conflicted / hook-routed)
-    // from the initial registration, shown by the Help card.
+    // Cross-platform rdev keyboard listener + the Windows-only wheel bridge.
+    // The listener emits into a channel; audio mutations remain on this host
+    // message-loop thread.
+    let hotkeys = RdevHotkeys::new(config.modifier)?;
+    set_wheel_modifier(config.modifier);
+    // The global listener owns every action, so the Help card can show the
+    // same active status for all configured shortcuts.
     let hotkey_status = hotkeys.status().to_vec();
     install_wheel_hook(hwnd)?;
 
@@ -273,6 +275,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     unsafe {
         let timer_ok = SetTimer(hwnd, ID_TIMER_POLL, POLL_MS, None);
         log::debug!("SetTimer -> {}", timer_ok);
+        let hotkey_timer_ok = SetTimer(hwnd, ID_TIMER_HOTKEY, HOTKEY_POLL_MS, None);
+        log::debug!("SetTimer(hotkey) -> {}", hotkey_timer_ok);
     }
 
     log::info!("volumectl {} running", crate::VERSION);
@@ -306,18 +310,9 @@ unsafe extern "system" fn host_wndproc(
 ) -> LRESULT {
     let ctx = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AppContext;
     match msg {
-        // ── Custom hotkey (keyboard) fired ───────────────────────────────
-        WM_HOTKEY => {
-            if let Some(action) = hotkey_action(wparam as i32) {
-                if !ctx.is_null() {
-                    apply_hotkey(&mut *ctx, action);
-                }
-            }
-            0
-        }
         // ── Mod+Scroll fired (mouse hook posts the same action ids) ──────
         WM_APP_WHEEL => {
-            if let Some(action) = hotkey_action(wparam as i32) {
+            if let Some(action) = hotkey_from_id(wparam as i32) {
                 if !ctx.is_null() {
                     apply_hotkey(&mut *ctx, action);
                 }
@@ -389,6 +384,11 @@ unsafe extern "system" fn host_wndproc(
             if !ctx.is_null() {
                 let ctx = &mut *ctx;
 
+                if wparam as usize == ID_TIMER_HOTKEY {
+                    drain_hotkeys(ctx);
+                    return 0;
+                }
+
                 // Live config reload (mtime watch).
                 let reloaded = reload_config_if_changed(ctx);
 
@@ -417,6 +417,14 @@ unsafe extern "system" fn host_wndproc(
             0
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+    }
+}
+
+/// Drain rdev actions on a fast timer independent from the slower config and
+/// audio synchronization poll. This keeps the first key press responsive.
+fn drain_hotkeys(ctx: &mut AppContext) {
+    while let Some(action) = ctx.hotkeys.try_recv() {
+        apply_hotkey(ctx, action);
     }
 }
 
@@ -590,10 +598,9 @@ fn adopt_saved_config(ctx: &mut AppContext, saved: Config) {
     ctx.config = saved;
     ctx.last_config_mtime = config_mtime();
     if modifier_changed {
-        log::info!("config: modifier changed — re-registering hotkeys");
-        if let Err(e) = ctx.hotkeys.register(ctx.config.modifier) {
-            log::warn!("hotkey re-register after modifier change failed: {e}");
-        }
+        log::info!("config: modifier changed — updating global listener");
+        ctx.hotkeys.set_modifier(ctx.config.modifier);
+        set_wheel_modifier(ctx.config.modifier);
         // Keep the per-action registration status fresh for the UI.
         ctx.hotkey_status = ctx.hotkeys.status().to_vec();
     }

@@ -53,7 +53,7 @@ only 156 px wide.
 Change the layout rectangles in `MixerLayout::new`:
 
 ```rust
-value_rect: RectF::new(16.0, 76.0, content_right, 104.0),
+value_rect: RectF::new(16.0, 60.0, content_right, 88.0),
 reset_rect: RectF::new(164.0, buttons_top, content_right, buttons_bottom),
 ```
 

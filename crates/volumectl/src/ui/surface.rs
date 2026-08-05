@@ -117,12 +117,11 @@ pub fn place_centered(work_area: WorkArea, size: SurfaceSize) -> SurfaceRect {
 }
 
 /// Place the mixer in the bottom-right corner, directly above the overlay
-/// with exactly `gap` pixels of vertical separation.
+/// with exactly `gap` pixels of vertical separation when the stack fits.
 ///
-/// The mixer shares the overlay's right edge (both are inset by `margin_x`)
-/// and its bottom edge sits `gap` above the overlay's top edge, so
-/// `mixer.bottom + gap == overlay.top` always holds. Coordinates follow the
-/// same pure-math rules as [`place_overlay`] and work for negative-origin
+/// If the overlay + gap + mixer stack is taller than the work area, the mixer
+/// is clamped to the work-area top so the card remains usable instead of being
+/// partially positioned off-screen. Coordinates work for negative-origin
 /// work areas.
 pub fn place_mixer_above_overlay(
     work_area: WorkArea,
@@ -134,10 +133,11 @@ pub fn place_mixer_above_overlay(
 ) -> SurfaceRect {
     let overlay = place_overlay(work_area, overlay_size, margin_x, margin_y);
     let right = overlay.right;
-    let bottom = overlay.top - gap;
+    let bottom = (overlay.top - gap).max(work_area.y + mixer_size.height);
+    let top = bottom - mixer_size.height;
     SurfaceRect {
         left: right - mixer_size.width,
-        top: bottom - mixer_size.height,
+        top,
         right,
         bottom,
     }
@@ -263,5 +263,24 @@ mod tests {
         assert_eq!(overlay.bottom, 600);
         assert_eq!(mixer.right, 800);
         assert_eq!(mixer.bottom, 600 - 50 - GAP);
+    }
+
+    #[test]
+    fn mixer_stays_visible_when_overlay_stack_exceeds_short_work_area() {
+        let work_area = WorkArea::new(0, 0, 800, 300);
+        let mixer = place_mixer_above_overlay(
+            work_area,
+            SurfaceSize::new(400, 224),
+            SurfaceSize::new(336, 88),
+            16,
+            16,
+            16,
+        );
+
+        assert_eq!(mixer.top, work_area.y);
+        assert_eq!(mixer.bottom, work_area.y + 224);
+        assert!(mixer.left >= work_area.x);
+        assert!(mixer.right <= work_area.right());
+        assert!(mixer.bottom <= work_area.bottom());
     }
 }

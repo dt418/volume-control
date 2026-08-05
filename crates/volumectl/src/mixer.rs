@@ -120,16 +120,17 @@ type ChildWndProc = unsafe extern "system" fn(HWND, u32, WPARAM, LPARAM) -> LRES
 ///
 /// Vertical rhythm on the 4px grid: 16 top padding; row 1 eyebrow
 /// `VOLUME MIXER` (label role) at y 16; row 2 `System output` (caption) at
-/// y 40; row 3 air (y 52..76); row 4 the 28px display value (y 76..104,
-/// right-aligned); row 5 the Signal Rail band (8px track, center y 128); row
-/// 6 air (y 132..172); row 7 the 36px button row (y 172..208) with 16px
+/// y 40; row 3 air (y 52..66); row 4 the 44px display value (y 66..110,
+/// right-aligned); row 5 the Signal Rail band (8px track, center y 132); row
+/// 6 air (y 136..172); row 7 the 36px button row (y 172..208) with 16px
 /// bottom padding. The native trackbar occupies the same x range as the rail
-/// with a 28px-tall hit area centered on the rail band (y 114..142).
+/// with a 28px-tall hit area centered on the rail band (y 118..146).
 ///
-/// The value row sits 10px above the slider hit area; the slider's outer
+/// The value row sits 8px above the slider hit area and has 16px of extra
+/// vertical room for the 28px display glyph; the slider's outer
 /// focus ring (3px gap + 1.5px stroke → 3.75px outset) would cut through
-/// the value's ink at y 110.25..111.75, so the row is lifted 8px (bottom
-/// 104) to clear the ring band with visible air — verified by
+/// the value's ink at y 114.25..115.75, so the row ends at 96px and leaves
+/// visible air before the ring — verified by
 /// `value_row_clears_the_slider_focus_ring`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct MixerLayout {
@@ -157,14 +158,14 @@ struct MixerLayout {
 const CONTENT_MARGIN: f32 = 16.0;
 const BUTTON_GAP: f32 = 16.0;
 const MUTE_BUTTON_WIDTH: f32 = 132.0;
-const VALUE_ROW_HEIGHT: f32 = 28.0;
-const VALUE_SLIDER_AIR: f32 = 10.0;
+const VALUE_ROW_HEIGHT: f32 = 44.0;
+const VALUE_SLIDER_AIR: f32 = 8.0;
 
 impl MixerLayout {
     fn new(w: f32, h: f32) -> Self {
         let content_left = CONTENT_MARGIN;
         let content_right = w - CONTENT_MARGIN;
-        let track_center_y = 128.0;
+        let track_center_y = 132.0;
         let track_half = 4.0;
         let slider_top = track_center_y - 14.0;
         let value_bottom = slider_top - VALUE_SLIDER_AIR;
@@ -1368,8 +1369,25 @@ mod tests {
         assert!(layout.mute_rect.right <= layout.reset_rect.left);
         assert!(layout.reset_rect.width() >= 200.0);
         assert!(
+            layout.value_rect.bottom + VALUE_SLIDER_AIR <= layout.slider_rect.top,
+            "volume value must leave the configured air before the slider"
+        );
+    }
+
+    #[test]
+    fn volume_value_moves_one_spacing_unit_above_the_slider() {
+        let layout = MixerLayout::new(WIN_W as f32, WIN_H as f32);
+
+        assert_eq!(layout.value_rect.top, 66.0);
+        assert_eq!(layout.value_rect.bottom, 110.0);
+        assert_eq!(layout.value_rect.height(), 44.0);
+        assert!(
+            layout.output_rect.bottom <= layout.value_rect.top,
+            "caption and volume value boxes must not overlap"
+        );
+        assert!(
             layout.value_rect.bottom + 8.0 <= layout.slider_rect.top,
-            "volume value must leave 8px of air before the slider"
+            "volume value must keep the expanded air above the slider"
         );
     }
 
@@ -1475,15 +1493,15 @@ mod tests {
         // at y 112, only 2px above the slider hit area (y 114), while the
         // ring's top stroke landed at y 110.25..111.75, right across the
         // value ink (live-verified: ring stroke pixels interleaved with the
-        // "51%" text on a real mixer). The row now sits at y 76..104,
-        // leaving visible air before the ring for both standard and
-        // high-contrast focus tokens.
+        // "51%" text on a real mixer). The row now sits at y 66..110 with
+        // 44px of vertical padding, leaving visible air before the ring for
+        // both standard and high-contrast focus tokens.
         for (high_contrast, label) in [(false, "standard"), (true, "high-contrast")] {
             let focus = appearance(ThemeMode::Dark, MaterialMode::Opaque, high_contrast)
                 .tokens
                 .focus;
             let l = MixerLayout::new(WIN_W as f32, WIN_H as f32);
-            assert_eq!(l.value_rect.height(), 28.0, "spec §6.2: 28px value row");
+            assert_eq!(l.value_rect.height(), 44.0, "value row needs glyph padding");
             let (outer, inner) = focus_ring_rects(l.slider_rect, &focus);
             for (layer, rect) in [("outer", outer), ("inner", inner)] {
                 assert!(
