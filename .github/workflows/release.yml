@@ -37,7 +37,7 @@ jobs:
             os: ubuntu-24.04
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install GTK4/libadwaita (Ubuntu)
@@ -64,7 +64,7 @@ jobs:
           RELEASE_PLATFORM: ${{ matrix.platform }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: bash scripts/package.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.platform }}
           path: dist/
@@ -74,7 +74,7 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
       - name: Generate checksums
