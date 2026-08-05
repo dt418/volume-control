@@ -82,9 +82,9 @@ Requirements: Rust (stable) + a C toolchain:
   xvfb-run -a cargo test --features gtk-renderer # renderer smoke tests
   ```
 
-  The Wayland layer-shell path also needs `libgtk-4-layer-shell-dev`
-  (packaged on Ubuntu 24.04); without it surfaces fall back to X11-compatible
-  borderless windows.
+  The Wayland layer-shell path also needs the GTK4 layer-shell development
+  package (`libgtk4-layer-shell-dev`, when provided by the distribution);
+  without it surfaces fall back to X11-compatible borderless windows.
 
 ## Platform status
 
