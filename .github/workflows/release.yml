@@ -137,6 +137,7 @@ jobs:
           RELEASE_TARGET: ${{ github.sha }}
         run: |
           gh release create "$RELEASE_TAG" dist/*/* \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$RELEASE_TARGET" \
             --title "VolumeControl $RELEASE_TAG" \
             --generate-notes
