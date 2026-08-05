@@ -454,6 +454,17 @@ fn adjust_headless(audio: &dyn crate::audio::AudioBackend, delta_percent: i16) {
 mod tests {
     use super::*;
 
+    fn primary_key() -> Key {
+        #[cfg(target_os = "macos")]
+        {
+            Key::MetaLeft
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Key::ControlLeft
+        }
+    }
+
     fn press(state: &KeyboardState, modifier: &AtomicU8, tx: &Sender<HotkeyAction>, key: Key) {
         process_event(EventType::KeyPress(key), modifier, state, tx);
     }
@@ -468,7 +479,7 @@ mod tests {
         let modifier = AtomicU8::new(modifier_code(HotkeyModifier::CtrlAlt));
         let (tx, rx) = mpsc::channel();
 
-        press(&state, &modifier, &tx, Key::ControlLeft);
+        press(&state, &modifier, &tx, primary_key());
         press(&state, &modifier, &tx, Key::Alt);
         press(&state, &modifier, &tx, Key::DownArrow);
         press(&state, &modifier, &tx, Key::DownArrow);
@@ -489,7 +500,7 @@ mod tests {
         let modifier = AtomicU8::new(modifier_code(HotkeyModifier::CtrlAlt));
         let (tx, rx) = mpsc::channel();
 
-        press(&state, &modifier, &tx, Key::ControlLeft);
+        press(&state, &modifier, &tx, primary_key());
         press(&state, &modifier, &tx, Key::Alt);
         press(&state, &modifier, &tx, Key::KeyR);
         press(&state, &modifier, &tx, Key::KeyR);
@@ -506,12 +517,12 @@ mod tests {
         let modifier = AtomicU8::new(modifier_code(HotkeyModifier::CtrlAlt));
         let (tx, _rx) = mpsc::channel();
 
-        press(&state, &modifier, &tx, Key::ControlLeft);
+        press(&state, &modifier, &tx, primary_key());
         press(&state, &modifier, &tx, Key::Alt);
         press(&state, &modifier, &tx, Key::UpArrow);
         assert!(state.holding.load(Ordering::Acquire));
 
-        release(&state, &modifier, &tx, Key::ControlLeft);
+        release(&state, &modifier, &tx, primary_key());
         assert!(!state.holding.load(Ordering::Acquire));
     }
 
@@ -531,7 +542,7 @@ mod tests {
         state.stop_hold();
         release(&state, &modifier, &tx, Key::Alt);
         modifier.store(modifier_code(HotkeyModifier::Ctrl), Ordering::Release);
-        press(&state, &modifier, &tx, Key::ControlLeft);
+        press(&state, &modifier, &tx, primary_key());
         press(&state, &modifier, &tx, Key::DownArrow);
         assert_eq!(
             rx.try_iter().collect::<Vec<_>>(),
