@@ -77,6 +77,23 @@ jobs:
           test -s target/release/volumectl && echo "volumectl present and non-empty"
           ls -la target/release/volumectl
           file target/release/volumectl
+      - name: Package macOS app bundle (validation)
+        shell: bash
+        env:
+          RELEASE_PLATFORM: macos
+          RELEASE_TAG: v0.0.0-ci
+        run: bash scripts/package.sh
+      - name: Verify the macOS app bundle
+        shell: bash
+        run: |
+          unzip -l dist/volumecontrol-0.0.0-ci-macos.zip | grep -q "VolumeControl.app/Contents/Info.plist"
+          unzip -l dist/volumecontrol-0.0.0-ci-macos.zip | grep -q "VolumeControl.app/Contents/MacOS/volumectl"
+          tmp="dist/verify-$$"
+          mkdir -p "$tmp"
+          unzip -q dist/volumecontrol-0.0.0-ci-macos.zip -d "$tmp"
+          codesign --verify --strict "$tmp/VolumeControl.app"
+          plutil -lint "$tmp/VolumeControl.app/Contents/Info.plist"
+          rm -rf "$tmp"
 
   ubuntu:
     name: Ubuntu 24.04 (GTK4/libadwaita + layer-shell)

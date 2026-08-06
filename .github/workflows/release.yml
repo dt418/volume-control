@@ -8,7 +8,8 @@
 # Platform notes:
 # - Windows: portable zip (native installer arrives with a follow-on
 #   packaging task; the artifact is the signed-ready exe + docs).
-# - macOS: zip of the release binary.
+# - macOS: ad-hoc signed VolumeControl.app bundle (LSUIElement agent) so
+#   Gatekeeper and the Accessibility permission UI can identify the app.
 # - Ubuntu 24.04: tar.gz of the release binary built with the GTK4/
 #   libadwaita renderer, plus the optional Wayland layer-shell feature when
 #   the system library is installed.

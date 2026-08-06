@@ -121,9 +121,71 @@ fn modifier_from_code(code: u8) -> HotkeyModifier {
     }
 }
 
+/// Human-readable label for the configured modifier. The persisted `CtrlAlt`
+/// value means `Ctrl+Alt` on Windows/Linux. macOS accepts **either** the
+/// Control or the Command key as the primary modifier, so `CtrlAlt` works as
+/// both `⌃+⌥` (the literal config) and `⌘+⌥` (the macOS convention).
+#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+fn modifier_label(modifier: HotkeyModifier) -> &'static str {
+    match modifier {
+        HotkeyModifier::CtrlAlt => "⌘/⌃+⌥",
+        HotkeyModifier::Alt => "⌥",
+        HotkeyModifier::Ctrl => "⌘/⌃",
+        HotkeyModifier::CapsLock => "⇪",
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+#[cfg(not(target_os = "macos"))]
+fn modifier_label(modifier: HotkeyModifier) -> &'static str {
+    match modifier {
+        HotkeyModifier::CtrlAlt => "Ctrl+Alt",
+        HotkeyModifier::Alt => "Alt",
+        HotkeyModifier::Ctrl => "Ctrl",
+        HotkeyModifier::CapsLock => "CapsLock",
+    }
+}
+
+/// macOS delivers global key events through a CGEventTap, which is gated
+/// behind the Accessibility permission. Report the status at startup so a
+/// silent failure (permission missing) is never mistaken for a broken app.
+#[cfg(target_os = "macos")]
+fn accessibility_trusted() -> bool {
+    #[link(name = "ApplicationServices", kind = "framework")]
+    extern "C" {
+        fn AXIsProcessTrusted() -> i32;
+    }
+    unsafe { AXIsProcessTrusted() != 0 }
+}
+
+/// Print actionable permission guidance to stderr (always visible, even
+/// without `RUST_LOG`). The host keeps running: macOS applies the permission
+/// without a restart, so hotkeys activate the moment it is granted.
+#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+fn print_permission_guidance() {
+    if accessibility_trusted() {
+        return;
+    }
+    eprintln!(
+        "VolumeControl needs the Accessibility permission to listen for global hotkeys.\n\
+         Grant it in: System Settings → Privacy & Security → Accessibility\n\
+         → enable VolumeControl. The app keeps running; hotkeys activate as\n\
+         soon as the permission is granted."
+    );
+}
+
+#[cfg(not(target_os = "windows"))]
+#[cfg(not(target_os = "macos"))]
+fn print_permission_guidance() {}
+
 #[cfg(target_os = "macos")]
 fn primary_modifier_held(state: &KeyboardState) -> bool {
-    state.meta.load(Ordering::Acquire)
+    // Accept both ⌘ and ⌃: the config value `CtrlAlt` should behave like
+    // Ctrl+Alt everywhere, while ⌘+⌥ stays available as the macOS-native
+    // spelling of the same shortcut.
+    state.meta.load(Ordering::Acquire) || state.ctrl.load(Ordering::Acquire)
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -274,6 +336,7 @@ fn run_repeat_worker(
     state: Arc<KeyboardState>,
     tx: Sender<HotkeyAction>,
     listener_stop: Arc<AtomicBool>,
+    interval: Duration,
 ) {
     loop {
         if listener_stop.load(Ordering::Acquire) {
@@ -291,17 +354,28 @@ fn run_repeat_worker(
             continue;
         }
 
+        // Wait a full interval before emitting the repeat. The physical key
+        // press already sent the first action, so emitting here immediately
+        // would double the step on every press.
+        let guard = state.wake_lock.lock().expect("hotkey wake mutex poisoned");
+        let (_guard, _) = state
+            .wake
+            .wait_timeout(guard, interval)
+            .expect("hotkey wake mutex poisoned");
+        if !state.holding.load(Ordering::Acquire) {
+            continue;
+        }
+
         let action = state.hold_action.load(Ordering::Acquire) as i32;
         if let Some(action) = crate::hotkeys::hotkey_from_id(action) {
             let _ = tx.send(action);
         }
-
-        let guard = state.wake_lock.lock().expect("hotkey wake mutex poisoned");
-        let (_guard, _) = state
-            .wake
-            .wait_timeout(guard, REPEAT_INTERVAL)
-            .expect("hotkey wake mutex poisoned");
     }
+}
+
+/// Read a stored listener error without panicking on a poisoned lock.
+fn listener_failure_read(lock: &Mutex<Option<String>>) -> Option<String> {
+    lock.lock().ok().and_then(|guard| guard.clone())
 }
 
 /// Cross-platform global keyboard listener and Hold-to-Repeat controller.
@@ -309,6 +383,10 @@ pub struct RdevHotkeys {
     modifier: Arc<AtomicU8>,
     state: Arc<KeyboardState>,
     listener_stop: Arc<AtomicBool>,
+    /// Set when `rdev::listen` exits with an error (for example the macOS
+    /// event tap failed to start). Read by hosts so a dead listener is never
+    /// silent.
+    listener_error: Arc<Mutex<Option<String>>>,
     worker: Option<JoinHandle<()>>,
     /// `rdev::listen` blocks and has no portable cancellation API. Dropping
     /// this handle detaches it; the callback is disabled by `listener_stop`.
@@ -322,18 +400,20 @@ impl RdevHotkeys {
         let modifier = Arc::new(AtomicU8::new(modifier_code(initial_modifier)));
         let state = Arc::new(KeyboardState::new());
         let listener_stop = Arc::new(AtomicBool::new(false));
+        let listener_error = Arc::new(Mutex::new(None));
 
         let worker_state = Arc::clone(&state);
         let worker_stop = Arc::clone(&listener_stop);
         let worker_tx = tx.clone();
         let worker = thread::Builder::new()
             .name("volumectl-hotkey-repeat".into())
-            .spawn(move || run_repeat_worker(worker_state, worker_tx, worker_stop))
+            .spawn(move || run_repeat_worker(worker_state, worker_tx, worker_stop, REPEAT_INTERVAL))
             .map_err(|error| format!("start hotkey repeat worker: {error}"))?;
 
         let listener_modifier = Arc::clone(&modifier);
         let listener_state = Arc::clone(&state);
         let listener_stop_flag = Arc::clone(&listener_stop);
+        let listener_error_slot = Arc::clone(&listener_error);
         let listener = thread::Builder::new()
             .name("volumectl-rdev-listener".into())
             .spawn(move || {
@@ -344,7 +424,11 @@ impl RdevHotkeys {
                     }
                 });
                 if let Err(error) = result {
-                    log::error!("global keyboard listener stopped: {error:?}");
+                    let message = format!("{error:?}");
+                    log::error!("global keyboard listener stopped: {message}");
+                    if let Ok(mut slot) = listener_error_slot.lock() {
+                        *slot = Some(message);
+                    }
                 }
             })
             .map_err(|error| format!("start rdev listener: {error}"))?;
@@ -353,6 +437,7 @@ impl RdevHotkeys {
             modifier,
             state,
             listener_stop,
+            listener_error,
             worker: Some(worker),
             listener: Some(listener),
             rx,
@@ -369,6 +454,12 @@ impl RdevHotkeys {
     /// Return the next action, if the listener has queued one.
     pub fn try_recv(&self) -> Option<HotkeyAction> {
         self.rx.try_recv().ok()
+    }
+
+    /// The error that stopped the global listener, if the listener thread
+    /// exited with one.
+    pub fn listener_failure(&self) -> Option<String> {
+        listener_failure_read(&self.listener_error)
     }
 
     /// The rdev listener owns all configured actions, so there is no per-key
@@ -407,12 +498,22 @@ pub fn run_headless() -> Result<(), String> {
     let config = crate::config::load();
     let audio = crate::audio::default_backend().map_err(|error| error.to_string())?;
     let hotkeys = RdevHotkeys::new(config.modifier)?;
-    log::info!(
-        "volumectl global hotkeys running (rdev; modifier={:?})",
-        config.modifier
+
+    let combo = modifier_label(config.modifier);
+    eprintln!(
+        "VolumeControl global hotkeys running (rdev).\n\
+         config: {}\n\
+         modifier: {combo} — hold {combo}↑/↓ to repeat, {combo}M mutes,\n\
+         {combo}R resets to 50%, {combo}V opens the mixer (headless: no-op).",
+        crate::config::config_path().display(),
     );
+    print_permission_guidance();
 
     loop {
+        if let Some(error) = hotkeys.listener_failure() {
+            eprintln!("VolumeControl global keyboard listener stopped: {error}");
+            return Err(format!("global keyboard listener stopped: {error}"));
+        }
         while let Some(action) = hotkeys.try_recv() {
             use HotkeyAction as H;
             match action {
@@ -454,6 +555,66 @@ fn adjust_headless(audio: &dyn crate::audio::AudioBackend, delta_percent: i16) {
 mod tests {
     use super::*;
 
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn modifier_label_matches_the_platform_primary_key() {
+        #[cfg(target_os = "macos")]
+        assert_eq!(modifier_label(HotkeyModifier::CtrlAlt), "⌘/⌃+⌥");
+        #[cfg(target_os = "macos")]
+        assert_eq!(modifier_label(HotkeyModifier::Ctrl), "⌘/⌃");
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(modifier_label(HotkeyModifier::CtrlAlt), "Ctrl+Alt");
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(modifier_label(HotkeyModifier::Ctrl), "Ctrl");
+    }
+
+    #[test]
+    fn repeat_worker_waits_a_full_interval_before_the_first_repeat() {
+        // A very long interval makes the double-fire observable without
+        // wall-clock races: the worker must not emit before the interval
+        // elapses, because the key press already sent the first action.
+        let state = Arc::new(KeyboardState::new());
+        let (tx, rx) = mpsc::channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let worker = {
+            let state = Arc::clone(&state);
+            let tx = tx.clone();
+            let stop = Arc::clone(&stop);
+            thread::spawn(move || {
+                run_repeat_worker(state, tx, stop, Duration::from_secs(60));
+            })
+        };
+
+        let modifier = AtomicU8::new(modifier_code(HotkeyModifier::CtrlAlt));
+        press(&state, &modifier, &tx, primary_key());
+        press(&state, &modifier, &tx, Key::Alt);
+        press(&state, &modifier, &tx, Key::UpArrow);
+
+        // Give a buggy worker plenty of time to (incorrectly) emit its
+        // immediate repeat, then stop the hold.
+        thread::sleep(Duration::from_millis(100));
+        state.stop_hold();
+        stop.store(true, Ordering::Release);
+        state.wake.notify_one();
+        let _ = worker.join();
+
+        assert_eq!(
+            rx.try_iter().collect::<Vec<_>>(),
+            vec![HotkeyAction::VolumeUp],
+            "a physical press must emit exactly one action"
+        );
+    }
+
+    #[test]
+    fn listener_failure_read_returns_the_stored_error() {
+        assert_eq!(listener_failure_read(&Mutex::new(None)), None);
+        let lock = Mutex::new(Some("synthetic listener error".to_string()));
+        assert_eq!(
+            listener_failure_read(&lock).as_deref(),
+            Some("synthetic listener error")
+        );
+    }
+
     fn primary_key() -> Key {
         #[cfg(target_os = "macos")]
         {
@@ -492,6 +653,24 @@ mod tests {
 
         release(&state, &modifier, &tx, Key::Alt);
         assert!(!state.holding.load(Ordering::Acquire));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_accepts_ctrl_alt_like_command_alt() {
+        let state = KeyboardState::new();
+        let modifier = AtomicU8::new(modifier_code(HotkeyModifier::CtrlAlt));
+        let (tx, rx) = mpsc::channel();
+
+        press(&state, &modifier, &tx, Key::ControlLeft);
+        press(&state, &modifier, &tx, Key::Alt);
+        press(&state, &modifier, &tx, Key::DownArrow);
+
+        assert_eq!(
+            rx.try_iter().collect::<Vec<_>>(),
+            vec![HotkeyAction::VolumeDown],
+            "Ctrl+Alt must work on macOS too, matching the CtrlAlt config"
+        );
     }
 
     #[test]

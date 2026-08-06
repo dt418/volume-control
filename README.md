@@ -17,6 +17,10 @@ application: no webview, no Electron, no runtime dependencies beyond the OS.
   - `Ctrl+Alt+V` — open mixer *(planned)*
   - `Ctrl+Alt+Shift+M` — open tray menu (works even when the tray icon is
     hidden by Windows)
+  - On macOS **both ⌘ (Command) and ⌃ (Control)** work as the primary
+    modifier, so the `CtrlAlt` config matches `Ctrl+Alt` (⌃+⌥) while the
+    macOS-native `⌘+⌥` spelling also works: `⌘/⌃+⌥+↑ / ↓` etc. Hold the
+    combo to repeat the volume step continuously.
 - **Media keys** (`Volume Up/Down/Mute`) keep the native Windows flyout — the
   app only stays in sync.
 - **Overlay**: bottom-right popup with threshold-colored bar (grey / green /
@@ -86,23 +90,50 @@ Requirements: Rust (stable) + a C toolchain:
   package (`libgtk4-layer-shell-dev`, when provided by the distribution);
   without it surfaces fall back to X11-compatible borderless windows.
 
+## Running on macOS
+
+The macOS release is a proper app bundle (`VolumeControl.app`) that runs a
+global-hotkey host (no Dock icon, no windows yet — hotkeys + volume only):
+
+1. Unzip the release archive and move `VolumeControl.app` to `/Applications`.
+2. First launch is blocked by Gatekeeper because the app is ad-hoc signed.
+   Right-click the app → **Open** → **Open**, or remove the quarantine flag
+   in Terminal:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/VolumeControl.app
+   ```
+
+3. Grant **Accessibility** permission: **System Settings → Privacy & Security
+   → Accessibility** and enable **VolumeControl** (the system prompts on
+   first launch when possible). Without this permission macOS silently
+   delivers no global key events, so the hotkeys appear dead.
+4. Test with the default combo: hold **⌘+⌥+↑ / ↓** (or **⌃+⌥+↑ / ↓**) —
+   volume changes immediately and keeps repeating every 50 ms while held.
+   `⌘/⌃+⌥+M` mutes, `⌘/⌃+⌥+R` resets to 50%.
+5. To quit: `pkill -x volumectl` (a menu-bar item is a follow-on task).
+
+Running the raw binary from a terminal shows a startup banner with the config
+path, the resolved modifier, and the permission state — useful for debugging.
+
 ## Platform status
 
 | Feature                | Windows | macOS | Linux |
 |------------------------|:-------:|:-----:|:-----:|
-| Volume control         | ✅ WASAPI | 🔜 CoreAudio | 🔜 PulseAudio/PipeWire |
-| Global hotkeys         | ✅ RegisterHotKey | 🔜 | 🔜 |
+| Volume control         | ✅ WASAPI | ✅ CoreAudio | ✅ PulseAudio |
+| Global hotkeys         | ✅ rdev | ✅ rdev (Accessibility permission) | ✅ rdev (X11) |
 | Overlay                | ✅ | 🔜 | 🔜 |
 | Mixer                  | ✅ | 🔜 | 🔜 |
 | Settings window        | ✅ | 🔜 | 🔜 |
 | System tray            | ✅ tray-icon | 🔜 | 🔜 |
-| Live config            | ✅ | — | — |
+| Live config reload     | ✅ | 🔜 | 🔜 |
 | Adaptive UI renderer   | ✅ native Win32 | ✅ AppKit (surfaces + smoke-tested) | ✅ GTK4/libadwaita (surfaces, CI-tested under Xvfb) |
 
-The macOS and Linux renderers implement the same Signal Glass surface
-contract as Windows (placement, material ladder, motion policy, §11.2
-accessibility vocabulary) behind the shared `NativeRenderer` bridge; their
-host wiring (hotkeys, audio, tray) is follow-on work.
+macOS and Linux currently run the cross-platform `rdev` hotkey host (with
+their native audio backends); the full overlay/mixer/settings/tray surfaces
+are Windows-first and land on the other platforms as follow-on work. The
+AppKit and GTK4/libadwaita renderers already implement the same Signal Glass
+surface contract as Windows behind the shared `NativeRenderer` bridge.
 
 ## CI and releases
 
@@ -128,10 +159,13 @@ crates/volumectl/
 ├── src/
 │   ├── audio/          AudioBackend trait (cross-platform)
 │   ├── audio_windows   WASAPI via raw COM vtables (windows-sys)
+│   ├── audio_macos     CoreAudio via the volumecontrol crate
+│   ├── audio_linux     PulseAudio via the volumecontrol crate
 │   ├── hotkeys/        HotkeyAction types
-│   ├── hotkeys_win32   Win32 RegisterHotKey + hidden-window message loop
+│   ├── hotkeys_rdev    global listener + hold-to-repeat (all platforms)
 │   ├── overlay         GDI-painted native popup (click-through, auto-hide)
 │   ├── tray            tray-icon + muda context menu
+│   ├── linux_app       GTK4 host (Linux, gtk-renderer feature)
 │   ├── config          JSON config, mtime live reload
 │   ├── core            shared volume/clamp/threshold logic (+ unit tests)
 │   ├── ui/             shared adaptive UI contract (model, theme, capabilities,
@@ -139,11 +173,12 @@ crates/volumectl/
 │   └── cli             non-Windows CLI fallback
 ```
 
-Windows-only modules are `#[cfg(target_os = "windows")]`-gated; the crate
-still compiles on macOS/Linux (as the CLI utility) so non-Windows backends
-can be added incrementally. The `ui` module defines the shared renderer
-contract; `ui/platform/macos` and `ui/platform/linux` are compile-safe seams
-(currently stubs) for the follow-on AppKit and GTK/libadwaita renderers.
+Windows-only modules are `#[cfg(target_os = "windows")]`-gated. The non-Windows
+entry points run the `rdev` hotkey host with the native audio backend
+(CoreAudio on macOS, PulseAudio on Linux); Linux additionally builds the GTK4
+host with the `gtk-renderer` feature. The `ui` module defines the shared
+renderer contract, and `ui/platform/macos` + `ui/platform/linux` are the
+AppKit and GTK4/libadwaita renderer implementations.
 
 ## License
 
