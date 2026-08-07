@@ -185,14 +185,16 @@ fn foreground_process() -> Option<String> {
         ])
         .output()
         .ok()?;
-    
+
     if output.status.success() {
         let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if name.is_empty() {
             None
         } else {
             // Normalize: lowercase and ensure .app suffix for consistency with blacklist
-            Some(crate::config::normalize_blacklist_entry(&name.to_lowercase()))
+            Some(crate::config::normalize_blacklist_entry(
+                &name.to_lowercase(),
+            ))
         }
     } else {
         None
@@ -203,7 +205,7 @@ fn foreground_process() -> Option<String> {
 #[cfg(target_os = "linux")]
 fn foreground_process() -> Option<String> {
     use std::process::Command;
-    
+
     // Method 1: Try xdotool first (most reliable if available)
     if let Ok(output) = Command::new("xdotool")
         .args(["getactivewindow", "--pid"])
@@ -220,26 +222,23 @@ fn foreground_process() -> Option<String> {
             }
         }
     }
-    
+
     // Method 2: Fallback to xprop + wmctrl
     let output = Command::new("xprop")
         .args(["-root", "_NET_ACTIVE_WINDOW"])
         .output()
         .ok()?;
-    
+
     if !output.status.success() {
         log::debug!("foreground_process: xprop failed");
         return None;
     }
-    
+
     let window_id = String::from_utf8_lossy(&output.stdout);
     let window_id = window_id.split('#').nth(1)?.trim();
-    
-    let wmctrl_output = Command::new("wmctrl")
-        .arg("-lp")
-        .output()
-        .ok()?;
-    
+
+    let wmctrl_output = Command::new("wmctrl").arg("-lp").output().ok()?;
+
     if wmctrl_output.status.success() {
         let lines = String::from_utf8_lossy(&wmctrl_output.stdout);
         for line in lines.lines() {
@@ -257,7 +256,7 @@ fn foreground_process() -> Option<String> {
             }
         }
     }
-    
+
     // Method 3: Direct X11 query via x11rb (no CLI dependencies needed)
     // This replaces the broken /proc enumeration which returned arbitrary processes
     if let Some(pid) = get_window_pid_x11() {
@@ -267,7 +266,7 @@ fn foreground_process() -> Option<String> {
             return Some(crate::config::normalize_blacklist_entry(&name));
         }
     }
-    
+
     // All methods failed - return None (better than wrong answer)
     log::warn!("foreground_process: could not determine foreground process on Linux");
     None
@@ -279,52 +278,66 @@ fn foreground_process() -> Option<String> {
 fn get_window_pid_x11() -> Option<u32> {
     use x11rb::connection::Connection;
     use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
-    
+
     // Connect to X11 display
     let (conn, screen_num) = x11rb::connect(None).ok()?;
     let screen = &conn.setup().roots[screen_num];
     let root = screen.root;
-    
+
     // Get _NET_ACTIVE_WINDOW property from root window
     let active_win_prop = conn
-        .get_property(false, root, AtomEnum::_NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, 1)
+        .get_property(
+            false,
+            root,
+            AtomEnum::_NET_ACTIVE_WINDOW,
+            AtomEnum::WINDOW,
+            0,
+            1,
+        )
         .ok()?
         .reply()
         .ok()?;
-    
+
     if active_win_prop.value.len() < 4 {
         return None;
     }
-    
+
     let active_window = u32::from_ne_bytes([
         active_win_prop.value[0],
         active_win_prop.value[1],
         active_win_prop.value[2],
         active_win_prop.value[3],
     ]);
-    
+
     if active_window == 0 {
         return None;
     }
-    
+
     // Get _NET_WM_PID property from the active window
     let pid_prop = conn
-        .get_property(false, active_window, AtomEnum::_NET_WM_PID, AtomEnum::CARDINAL, 0, 1)
+        .get_property(
+            false,
+            active_window,
+            AtomEnum::_NET_WM_PID,
+            AtomEnum::CARDINAL,
+            0,
+            1,
+        )
         .ok()?
         .reply()
         .ok()?;
-    
+
     if pid_prop.value.len() < 4 {
         return None;
     }
-    
+
     let pid = u32::from_ne_bytes([
         pid_prop.value[0],
         pid_prop.value[1],
         pid_prop.value[2],
         pid_prop.value[3],
     ]);
-    
+
     Some(pid)
 }
 
