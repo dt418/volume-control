@@ -313,7 +313,8 @@ mod tests {
     fn commit_success_adopts_the_returned_normalized_config() {
         let mut draft = SettingsDraft::new(valid_config());
         // An out-of-bounds-but-normalizable blacklist entry: strict validation
-        // passes, but the persisted form is lowercased and trimmed.
+        // passes, but the persisted form is lowercased, trimmed, and given the
+        // platform's extension convention.
         let mut edited = valid_config();
         edited.blacklist.push("  Chrome.EXE  ".into());
         draft.set_current(edited);
@@ -325,6 +326,11 @@ mod tests {
             })
             .expect("valid config persists");
 
+        #[cfg(target_os = "windows")]
+        assert_eq!(saved.blacklist, vec!["chrome.exe".to_string()]);
+        #[cfg(target_os = "macos")]
+        assert_eq!(saved.blacklist, vec!["chrome.exe.app".to_string()]);
+        #[cfg(target_os = "linux")]
         assert_eq!(saved.blacklist, vec!["chrome.exe".to_string()]);
         assert_eq!(draft.current(), &saved);
         assert!(!draft.is_dirty());

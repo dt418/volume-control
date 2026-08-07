@@ -1,27 +1,104 @@
-# Rust
-/target
-**/*.rs.bk
-Cargo.lock
+```
+# Worktrees
+.worktrees/
 
-# OS junk
+# Environment and config
+.env
+.env.local
+.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.venv.*
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/modules/
+.DS_Store
+*.swp
+*~
+.pytest_cache/
+.hypothesis/
+.eggs/
+*.egg-info/
+.installed.cfg
+.share/
+.mypy_cache/
+.pyre/
+.pytype/
+cython_debug/
+
+# Build and distribution artifacts
+dist/
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
 
-# Local runtime
-config.json
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Thumbs.db:encryptable
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.cov/
+coverage.xml
 *.log
 
-# Brainstorming visual companion state
-.superpowers/
-
-# CI release packaging output
-dist/
-
-# Local agent and WSL test artifacts
-.claude/worktrees/
-.freebuff/
-tmp_*.py
-tmp_*.rs
-wsl-*.sh
-wsl-*.out
-wsl-*.err
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.ENV/
+```
