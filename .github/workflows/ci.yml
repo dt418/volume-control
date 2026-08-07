@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   checks:
-    name: Format, diff gate, CLI fallback
+    name: Format, lint, diff gate, CLI fallback
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -33,6 +33,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libpulse-dev libx11-dev libxi-dev libxtst-dev
       - name: Format
         run: cargo fmt --all --check
+      - name: Lint (clippy, no GTK features)
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
       - name: Forbidden diff paths
         run: bash scripts/ci-diff-check.sh
       - name: Build (no GTK features — CLI fallback)
