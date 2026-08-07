@@ -101,15 +101,28 @@ impl Default for AppearanceConfig {
 }
 
 /// Modifier combos for the custom hotkeys.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum HotkeyModifier {
-    #[default]
     CtrlAlt,
     Alt,
     Ctrl,
     #[serde(rename = "CapsLock")]
     CapsLock,
+}
+
+impl Default for HotkeyModifier {
+    /// Platform-aware default that minimises OS shortcut conflicts:
+    /// `CapsLock` on Linux (`Ctrl+Alt+↑/↓` is the workspace switcher in
+    /// GNOME and KDE), `Ctrl+Alt` elsewhere (VolumePro parity).
+    #[cfg(target_os = "linux")]
+    fn default() -> Self {
+        HotkeyModifier::CapsLock
+    }
+    #[cfg(not(target_os = "linux"))]
+    fn default() -> Self {
+        HotkeyModifier::CtrlAlt
+    }
 }
 
 /// App-level configuration.
@@ -124,6 +137,9 @@ pub struct Config {
     pub overlay_duration_ms: u64,
     /// Modifier used for custom hotkeys (default CtrlAlt).
     pub modifier: HotkeyModifier,
+    /// Launch the app at login through the OS autostart mechanism.
+    #[serde(default)]
+    pub autostart: bool,
     /// Executable names (lowercase, with `.exe`) where custom hotkeys are
     /// suppressed while that process has the foreground window.
     pub blacklist: Vec<String>,
@@ -179,7 +195,8 @@ impl Default for Config {
             volume_step: 2,
             volume_step_large: 10,
             overlay_duration_ms: 1800,
-            modifier: HotkeyModifier::CtrlAlt,
+            modifier: HotkeyModifier::default(),
+            autostart: false,
             blacklist: Vec::new(),
             color_thresholds: ColorThresholds {
                 green_up_to: 40,

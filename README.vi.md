@@ -10,7 +10,8 @@ ngoài hệ điều hành.
 
 ## Tính năng
 
-- **Phím tắt toàn cục** (mặc định `Ctrl+Alt`):
+- **Phím tắt toàn cục** (mặc định `Ctrl+Alt`; trên Linux là `CapsLock` để
+  không đụng tổ hợp `Ctrl+Alt+↑/↓` chuyển workspace của GNOME/KDE):
   - `Ctrl+Alt+↑ / ↓` — tăng/giảm âm lượng ±2%
   - `Ctrl+Alt+Shift+↑ / ↓` — tăng/giảm ±10%
   - `Ctrl+Alt+M` — bật/tắt tiếng
@@ -24,6 +25,9 @@ ngoài hệ điều hành.
   xanh dương / cam-đỏ) kèm phần trăm; tự ẩn sau ~1,8 giây; không bắt chuột.
 - **Khay hệ thống**: nhãn âm lượng trực tiếp, bật/tắt tiếng, đặt lại 50%,
   thoát.
+- **Khởi động cùng hệ thống**: tự khởi động theo cơ chế native từng OS —
+  Windows `HKCU\...\CurrentVersion\Run`, macOS LaunchAgent, Linux XDG
+  autostart. Bật/tắt trong Settings hoặc bằng `volumectl autostart on|off|status`.
 - **Nạp lại cấu hình trực tiếp**: sửa `config.json` là áp dụng ngay trong
   ~150 ms — không cần khởi động lại.
 - **Đồng bộ ngoài**: âm lượng đổi bởi phím media, ứng dụng khác hoặc
@@ -44,7 +48,8 @@ Lần chạy đầu tiên, ứng dụng ghi cấu hình mặc định vào:
   "volume_step": 2,           // bước nhỏ, phần trăm (1-50)
   "volume_step_large": 10,    // bước Shift, phải > volume_step
   "overlay_duration_ms": 1800, // thời gian hiển thị overlay (200-10000)
-  "modifier": "CtrlAlt",      // CtrlAlt | CapsLock | Alt | Ctrl
+  "modifier": "CtrlAlt",      // CtrlAlt | CapsLock | Alt | Ctrl (mặc định CtrlAlt; Linux là CapsLock)
+  "autostart": false,         // tự khởi động khi đăng nhập qua cơ chế của hệ điều hành
   "blacklist": [],            // dành cho phiên bản sau
   "color_thresholds": { "green_up_to": 40, "blue_up_to": 75, "orange_up_to": 100 }
 }
@@ -73,7 +78,8 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
 
 - **Ubuntu 24.04** (hoặc Debian 12+): Rust (stable) + gói dev GTK4/libadwaita.
   Nếu không có chúng, binary chạy dạng CLI đơn giản (`volumectl get` /
-  `set <0-100>`); nếu có, renderer native được biên dịch:
+  `set <0-100>` / `autostart <on|off|status>`); nếu có, renderer native được
+  biên dịch:
 
   ```bash
   sudo apt-get install libgtk-4-dev libadwaita-1-dev libpulse-dev xvfb

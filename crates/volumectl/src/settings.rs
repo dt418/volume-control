@@ -199,6 +199,7 @@ const ID_BTN_APPLY: isize = 120;
 const ID_BTN_RESET: isize = 121;
 const ID_BTN_CANCEL: isize = 122;
 const ID_BTN_CLOSE: isize = 123;
+const ID_CHK_AUTOSTART: isize = 124;
 
 /// One-shot timer ID for the deferred DWM backdrop re-apply after a show
 /// (see the comment in [`Settings::show`]).
@@ -253,6 +254,8 @@ const ID_ST_STORAGE_STATUS: isize = 326;
 /// Invisible (off-client) UIA mirror of the footer status line: its window
 /// text is `Status: …` / `Alert: …` (spec §11.2).
 const ID_ST_STATUS_UIA: isize = 327;
+/// OS-shortcut conflict advisory for the selected modifier (Hotkeys).
+const ID_ST_HOTKEY_CONFLICT: isize = 328;
 /// Inline validation errors, one per validatable field (see
 /// [`INLINE_ERROR_FIELDS`] for the field order).
 const ID_ERR_VOL_STEP: isize = 400;
@@ -400,6 +403,7 @@ struct ControlValues {
     volume_step: u32,
     volume_step_large: u32,
     overlay_duration_ms: u64,
+    autostart: bool,
     modifier: HotkeyModifier,
     theme: ThemeMode,
     material: MaterialMode,
@@ -440,6 +444,7 @@ impl RowLayout {
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct GeneralLayout {
     rows: [RowLayout; 3],
+    chk_autostart: RectF,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -447,6 +452,7 @@ struct HotkeysLayout {
     label: RectF,
     combo: RectF,
     status: RectF,
+    conflict: RectF,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -563,6 +569,12 @@ impl SettingsLayout {
                 RowLayout::new(content_x, content_y + 44.0, cw, 120.0),
                 RowLayout::new(content_x, content_y + 88.0, cw, 120.0),
             ],
+            chk_autostart: RectF::new(
+                content_x,
+                content_y + 132.0,
+                content_x + 336.0,
+                content_y + 157.0,
+            ),
         };
         let hotkeys = HotkeysLayout {
             label: RectF::new(
@@ -582,6 +594,12 @@ impl SettingsLayout {
                 content_y + 30.0,
                 content_x + cw,
                 content_y + 48.0,
+            ),
+            conflict: RectF::new(
+                content_x + 108.0,
+                content_y + 52.0,
+                content_x + cw,
+                content_y + 92.0,
             ),
         };
         let appearance = AppearanceLayout {
@@ -748,6 +766,7 @@ fn child_rects(layout: &SettingsLayout) -> Vec<(isize, RectF)> {
     // Hotkeys.
     out.push((ID_LBL_MODIFIER, layout.hotkeys.label));
     out.push((ID_ST_HOTKEY_STATUS, layout.hotkeys.status));
+    out.push((ID_ST_HOTKEY_CONFLICT, layout.hotkeys.conflict));
     // Appearance labels + preview caption.
     out.push((ID_LBL_THEME, layout.appearance.rows[0].label));
     out.push((ID_LBL_MATERIAL, layout.appearance.rows[1].label));
@@ -780,6 +799,7 @@ fn child_rects(layout: &SettingsLayout) -> Vec<(isize, RectF)> {
     out.push((ID_VOL_STEP, layout.general.rows[0].field));
     out.push((ID_VOL_STEP_LARGE, layout.general.rows[1].field));
     out.push((ID_OVERLAY_MS, layout.general.rows[2].field));
+    out.push((ID_CHK_AUTOSTART, layout.general.chk_autostart));
     // Hotkeys control.
     out.push((ID_COMBO_MODIFIER, layout.hotkeys.combo));
     // Appearance controls.
@@ -818,9 +838,11 @@ struct SettingsData {
     edit_volume_step: HWND,
     edit_volume_step_large: HWND,
     edit_overlay_ms: HWND,
+    chk_autostart: HWND,
     // Hotkeys
     combo_modifier: HWND,
     static_hotkey_status: HWND,
+    static_hotkey_conflict: HWND,
     // Appearance
     combo_theme: HWND,
     combo_material: HWND,
@@ -903,8 +925,10 @@ impl SettingsData {
             edit_volume_step: 0,
             edit_volume_step_large: 0,
             edit_overlay_ms: 0,
+            chk_autostart: 0,
             combo_modifier: 0,
             static_hotkey_status: 0,
+            static_hotkey_conflict: 0,
             combo_theme: 0,
             combo_material: 0,
             combo_motion: 0,
@@ -1200,6 +1224,13 @@ impl Settings {
                 d.hfont_caption,
                 false
             );
+            d.chk_autostart = reg_ctl!(
+                w!("BUTTON"),
+                w!("Launch VolumeControl at startup"),
+                WS_CHILD | WS_TABSTOP | BS_AUTOCHECKBOX,
+                layout.general.chk_autostart,
+                ID_CHK_AUTOSTART,
+            );
 
             // ── Hotkeys ──────────────────────────────────────────────────
             reg_static!(
@@ -1221,6 +1252,13 @@ impl Settings {
                 layout.hotkeys.status,
                 ID_ST_HOTKEY_STATUS,
                 d.hfont_body,
+                false
+            );
+            d.static_hotkey_conflict = reg_static!(
+                w!(""),
+                layout.hotkeys.conflict,
+                ID_ST_HOTKEY_CONFLICT,
+                d.hfont_caption,
                 false
             );
 
@@ -2216,6 +2254,7 @@ fn read_controls(d: &SettingsData) -> ControlValues {
         volume_step: edit_number(d.edit_volume_step),
         volume_step_large: edit_number(d.edit_volume_step_large),
         overlay_duration_ms: edit_number_u64(d.edit_overlay_ms),
+        autostart: checkbox_checked(d.chk_autostart),
         modifier: modifier_from_index(combo_get_index(d.combo_modifier)),
         theme: theme_from_index(combo_get_index(d.combo_theme)),
         material: material_from_index(combo_get_index(d.combo_material)),
@@ -2237,6 +2276,7 @@ fn control_values_to_config(base: &Config, values: &ControlValues) -> Config {
     cfg.volume_step = values.volume_step;
     cfg.volume_step_large = values.volume_step_large;
     cfg.overlay_duration_ms = values.overlay_duration_ms;
+    cfg.autostart = values.autostart;
     cfg.modifier = values.modifier;
     cfg.appearance.theme = values.theme;
     cfg.appearance.material = values.material;
@@ -2257,6 +2297,7 @@ fn populate_controls(d: &SettingsData) {
     set_control_text(d.edit_volume_step, &cfg.volume_step.to_string());
     set_control_text(d.edit_volume_step_large, &cfg.volume_step_large.to_string());
     set_control_text(d.edit_overlay_ms, &cfg.overlay_duration_ms.to_string());
+    set_checkbox(d.chk_autostart, cfg.autostart);
     combo_set_index(d.combo_modifier, modifier_index(cfg.modifier));
     combo_set_index(d.combo_theme, theme_index(cfg.appearance.theme));
     combo_set_index(d.combo_material, material_index(cfg.appearance.material));
@@ -2278,6 +2319,29 @@ fn populate_controls(d: &SettingsData) {
             modifier_label(cfg.modifier)
         ),
     );
+    update_hotkey_conflict(d, cfg.modifier);
+}
+
+/// Refresh the Hotkeys section's OS-shortcut conflict advisory for
+/// `modifier`. Pure text derived from the platform conflict table.
+fn update_hotkey_conflict(d: &SettingsData, modifier: HotkeyModifier) {
+    let conflicts = crate::hotkeys::conflicts_for(modifier);
+    let text = if conflicts.is_empty() {
+        "No known conflicts with OS shortcuts for this modifier.".to_string()
+    } else {
+        let lines: Vec<String> = conflicts
+            .iter()
+            .map(|c| {
+                format!(
+                    "{} — {}.",
+                    crate::hotkeys::combo_label(modifier, c.key),
+                    c.note
+                )
+            })
+            .collect();
+        format!("Possible conflicts: {}", lines.join("  "))
+    };
+    set_control_text(d.static_hotkey_conflict, &text);
 }
 
 /// Repopulate only the blacklist listbox from the draft's working copy.
@@ -2313,6 +2377,7 @@ fn interactive_handles(d: &SettingsData) -> Vec<(isize, HWND)> {
         (ID_VOL_STEP, d.edit_volume_step),
         (ID_VOL_STEP_LARGE, d.edit_volume_step_large),
         (ID_OVERLAY_MS, d.edit_overlay_ms),
+        (ID_CHK_AUTOSTART, d.chk_autostart),
         (ID_COMBO_MODIFIER, d.combo_modifier),
         (ID_COMBO_THEME, d.combo_theme),
         (ID_COMBO_MATERIAL, d.combo_material),
@@ -2341,6 +2406,7 @@ fn interactive_handles(d: &SettingsData) -> Vec<(isize, HWND)> {
 fn interactive_section(id: isize) -> Option<Section> {
     match id {
         ID_VOL_STEP..=ID_OVERLAY_MS => Some(Section::General),
+        ID_CHK_AUTOSTART => Some(Section::General),
         ID_COMBO_MODIFIER => Some(Section::Hotkeys),
         ID_COMBO_THEME..=ID_COMBO_ACCENT => Some(Section::Appearance),
         ID_LIST_BLACKLIST..=ID_BTN_BLACKLIST_RECOMMEND => Some(Section::Blacklist),
@@ -2361,9 +2427,11 @@ fn static_section(id: isize) -> Option<Section> {
         | ID_HELP_VOL_STEP
         | ID_HELP_VOL_STEP_LARGE
         | ID_HELP_OVERLAY => Some(Section::General),
-        ID_HDR_HOTKEYS | ID_SUB_HOTKEYS | ID_LBL_MODIFIER | ID_ST_HOTKEY_STATUS => {
-            Some(Section::Hotkeys)
-        }
+        ID_HDR_HOTKEYS
+        | ID_SUB_HOTKEYS
+        | ID_LBL_MODIFIER
+        | ID_ST_HOTKEY_STATUS
+        | ID_ST_HOTKEY_CONFLICT => Some(Section::Hotkeys),
         ID_HDR_APPEARANCE
         | ID_SUB_APPEARANCE
         | ID_LBL_THEME..=ID_LBL_ACCENT
@@ -3120,8 +3188,8 @@ unsafe extern "system" fn settings_wndproc(
                         merge_recommended(d);
                         return 0;
                     }
-                    ID_CHK_BEEP => {
-                        // The checkbox is a draft edit: keep Apply's enabled
+                    ID_CHK_BEEP | ID_CHK_AUTOSTART => {
+                        // Checkboxes are draft edits: keep Apply's enabled
                         // state honest.
                         sync_apply_enabled(d);
                         return 0;
@@ -3142,6 +3210,12 @@ unsafe extern "system" fn settings_wndproc(
                     apply_appearance_combo(d, id);
                 }
                 sync_apply_enabled(d);
+                if id == ID_COMBO_MODIFIER {
+                    update_hotkey_conflict(
+                        d,
+                        modifier_from_index(combo_get_index(d.combo_modifier)),
+                    );
+                }
                 return 0;
             }
             if code == EN_CHANGE {
@@ -3315,6 +3389,7 @@ mod tests {
             volume_step_large: 10,
             overlay_duration_ms: 1800,
             modifier: HotkeyModifier::CtrlAlt,
+            autostart: false,
             theme: ThemeMode::System,
             material: MaterialMode::Auto,
             motion: MotionMode::Full,
@@ -3599,7 +3674,7 @@ mod tests {
         let mut settings = hidden_window();
         let d = data_mut(&mut settings);
 
-        // General: rail, the three General controls, then Reset/Cancel/Save/Close.
+        // General: rail, the four General controls, then Reset/Cancel/Save/Close.
         let cycle = tab_cycle(d);
         assert_eq!(
             cycle,
@@ -3608,6 +3683,7 @@ mod tests {
                 d.edit_volume_step,
                 d.edit_volume_step_large,
                 d.edit_overlay_ms,
+                d.chk_autostart,
                 d.btn_reset,
                 d.btn_cancel,
                 d.btn_apply,
@@ -4132,6 +4208,72 @@ mod tests {
         assert!(
             !d.draft.is_dirty(),
             "removing the only edit restores the baseline"
+        );
+    }
+
+    #[test]
+    fn autostart_checkbox_populates_from_and_reads_into_the_draft() {
+        let mut settings = hidden_window();
+        // Seed the draft with autostart enabled and repopulate the controls:
+        // the checkbox must reflect the draft.
+        {
+            let d = data_mut(&mut settings);
+            let mut cfg = d.draft.current().clone();
+            cfg.autostart = true;
+            d.draft.set_current(cfg);
+            populate_controls(d);
+        }
+        let d = data(&settings);
+        assert!(
+            checkbox_checked(d.chk_autostart),
+            "populate must check the autostart box from the draft"
+        );
+        // The Apply read path carries the checkbox back into the config.
+        let values = read_controls(d);
+        assert!(values.autostart);
+        let cfg = control_values_to_config(d.draft.current(), &values);
+        assert!(cfg.autostart, "checkbox state reaches the applied config");
+    }
+
+    #[test]
+    fn autostart_checkbox_tracks_a_manual_toggle_into_the_draft() {
+        let mut settings = hidden_window();
+        {
+            let d = data_mut(&mut settings);
+            let mut cfg = d.draft.current().clone();
+            cfg.autostart = true;
+            d.draft.set_current(cfg);
+            populate_controls(d);
+        }
+        // A user unchecks the box; the draft baseline still says true, so
+        // only the read path (Apply) decides what gets persisted.
+        set_checkbox(data(&settings).chk_autostart, false);
+        let d = data(&settings);
+        let values = read_controls(d);
+        assert!(!values.autostart);
+        let cfg = control_values_to_config(d.draft.current(), &values);
+        assert!(!cfg.autostart, "unchecked box must persist autostart=false");
+    }
+
+    #[test]
+    fn hotkey_conflict_advisory_updates_with_the_selected_modifier() {
+        let settings = hidden_window();
+        let d = data(&settings);
+        update_hotkey_conflict(d, HotkeyModifier::CapsLock);
+        let text = get_control_text(d.static_hotkey_conflict);
+        assert!(
+            text.contains("No known conflicts"),
+            "CapsLock must be advisory-free, got: {text}"
+        );
+        update_hotkey_conflict(d, HotkeyModifier::CtrlAlt);
+        let text = get_control_text(d.static_hotkey_conflict);
+        assert!(
+            text.contains("Possible conflicts"),
+            "CtrlAlt has known clashes, got: {text}"
+        );
+        assert!(
+            text.contains("Ctrl+Alt"),
+            "advisory shows the combo: {text}"
         );
     }
 }

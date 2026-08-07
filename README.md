@@ -9,7 +9,8 @@ application: no webview, no Electron, no runtime dependencies beyond the OS.
 
 ## Features
 
-- **Global hotkeys** (default `Ctrl+Alt`):
+- **Global hotkeys** (default `Ctrl+Alt`; `CapsLock` on Linux, which keeps
+  GNOME/KDE's `Ctrl+Alt+↑/↓` workspace switching intact):
   - `Ctrl+Alt+↑ / ↓` — volume ±2%
   - `Ctrl+Alt+Shift+↑ / ↓` — volume ±10%
   - `Ctrl+Alt+M` — mute toggle
@@ -27,6 +28,9 @@ application: no webview, no Electron, no runtime dependencies beyond the OS.
   blue / orange-red) and the percentage; auto-hides after ~1.8 s;
   click-through.
 - **System tray**: live volume label, mute toggle, reset, exit.
+- **Start with the system**: native per-OS autostart — Windows
+  `HKCU\...\CurrentVersion\Run`, macOS LaunchAgent, Linux XDG autostart.
+  Toggle it in Settings or with `volumectl autostart on|off|status`.
 - **Live config reload**: edit `config.json` and settings apply within
   ~150 ms — no restart needed.
 - **External sync**: volume changed by media keys, other apps, or Bluetooth
@@ -47,7 +51,8 @@ On first run the app writes a default config to:
   "volume_step": 2,           // small step, percent (1-50)
   "volume_step_large": 10,    // Shift step, must be > volume_step
   "overlay_duration_ms": 1800, // overlay visibility (200-10000)
-  "modifier": "CtrlAlt",      // CtrlAlt | CapsLock | Alt | Ctrl
+  "modifier": "CtrlAlt",      // CtrlAlt | CapsLock | Alt | Ctrl (default CtrlAlt; CapsLock on Linux)
+  "autostart": false,         // launch at login via the OS autostart mechanism
   "blacklist": [],            // reserved for future use
   "color_thresholds": { "green_up_to": 40, "blue_up_to": 75, "orange_up_to": 100 }
 }
@@ -76,7 +81,8 @@ Requirements: Rust (stable) + a C toolchain:
 
 - **Ubuntu 24.04** (or Debian 12+): Rust (stable) + GTK4/libadwaita dev
   packages. Without them the binary builds as the CLI fallback
-  (`volumectl get` / `set <0-100>`); with them the native renderer builds:
+  (`volumectl get` / `set <0-100>` / `autostart <on|off|status>`); with them
+  the native renderer builds:
 
   ```bash
   sudo apt-get install libgtk-4-dev libadwaita-1-dev libpulse-dev xvfb
@@ -163,6 +169,7 @@ crates/volumectl/
 │   ├── audio_linux     PulseAudio via the volumecontrol crate
 │   ├── hotkeys/        HotkeyAction types
 │   ├── hotkeys_rdev    global listener + hold-to-repeat (all platforms)
+│   ├── autostart       launch-at-login (Windows Run, macOS LaunchAgent, Linux XDG)
 │   ├── overlay         GDI-painted native popup (click-through, auto-hide)
 │   ├── tray            tray-icon + muda context menu
 │   ├── linux_app       GTK4 host (Linux, gtk-renderer feature)

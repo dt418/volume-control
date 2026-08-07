@@ -1,5 +1,7 @@
 //! Hotkey action and status definitions shared across all platforms.
 
+use crate::config::HotkeyModifier;
+
 /// Identifies an action triggered by a hotkey.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HotkeyAction {
@@ -90,5 +92,215 @@ impl HotkeyAction {
             HotkeyAction::OpenMixer => "Mixer",
             HotkeyAction::OpenMenu => "Open tray menu",
         }
+    }
+}
+
+/// A known clash between a configured modifier and an OS or common-app
+/// shortcut that uses one of the app's fixed keys (↑/↓, M, R, V).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShortcutConflict {
+    /// The affected key of the app's fixed key set (e.g. `↑/↓`, `M`, `R`).
+    pub key: &'static str,
+    /// Why the combo clashes (OS/desktop/app behaviour).
+    pub note: &'static str,
+    /// True when the OS or desktop environment reserves the combo
+    /// system-wide (e.g. GNOME workspace switching).
+    pub os_reserved: bool,
+}
+
+/// The configured modifier as a compact label (`Ctrl+Alt`, `Alt`, `Ctrl`,
+/// `CapsLock`).
+pub fn modifier_prefix(modifier: HotkeyModifier) -> &'static str {
+    match modifier {
+        HotkeyModifier::CtrlAlt => "Ctrl+Alt",
+        HotkeyModifier::Alt => "Alt",
+        HotkeyModifier::Ctrl => "Ctrl",
+        HotkeyModifier::CapsLock => "CapsLock",
+    }
+}
+
+/// One human-readable combo for a conflict, e.g. `Ctrl+Alt+↑/↓`.
+pub fn combo_label(modifier: HotkeyModifier, key: &str) -> String {
+    format!("{}+{key}", modifier_prefix(modifier))
+}
+
+/// Known OS/common-app shortcuts that clash with the configured modifier on
+/// the platform the binary runs on. The app's keys are fixed, so the whole
+/// conflict surface is `modifier × key`.
+pub fn conflicts_for(modifier: HotkeyModifier) -> Vec<ShortcutConflict> {
+    #[cfg(target_os = "windows")]
+    {
+        windows_conflicts(modifier)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        macos_conflicts(modifier)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        linux_conflicts(modifier)
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_conflicts(modifier: HotkeyModifier) -> Vec<ShortcutConflict> {
+    match modifier {
+        HotkeyModifier::CtrlAlt => vec![ShortcutConflict {
+            key: "↑/↓",
+            note: "the screen-rotation shortcut on many laptops (Intel/AMD graphics)",
+            os_reserved: false,
+        }],
+        HotkeyModifier::Alt => vec![
+            ShortcutConflict {
+                key: "↑/↓",
+                note: "move-line in editors (VS Code, JetBrains)",
+                os_reserved: false,
+            },
+            ShortcutConflict {
+                key: "M/R/V",
+                note: "menu mnemonics in most apps",
+                os_reserved: false,
+            },
+        ],
+        HotkeyModifier::Ctrl => vec![
+            ShortcutConflict {
+                key: "R",
+                note: "reload in browsers and editors",
+                os_reserved: false,
+            },
+            ShortcutConflict {
+                key: "V",
+                note: "paste in most apps",
+                os_reserved: false,
+            },
+        ],
+        HotkeyModifier::CapsLock => Vec::new(),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_conflicts(modifier: HotkeyModifier) -> Vec<ShortcutConflict> {
+    match modifier {
+        // The Ctrl config accepts both ⌃ and ⌘ as the primary key, so the
+        // resulting combos collide with common ⌘ shortcuts.
+        HotkeyModifier::Ctrl => vec![
+            ShortcutConflict {
+                key: "M",
+                note: "Minimize (⌘+M)",
+                os_reserved: false,
+            },
+            ShortcutConflict {
+                key: "V",
+                note: "Paste (⌘+V)",
+                os_reserved: false,
+            },
+            ShortcutConflict {
+                key: "R",
+                note: "Reload in many apps (⌘+R)",
+                os_reserved: false,
+            },
+            ShortcutConflict {
+                key: "↑/↓",
+                note: "Home/End in text fields (⌘+↑/↓)",
+                os_reserved: false,
+            },
+        ],
+        HotkeyModifier::CtrlAlt => vec![ShortcutConflict {
+            key: "M",
+            note: "Minimize All in some apps (⌘/⌃+⌥+M)",
+            os_reserved: false,
+        }],
+        HotkeyModifier::Alt | HotkeyModifier::CapsLock => Vec::new(),
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_conflicts(modifier: HotkeyModifier) -> Vec<ShortcutConflict> {
+    match modifier {
+        HotkeyModifier::CtrlAlt => vec![ShortcutConflict {
+            key: "↑/↓",
+            note: "workspace switching in GNOME and KDE",
+            os_reserved: true,
+        }],
+        HotkeyModifier::Alt => vec![
+            ShortcutConflict {
+                key: "↑/↓",
+                note: "move-line in editors (VS Code, JetBrains)",
+                os_reserved: false,
+            },
+            ShortcutConflict {
+                key: "M/R/V",
+                note: "menu mnemonics in most apps",
+                os_reserved: false,
+            },
+        ],
+        HotkeyModifier::Ctrl => vec![
+            ShortcutConflict {
+                key: "R",
+                note: "reload in browsers and editors",
+                os_reserved: false,
+            },
+            ShortcutConflict {
+                key: "V",
+                note: "paste in most apps",
+                os_reserved: false,
+            },
+        ],
+        HotkeyModifier::CapsLock => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn modifier_prefix_renders_all_four_modifiers() {
+        assert_eq!(modifier_prefix(HotkeyModifier::CtrlAlt), "Ctrl+Alt");
+        assert_eq!(modifier_prefix(HotkeyModifier::Alt), "Alt");
+        assert_eq!(modifier_prefix(HotkeyModifier::Ctrl), "Ctrl");
+        assert_eq!(modifier_prefix(HotkeyModifier::CapsLock), "CapsLock");
+    }
+
+    #[test]
+    fn combo_label_joins_prefix_and_key() {
+        assert_eq!(combo_label(HotkeyModifier::CtrlAlt, "↑/↓"), "Ctrl+Alt+↑/↓");
+        assert_eq!(combo_label(HotkeyModifier::CapsLock, "M"), "CapsLock+M");
+    }
+
+    #[test]
+    fn capslock_has_no_known_conflicts_on_any_platform() {
+        assert!(conflicts_for(HotkeyModifier::CapsLock).is_empty());
+    }
+
+    #[test]
+    fn the_platform_default_modifier_is_the_least_conflicting_choice() {
+        #[cfg(target_os = "linux")]
+        assert_eq!(HotkeyModifier::default(), HotkeyModifier::CapsLock);
+        #[cfg(not(target_os = "linux"))]
+        assert_eq!(HotkeyModifier::default(), HotkeyModifier::CtrlAlt);
+
+        // On Linux the default (CapsLock) is entirely conflict-free.
+        #[cfg(target_os = "linux")]
+        assert!(conflicts_for(HotkeyModifier::default()).is_empty());
+    }
+
+    #[test]
+    fn conflict_table_covers_the_alternative_modifiers() {
+        // CtrlAlt clashes with something on every platform (screen rotation /
+        // workspace switching / Minimize All) — that is why the platform
+        // default avoids it where possible.
+        assert!(!conflicts_for(HotkeyModifier::CtrlAlt).is_empty());
+
+        #[cfg(target_os = "linux")]
+        assert!(
+            conflicts_for(HotkeyModifier::CtrlAlt)
+                .iter()
+                .any(|c| c.os_reserved),
+            "GNOME/KDE workspace switching is reserved by the desktop"
+        );
+
+        // Ctrl also collides with common app shortcuts on every platform.
+        assert!(!conflicts_for(HotkeyModifier::Ctrl).is_empty());
     }
 }

@@ -375,6 +375,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let config = crate::config::load();
+    if config.autostart && !crate::autostart::is_enabled() {
+        log::warn!(
+            "config requests autostart but the OS registration is missing — \
+             re-enable it in Settings or the app will not launch at login"
+        );
+    }
     let last_config_mtime = config_mtime();
     let audio = WindowsAudio::new()?;
     let overlay = Overlay::new()?;
@@ -784,6 +790,7 @@ fn tray_command_to_action(cmd: TrayCommand) -> AppAction {
 /// only when the modifier changed, and refresh every renderer.
 fn adopt_saved_config(ctx: &mut AppContext, saved: Config) {
     let modifier_changed = saved.modifier != ctx.config.modifier;
+    let autostart_changed = saved.autostart != ctx.config.autostart;
     ctx.config = saved;
     ctx.last_config_mtime = config_mtime();
     if modifier_changed {
@@ -792,6 +799,19 @@ fn adopt_saved_config(ctx: &mut AppContext, saved: Config) {
         set_wheel_modifier(ctx.config.modifier);
         // Keep the per-action registration status fresh for the UI.
         ctx.hotkey_status = ctx.hotkeys.status().to_vec();
+    }
+    if autostart_changed {
+        match crate::autostart::set_enabled(ctx.config.autostart) {
+            Ok(()) => log::info!(
+                "autostart: {} (system registration updated)",
+                if ctx.config.autostart {
+                    "enabled"
+                } else {
+                    "disabled"
+                }
+            ),
+            Err(e) => log::warn!("autostart update failed: {e}"),
+        }
     }
     publish_confirmed_state(ctx, false);
 }

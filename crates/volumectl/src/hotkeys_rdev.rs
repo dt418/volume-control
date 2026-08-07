@@ -507,6 +507,17 @@ pub fn run_headless() -> Result<(), String> {
          {combo}R resets to 50%, {combo}V opens the mixer (headless: no-op).",
         crate::config::config_path().display(),
     );
+    let conflicts = crate::hotkeys::conflicts_for(config.modifier);
+    for conflict in &conflicts {
+        eprintln!(
+            "  note: {} — {}.",
+            crate::hotkeys::combo_label(config.modifier, conflict.key),
+            conflict.note
+        );
+    }
+    if !conflicts.is_empty() {
+        eprintln!("  tip: the CapsLock modifier has no known OS conflicts.");
+    }
     print_permission_guidance();
 
     loop {

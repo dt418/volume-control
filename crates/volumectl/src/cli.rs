@@ -35,8 +35,37 @@ pub fn run() -> Result<ExitCode, String> {
             device.toggle_mute().map_err(|e| e.to_string())?;
             Ok(ExitCode::SUCCESS)
         }
+        "autostart" => {
+            let action = args.get(1).map(String::as_str).unwrap_or("status");
+            match action {
+                "on" => {
+                    crate::autostart::set_enabled(true).map_err(|e| e.to_string())?;
+                    println!("autostart: enabled");
+                    Ok(ExitCode::SUCCESS)
+                }
+                "off" => {
+                    crate::autostart::set_enabled(false).map_err(|e| e.to_string())?;
+                    println!("autostart: disabled");
+                    Ok(ExitCode::SUCCESS)
+                }
+                "status" => {
+                    println!(
+                        "autostart: {}",
+                        if crate::autostart::is_enabled() {
+                            "enabled"
+                        } else {
+                            "disabled"
+                        }
+                    );
+                    Ok(ExitCode::SUCCESS)
+                }
+                other => Err(format!(
+                    "usage: volumectl autostart <on|off|status> (got '{other}')"
+                )),
+            }
+        }
         other => Err(format!(
-            "unknown command '{other}' (try: get, set <0-100>, mute)"
+            "unknown command '{other}' (try: get, set <0-100>, mute, autostart <on|off|status>)"
         )),
     }
 }
