@@ -38,6 +38,7 @@ gtk-renderer = ["dep:gtk4", "dep:libadwaita"]
 layer-shell = ["dep:gtk4-layer-shell", "gtk-renderer"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", features = ["allow-unsafe-code"] }
 gtk4 = { version = "0.8", optional = true }
 libadwaita = { version = "0.6", optional = true }
 gtk4-layer-shell = { version = "0.3", optional = true }

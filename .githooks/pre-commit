@@ -1,0 +1,35 @@
+#!/usr/bin/env sh
+# Pre-commit guard: fail fast on formatting, whitespace, and lint issues.
+# Install with scripts/install-hooks.sh or scripts/install-hooks.ps1
+# (sets core.hooksPath to this directory). Skip with `git commit --no-verify`
+# only when explicitly requested.
+
+set -e
+
+# Resolve cargo when the hook runs outside a configured PATH (common on
+# Windows, where git invokes hooks with a minimal environment).
+if ! command -v cargo >/dev/null 2>&1; then
+  for cargo_dir in "$HOME/.cargo/bin" "$USERPROFILE/.cargo/bin"; do
+    if [ -n "$cargo_dir" ] && { [ -x "$cargo_dir/cargo" ] || [ -x "$cargo_dir/cargo.exe" ]; }; then
+      PATH="$cargo_dir:$PATH"
+      export PATH
+      break
+    fi
+  done
+fi
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "[pre-commit] cargo not found; install the Rust toolchain first" >&2
+  exit 1
+fi
+
+echo "[pre-commit] cargo fmt --all --check"
+cargo fmt --all --check
+
+echo "[pre-commit] git diff --cached --check"
+git diff --cached --check
+
+echo "[pre-commit] cargo clippy --workspace --all-targets --no-default-features -- -D warnings"
+cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+
+echo "[pre-commit] format and lint OK"

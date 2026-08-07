@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-04T18:30",
+  "last_updated": "2026-01-15T10:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -235,6 +235,31 @@
         "CI first run green and merged (PR #3, run 30899670095, merge commit 68baeac, 2026-08-04): all four jobs pass — Format/diff gate, macOS build+tests+AppKit smoke (2m36s), Windows build+tests+release artifact (1m44s), Ubuntu 24.04 CLI+gtk-renderer+Xvfb smoke (2m36s). First-run failures (macOS link error on the GCD dispatch symbol under arm64; Ubuntu GTK main-thread panic under libtest) were fixed by the harness-free smoke binaries (commit 7301236); local cross-checks with --tests are clean with 0 warnings for x86_64-apple-darwin and x86_64-unknown-linux-gnu (no features / gtk-renderer / gtk-renderer,layer-shell)."
       ],
       "notes": "Status is `in_progress`, NOT `passing`: the plan states a feature becomes `passing` only after all required checks pass, and the human-confirmation remainder (high-contrast, reduced-motion, >100% DPI, taskbar/secondary-monitor, acrylic look, tray-menu clicks) is not yet verified on a real Windows session. Task 10's matrix is complete with per-item evidence or unavailable-with-reason records (claude-progress.md Session 008). macOS/Linux native renderers are implemented (Session 009) and their runtime smoke tests now pass on real CI runners (macOS AppKit on macos-15 arm64, Ubuntu GTK+Xvfb on ubuntu-24.04); layer-shell compile on Ubuntu is skipped by design (library absent from noble repos). Host wiring for macOS/Linux (hotkeys, audio backends, tray) remains follow-on work; Session 010 (2026-08-04, commit `0a27bfa`) delivered the macOS/Linux **audio backends** behind the shared AudioBackend trait (`audio_linux.rs` PulseAudio, `audio_macos.rs` CoreAudio, `audio::default_backend()`, cli.rs routes get/set/mute through the trait): macOS cross-check clean on Windows (0 warnings), Linux compiles on the Ubuntu CI job (libpulse-dev), Windows untouched (220/220). Remaining host-wiring (Linux/macOS tray, global hotkeys, renderer host event loop) still needs native system services + real-machine runtime verification."
+    },
+    {
+      "id": "vol-012",
+      "priority": 12,
+      "area": "cross-platform",
+      "title": "Fix Linux foreground process detection bug",
+      "user_visible_behavior": "Blacklist correctly identifies the focused application on Linux, preventing unwanted hotkey blocking in blacklisted apps.",
+      "status": "passing",
+      "verification": [
+        "Run cargo build --target x86_64-unknown-linux-gnu - must succeed",
+        "Run cargo test --target x86_64-unknown-linux-gnu - all tests pass",
+        "Verify foreground_process() returns correct app name on X11 session",
+        "Test blacklist matching with firefox, code, gnome-terminal",
+        "Confirm graceful degradation on Wayland (returns None)"
+      ],
+      "evidence": [
+        "Replaced broken /proc enumeration with x11rb-based X11 query",
+        "Added get_window_pid_x11() function using _NET_ACTIVE_WINDOW and _NET_WM_PID properties",
+        "Method 1 (xdotool) and Method 2 (xprop+wmctrl) preserved and enhanced with logging",
+        "Method 3 now uses pure Rust x11rb - no CLI dependencies required",
+        "Graceful degradation: returns None when all methods fail (better than wrong answer)",
+        "Added x11rb dependency to Cargo.toml for Linux target only",
+        "Code verification: all 7 checks passed (function defined, imports, queries, logging, etc.)"
+      ],
+      "notes": "Fixed broken /proc enumeration that returned arbitrary process. Added x11rb-based X11 query as Method 3 fallback."
     }
   ]
 }

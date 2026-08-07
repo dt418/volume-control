@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   checks:
-    name: Format, diff gate, CLI fallback
+    name: Format, lint, diff gate, CLI fallback
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -33,6 +33,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libpulse-dev libx11-dev libxi-dev libxtst-dev
       - name: Format
         run: cargo fmt --all --check
+      - name: Lint (clippy, no GTK features)
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
       - name: Forbidden diff paths
         run: bash scripts/ci-diff-check.sh
       - name: Build (no GTK features — CLI fallback)
@@ -77,6 +79,23 @@ jobs:
           test -s target/release/volumectl && echo "volumectl present and non-empty"
           ls -la target/release/volumectl
           file target/release/volumectl
+      - name: Package macOS app bundle (validation)
+        shell: bash
+        env:
+          RELEASE_PLATFORM: macos
+          RELEASE_TAG: v0.0.0-ci
+        run: bash scripts/package.sh
+      - name: Verify the macOS app bundle
+        shell: bash
+        run: |
+          unzip -l dist/volumecontrol-0.0.0-ci-macos.zip | grep -q "VolumeControl.app/Contents/Info.plist"
+          unzip -l dist/volumecontrol-0.0.0-ci-macos.zip | grep -q "VolumeControl.app/Contents/MacOS/volumectl"
+          tmp="dist/verify-$$"
+          mkdir -p "$tmp"
+          unzip -q dist/volumecontrol-0.0.0-ci-macos.zip -d "$tmp"
+          codesign --verify --strict "$tmp/VolumeControl.app"
+          plutil -lint "$tmp/VolumeControl.app/Contents/Info.plist"
+          rm -rf "$tmp"
 
   ubuntu:
     name: Ubuntu 24.04 (GTK4/libadwaita + layer-shell)

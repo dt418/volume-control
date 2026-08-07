@@ -11,6 +11,7 @@
 //! with a configurable blocked beep; pressing volume at 0% / 100% beeps the
 //! limit tone. A single-instance mutex prevents duplicates.
 
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::{
     Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM},
     System::Diagnostics::Debug::Beep,
@@ -116,6 +117,7 @@ struct AppContext {
 }
 
 /// Prevent two instances (VolumePro's `#SingleInstance Force` equivalent).
+#[cfg(target_os = "windows")]
 fn ensure_single_instance() -> bool {
     unsafe {
         let h = CreateMutexW(
@@ -135,7 +137,14 @@ fn ensure_single_instance() -> bool {
     }
 }
 
+/// Stub for non-Windows platforms (no single-instance enforcement).
+#[cfg(not(target_os = "windows"))]
+fn ensure_single_instance() -> bool {
+    true
+}
+
 /// Lowercase base name (e.g. `code.exe`) of the foreground window's process.
+#[cfg(target_os = "windows")]
 fn foreground_process() -> Option<String> {
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -164,6 +173,175 @@ fn foreground_process() -> Option<String> {
     }
 }
 
+/// Lowercase base name of the foreground window's process on macOS.
+#[cfg(target_os = "macos")]
+fn foreground_process() -> Option<String> {
+    use std::process::Command;
+    // Use AppleScript to get the frontmost application
+    let output = Command::new("osascript")
+        .args([
+            "-e",
+            "tell application \"System Events\" to get name of first application process whose frontmost is true"
+        ])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if name.is_empty() {
+            None
+        } else {
+            // Normalize: lowercase and ensure .app suffix for consistency with blacklist
+            Some(crate::config::normalize_blacklist_entry(
+                &name.to_lowercase(),
+            ))
+        }
+    } else {
+        None
+    }
+}
+
+/// Lowercase base name of the foreground window's process on Linux.
+#[cfg(target_os = "linux")]
+fn foreground_process() -> Option<String> {
+    use std::process::Command;
+
+    // Method 1: Try xdotool first (most reliable if available)
+    if let Ok(output) = Command::new("xdotool")
+        .args(["getactivewindow", "--pid"])
+        .output()
+    {
+        if output.status.success() {
+            let pid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+                    let name = comm.trim().to_lowercase();
+                    log::debug!("foreground_process: xdotool found PID {} -> {}", pid, name);
+                    return Some(crate::config::normalize_blacklist_entry(&name));
+                }
+            }
+        }
+    }
+
+    // Method 2: Fallback to xprop + wmctrl
+    let output = Command::new("xprop")
+        .args(["-root", "_NET_ACTIVE_WINDOW"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        log::debug!("foreground_process: xprop failed");
+        return None;
+    }
+
+    let window_id = String::from_utf8_lossy(&output.stdout);
+    let window_id = window_id.split('#').nth(1)?.trim();
+
+    let wmctrl_output = Command::new("wmctrl").arg("-lp").output().ok()?;
+
+    if wmctrl_output.status.success() {
+        let lines = String::from_utf8_lossy(&wmctrl_output.stdout);
+        for line in lines.lines() {
+            if line.contains(window_id) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    if let Ok(pid) = parts[1].parse::<u32>() {
+                        if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+                            let name = comm.trim().to_lowercase();
+                            log::debug!("foreground_process: wmctrl found PID {} -> {}", pid, name);
+                            return Some(crate::config::normalize_blacklist_entry(&name));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Method 3: Direct X11 query via x11rb (no CLI dependencies needed)
+    // This replaces the broken /proc enumeration which returned arbitrary processes
+    if let Some(pid) = get_window_pid_x11() {
+        if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+            let name = comm.trim().to_lowercase();
+            log::debug!("foreground_process: x11rb found PID {} -> {}", pid, name);
+            return Some(crate::config::normalize_blacklist_entry(&name));
+        }
+    }
+
+    // All methods failed - return None (better than wrong answer)
+    log::warn!("foreground_process: could not determine foreground process on Linux");
+    None
+}
+
+/// Get the PID of the active window using X11 directly via x11rb.
+/// This is a pure-Rust implementation that doesn't require external CLI tools.
+#[cfg(target_os = "linux")]
+fn get_window_pid_x11() -> Option<u32> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+
+    // Connect to X11 display
+    let (conn, screen_num) = x11rb::connect(None).ok()?;
+    let screen = &conn.setup().roots[screen_num];
+    let root = screen.root;
+
+    // Get _NET_ACTIVE_WINDOW property from root window
+    let active_win_prop = conn
+        .get_property(
+            false,
+            root,
+            AtomEnum::_NET_ACTIVE_WINDOW,
+            AtomEnum::WINDOW,
+            0,
+            1,
+        )
+        .ok()?
+        .reply()
+        .ok()?;
+
+    if active_win_prop.value.len() < 4 {
+        return None;
+    }
+
+    let active_window = u32::from_ne_bytes([
+        active_win_prop.value[0],
+        active_win_prop.value[1],
+        active_win_prop.value[2],
+        active_win_prop.value[3],
+    ]);
+
+    if active_window == 0 {
+        return None;
+    }
+
+    // Get _NET_WM_PID property from the active window
+    let pid_prop = conn
+        .get_property(
+            false,
+            active_window,
+            AtomEnum::_NET_WM_PID,
+            AtomEnum::CARDINAL,
+            0,
+            1,
+        )
+        .ok()?
+        .reply()
+        .ok()?;
+
+    if pid_prop.value.len() < 4 {
+        return None;
+    }
+
+    let pid = u32::from_ne_bytes([
+        pid_prop.value[0],
+        pid_prop.value[1],
+        pid_prop.value[2],
+        pid_prop.value[3],
+    ]);
+
+    Some(pid)
+}
+
+#[cfg(target_os = "windows")]
 fn beep_blocked(cfg: &Config) {
     if cfg.beep.enabled {
         unsafe {
@@ -172,12 +350,23 @@ fn beep_blocked(cfg: &Config) {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
+fn beep_blocked(_cfg: &Config) {
+    // No-op on non-Windows (no Win32 Beep API)
+}
+
+#[cfg(target_os = "windows")]
 fn beep_limit(cfg: &Config) {
     if cfg.beep.enabled {
         unsafe {
             Beep(cfg.beep.limit_freq, cfg.beep.limit_duration_ms);
         }
     }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn beep_limit(_cfg: &Config) {
+    // No-op on non-Windows (no Win32 Beep API)
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {

@@ -198,6 +198,7 @@ impl Default for Config {
 /// `Alt` conflicts with move-line in editors → editors.
 /// `Ctrl` conflicts with paste/zoom/reload in browsers, editors, terminals.
 pub fn recommended_blacklist(modifier: HotkeyModifier) -> Vec<String> {
+    #[cfg(target_os = "windows")]
     let list: &[&str] = match modifier {
         HotkeyModifier::CtrlAlt | HotkeyModifier::CapsLock => &[],
         HotkeyModifier::Alt => &[
@@ -226,11 +227,73 @@ pub fn recommended_blacklist(modifier: HotkeyModifier) -> Vec<String> {
             "WindowsTerminal.exe",
         ],
     };
-    // Entries are lowercased so they match the lowercase process-name check.
-    list.iter()
-        .map(|s| s.to_lowercase())
-        .filter(|s| s.ends_with(".exe"))
-        .collect()
+
+    #[cfg(target_os = "macos")]
+    let list: &[&str] = match modifier {
+        HotkeyModifier::CtrlAlt | HotkeyModifier::CapsLock => &[],
+        HotkeyModifier::Alt => &[
+            "Visual Studio Code.app",
+            "IntelliJ IDEA.app",
+            "WebStorm.app",
+            "PhpStorm.app",
+            "Sublime Text.app",
+            "Cursor.app",
+        ],
+        HotkeyModifier::Ctrl => &[
+            "Google Chrome.app",
+            "Microsoft Edge.app",
+            "Firefox.app",
+            "Brave Browser.app",
+            "Opera.app",
+            "Vivaldi.app",
+            "Safari.app",
+            "Visual Studio Code.app",
+            "IntelliJ IDEA.app",
+            "WebStorm.app",
+            "PhpStorm.app",
+            "Sublime Text.app",
+            "Cursor.app",
+            "Xcode.app",
+            "Terminal.app",
+            "iTerm.app",
+        ],
+    };
+
+    #[cfg(target_os = "linux")]
+    let list: &[&str] = match modifier {
+        HotkeyModifier::CtrlAlt | HotkeyModifier::CapsLock => &[],
+        HotkeyModifier::Alt => &[
+            "code",
+            "idea",
+            "webstorm",
+            "phpstorm",
+            "sublime_text",
+            "cursor",
+            "gedit",
+            "kate",
+        ],
+        HotkeyModifier::Ctrl => &[
+            "google-chrome",
+            "chromium",
+            "firefox",
+            "brave",
+            "opera",
+            "vivaldi",
+            "code",
+            "idea",
+            "webstorm",
+            "phpstorm",
+            "sublime_text",
+            "cursor",
+            "gnome-terminal",
+            "konsole",
+            "alacritty",
+            "kitty",
+        ],
+    };
+
+    // Entries are normalized for the current platform
+    list.iter().map(|s| normalize_blacklist_entry(s)).collect()
 }
 
 /// Merge the recommended blacklist for `modifier` into the config, preserving
@@ -360,6 +423,41 @@ pub fn validate(cfg: &Config) -> Result<(), ConfigValidationError> {
     Ok(())
 }
 
+/// Normalize a blacklist entry for the current platform.
+///
+/// Windows: ensures .exe extension
+/// macOS: ensures .app extension  
+/// Linux: no extension convention, just lowercase and trim
+///
+/// This function is public to allow cross-platform usage in foreground_process()
+pub fn normalize_blacklist_entry(entry: &str) -> String {
+    let entry = entry.trim().to_lowercase();
+
+    #[cfg(target_os = "windows")]
+    {
+        if entry.ends_with(".exe") {
+            entry
+        } else {
+            format!("{}.exe", entry)
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if entry.ends_with(".app") {
+            entry
+        } else {
+            format!("{}.app", entry)
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Linux uses binary names without extensions
+        entry
+    }
+}
+
 /// Return a normalized copy while preserving the existing config bounds.
 pub fn normalize(mut cfg: Config) -> Config {
     // There must be room for a strictly larger large step within the existing
@@ -376,13 +474,12 @@ pub fn normalize(mut cfg: Config) -> Config {
     cfg.overlay_duration_ms = cfg
         .overlay_duration_ms
         .clamp(MIN_OVERLAY_DURATION_MS, MAX_OVERLAY_DURATION_MS);
-    // Blacklist entries are lowercased + trimmed at load so the hotkey gate
-    // can do an exact lowercase match against the foreground process name.
+    // Blacklist entries are normalized per-platform so the hotkey gate
+    // can do an exact match against the foreground process name.
     cfg.blacklist = cfg
         .blacklist
         .iter()
-        .map(|s| s.trim().to_lowercase())
-        .filter(|s| s.ends_with(".exe"))
+        .map(|s| normalize_blacklist_entry(s))
         .collect();
     cfg.beep.blocked_freq = cfg.beep.blocked_freq.clamp(37, 32767);
     cfg.beep.blocked_duration_ms = cfg.beep.blocked_duration_ms.clamp(10, 2000);
@@ -498,8 +595,42 @@ pub fn save(cfg: &Config) -> std::io::Result<()> {
 }
 
 /// Check whether the given lowercase process name is blacklisted.
+///
+/// Uses exact matching since both blacklist entries and process names are now
+/// normalized to the same platform-specific format.
 pub fn is_blacklisted(blacklist: &[String], process_lower: &str) -> bool {
-    blacklist.iter().any(|b| b == process_lower)
+    // First try exact match (fast path)
+    if blacklist.iter().any(|b| b == process_lower) {
+        return true;
+    }
+
+    // Fallback: try matching without extension for cross-platform compatibility
+    // This handles cases where user manually enters names without proper extension
+    #[cfg(target_os = "windows")]
+    {
+        let without_ext = process_lower.strip_suffix(".exe").unwrap_or(process_lower);
+        blacklist.iter().any(|b| {
+            b == process_lower
+                || b.strip_suffix(".exe")
+                    .map(|s| s == without_ext)
+                    .unwrap_or(false)
+        })
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let without_ext = process_lower.strip_suffix(".app").unwrap_or(process_lower);
+        blacklist.iter().any(|b| {
+            b == process_lower
+                || b.strip_suffix(".app")
+                    .map(|s| s == without_ext)
+                    .unwrap_or(false)
+        })
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Linux doesn't use extensions, so exact match is sufficient
+        false // Already checked in fast path
+    }
 }
 
 /// Open the config in the user's text editor.
@@ -559,6 +690,96 @@ mod tests {
         assert_eq!(appearance.material, MaterialMode::Auto);
         assert_eq!(appearance.motion, MotionMode::Full);
         assert_eq!(appearance.accent, AccentMode::System);
+    }
+
+    #[test]
+    fn normalize_blacklist_entry_adds_platform_extension() {
+        // Test that normalization adds appropriate extension per platform
+        let entry = "code";
+        let normalized = normalize_blacklist_entry(entry);
+
+        #[cfg(target_os = "windows")]
+        assert_eq!(normalized, "code.exe");
+
+        #[cfg(target_os = "macos")]
+        assert_eq!(normalized, "code.app");
+
+        #[cfg(target_os = "linux")]
+        assert_eq!(normalized, "code");
+    }
+
+    #[test]
+    fn normalize_blacklist_entry_preserves_existing_extension() {
+        #[cfg(target_os = "windows")]
+        {
+            assert_eq!(normalize_blacklist_entry("code.exe"), "code.exe");
+            assert_eq!(normalize_blacklist_entry("chrome.exe"), "chrome.exe");
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(normalize_blacklist_entry("safari.app"), "safari.app");
+            assert_eq!(normalize_blacklist_entry("chrome.app"), "chrome.app");
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            assert_eq!(normalize_blacklist_entry("firefox"), "firefox");
+            assert_eq!(normalize_blacklist_entry("code"), "code");
+        }
+    }
+
+    #[test]
+    fn is_blacklisted_matches_with_and_without_extension() {
+        #[cfg(target_os = "windows")]
+        {
+            let blacklist = vec!["code.exe".to_string(), "chrome.exe".to_string()];
+            assert!(is_blacklisted(&blacklist, "code.exe"));
+            assert!(is_blacklisted(&blacklist, "code"));
+            assert!(!is_blacklisted(&blacklist, "firefox.exe"));
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let blacklist = vec!["safari.app".to_string(), "chrome.app".to_string()];
+            assert!(is_blacklisted(&blacklist, "safari.app"));
+            assert!(is_blacklisted(&blacklist, "safari"));
+            assert!(!is_blacklisted(&blacklist, "firefox.app"));
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let blacklist = vec!["firefox".to_string(), "code".to_string()];
+            assert!(is_blacklisted(&blacklist, "firefox"));
+            assert!(!is_blacklisted(&blacklist, "chrome"));
+        }
+    }
+
+    #[test]
+    fn recommended_blacklist_returns_platform_specific_entries() {
+        // Test Ctrl modifier which has the most entries
+        let rec = recommended_blacklist(HotkeyModifier::Ctrl);
+
+        #[cfg(target_os = "windows")]
+        {
+            assert!(rec.iter().any(|e| e.ends_with(".exe")));
+            assert!(rec.iter().any(|e| e == "code.exe"));
+            assert!(rec.iter().any(|e| e == "chrome.exe"));
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            assert!(rec.iter().any(|e| e.ends_with(".app")));
+            assert!(rec.iter().any(|e| e == "visual studio code.app"));
+            assert!(rec.iter().any(|e| e == "safari.app"));
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            assert!(rec.iter().all(|e| !e.contains('.')));
+            assert!(rec.iter().any(|e| e == "code"));
+            assert!(rec.iter().any(|e| e == "firefox"));
+        }
     }
 
     #[test]

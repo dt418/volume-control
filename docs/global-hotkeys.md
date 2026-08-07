@@ -20,10 +20,17 @@ the operating system reports repeated key-press events.
 - Windows normally needs no extra permission for the global listener. The
   application still needs a normal interactive desktop session; services and
   elevated/security-isolated desktops may not receive the same events.
-- macOS requires Accessibility permission for the running app or executable:
-  **System Settings → Privacy & Security → Accessibility**. If the binary or
-  app bundle changes, macOS may require removing and adding it again. Without
-  permission, `rdev` can start but keyboard callbacks may be silent.
+- macOS accepts **either ⌘ (Command) or ⌃ (Control)** as the primary
+  modifier, so the default `CtrlAlt` config matches `⌃+⌥` (Control+Option)
+  while the macOS-native `⌘+⌥` (Command+Option) spelling also works. macOS
+  also requires the **Accessibility** permission for the running app:
+  **System Settings → Privacy & Security → Accessibility**. Use the packaged
+  `VolumeControl.app` (ad-hoc signed in the release workflow) so the OS can
+  prompt and list the app; a bare ad-hoc Mach-O binary cannot be added
+  reliably. If the binary or app bundle changes, macOS may require removing
+  and adding the entry again. Without permission, `rdev` can start but
+  keyboard callbacks may be silent — the headless host prints a startup
+  banner with the permission state so the failure is never silent.
 - Linux `rdev::listen` uses X11. An X11 `DISPLAY` session and access to that
   display are required. The default build does not claim Wayland support:
   `rdev`'s optional `unstable_grab`/evdev path can work under Wayland, but it
