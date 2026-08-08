@@ -81,8 +81,8 @@ if [ ! -r "$manifest" ]; then
     exit 1
 fi
 manifest_version="$(sed -nE 's/.*"version": ([0-9]+).*/\1/p' "$manifest" | head -1)"
-if [ "$manifest_version" != "2" ]; then
-    echo "error: unsupported manifest version $manifest_version (expected 2)" >&2
+if [ "$manifest_version" != "3" ]; then
+    echo "error: unsupported manifest version $manifest_version (expected 3)" >&2
     exit 1
 fi
 
@@ -124,6 +124,16 @@ run_step() {
         local rc=$?
         printf '[%s] FAILED (exit %s)\n' "$name" "$rc"
         failed=true
+    fi
+}
+
+# Record-keeping guard: reject a commit that changes substantive files
+# without updating both records. Delegates to the single implementation in
+# scripts/check-records.sh --staged (no duplicated rule logic here).
+check_record_updates() {
+    if ! sh "$repo_root/scripts/check-records.sh" --staged; then
+        echo '  stage updates to feature_list.json and claude-progress.md with this change' >&2
+        return 1
     fi
 }
 
@@ -210,7 +220,16 @@ for line in "${step_lines[@]}"; do
     fi
 
     if [ "$is_internal" = true ]; then
-        run_step "$name" check_forbidden_paths
+        internal_id="$(sed -nE 's/.*"internal": "([^"]+)".*/\1/p' <<<"$line")"
+        case "$internal_id" in
+            forbidden_paths) internal_fn=check_forbidden_paths ;;
+            record_updates)  internal_fn=check_record_updates ;;
+            *)
+                echo "error: unknown internal step '$internal_id' in manifest step '$id'" >&2
+                exit 1
+                ;;
+        esac
+        run_step "$name" "$internal_fn"
         continue
     fi
 

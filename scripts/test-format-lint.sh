@@ -9,10 +9,12 @@
 #   1. a clean `--skip-tests` run must exit 0 and print "Gate passed."
 #   2. a forbidden diff path (scratch edit to .claude/settings.local.json)
 #      must exit 1 and report "forbidden paths in the working diff"
-#   3. (bash gate only) an unknown flag must exit 2 with a usage message
-#   4. the .claude/skills/format-lint mirrors must be byte-identical to the
+#   3. a staged code file without record updates must exit 1 and report the
+#      "record updates" step as FAILED (on both gates)
+#   4. (bash gate only) an unknown flag must exit 2 with a usage message
+#   5. the .claude/skills/format-lint mirrors must be byte-identical to the
 #      canonical gate scripts
-#   5. every manifest forbidden pattern matches a representative path, and
+#   6. every manifest forbidden pattern matches a representative path, and
 #      benign/near-miss paths do not, on both parsers
 #
 # The PowerShell gate is exercised only when `powershell`/`pwsh` is on PATH.
@@ -20,8 +22,10 @@
 # artifacts; the full gate with tests remains CI's job.
 #
 # The negative tests temporarily overwrite .claude/settings.local.json
-# (tracked, unmodified in a normal worktree); the original bytes are
-# restored by the EXIT trap no matter how the script exits.
+# (tracked, unmodified in a normal worktree) and stage an untracked scratch
+# file; both are restored by the EXIT trap no matter how the script exits.
+# The records step reads the staged set, so the smoke test requires a clean
+# index up front (see the precondition below).
 #
 # Usage: bash scripts/test-format-lint.sh
 # Exit: 0 = all checks passed; 1 = at least one check failed.
@@ -45,8 +49,18 @@ if ! git diff --quiet HEAD -- "$forbidden_file"; then
     echo "      commit or stash it before running the smoke test" >&2
     exit 1
 fi
+# The records step (manifest v3) enforces that staged substantive changes
+# also stage the records; a dirty index would make its success-path runs
+# fail regardless of the gates themselves, so require a clean index up front.
+if ! git diff --cached --quiet; then
+    echo "FAIL - the index has staged changes; the records step reads the staged set" >&2
+    echo "      and would fail regardless of the gates. Run \`git stash\` (or commit" >&2
+    echo "      / reset) before running the smoke test." >&2
+    exit 1
+fi
 
 tmpdir="$(mktemp -d)"
+records_scratch="scripts/.smoke-records-scratch.txt"
 backup="$(mktemp)"
 
 # Preserve the tracked forbidden file byte-for-byte across the negative tests.
@@ -56,6 +70,10 @@ restore_forbidden() {
 }
 cleanup() {
     restore_forbidden
+    # Records-step negatives stage an untracked scratch file; always unstage
+    # and remove it so an interrupted run leaves no trace in the index.
+    git reset -q -- "$records_scratch" 2>/dev/null
+    rm -f "$records_scratch"
     rm -f "$backup"
     rm -rf "$tmpdir"
 }
@@ -115,6 +133,18 @@ else
         report ok 'gates agree: same step names in the same order'
     else
         report FAIL 'gates agree: same step names in the same order' 'step lists differ between bash and PowerShell gates'
+    fi
+
+    # --- records step parity: both gates must run the v3 records step ---------
+    if grep -qF '[record updates (feature_list.json + claude-progress.md)]' "$tmpdir/bash-ok"; then
+        report ok 'bash gate: runs the manifest v3 record-updates step'
+    else
+        report FAIL 'bash gate: runs the manifest v3 record-updates step'
+    fi
+    if grep -qF '[record updates (feature_list.json + claude-progress.md)]' "$tmpdir/ps-ok"; then
+        report ok 'PowerShell gate: runs the manifest v3 record-updates step'
+    else
+        report FAIL 'PowerShell gate: runs the manifest v3 record-updates step'
     fi
 fi
 
@@ -177,6 +207,37 @@ if [ -n "$ps" ]; then
 fi
 restore_forbidden
 
+# --- records step: staged code without record updates must fail ----------------
+# Stage an untracked substantive scratch file (under scripts/, not ignored,
+# not a forbidden path) and run both gates: the records step must fail with
+# exit 1, proving the v3 step is wired into the staged-set check on both
+# sides. The EXIT trap unstages and removes the scratch.
+printf 'records smoke scratch\n' > "$records_scratch"
+git add "$records_scratch"
+bash scripts/format-lint.sh --skip-tests >"$tmpdir/bash-records" 2>&1
+rc=$?
+if [ "$rc" -eq 1 ] && grep -q 'record updates (feature_list.json + claude-progress.md)] FAILED' "$tmpdir/bash-records"; then
+    report ok 'bash gate: staged code without record updates fails the records step'
+else
+    report FAIL 'bash gate: staged code without record updates fails the records step' "rc=$rc"
+fi
+git reset -q -- "$records_scratch"
+
+if [ -n "$ps" ]; then
+    git add "$records_scratch"
+    "$ps" -NoProfile -ExecutionPolicy Bypass -File \
+        .agents/skills/format-lint/scripts/format-lint.ps1 -SkipTests \
+        >"$tmpdir/ps-records" 2>&1
+    rc=$?
+    if [ "$rc" -eq 1 ] && grep -q 'record updates (feature_list.json + claude-progress.md)] FAILED' "$tmpdir/ps-records"; then
+        report ok 'PowerShell gate: staged code without record updates fails the records step'
+    else
+        report FAIL 'PowerShell gate: staged code without record updates fails the records step' "rc=$rc"
+    fi
+    git reset -q -- "$records_scratch"
+fi
+rm -f "$records_scratch"
+
 # --- unknown flag: bash gate only ----------------------------------------------
 # (The PowerShell twin rejects unknown parameters at parse time with a
 # different exit code, so only the bash contract is asserted here.)
@@ -192,10 +253,16 @@ fi
 # Both gates read scripts/format-lint-steps.json; if the manifest breaks one
 # parser, both the bash and PowerShell gates are suspect.
 manifest_steps="$(grep -cE '^    \{ "id": ' scripts/format-lint-steps.json 2>/dev/null || true)"
-if [ "$manifest_steps" -eq 5 ]; then
-    report ok 'manifest: 5 steps defined in scripts/format-lint-steps.json'
+if [ "$manifest_steps" -eq 6 ]; then
+    report ok 'manifest: 6 steps defined in scripts/format-lint-steps.json'
 else
-    report FAIL 'manifest: 5 steps defined in scripts/format-lint-steps.json' "found $manifest_steps"
+    report FAIL 'manifest: 6 steps defined in scripts/format-lint-steps.json' "found $manifest_steps"
+fi
+manifest_version="$(sed -nE 's/.*"version": ([0-9]+).*/\1/p' scripts/format-lint-steps.json 2>/dev/null | head -1)"
+if [ "$manifest_version" = 3 ]; then
+    report ok 'manifest: version 3 (records step added)'
+else
+    report FAIL 'manifest: version 3 (records step added)' "found $manifest_version"
 fi
 if [ -n "$ps" ]; then
     if "$ps" -NoProfile -Command \

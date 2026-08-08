@@ -842,6 +842,16 @@ fn get_window_pid_x11() -> Option<u32> {
 - Follow-up: self-test extended to 19 checks — it now asserts the pre-commit
   hook still invokes `check-records.sh --staged` (comment-aware, so a future
   hook edit that drops or comments out the guard fails loudly).
+- Follow-up 2 (user-requested reversal of the initial out-of-scope note):
+  the record-keeping guard is now also enforced by **both format-lint
+  gates**. `scripts/format-lint-steps.json` bumped to **v3** with a new
+  `record updates` internal step; the bash gate calls `check-records.sh
+  --staged` directly and the PowerShell gate bridges to it via Git Bash
+  (resolved next to git), so the exempt/substantive rule is NOT duplicated.
+  The smoke test grew to **30 checks**: both gates run the new step, a
+  staged code-only scratch fails it on bash AND PowerShell, manifest is v3
+  with 6 steps, and both gates reject a non-v3 manifest. All mirrors
+  re-synced and byte-identical.
 
 ## Session 011 (2026-08-08) — format-lint gate toolchain
 

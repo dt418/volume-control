@@ -29,6 +29,9 @@ Every task in this repository MUST:
 
 - Pre-commit hook runs `--staged`: committing code without staged record
   updates fails fast.
+- Both format-lint gates run `--staged` as the manifest v3 `record updates`
+  step (the bash gate calls the script directly; the PowerShell gate bridges
+  to it via Git Bash).
 - CI runs `--branch`: a PR whose branch never updates the records fails.
 - `--check` reads a path list from stdin (used by the self-test).
 

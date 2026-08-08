@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "forbidden_patterns": [
     "^target/",
     "^\\.superpowers/",
@@ -12,6 +12,7 @@
     { "id": "fmt", "name": "cargo fmt --all --check", "args": ["cargo", "fmt", "--all", "--check"] },
     { "id": "diff", "name": "git diff --check HEAD", "args": ["git", "diff", "--check", "HEAD"] },
     { "id": "forbidden", "name": "forbidden diff paths", "internal": "forbidden_paths" },
+    { "id": "records", "name": "record updates (feature_list.json + claude-progress.md)", "internal": "record_updates" },
     { "id": "clippy", "name": "cargo clippy --workspace --all-targets --no-default-features -- -D warnings", "args": ["cargo", "clippy", "--workspace", "--all-targets", "--no-default-features", "--", "-D", "warnings"] },
     { "id": "test", "name": "cargo test --workspace --no-default-features", "args": ["cargo", "test", "--workspace", "--no-default-features"], "skip_when": "skip_tests" }
   ]

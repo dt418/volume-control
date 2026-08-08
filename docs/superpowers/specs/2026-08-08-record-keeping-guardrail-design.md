@@ -162,8 +162,13 @@ Hermetic and self-contained (no format-lint dependencies):
 
 ## Out of Scope
 
-- Adding the guard to the format-lint manifest / PowerShell gate (rejected:
-  duplication + manifest bump for no enforcement gain).
+- ~~Adding the guard to the format-lint manifest / PowerShell gate (rejected:
+  duplication + manifest bump for no enforcement gain).~~ **AMENDED 2026-08-08
+  (user request):** implemented as manifest v3 `record updates` internal
+  step. No rule duplication: the bash gate calls `scripts/check-records.sh`
+  directly and the PowerShell gate bridges to it via Git Bash (resolved next
+  to git); only the dispatch is duplicated, and the smoke test asserts
+  parity (step lists, headers, and a staged-scratch negative on both gates).
 - Pre-commit hook rewrites beyond the added check (ordering of the existing
   cargo steps is preserved).
 - Enforcing the *process* steps themselves (brainstorm/spec/plan) —

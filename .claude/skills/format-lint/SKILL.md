@@ -32,15 +32,21 @@ and the CI checks (`.github/workflows/ci.yml`, `.githooks/pre-commit`,
 
 ## Single source of truth
 
-The gate's five steps (names, order, commands, the internal forbidden-path
-step, and the `-SkipTests` skip rule) and the forbidden-diff-path pattern
-list (`forbidden_patterns`) are defined once in
-`scripts/format-lint-steps.json`. Both gates read that manifest and execute
-it, so they cannot drift. To change the gate, edit the manifest (bump its
-`version` if the schema changes); the flag switches only transform the
-manifest's default steps (`-Fix` drops `--check` from the fmt step,
+The gate's six steps (names, order, commands, the internal forbidden-path
+and record-updates steps, and the `-SkipTests` skip rule) and the
+forbidden-diff-path pattern list (`forbidden_patterns`) are defined once in
+`scripts/format-lint-steps.json` (version 3). Both gates read that manifest
+and execute it, so they cannot drift. To change the gate, edit the manifest
+(bump its `version` if the schema changes); the flag switches only transform
+the manifest's default steps (`-Fix` drops `--check` from the fmt step,
 `-AllFeatures` swaps `--no-default-features` for `--all-features` on clippy
 and test).
+
+The `record updates` internal step enforces that staged substantive
+changes also stage `feature_list.json` and `claude-progress.md`. The rule
+lives ONCE in `scripts/check-records.sh`; the bash gate calls it directly
+and the PowerShell gate bridges to it via Git Bash (resolved next to git),
+so neither gate duplicates the exempt/substantive tables.
 
 Manifest constraints: one step object per line and one `forbidden_patterns`
 entry per line, both at 4-space indent, JSON values free of embedded quotes
@@ -64,8 +70,9 @@ hook, including the forbidden-diff-path gate from `scripts/ci-diff-check.sh`):
 1. `cargo fmt --all --check`
 2. `git diff --check HEAD` (whitespace hygiene, staged and unstaged)
 3. Forbidden diff paths (`target/`, `.superpowers/`, `.claude/settings.local.json`, `.claude/worktrees/`, `config.json`, `*.log`)
-4. `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
-5. `cargo test --workspace --no-default-features`
+4. Record updates: staged substantive changes must also stage `feature_list.json` + `claude-progress.md` (`scripts/check-records.sh --staged`)
+5. `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+6. `cargo test --workspace --no-default-features`
 
 Use `-Fix` when formatting changes are authorized:
 

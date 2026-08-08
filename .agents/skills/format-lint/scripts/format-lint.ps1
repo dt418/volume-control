@@ -57,6 +57,30 @@ function Get-Git {
     throw "git not found on PATH and not at a standard Git for Windows location"
 }
 
+# -- Bash resolution --------------------------------------------------------
+# The record-keeping step delegates to scripts/check-records.sh (the single
+# implementation of the rule) via bash. Git for Windows ships bash at
+# Git\bin\bash.exe, so resolve it the same way as git. Resolved lazily inside
+# Invoke-RecordUpdates (not at startup) so a bash-less machine can still run
+# the rest of the gate; the records step then fails loudly instead of being
+# silently skipped.
+function Get-Bash {
+    $fromPath = Get-Command bash -ErrorAction SilentlyContinue
+    if ($fromPath) {
+        return $fromPath.Source
+    }
+    $locations = @()
+    foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+        if ($base) { $locations += (Join-Path $base 'Git\bin\bash.exe') }
+    }
+    foreach ($candidate in $locations) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
 # -- Repository root resolution ---------------------------------------------
 # Walk up from the script until the workspace Cargo.toml is found, so the gate
 # always runs from the repository root no matter where the skill is vendored.
@@ -93,8 +117,8 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "step manifest not found at $manifestPath"
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-if ($manifest.version -ne 2) {
-    throw "unsupported manifest version $($manifest.version) (expected 2)"
+if ($manifest.version -ne 3) {
+    throw "unsupported manifest version $($manifest.version) (expected 3)"
 }
 $steps = @($manifest.steps)
 if ($steps.Count -eq 0) {
@@ -132,6 +156,19 @@ function Invoke-Step {
     } else {
         Write-Host "[$Name] OK" -ForegroundColor Green
     }
+}
+
+# Record-keeping guard: reject a commit that changes substantive files
+# without updating both records. Delegates to the single implementation in
+# scripts/check-records.sh --staged via bash (no duplicated rule logic here).
+function Invoke-RecordUpdates {
+    $bashPath = Get-Bash
+    if (-not $bashPath) {
+        Write-Host '  bash not found; the record-updates step needs Git Bash (Git for Windows)' -ForegroundColor Red
+        $script:stepFailed = $true
+        return
+    }
+    & $bashPath scripts/check-records.sh --staged
 }
 
 # Local mirror of scripts/ci-diff-check.sh: reject forbidden paths in the
@@ -185,7 +222,12 @@ try {
         if ($skipWhen -eq 'skip_tests' -and $SkipTests) { continue }
 
         if ($isInternal) {
-            Invoke-Step $stepName { Invoke-ForbiddenPaths }
+            $internalId = [string]$step.internal
+            switch ($internalId) {
+                'forbidden_paths' { Invoke-Step $stepName { Invoke-ForbiddenPaths } }
+                'record_updates'  { Invoke-Step $stepName { Invoke-RecordUpdates } }
+                default { throw "unknown internal step '$internalId' in manifest step '$stepId'" }
+            }
             continue
         }
 

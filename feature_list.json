@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-08T17:00",
+  "last_updated": "2026-08-08T17:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -19,22 +19,25 @@
       "priority": 14,
       "area": "tooling",
       "title": "Record-keeping guardrail (mandatory workflow + enforced records)",
-      "user_visible_behavior": "Developer-facing: every substantive change must update feature_list.json and claude-progress.md or the pre-commit hook and CI reject it; the superpowers flow (brainstorm/spec/plan/execute/verify/finish) and evidence-before-claims are the codified mandatory workflow.",
+      "user_visible_behavior": "Developer-facing: every substantive change must update feature_list.json and claude-progress.md or the pre-commit hook, both format-lint gates (manifest v3 record-updates step), and CI reject it; the superpowers flow (brainstorm/spec/plan/execute/verify/finish) and evidence-before-claims are the codified mandatory workflow.",
       "status": "passing",
       "verification": [
         "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0.",
+        "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (30 checks incl. records-step parity and staged-scratch negatives on both gates).",
         "Run `bash scripts/check-records.sh --staged` on a code-only staged set - must exit 1 with a message naming both records.",
         "Run `bash scripts/check-records.sh --branch <base>` on a code-only branch - must exit 1; with a records commit - exit 0.",
-        "Run `bash scripts/test-format-lint.sh` and `bash scripts/format-lint.sh --skip-tests` - no regression.",
+        "Run `bash scripts/format-lint.sh --skip-tests` and the PowerShell gate - both run the record-updates step and pass.",
         "Run `cargo test` - green."
       ],
       "evidence": [
         "Self-test covers --check unit cases (substantive-only fail, +both records pass, +one record fail, exempt pass, empty pass, unknown mode exit 2), --staged and --branch integration in a temp git repo, the pre-commit-hook guard invocation, and the guardrail skill mirror byte-identity.",
+        "format-lint smoke test (30 checks): both gates run the manifest v3 record-updates step, a staged code-only scratch fails it on both bash and PowerShell, manifest is v3 with 6 steps, mirrors byte-identical.",
+        "PowerShell gate bridges to scripts/check-records.sh via Git Bash (resolved next to git) - no rule duplication; both gates reject a non-v3 manifest.",
         "Pre-commit hook rejects code-only staged sets and accepts code+records (verified).",
-        "CI checks job runs `bash scripts/check-records.sh --branch` and `bash scripts/test-check-records.sh`.",
-        "Session 012 (claude-progress.md) records this landing; the guard's own commit updates both records."
+        "CI checks job runs `bash scripts/check-records.sh --branch`, `bash scripts/test-check-records.sh`, and the format-lint smoke test.",
+        "Session 012 (claude-progress.md) records this landing; the guard's own commits update both records."
       ],
-      "notes": "Tooling feature; enforces the record-keeping rule that was previously documentation-only. Deliberately not part of the format-lint manifest (avoids PowerShell duplication)."
+      "notes": "Tooling feature; enforces the record-keeping rule that was previously documentation-only. Manifest bumped to v3 for the records internal step (user-requested reversal of the initial out-of-scope note)."
     },
     {
       "id": "vol-009",
