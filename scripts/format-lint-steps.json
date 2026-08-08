@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "forbidden_patterns": [
+    "^target/",
+    "^\\.superpowers/",
+    "^\\.claude/settings\\.local\\.json",
+    "^\\.claude/worktrees/",
+    "^config\\.json",
+    ".*\\.log"
+  ],
+  "steps": [
+    { "id": "fmt", "name": "cargo fmt --all --check", "args": ["cargo", "fmt", "--all", "--check"] },
+    { "id": "diff", "name": "git diff --check HEAD", "args": ["git", "diff", "--check", "HEAD"] },
+    { "id": "forbidden", "name": "forbidden diff paths", "internal": "forbidden_paths" },
+    { "id": "clippy", "name": "cargo clippy --workspace --all-targets --no-default-features -- -D warnings", "args": ["cargo", "clippy", "--workspace", "--all-targets", "--no-default-features", "--", "-D", "warnings"] },
+    { "id": "test", "name": "cargo test --workspace --no-default-features", "args": ["cargo", "test", "--workspace", "--no-default-features"], "skip_when": "skip_tests" }
+  ]
+}

@@ -1,54 +1,18 @@
-```
 # Worktrees
 .worktrees/
+.claude/worktrees/
 
 # Environment and config
 .env
 .env.local
 .env.*
+config.json
 
-# Logs
-*.log
+# Agent tooling state
+.superpowers/
 
-# Temporary files
-*.tmp
-*.swp
-*.swo
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-.venv.*
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.git/modules/
-.DS_Store
-*.swp
-*~
-.pytest_cache/
-.hypothesis/
-.eggs/
-*.egg-info/
-.installed.cfg
-.share/
-.mypy_cache/
-.pyre/
-.pytype/
-cython_debug/
+# Rust build artifacts
+/target/
 
 # Build and distribution artifacts
 dist/
@@ -56,49 +20,66 @@ build/
 develop-eggs/
 downloads/
 eggs/
-.eggs/
 lib/
 lib64/
 parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
 *.egg
 MANIFEST
+
+# Logs, temp and scratch files
+*.log
+*.tmp
+*~
+*.swp
+*.swo
+tmp_*
+wsl-*
+.freebuff/
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+cython_debug/
+.coverage
+.coverage.*
+htmlcov/
+.cov/
+coverage.xml
+*.cover
+.hypothesis/
+.eggs/
+*.egg-info/
+.installed.cfg
+.share/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+.venv.*
+venv/
+env/
+ENV/
+.ENV/
 
 # IDE and editor files
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-
-# System files
 .DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
-ehthumbs.db
 Thumbs.db
 Thumbs.db:encryptable
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.cov/
-coverage.xml
-*.log
-
-# Virtual environments
-.venv/
-venv/
-env/
-ENV/
-.ENV/
-```
+ehthumbs.db
