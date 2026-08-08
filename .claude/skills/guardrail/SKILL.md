@@ -42,6 +42,24 @@ and commit. The guard only suggests; it never creates or edits the records
 itself. Never bypass with `--no-verify` except when the user explicitly
 requests it.
 
+## Ship (mandatory before any commit + push)
+
+`scripts/ship.sh` (or `scripts/ship.ps1` on Windows, which bridges to it)
+is the supported path to commit + push. It runs, in order, and none of
+these can be skipped by any flag:
+
+1. `check-records.sh --branch origin/master` — records updated somewhere
+   in the change set.
+2. `scripts/format-lint.sh` — the FULL gate, tests included.
+3. `scripts/test-check-records.sh` and `scripts/test-format-lint.sh` — the
+   guardrails themselves must be intact.
+4. After staging, `check-records.sh --staged` — the exact commit set.
+
+Then it stages, commits, and (with `--push`) pushes. `--dry-run` verifies
+without changing anything; `--force` relaxes ONLY git-hygiene warnings
+(never the hard checks above). There are no `--skip-*` flags. Bypassing
+ship (e.g. `git commit --no-verify`) requires explicit user approval.
+
 ## Exempt (no record update required)
 
 `feature_list.json`, `claude-progress.md`, `docs/**`, `README.md`,

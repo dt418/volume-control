@@ -898,3 +898,38 @@ fn get_window_pid_x11() -> Option<u32> {
   byte-identity verified; `.claude/settings.local.json` untouched.
 - Out of scope: pre-commit hook changes.
 
+## Session 013 (2026-08-08) — Mandatory ship flow (scripts/ship.sh + ship.ps1)
+
+- Goal: guarantee the guardrail flow is ALWAYS applied before anything ships
+  and is NEVER bypassable by default — codified as a single ship entry point
+  (the user-requested top of the enforcement stack built in Sessions 011/012).
+- What landed:
+  - `scripts/ship.sh` — canonical flow with 5 hard checks that NO flag can
+    skip: records guard `--branch origin/master`; the FULL format-lint gate
+    (tests included); both guardrail self-tests (test-check-records.sh +
+    test-format-lint.sh); and a `check-records.sh --staged` re-check AFTER
+    staging the exact commit set. Then it stages, commits, and with `--push`
+    pushes. `--dry-run` verifies without changing anything; `--force` relaxes
+    ONLY git-hygiene soft preconditions (behind origin/master, no origin
+    remote); there are NO `--skip-*` flags anywhere.
+  - `scripts/ship.ps1` — thin native PowerShell bridge: resolves Git Bash
+    (walk-up from git.exe, never the WSL shim — same pattern as
+    format-lint.ps1) and delegates to ship.sh with mapped flags. Zero rule
+    duplication, so the two entry points cannot drift.
+  - `scripts/test-ship.sh` — 21 wiring checks (comment-aware and
+    progress-line-aware, the same technique as the pre-commit-hook
+    assertions): every hard check still invoked, the gate runs with tests
+    (no --skip-tests), no bypass flags in code or usage, --help / unknown-
+    flag contracts, ship.ps1 bridges without duplicating rule logic, and
+    both guardrail-skill mirrors document the flow.
+  - CI: the `checks` job now runs `bash scripts/test-ship.sh`.
+  - Guardrail skill (canonical + `.claude/` mirror, byte-identical) and
+    `GUARDRAILS.md` gained the mandatory Ship section; `feature_list.json`
+    gained the `ship_gate_mandatory` rule.
+- Verification: test-ship.sh 21/21; test-check-records.sh 22/22;
+  test-format-lint.sh 33/33; both gates pass; `ship.ps1 -DryRun` ran the
+  entire flow end-to-end on Windows via Git Bash (records branch guard, full
+  gate with tests, both self-tests) and exited 0; `ship.sh --dry-run`
+  dogfood passed; cargo test 225/225; the records guard passed on this
+  change's own staged set.
+

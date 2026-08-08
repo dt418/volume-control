@@ -1,11 +1,12 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-08T18:45",
+  "last_updated": "2026-08-08T19:15",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
     "do_not_skip_verification": true,
-    "records_required_with_every_change": true
+    "records_required_with_every_change": true,
+    "ship_gate_mandatory": true
   },
   "status_legend": {
     "not_started": "Work has not begun.",
@@ -14,6 +15,30 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-015",
+      "priority": 15,
+      "area": "tooling",
+      "title": "Mandatory ship flow (scripts/ship.sh + ship.ps1)",
+      "user_visible_behavior": "Developer-facing: the supported path to commit + push is scripts/ship.sh (or scripts/ship.ps1 on Windows), which always runs the records guard (branch + staged), the full format-lint gate with tests, and both guardrail self-tests before committing. No flag can skip them; --force relaxes only git-hygiene warnings; --dry-run verifies without changing anything.",
+      "status": "passing",
+      "verification": [
+        "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
+        "Run `bash scripts/ship.sh --dry-run` - all hard checks pass, exit 0, nothing changed.",
+        "Run `scripts/ship.ps1 -DryRun` on Windows - bridges to ship.sh and passes.",
+        "Run `bash scripts/ship.sh --help` - exit 0; usage lists --push/--force/--dry-run/--message and no bypass flags.",
+        "Run `bash scripts/ship.sh --bogus` - exit 2 (usage error).",
+        "Run the full battery (test-check-records.sh, test-format-lint.sh, both gates, cargo test) - green."
+      ],
+      "evidence": [
+        "test-ship.sh 21/21: comment-aware wiring assertions for all 5 hard checks, no-bypass-flag assertions (code and usage), --help/unknown-flag contracts, ship.ps1 bridge + zero-duplication, guardrail-skill documentation in both mirrors.",
+        "ship.ps1 -DryRun ran the complete flow end-to-end on Windows via Git Bash (records branch guard, full gate with tests, both self-tests) and exited 0.",
+        "--force relaxes only the behind-origin/master and no-origin soft preconditions; the hard checks always run (verified by code path and the wiring assertions).",
+        "CI checks job runs `bash scripts/test-ship.sh` so the ship wiring cannot rot unnoticed.",
+        "Session 013 (claude-progress.md) records this landing; the guard passed on this change's own staged set."
+      ],
+      "notes": "Extends vol-014: the record-keeping guardrail is now wrapped by a mandatory ship gate that also enforces the format-lint gate and the guardrails' own self-tests."
+    },
     {
       "id": "vol-014",
       "priority": 14,

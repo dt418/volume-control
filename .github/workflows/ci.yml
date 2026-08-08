@@ -47,6 +47,8 @@ jobs:
         run: bash scripts/check-records.sh --branch
       - name: Smoke-test record-keeping guard
         run: bash scripts/test-check-records.sh
+      - name: Smoke-test ship-flow wiring
+        run: bash scripts/test-ship.sh
 
   windows:
     name: Windows (build + tests + release artifact)
