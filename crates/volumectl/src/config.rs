@@ -340,30 +340,29 @@ pub fn config_path() -> PathBuf {
 /// Only writes the file back when normalisation actually changed values, so
 /// the app's live-reload watcher (mtime based) doesn't loop on its own writes.
 pub fn load() -> Config {
-    let path = config_path();
-    match std::fs::read_to_string(&path) {
-        Ok(raw) => match serde_json::from_str::<Config>(&raw) {
-            Ok(orig) => {
-                let cfg = normalize(orig.clone());
-                if cfg != orig {
-                    let _ = save(&cfg);
-                }
-                cfg
-            }
-            Err(e) => {
-                log::warn!("config parse error ({e}); using defaults");
-                let cfg = normalize(Config::default());
-                let _ = save(&cfg);
-                cfg
-            }
-        },
-        Err(_) => {
-            log::info!("no config yet — writing defaults to {}", path.display());
+    match load_existing() {
+        Ok(cfg) => cfg,
+        Err(error) => {
+            let path = config_path();
+            log::warn!("config load failed ({error}); using defaults");
             let cfg = normalize(Config::default());
             let _ = save(&cfg);
+            log::debug!("default config path: {}", path.display());
             cfg
         }
     }
+}
+
+/// Load an existing config without creating or overwriting the file.
+///
+/// Hosts use this for live reload so a transient partial write or malformed
+/// edit cannot replace a valid in-memory configuration with defaults.
+pub fn load_existing() -> Result<Config, ConfigError> {
+    let path = config_path();
+    let raw = std::fs::read_to_string(&path)?;
+    let orig = serde_json::from_str::<Config>(&raw)?;
+    let cfg = normalize(orig.clone());
+    Ok(cfg)
 }
 
 /// Validate raw configuration values without changing them.

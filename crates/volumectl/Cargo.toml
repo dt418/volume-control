@@ -65,11 +65,23 @@ name = "appkit_smoke"
 path = "tests/appkit_smoke.rs"
 harness = false
 
+# macOS host smoke test: the host and AppKit renderer are both main-thread-only.
+[[test]]
+name = "macos_host_smoke"
+path = "tests/macos_host_smoke.rs"
+harness = false
+
 # Ubuntu GTK4/libadwaita smoke test: same harness-free main-thread pattern
 # (GTK panics off the main thread). `required-features` keeps the target out
 # of builds without the renderer feature; CI runs it under `xvfb-run`.
 [[test]]
 name = "gtk_smoke"
 path = "tests/gtk_smoke.rs"
+harness = false
+required-features = ["gtk-renderer"]
+# Linux host-loop smoke test: main-thread GTK/GLib action routing and teardown.
+[[test]]
+name = "linux_host_smoke"
+path = "tests/linux_host_smoke.rs"
 harness = false
 required-features = ["gtk-renderer"]

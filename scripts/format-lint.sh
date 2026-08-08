@@ -145,7 +145,7 @@ check_forbidden_paths() {
     pattern="$(IFS='|'; printf '%s' "${forbidden_patterns[*]}")"
     # Let git's stderr through (e.g. the LF/CRLF warning) so genuine errors
     # are visible, matching the PowerShell twin; the exit code is checked.
-    tracked="$(git diff HEAD --name-only --diff-filter=ACMR)"
+    tracked="$(git diff HEAD --name-only --diff-filter=ACMRD)"
     if [ $? -ne 0 ]; then
         echo '  git command failed while listing diff paths' >&2
         return 1

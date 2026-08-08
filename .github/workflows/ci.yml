@@ -7,7 +7,7 @@
 #   libadwaita renderer build and smoke tests under Xvfb, and the optional
 #   Wayland layer-shell build when the system library is available.
 #
-# A shared "checks" job runs formatting and the forbidden-diff-path gate.
+# A shared "checks" job runs formatting, whitespace, and forbidden-diff gates.
 
 name: CI
 
@@ -35,7 +35,7 @@ jobs:
         run: cargo fmt --all --check
       - name: Lint (clippy, no GTK features)
         run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
-      - name: Forbidden diff paths
+      - name: Diff hygiene (whitespace + forbidden paths)
         run: bash scripts/ci-diff-check.sh
       - name: Build (no GTK features — CLI fallback)
         run: cargo build

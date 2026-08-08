@@ -1,5 +1,11 @@
+# Keep text files LF by default. Windows batch files are the only explicit
+# CRLF exception because cmd.exe expects the native line ending.
+* text=auto eol=lf
+
 # Shell scripts must stay LF even on Windows checkouts so the shebang works.
 *.sh text eol=lf
+*.ps1 text eol=lf
 *.bat text eol=crlf
 *.yml text eol=lf
 *.yaml text eol=lf
+.githooks/pre-commit text eol=lf

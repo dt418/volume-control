@@ -9,7 +9,9 @@
 #   1. a clean `--skip-tests` run must exit 0 and print "Gate passed."
 #   2. a forbidden diff path (scratch edit to .claude/settings.local.json)
 #      must exit 1 and report "forbidden paths in the working diff"
-#   3. a staged code file without record updates must exit 1 and report the
+#   3. a deleted tracked forbidden path must exit 1 and be reported (on both
+#      gates)
+#   4. a staged code file without record updates must exit 1 and report the
 #      "record updates" step as FAILED (on both gates)
 #   4. (bash gate only) an unknown flag must exit 2 with a usage message
 #   5. the pre-commit hook still invokes its fmt / whitespace / clippy steps
@@ -26,7 +28,7 @@
 # Tests stay fast by using --skip-tests and relying on cached clippy
 # artifacts; the full gate with tests remains CI's job.
 #
-# The negative tests temporarily overwrite .claude/settings.local.json
+# The negative tests temporarily overwrite/delete .claude/settings.local.json
 # (tracked, unmodified in a normal worktree) and stage an untracked scratch
 # file; both are restored by the EXIT trap no matter how the script exits.
 # The records step reads the staged set, so the smoke test requires a clean
@@ -212,6 +214,35 @@ if [ -n "$ps" ]; then
 fi
 restore_forbidden
 
+# --- deleted forbidden path: bash gate ------------------------------------------
+# A deleted tracked forbidden path is still part of the working diff and must
+# be rejected. This guards the ACMRD diff filter; the EXIT trap restores the
+# file and index state if the test is interrupted.
+git rm -q "$forbidden_file"
+bash scripts/format-lint.sh --skip-tests >"$tmpdir/bash-fb-delete" 2>&1
+rc=$?
+if [ "$rc" -eq 1 ] && grep -q 'forbidden paths in the working diff' "$tmpdir/bash-fb-delete"; then
+    report ok 'bash gate: deleted forbidden path exits 1 and is reported'
+else
+    report FAIL 'bash gate: deleted forbidden path exits 1 and is reported' "rc=$rc"
+fi
+git restore --staged --worktree -- "$forbidden_file"
+
+# --- deleted forbidden path: PowerShell gate (when available) --------------------
+if [ -n "$ps" ]; then
+    git rm -q "$forbidden_file"
+    "$ps" -NoProfile -ExecutionPolicy Bypass -File \
+        .agents/skills/format-lint/scripts/format-lint.ps1 -SkipTests \
+        >"$tmpdir/ps-fb-delete" 2>&1
+    rc=$?
+    if [ "$rc" -eq 1 ] && grep -q 'forbidden paths in the working diff' "$tmpdir/ps-fb-delete"; then
+        report ok 'PowerShell gate: deleted forbidden path exits 1 and is reported'
+    else
+        report FAIL 'PowerShell gate: deleted forbidden path exits 1 and is reported' "rc=$rc"
+    fi
+    git restore --staged --worktree -- "$forbidden_file"
+fi
+
 # --- records step: staged code without record updates must fail ----------------
 # Stage an untracked substantive scratch file (under scripts/, not ignored,
 # not a forbidden path) and run both gates: the records step must fail with
@@ -329,7 +360,10 @@ if [ -n "$ps" ]; then
         for ($i = 0; $i -lt $fp.Count; $i++) {
             if ($samples[$i] -notmatch $fp[$i]) { Write-Output "FAIL $($fp[$i])"; $ok = $false }
         }
-        if ("src/main.rs" -match ($fp -join "|")) { Write-Output "FAIL benign"; $ok = $false }
+        $benign = @("src/main.rs", "target-foo.txt", "configx.json", "logo.txt")
+        foreach ($path in $benign) {
+            if ($path -match ($fp -join "|")) { Write-Output "FAIL benign $path"; $ok = $false }
+        }
         if ($ok) { exit 0 } else { exit 1 }
         ' \
         >/dev/null 2>&1; then

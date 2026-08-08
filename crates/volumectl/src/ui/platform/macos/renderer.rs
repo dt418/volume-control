@@ -92,6 +92,27 @@ pub fn a11y_label(surface: SurfaceId) -> &'static str {
     }
 }
 
+/// Convert physical shared geometry into AppKit points.
+fn appkit_rect_values(
+    rect: SurfaceRect,
+    work_area: WorkArea,
+    dpi_scale: f32,
+) -> (f64, f64, f64, f64) {
+    let scale = if dpi_scale.is_finite() && dpi_scale > 0.0 {
+        dpi_scale as f64
+    } else {
+        1.0
+    };
+    let height = work_area.height as f64;
+    let top = work_area.y as f64;
+    (
+        rect.left as f64 / scale,
+        (top + height - rect.bottom as f64) / scale,
+        rect.width() as f64 / scale,
+        rect.height() as f64 / scale,
+    )
+}
+
 /// One planned surface: where it goes, how it looks, how it is announced.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SurfacePlan {
@@ -293,14 +314,9 @@ mod appkit {
         let _app = NSApplication::sharedApplication(mtm);
     }
 
-    fn to_ns_rect(rect: SurfaceRect, work_area: WorkArea) -> NSRect {
-        // AppKit uses a bottom-left origin; the shared math uses top-left.
-        let height = work_area.height;
-        let top = work_area.y;
-        NSRect::new(
-            NSPoint::new(rect.left as f64, (top + height - rect.bottom) as f64),
-            NSSize::new(rect.width() as f64, rect.height() as f64),
-        )
+    fn to_ns_rect(rect: SurfaceRect, work_area: WorkArea, dpi_scale: f32) -> NSRect {
+        let (left, bottom, width, height) = appkit_rect_values(rect, work_area, dpi_scale);
+        NSRect::new(NSPoint::new(left, bottom), NSSize::new(width, height))
     }
 
     impl Panel {
@@ -327,7 +343,7 @@ mod appkit {
         /// Apply a fresh plan: frame, material treatment, VoiceOver label,
         /// and motion policy.
         pub fn apply_plan(&mut self, plan: &SurfacePlan, caps: &UiCapabilities) {
-            let rect = to_ns_rect(plan.rect, caps.work_area);
+            let rect = to_ns_rect(plan.rect, caps.work_area, caps.dpi_scale);
             // SAFETY: main thread, window retained by `self`.
             unsafe {
                 self.window.setFrame_display(rect, true);
@@ -533,6 +549,17 @@ mod tests {
             );
             assert_eq!(mixer.rect.right, overlay.rect.right, "right edge at {dpi}x");
         }
+    }
+
+    #[test]
+    fn retina_appkit_frame_converts_physical_pixels_to_points_once() {
+        let work_area = WorkArea::new(0, 0, 2880, 1800);
+        let rect = SurfaceRect::new(2168, 1624, 2840, 1800);
+        let (left, bottom, width, height) = appkit_rect_values(rect, work_area, 2.0);
+
+        // AppKit uses a lower-left origin: a rect whose physical bottom is
+        // the work-area bottom maps to y=0 points after one scale conversion.
+        assert_eq!((left, bottom, width, height), (1084.0, 0.0, 336.0, 88.0));
     }
 
     #[test]

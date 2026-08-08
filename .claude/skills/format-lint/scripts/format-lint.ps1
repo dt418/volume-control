@@ -217,7 +217,7 @@ function Invoke-ForbiddenPaths {
     # Multi-command step: capture native exit codes immediately (see step
     # authoring notes) before any cmdlet can mask or inherit them.
     $gitFailed = $false
-    $tracked = & $git diff HEAD --name-only --diff-filter=ACMR
+    $tracked = & $git diff HEAD --name-only --diff-filter=ACMRD
     if ($LASTEXITCODE -ne 0) { $gitFailed = $true }
     $untracked = & $git ls-files --others --exclude-standard
     if ($LASTEXITCODE -ne 0) { $gitFailed = $true }

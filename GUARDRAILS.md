@@ -8,11 +8,13 @@ Hard rules that must not be bypassed without explicit user approval.
   `git diff --check`, and
   `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`.
 - Every commit, PR, and merge must pass
-  `cargo test --workspace --no-default-features`.
+  `cargo test --workspace --no-default-features` through the full gate and
+  CI. The lightweight pre-commit hook does not run the workspace test suite.
 - Do not weaken `-D warnings` or suppress project warnings to force a green
   check; fix the code instead.
-- Keep `.githooks/pre-commit` in sync with the CI checks so local and remote
-  gates agree.
+- Keep the pre-commit hook's fmt, whitespace, and clippy checks aligned with
+  the checks it actually runs; the full gate and CI remain authoritative for
+  workspace tests.
 
 ## Diff hygiene
 
