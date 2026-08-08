@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-01-15T10:30",
+  "last_updated": "2026-08-08T15:00",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -260,6 +260,28 @@
         "Code verification: all 7 checks passed (function defined, imports, queries, logging, etc.)"
       ],
       "notes": "Fixed broken /proc enumeration that returned arbitrary process. Added x11rb-based X11 query as Method 3 fallback."
+    },
+    {
+      "id": "vol-013",
+      "priority": 13,
+      "area": "tooling",
+      "title": "Format-lint gate toolchain (manifest-driven, cross-platform)",
+      "user_visible_behavior": "Developer-facing: a deterministic quality gate is shared by local Windows/Linux/macOS runs and CI — the same 5 steps (fmt, diff check, forbidden paths, clippy -D warnings, tests) and the same forbidden-diff-path rules apply everywhere, so a change that passes locally behaves identically in CI.",
+      "status": "passing",
+      "verification": [
+        "Run `bash scripts/test-format-lint.sh` — all 24 checks must pass, exit 0.",
+        "Run `bash scripts/format-lint.sh` and `powershell -File .agents/skills/format-lint/scripts/format-lint.ps1` — both full gates must pass, exit 0.",
+        "Confirm `.agents/skills/format-lint/` and `.claude/skills/format-lint/` mirrors are byte-identical (cmp).",
+        "Confirm CI runs the smoke test in the ubuntu `checks` and `windows` jobs."
+      ],
+      "evidence": [
+        "24/24 smoke checks pass: bash + PowerShell gates (exit codes, forbidden-path catch, --fix/--all-features transforms, manifest parse, per-pattern forbidden-path matches, mirror byte-identity).",
+        "Both full gates exit 0 with the test suite (cargo test: 225 passed / 0 failed).",
+        "scripts/format-lint-steps.json v2 defines the 5 steps and 6 forbidden-diff-path patterns; mirrors byte-identical via cmp.",
+        "Committed 2026-08-08: d510637 (toolchain), ae1e011 (CI wiring into ubuntu checks + windows jobs), d0d1d41 (progress docs, Session 011); pre-commit hook and final whole-branch review clean.",
+        "Known accepted cost: the ubuntu checks job's smoke-test --all-features run fails fast at gtk4-sys pkg-config (no GTK dev libs installed there); assertions are header-only so it still passes."
+      ],
+      "notes": "Tooling/infrastructure feature, not user-visible app behavior; tracked here as the repository system of record per CLAUDE.md. Pre-commit hook extension deliberately out of scope."
     }
   ]
 }
