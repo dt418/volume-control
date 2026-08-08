@@ -213,11 +213,27 @@ else
         '(guard dropped or commented out in .githooks/pre-commit?)'
 fi
 
-# --- mirror check: guardrail skill ---------------------------------------------
+# --- mirror checks: skills ------------------------------------------------------
+# The guardrail and pre-push-review skills are the workflow's contract; a
+# drifted mirror silently splits what agents see, so both must stay
+# byte-identical and the guardrail must still mandate the review phase.
 if cmp -s .agents/skills/guardrail/SKILL.md .claude/skills/guardrail/SKILL.md; then
     report ok 'guardrail skill: .agents/.claude mirrors are byte-identical'
 else
     report FAIL 'guardrail skill: .agents/.claude mirrors differ (resync .claude/skills/guardrail/)'
+fi
+if [ -f .agents/skills/pre-push-review/SKILL.md ] && \
+   [ -f .claude/skills/pre-push-review/SKILL.md ] && \
+   cmp -s .agents/skills/pre-push-review/SKILL.md .claude/skills/pre-push-review/SKILL.md; then
+    report ok 'pre-push-review skill: .agents/.claude mirrors are byte-identical'
+else
+    report FAIL 'pre-push-review skill: .agents/.claude mirrors differ (resync .claude/skills/pre-push-review/)'
+fi
+if grep -q 'pre-push-review' .agents/skills/guardrail/SKILL.md && \
+   grep -q 'pre-push-review' .claude/skills/guardrail/SKILL.md; then
+    report ok 'guardrail skill (both mirrors): mandates the three-domain pre-push review'
+else
+    report FAIL 'guardrail skill (both mirrors): mandates the three-domain pre-push review'
 fi
 
 if [ "$failures" -eq 0 ]; then

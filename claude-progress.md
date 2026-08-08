@@ -933,3 +933,33 @@ fn get_window_pid_x11() -> Option<u32> {
   dogfood passed; cargo test 225/225; the records guard passed on this
   change's own staged set.
 
+## Session 014 (2026-08-08) — Three-domain pre-push review skill
+
+- Goal: codify the one-off adversarial three-domain review (guard core /
+  gate chain / wiring-records) that hardened the stack into a reusable,
+  drift-checked artifact, so every push gets the same adversarial pass
+  before commit.
+- What landed:
+  - `.agents/skills/pre-push-review/SKILL.md` (+ `.claude/` mirror,
+    byte-identical) — the three domain hunt-for checklists distilled from
+    the review's actual findings (stderr discipline, WSL-shim rejection,
+    template-hint contract on the real --staged/--branch paths,
+    $LASTEXITCODE capture, manifest parity, mirror byte-identity, records
+    honesty, docs-match-enforcement), the parallel-dispatch process, and a
+    verification gate.
+  - Guardrail skill (both mirrors) now mandates the review phase
+    (brainstorm -> spec -> plan -> execute -> verify -> review -> finish)
+    and references the new skill; its Verification section also gained
+    `bash scripts/test-ship.sh`.
+  - `scripts/ship.sh` header + usage remind to run the review before
+    `--push` (no bypass tokens introduced; test-ship.sh patterns intact).
+  - `scripts/test-check-records.sh` gained 2 wiring checks (22 -> 24):
+    pre-push-review mirror byte-identity + guardrail-still-mandates-the-
+    review, so an edit that drops the review from the flow fails loudly.
+  - Design spec at
+    `docs/superpowers/specs/2026-08-08-pre-push-review-design.md` (exempt
+    from the records rule).
+- Verification: test-check-records.sh 24/24; test-format-lint.sh 33/33;
+  test-ship.sh 21/21; both gates pass; cargo test 225/225; records guard
+  passed on this change's own staged set.
+

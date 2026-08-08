@@ -6,6 +6,10 @@
 # applied before anything ships. Running this (or scripts/ship.ps1 on
 # Windows, which bridges to it) is the supported path to commit + push.
 #
+# Before pushing, run the three-domain adversarial review of the
+# enforcement stack (see the pre-push-review skill) so every push gets
+# the same adversarial pass; the mechanical battery below is its base.
+#
 # Hard checks - NO flag can skip these:
 #   1. check-records.sh --branch origin/master  records updated somewhere
 #      in the change set (skipped with a warning only when there is no
@@ -51,6 +55,7 @@ usage() {
     echo
     echo "There are NO bypass flags: records, format-lint (with tests), and"
     echo "both self-tests always run before anything is committed."
+    echo "  (Run the three-domain adversarial review first - pre-push-review skill.)"
 }
 
 i=0

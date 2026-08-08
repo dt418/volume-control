@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-08T19:15",
+  "last_updated": "2026-08-08T19:45",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,29 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-016",
+      "priority": 16,
+      "area": "tooling",
+      "title": "Three-domain pre-push review skill (guard core / gate chain / wiring-records)",
+      "user_visible_behavior": "Developer/agent-facing: every push now runs the same adversarial three-domain review of the enforcement stack (records guard core, format-lint gate chain, CI/skills/docs/records consistency) via the pre-push-review skill, mandated by the guardrail skill before ship and referenced from ship.sh. A workflow edit that drops the review fails the self-tests.",
+      "status": "passing",
+      "verification": [
+        "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0 (24 checks incl. pre-push-review mirror identity and guardrail review-mandate assertions).",
+        "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0.",
+        "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
+        "Run both format-lint gates and `cargo test` - green.",
+        "Run `sh scripts/check-records.sh --staged` on this change's staged set - exit 0."
+      ],
+      "evidence": [
+        ".agents/skills/pre-push-review/SKILL.md and .claude mirror are byte-identical (asserted by test-check-records.sh).",
+        "The skill encodes the three domain hunt-for checklists distilled from the review that hardened the stack (stderr discipline, WSL-shim rejection, template-hint contract on real paths, $LASTEXITCODE capture, mirror byte-identity, records honesty).",
+        "Guardrail skill (both mirrors) now mandates the review phase (brainstorm -> spec -> plan -> execute -> verify -> review -> finish) and references the skill; asserted by the self-test.",
+        "scripts/ship.sh header and usage remind to run the review before --push; test-ship.sh still passes.",
+        "Session 014 (claude-progress.md) records this landing; design spec at docs/superpowers/specs/2026-08-08-pre-push-review-design.md."
+      ],
+      "notes": "Codifies the one-off three-domain parallel review as a repeatable, drift-checked skill. Extends vol-014/vol-015: the enforcement stack now has an adversarial review layer above the mechanical battery."
+    },
     {
       "id": "vol-015",
       "priority": 15,

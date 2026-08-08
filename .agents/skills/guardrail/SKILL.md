@@ -10,7 +10,7 @@ description: Mandatory workflow and record-keeping rules for volume-control - ev
 Every task in this repository MUST:
 
 1. **Follow the superpowers flow**: brainstorm (spec) → plan → execute →
-   verify → finish. Process skills come first (brainstorming, then
+   verify → review → finish. Process skills come first (brainstorming, then
    writing-plans), then implementation skills. Do not skip to code.
 2. **Apply hardness (verification-before-completion)**: no completion claim
    without fresh verification evidence. Run the full verification command in
@@ -42,6 +42,15 @@ and commit. The guard only suggests; it never creates or edits the records
 itself. Never bypass with `--no-verify` except when the user explicitly
 requests it.
 
+## Review (mandatory before any push)
+
+Before pushing, run the three-domain adversarial review of the enforcement
+stack — guard core, gate chain, wiring/records consistency — using the
+`pre-push-review` skill. It dispatches one reviewer per domain in parallel,
+then every genuine defect is fixed with live negative verification before the
+full battery is re-run. The review is complete only when its evidence is
+recorded in `feature_list.json` and `claude-progress.md`.
+
 ## Ship (mandatory before any commit + push)
 
 `scripts/ship.sh` (or `scripts/ship.ps1` on Windows, which bridges to it)
@@ -70,5 +79,6 @@ ship (e.g. `git commit --no-verify`) requires explicit user approval.
 
 After the guard passes, run the full battery: `bash scripts/format-lint.sh`
 (or `--skip-tests` for speed), `cargo test`, and the self-tests
-(`bash scripts/test-format-lint.sh`, `bash scripts/test-check-records.sh`)
-before claiming completion.
+(`bash scripts/test-format-lint.sh`, `bash scripts/test-check-records.sh`,
+`bash scripts/test-ship.sh`), then the three-domain pre-push review
+(`pre-push-review` skill) before claiming completion or pushing.
