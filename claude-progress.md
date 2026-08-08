@@ -852,6 +852,11 @@ fn get_window_pid_x11() -> Option<u32> {
   staged code-only scratch fails it on bash AND PowerShell, manifest is v3
   with 6 steps, and both gates reject a non-v3 manifest. All mirrors
   re-synced and byte-identical.
+- Follow-up 3: the format-lint smoke test now also asserts the pre-commit
+  hook still invokes its older fmt/whitespace/clippy steps (33 checks).
+  Comment-aware and line-anchored (echo progress lines contain the command
+  strings, so the match requires the actual invocation, not merely the
+  echo) — a hook edit that drops or comments out any step fails loudly.
 
 ## Session 011 (2026-08-08) — format-lint gate toolchain
 

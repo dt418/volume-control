@@ -12,9 +12,11 @@
 #   3. a staged code file without record updates must exit 1 and report the
 #      "record updates" step as FAILED (on both gates)
 #   4. (bash gate only) an unknown flag must exit 2 with a usage message
-#   5. the .claude/skills/format-lint mirrors must be byte-identical to the
+#   5. the pre-commit hook still invokes its fmt / whitespace / clippy steps
+#      (comment-aware, so a hook edit that drops or comments one fails)
+#   6. the .claude/skills/format-lint mirrors must be byte-identical to the
 #      canonical gate scripts
-#   6. every manifest forbidden pattern matches a representative path, and
+#   7. every manifest forbidden pattern matches a representative path, and
 #      benign/near-miss paths do not, on both parsers
 #
 # The PowerShell gate is exercised only when `powershell`/`pwsh` is on PATH.
@@ -333,6 +335,26 @@ if [ -n "$ps" ]; then
         report FAIL 'forbidden patterns: all match their samples in PowerShell'
     fi
 fi
+
+# --- guard wiring: the pre-commit hook must still run the older checks ------
+# A future hook edit that drops or comments out the fmt/whitespace/clippy
+# steps would silently disable local enforcement of the older gate; assert
+# each invocation is present and not commented out. The hook's `echo
+# "[pre-commit] ..."` progress lines contain the command strings too, so the
+# awk match is anchored at the start of the line to require the actual
+# invocation, not merely the echo.
+hook_invokes() { # <command-prefix> <description>
+    local cmd="$1" desc="$2"
+    if awk -v cmd="$cmd" '!/^[[:space:]]*#/ && $0 ~ "^[[:space:]]*" cmd' .githooks/pre-commit | grep -q .; then
+        report ok "$desc"
+    else
+        report FAIL "$desc" '(step dropped or commented out in .githooks/pre-commit?)'
+    fi
+}
+hook_invokes 'cargo fmt --all --check' 'pre-commit hook: still runs cargo fmt --all --check'
+hook_invokes 'git diff --cached --check' 'pre-commit hook: still runs git diff --cached --check'
+hook_invokes 'cargo clippy --workspace --all-targets --no-default-features -- -D warnings' \
+    'pre-commit hook: still runs cargo clippy -D warnings'
 
 # --- mirror drift: .claude skill copies must match the canonical gates ---------
 if cmp -s .agents/skills/format-lint/scripts/format-lint.ps1 \
