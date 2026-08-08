@@ -27,12 +27,32 @@ use crate::ui::model::{AppState, MotionMode, SurfaceId};
 #[cfg(feature = "gtk-renderer")]
 use crate::ui::renderer::{HostHandle, NativeRenderer};
 use crate::ui::theme::{MaterialIntent, Rgba, ThemeTokens};
-#[cfg(test)]
 use crate::ui::WorkArea;
 use crate::ui::{
     place_centered, place_mixer_above_overlay, place_overlay, resolve_material, resolve_motion,
     ResolvedMaterial, SurfaceRect, SurfaceSize, UiCapabilities,
 };
+
+/// Compute the layer-shell margin from an absolute planned edge.
+///
+/// `SurfaceRect` and `WorkArea` use absolute coordinates, so subtracting from
+/// width/height alone is incorrect for secondary monitors with non-zero origins.
+pub const fn layer_shell_margin_right(work_area: WorkArea, rect: SurfaceRect) -> i32 {
+    work_area.right() - rect.right
+}
+
+pub const fn layer_shell_margin_bottom(work_area: WorkArea, rect: SurfaceRect) -> i32 {
+    work_area.bottom() - rect.bottom
+}
+
+#[cfg(feature = "layer-shell")]
+fn keyboard_mode_for(surface: SurfaceId) -> gtk4_layer_shell::KeyboardMode {
+    match surface {
+        SurfaceId::Overlay => gtk4_layer_shell::KeyboardMode::None,
+        SurfaceId::Mixer => gtk4_layer_shell::KeyboardMode::OnDemand,
+        _ => gtk4_layer_shell::KeyboardMode::None,
+    }
+}
 
 /// Logical (1x) surface sizes from the Signal Glass spec §5–§8, shared with
 /// the Windows and macOS renderers so every platform places identical
@@ -280,8 +300,12 @@ impl NativeRenderer for LinuxRenderer {
 
     fn publish(&mut self, state: &AppState, tokens: &ThemeTokens, capabilities: &UiCapabilities) {
         let plans = plan_surfaces(state, tokens, capabilities, self.layer_shell_ok);
+        let layer_shell_ok = self.layer_shell_ok;
         for plan in &plans {
             let panel = self.panel_for(plan.surface);
+            if panel.needs_recreate(plan) {
+                *panel = gtk_surfaces::GtkPanel::new(plan.surface, layer_shell_ok);
+            }
             panel.apply_plan(plan, capabilities);
             let visible = state.is_visible(plan.surface);
             panel.set_visible(visible);
@@ -345,6 +369,10 @@ mod gtk_surfaces {
     pub struct GtkPanel {
         window: gtk::Window,
         kind: GtkMaterialKind,
+        #[cfg(feature = "layer-shell")]
+        layer_shell_initialized: bool,
+        #[cfg(feature = "layer-shell")]
+        layer_shell_mode: bool,
     }
 
     impl GtkPanel {
@@ -354,7 +382,26 @@ mod gtk_surfaces {
             Self {
                 window,
                 kind: GtkMaterialKind::Opaque,
+                #[cfg(feature = "layer-shell")]
+                layer_shell_initialized: false,
+                #[cfg(feature = "layer-shell")]
+                layer_shell_mode: false,
             }
+        }
+
+        #[cfg(feature = "layer-shell")]
+        pub fn needs_recreate(&self, plan: &SurfacePlan) -> bool {
+            if !self.layer_shell_initialized {
+                return false;
+            }
+            let is_float = matches!(plan.surface, SurfaceId::Overlay | SurfaceId::Mixer);
+            let use_layer_shell = is_float && plan.gtk_material == GtkMaterialKind::WaylandGlass;
+            self.layer_shell_mode != use_layer_shell
+        }
+
+        #[cfg(not(feature = "layer-shell"))]
+        pub fn needs_recreate(&self, _plan: &SurfacePlan) -> bool {
+            false
         }
 
         /// Apply a fresh plan: window type (layer-shell vs plain), material
@@ -371,6 +418,9 @@ mod gtk_surfaces {
                 self.window.set_decorated(false);
                 self.window.set_title(Some(plan.label));
                 self.window.set_default_size(size.width, size.height);
+                let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                content.set_size_request(size.width, size.height);
+                self.window.set_child(Some(&content));
             }
 
             self.apply_material(plan);
@@ -388,7 +438,7 @@ mod gtk_surfaces {
 
             // Accessibility: the §11.2 label the Windows/macOS renderers use.
             self.window
-                .update_property(&[gtk::accessible::Property::Label(plan.label.into())]);
+                .update_property(&[gtk::accessible::Property::Label(plan.label)]);
 
             // Motion: disabled/reduced surfaces present instantly. GTK has no
             // per-window animation policy, so this is expressed by leaving the
@@ -407,20 +457,26 @@ mod gtk_surfaces {
             size: SurfaceSize,
         ) {
             use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-            self.window.init_layer_shell();
+            if !self.layer_shell_initialized {
+                self.window.init_layer_shell();
+                self.layer_shell_initialized = true;
+            }
+            self.layer_shell_mode = true;
             self.window.set_layer(Layer::Overlay);
             // Bottom-right placement against the shared work-area math: the
             // anchors fix the corner and the margins reproduce the plan rect.
             self.window.set_anchor(Edge::Right, true);
             self.window.set_anchor(Edge::Bottom, true);
+            self.window.set_margin(
+                Edge::Right,
+                layer_shell_margin_right(caps.work_area, plan.rect),
+            );
+            self.window.set_margin(
+                Edge::Bottom,
+                layer_shell_margin_bottom(caps.work_area, plan.rect),
+            );
             self.window
-                .set_margin(Edge::Right, caps.work_area.width - plan.rect.right);
-            self.window
-                .set_margin(Edge::Bottom, caps.work_area.height - plan.rect.bottom);
-            // Exclusive keyboard keeps the transient overlay from stealing
-            // focus from the active app, matching the Windows non-activating
-            // overlay/mixer behavior.
-            self.window.set_keyboard_mode(KeyboardMode::Exclusive);
+                .set_keyboard_mode(keyboard_mode_for(plan.surface));
             let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
             content.set_size_request(size.width, size.height);
             self.window.set_child(Some(&content));
@@ -513,6 +569,15 @@ pub use gtk_surfaces::{ensure_gtk_initialized, layer_shell_available, GtkPanel};
 mod tests {
     use super::*;
     use crate::ui::model::{MaterialMode, SurfaceVisibilityState, ThemeMode};
+
+    #[test]
+    fn layer_shell_margins_use_absolute_work_area_edges() {
+        let work_area = WorkArea::new(-1920, -40, 1920, 1040);
+        let rect = SurfaceRect::new(-336, 876, 0, 964);
+
+        assert_eq!(layer_shell_margin_right(work_area, rect), 0);
+        assert_eq!(layer_shell_margin_bottom(work_area, rect), 36);
+    }
 
     fn caps(dpi: f32) -> UiCapabilities {
         UiCapabilities {

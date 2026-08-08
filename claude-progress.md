@@ -1055,3 +1055,62 @@ fn get_window_pid_x11() -> Option<u32> {
   commit. Real AppKit host smoke remains a macos-15 CI requirement; Linux
   host/tray/Wayland work and the remaining Windows human checks remain open.
   `vol-011` stays `in_progress`.
+
+## Session 016 (2026-08-08) — Fix Linux GTK host-loop verification blockers
+
+- Scope: fix the current uncommitted Linux host-loop worktree without claiming
+  optional layer-shell or Wayland runtime evidence.
+- Fixes: GTK/GLib `RefMut` bindings now live through callback use; the unused
+  GTK `Config` import and feature-specific dead-code warning are removed; the
+  harness-free host smoke routes actions through `LinuxRenderer::dispatch` and
+  `HostHandle`; `DeviceLost` drops the audio backend so the bounded slow-poll
+  retry policy can recover, and failed retries are logged; GLib timeout sources
+  are removed before renderer destruction; the absolute-origin geometry test
+  fixture now matches its zero-margin expectation; new host-core coverage locks
+  in backend recovery. The worktree defaults text files to LF and uses
+  worktree-local `core.autocrlf=false`.
+- Verification: `cargo fmt --all --check`, `git diff --check HEAD`, Windows
+  `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`,
+  and Windows `cargo test --workspace --no-default-features` all pass; native
+  Ubuntu/WSL `cargo check --workspace --no-default-features`, native GTK4
+  `cargo check --workspace --features gtk-renderer`, GTK Clippy with
+  `-D warnings`, and Linux no-feature tests (107 library + 15 host-core
+  integration tests) all pass; `xvfb-run -a cargo test -p volumectl
+  --features gtk-renderer --test linux_host_smoke -- --nocapture` prints
+  `linux host smoke OK (X11/GTK only)`, and the existing `gtk_smoke` prints
+  `gtk smoke OK`.
+- Honest limitation: `cargo check --features gtk-renderer,layer-shell` remains
+  unavailable because Ubuntu 24.04 in this environment has no
+  `gtk4-layer-shell-0.pc` and no `libgtk4-layer-shell-dev` apt candidate.
+- Status: `vol-011` remains `in_progress`; Linux tray, Wayland runtime, and
+  real desktop capability evidence remain open.
+
+## Session 017 (2026-08-08) — Pre-push review fixes for host loop and gates
+
+- Review findings were verified against the active worktree before editing.
+  Linux `AppAction::ReloadConfig` now records an explicit request consumed by
+  the real slow poll, so an unchanged mtime no longer turns reload into a
+  log-only no-op. A regression test covers the request lifecycle.
+- The Xvfb Linux host smoke now calls the shared production GTK loop through
+  `linux_app::run_smoke`: it uses deterministic in-process audio, routes
+  `ShowSurface`, `OpenTrayMenu`, and `Exit` through `LinuxRenderer::dispatch`
+  and `HostHandle`, waits through the slow-poll interval, verifies visibility
+  and shutdown, then uses the production source-removal and renderer teardown.
+  This avoids requiring a PulseAudio server. The Mesa/libEGL/Zink messages
+  observed under Xvfb are environment diagnostics; both smoke binaries still
+  exit 0.
+- GTK layer-shell panels now recreate when a live material change flips the
+  panel between layer-shell and plain-window modes. Plain fallback panels also
+  receive their content size. The optional layer-shell build remains skipped
+  honestly because `gtk4-layer-shell-0.pc` and an Ubuntu 24.04 apt package
+  candidate are unavailable here.
+- Gate hardening: `scripts/ci-diff-check.sh` checks branch whitespace with
+  `git diff --check`; the PowerShell forbidden-pattern smoke covers all four
+  benign near-misses; `test-check-records.sh` injects successful git stderr and
+  a synthetic failing git command to verify both suppression and diagnostics.
+  `.gitattributes` explicitly pins PowerShell files and the extensionless hook
+  to LF. Windows smoke evidence uses the explicit Git Bash executable, not the
+  WSL `System32\\bash.exe` shim.
+- Review outcome: no unresolved high/important findings remain. `vol-011`
+  remains `in_progress`; Linux tray/global-hotkey and real Wayland evidence are
+  still open.

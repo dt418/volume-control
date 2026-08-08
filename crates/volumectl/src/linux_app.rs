@@ -1,56 +1,32 @@
 //! Linux application host (GTK4 + PulseAudio).
 //!
-//! The Linux counterpart of the Windows `app` shell: binds the shared
-//! [`crate::ui::NativeRenderer`] (the GTK renderer in
-//! `ui::platform::linux`) to the Linux audio backend on the GTK main thread.
-//! The host owns audio and configuration; the renderer only consumes
-//! published [`AppState`] and emits [`AppAction`] values back through a
-//! [`HostHandle`].
-//!
-//! The host runs a GTK main loop with a periodic poll (mirroring the Windows
-//! 150 ms timer): it drains the action channel, applies each action to the
-//! audio host, re-reads authoritative state, and republishes it to the
-//! renderer. Compiled only on Linux with the `gtk-renderer` feature; without
-//! a display session the caller falls back to the CLI.
-//!
-//! Tray / global-hotkey wiring is a separate follow-on; this host proves the
-//! renderer + audio + main-loop foundation on a real Linux session.
+//! The platform-neutral reducer lives in [`crate::linux_host_core`]. This file
+//! only owns GTK initialization, display capability detection, GLib polling,
+//! and the concrete Linux renderer/backend adapters.
 
 #[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
 mod gtk_host {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::rc::Rc;
-    use std::sync::mpsc::channel;
-    use std::time::Duration;
+    use std::sync::mpsc::{channel, Receiver};
+    use std::time::{Duration, Instant, SystemTime};
 
+    use gtk::gdk;
+    use gtk::prelude::*;
     use gtk4 as gtk;
 
-    use crate::audio::AudioBackend;
-    use crate::audio_linux::LinuxAudio;
-    use crate::config::Config;
-    use crate::hotkeys::HotkeyAction;
+    use crate::audio::{default_backend, AudioBackend, AudioError, VolumeState};
+    use crate::config;
     use crate::hotkeys_rdev::RdevHotkeys;
+    use crate::linux_host_core::{HostCore, HotkeySource};
     use crate::ui::platform::linux::renderer::LinuxRenderer;
-    use crate::ui::{
-        tokens_for, AppAction, AppState, HostHandle, NativeRenderer, SurfaceVisibility,
-        UiCapabilities, WorkArea,
-    };
+    use crate::ui::{tokens_for, AppAction, HostHandle, NativeRenderer, UiCapabilities, WorkArea};
 
-    /// Everything the GTK poll closure needs to drive the app on one thread.
-    pub struct HostCtx {
-        audio: LinuxAudio,
-        hotkeys: RdevHotkeys,
-        renderer: LinuxRenderer,
-        config: Config,
-        state: AppState,
-        caps: UiCapabilities,
-        quit_requested: bool,
-    }
+    const FAST_POLL_MS: u64 = 15;
+    const SLOW_POLL_MS: u64 = 150;
+    const _: () = assert!(FAST_POLL_MS < SLOW_POLL_MS);
 
-    fn detect_caps() -> UiCapabilities {
-        // On X11 (including Xvfb in CI) there is no compositing blur, so
-        // surfaces resolve to the opaque fallback. DPI is 1.0 by default; a
-        // real desktop would query the monitor geometry.
+    fn fallback_caps() -> UiCapabilities {
         UiCapabilities {
             compositor: false,
             blur: false,
@@ -61,166 +37,300 @@ mod gtk_host {
         }
     }
 
-    fn refresh_from_audio(ctx: &mut HostCtx) {
-        match ctx.audio.get_state() {
-            Ok(vs) => {
-                let mut state = ctx.state.clone();
-                state.volume_percent = vs.percent();
-                state.muted = vs.muted;
-                state.device = None;
-                ctx.state = state;
-            }
-            Err(e) => {
-                log::warn!("audio readback failed: {e}");
-            }
+    fn display() -> Option<gdk::Display> {
+        gdk::Display::default()
+    }
+
+    fn is_x11() -> bool {
+        display()
+            .map(|display| display.backend().is_x11())
+            .unwrap_or(false)
+    }
+
+    fn is_wayland() -> bool {
+        display()
+            .map(|display| display.backend().is_wayland())
+            .unwrap_or(false)
+    }
+
+    fn detect_caps() -> UiCapabilities {
+        let fallback = fallback_caps();
+        let Some(display) = display() else {
+            return fallback;
+        };
+        let monitors = display.monitors();
+        let Some(monitor) = monitors.item(0).and_downcast::<gdk::Monitor>() else {
+            return fallback;
+        };
+        let geometry = monitor.geometry();
+        UiCapabilities {
+            compositor: display.backend().is_wayland(),
+            blur: display.backend().is_wayland(),
+            high_contrast: false,
+            reduced_motion: false,
+            dpi_scale: monitor.scale_factor().max(1) as f32,
+            work_area: WorkArea::new(
+                geometry.x(),
+                geometry.y(),
+                geometry.width(),
+                geometry.height(),
+            ),
         }
+    }
+
+    fn file_mtime() -> Option<SystemTime> {
+        std::fs::metadata(config::config_path())
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+    }
+
+    fn publish(core: &HostCore, renderer: &mut LinuxRenderer) {
         let tokens = tokens_for(
-            ctx.config.appearance.theme,
-            false,
-            ctx.config.appearance.accent,
-            || Some(ctx.caps.reduced_motion),
+            core.state().theme,
+            core.capabilities().high_contrast,
+            core.config().appearance.accent,
+            || Some(core.capabilities().reduced_motion),
         );
-        ctx.renderer.publish(&ctx.state, &tokens, &ctx.caps);
+        renderer.publish(core.state(), &tokens, core.capabilities());
     }
 
-    fn apply_action(ctx: &mut HostCtx, action: &AppAction) {
-        use crate::ui::AppAction as A;
-        match action {
-            A::SetVolumePercent { percent } => {
-                let _ = ctx.audio.set_volume((*percent).min(100) as f32 / 100.0);
-            }
-            A::AdjustVolume { delta_percent } => {
-                let cur = ctx.audio.get_state().map(|s| s.volume).unwrap_or(0.0);
-                let target = (cur * 100.0 + *delta_percent as f32).clamp(0.0, 100.0) / 100.0;
-                let _ = ctx.audio.set_volume(target);
-            }
-            A::ToggleMute => {
-                let _ = ctx.audio.toggle_mute();
-            }
-            A::SetMute { muted } => {
-                let _ = ctx.audio.set_mute(*muted);
-            }
-            A::ResetVolume => {
-                let _ = ctx.audio.set_volume(0.5);
-            }
-            A::ShowSurface(s) | A::HideSurface(s) => {
-                let visible = matches!(action, A::ShowSurface(_));
-                ctx.state.set_visibility(
-                    *s,
-                    if visible {
-                        SurfaceVisibility::Visible
-                    } else {
-                        SurfaceVisibility::Hidden
-                    },
-                );
-            }
-            A::ToggleSurface(s) => {
-                let vis = ctx.state.toggle(*s);
-                log::info!("toggled {s:?} -> {vis:?}");
-            }
-            A::SetTheme(t) => ctx.config.appearance.theme = *t,
-            A::SetMaterial(m) => ctx.config.appearance.material = *m,
-            A::SetMotion(m) => ctx.config.appearance.motion = *m,
-            A::Exit => {
-                ctx.quit_requested = true;
-            }
-            _ => {}
+    fn poll_fast(core: &mut HostCore, receiver: &Receiver<AppAction>) {
+        core.poll_hotkeys();
+        while let Ok(action) = receiver.try_recv() {
+            core.apply_action(&action);
         }
     }
 
-    fn hotkey_to_action(action: HotkeyAction, config: &Config) -> AppAction {
-        use HotkeyAction as H;
-        match action {
-            H::VolumeUp => AppAction::AdjustVolume {
-                delta_percent: config.volume_step as i16,
-            },
-            H::VolumeDown => AppAction::AdjustVolume {
-                delta_percent: -(config.volume_step as i16),
-            },
-            H::VolumeUpLarge => AppAction::AdjustVolume {
-                delta_percent: config.volume_step_large as i16,
-            },
-            H::VolumeDownLarge => AppAction::AdjustVolume {
-                delta_percent: -(config.volume_step_large as i16),
-            },
-            H::ToggleMute => AppAction::ToggleMute,
-            H::Reset50 => AppAction::ResetVolume,
-            H::OpenMixer => AppAction::ToggleSurface(crate::ui::SurfaceId::Mixer),
-            H::OpenMenu => AppAction::OpenTrayMenu,
+    fn poll_slow(core: &mut HostCore, renderer: &mut LinuxRenderer) {
+        let current_mtime = file_mtime();
+        if core.take_config_reload_request() || current_mtime != core.config_mtime() {
+            match core.reload_config_at(&config::config_path(), current_mtime) {
+                Ok(()) => core.set_config_mtime(current_mtime),
+                Err(error) => log::warn!("Linux config reload ignored: {error}"),
+            }
+        }
+        if core.can_retry_audio() {
+            core.record_audio_retry();
+            match default_backend() {
+                Ok(audio) => core.set_audio_backend(audio),
+                Err(error) => {
+                    log::warn!("Linux audio retry failed: {error}");
+                    core.mark_degraded(format!("audio: {error}"));
+                }
+            }
+        }
+        core.refresh_audio();
+        publish(core, renderer);
+    }
+
+    fn run_loop(
+        audio: Option<Box<dyn AudioBackend>>,
+        audio_error: Option<String>,
+        hotkeys: Option<Box<dyn HotkeySource>>,
+        hotkey_error: Option<String>,
+        config: config::Config,
+        caps: UiCapabilities,
+        smoke: bool,
+    ) -> Result<(), String> {
+        let (sender, receiver) = channel::<AppAction>();
+        let host = HostHandle::new(move |action| {
+            let _ = sender.send(action);
+        });
+        let mut renderer = LinuxRenderer::create(host, caps).map_err(|error| error.to_string())?;
+        let mut core = HostCore::new(audio, hotkeys, config, caps);
+        if let Some(error) = audio_error {
+            core.mark_degraded(error);
+        }
+        if let Some(error) = hotkey_error {
+            core.mark_degraded(error);
+        }
+        core.set_config_mtime(file_mtime());
+        publish(&core, &mut renderer);
+
+        let main_loop = gtk::glib::MainLoop::new(None, false);
+        let state = Rc::new(RefCell::new(Some((core, renderer))));
+        let receiver = Rc::new(receiver);
+
+        let fast_loop = main_loop.clone();
+        let fast_state = Rc::clone(&state);
+        let fast_receiver = Rc::clone(&receiver);
+        let fast_source =
+            gtk::glib::timeout_add_local(Duration::from_millis(FAST_POLL_MS), move || {
+                let mut state = fast_state.borrow_mut();
+                let Some((core, _renderer)) = state.as_mut() else {
+                    return gtk::glib::ControlFlow::Break;
+                };
+                poll_fast(core, &fast_receiver);
+                if core.quit_requested() {
+                    fast_loop.quit();
+                }
+                gtk::glib::ControlFlow::Continue
+            });
+
+        let slow_loop = main_loop.clone();
+        let slow_state = Rc::clone(&state);
+        let slow_source =
+            gtk::glib::timeout_add_local(Duration::from_millis(SLOW_POLL_MS), move || {
+                let mut state = slow_state.borrow_mut();
+                let Some((core, renderer)) = state.as_mut() else {
+                    return gtk::glib::ControlFlow::Break;
+                };
+                poll_slow(core, renderer);
+                if core.quit_requested() {
+                    slow_loop.quit();
+                }
+                gtk::glib::ControlFlow::Continue
+            });
+
+        let smoke_source = if smoke {
+            let smoke_state = Rc::clone(&state);
+            let smoke_finished = Rc::new(Cell::new(false));
+            let callback_finished = Rc::clone(&smoke_finished);
+            let started_at = Instant::now();
+            let mut actions_sent = false;
+            let source = gtk::glib::timeout_add_local(Duration::from_millis(1), move || {
+                let mut state = smoke_state.borrow_mut();
+                let Some((_core, renderer)) = state.as_mut() else {
+                    callback_finished.set(true);
+                    return gtk::glib::ControlFlow::Break;
+                };
+                if !actions_sent {
+                    renderer.dispatch(AppAction::ShowSurface(crate::ui::SurfaceId::Mixer));
+                    renderer.dispatch(AppAction::OpenTrayMenu);
+                    actions_sent = true;
+                }
+                if started_at.elapsed() >= Duration::from_millis(200) {
+                    renderer.dispatch(AppAction::Exit);
+                    callback_finished.set(true);
+                    gtk::glib::ControlFlow::Break
+                } else {
+                    gtk::glib::ControlFlow::Continue
+                }
+            });
+            Some((source, smoke_finished))
+        } else {
+            None
+        };
+
+        main_loop.run();
+        fast_source.remove();
+        slow_source.remove();
+        if let Some((source, smoke_finished)) = smoke_source {
+            // The normal smoke path returns Break after dispatching Exit, so
+            // GLib has already removed this source. Only remove it when the
+            // main loop ended through an unexpected external quit.
+            if !smoke_finished.get() {
+                source.remove();
+            }
+        }
+        let smoke_ok = if smoke {
+            let state = state.borrow();
+            state.as_ref().is_some_and(|(core, _)| {
+                core.quit_requested() && core.state().is_visible(crate::ui::SurfaceId::Mixer)
+            })
+        } else {
+            true
+        };
+        if let Some((_core, mut renderer)) = state.borrow_mut().take() {
+            renderer.destroy();
+        }
+        if smoke_ok {
+            Ok(())
+        } else {
+            Err("Linux host smoke actions did not complete through the production loop".into())
         }
     }
 
-    /// Run the Linux host to completion. Returns an error string on failure.
+    struct SmokeAudio;
+
+    impl AudioBackend for SmokeAudio {
+        fn get_state(&self) -> Result<VolumeState, AudioError> {
+            Ok(VolumeState {
+                volume: 0.5,
+                muted: false,
+            })
+        }
+
+        fn set_volume(&self, _volume: f32) -> Result<(), AudioError> {
+            Ok(())
+        }
+
+        fn toggle_mute(&self) -> Result<VolumeState, AudioError> {
+            Ok(VolumeState {
+                volume: 0.5,
+                muted: true,
+            })
+        }
+
+        fn set_mute(&self, _muted: bool) -> Result<(), AudioError> {
+            Ok(())
+        }
+    }
+
+    /// Run the real GTK host loop with deterministic in-process audio and
+    /// renderer actions. This keeps the Xvfb smoke independent of PulseAudio
+    /// while exercising the production timers, action queue, and teardown.
+    pub fn run_smoke() -> Result<(), String> {
+        crate::ui::platform::linux::renderer::ensure_gtk_initialized()?;
+        run_loop(
+            Some(Box::new(SmokeAudio)),
+            None,
+            None,
+            None,
+            config::load(),
+            fallback_caps(),
+            true,
+        )
+    }
+
+    /// Run the Linux host to completion on GTK's process main thread.
     pub fn run() -> Result<(), String> {
         crate::ui::platform::linux::renderer::ensure_gtk_initialized()?;
-        let audio = LinuxAudio::new().map_err(|e| e.to_string())?;
-        let config = crate::config::load();
-        let hotkeys = RdevHotkeys::new(config.modifier).map_err(|e| e.to_string())?;
+        let config = config::load();
         let caps = detect_caps();
 
-        let (tx, rx) = channel::<AppAction>();
-        let host = HostHandle::new(move |action| {
-            let _ = tx.send(action);
-        });
-
-        let renderer = LinuxRenderer::create(host, caps).map_err(|e| e.to_string())?;
-
-        let mut ctx = HostCtx {
-            audio,
-            hotkeys,
-            renderer,
-            config,
-            state: AppState::default(),
-            caps,
-            quit_requested: false,
+        let (audio, audio_error) = match default_backend() {
+            Ok(audio) => (Some(audio), None),
+            Err(error) => (None, Some(error.to_string())),
         };
-        refresh_from_audio(&mut ctx);
 
-        // Drive the host on a dedicated GLib main context. The default context
-        // is acquired by the PulseAudio backend's mainloop thread, so the host
-        // must not register its timer through `timeout_add_local`: that helper
-        // always targets the default context. A local future is attached to
-        // this context instead, keeping the GTK host alive until `Exit`.
-        let main_context = gtk::glib::MainContext::new();
-        let main_loop = gtk::glib::MainLoop::new(Some(&main_context), false);
-        let main_loop_quit = main_loop.clone();
-        let ctx_rc = Rc::new(RefCell::new(ctx));
-        let rx_rc = Rc::new(rx);
-        main_context
-            .with_thread_default(|| {
-                log::info!("linux host running on the GTK main loop");
-                main_context.spawn_local(async move {
-                    loop {
-                        gtk::glib::timeout_future(Duration::from_millis(150)).await;
-                        {
-                            let mut c = ctx_rc.borrow_mut();
-                            while let Some(action) = c.hotkeys.try_recv() {
-                                let action = hotkey_to_action(action, &c.config);
-                                apply_action(&mut c, &action);
-                            }
-                            while let Ok(action) = rx_rc.try_recv() {
-                                apply_action(&mut c, &action);
-                            }
-                        }
-                        refresh_from_audio(&mut ctx_rc.borrow_mut());
-                        if ctx_rc.borrow().quit_requested {
-                            main_loop_quit.quit();
-                            break;
-                        }
-                    }
-                });
-                main_loop.run();
-            })
-            .map_err(|e| e.to_string())?;
-        Ok(())
+        let (hotkeys, hotkey_error) = if is_x11() {
+            match RdevHotkeys::new(config.modifier) {
+                Ok(hotkeys) => (Some(Box::new(hotkeys) as Box<dyn HotkeySource>), None),
+                Err(error) => (None, Some(format!("global hotkeys unavailable: {error}"))),
+            }
+        } else if is_wayland() {
+            (
+                None,
+                Some("global hotkeys unavailable: current Linux provider requires X11".into()),
+            )
+        } else {
+            (
+                None,
+                Some("global hotkeys unavailable: no X11 display".into()),
+            )
+        };
+
+        run_loop(
+            audio,
+            audio_error,
+            hotkeys,
+            hotkey_error,
+            config,
+            caps,
+            false,
+        )
     }
 }
 
 /// Linux application entry point (GTK renderer).
-///
-/// Initializes GTK; if no display session is available the error is returned
-/// so the caller can fall back to the CLI.
 #[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
 pub fn run() -> Result<(), String> {
     gtk_host::run()
+}
+
+/// Run the deterministic GTK/X11 host-loop smoke harness.
+#[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
+pub fn run_smoke() -> Result<(), String> {
+    gtk_host::run_smoke()
 }

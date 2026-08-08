@@ -360,7 +360,10 @@ if [ -n "$ps" ]; then
         for ($i = 0; $i -lt $fp.Count; $i++) {
             if ($samples[$i] -notmatch $fp[$i]) { Write-Output "FAIL $($fp[$i])"; $ok = $false }
         }
-        if ("src/main.rs" -match ($fp -join "|")) { Write-Output "FAIL benign"; $ok = $false }
+        $benign = @("src/main.rs", "target-foo.txt", "configx.json", "logo.txt")
+        foreach ($path in $benign) {
+            if ($path -match ($fp -join "|")) { Write-Output "FAIL benign $path"; $ok = $false }
+        }
         if ($ok) { exit 0 } else { exit 1 }
         ' \
         >/dev/null 2>&1; then

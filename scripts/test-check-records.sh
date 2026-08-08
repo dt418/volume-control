@@ -110,6 +110,22 @@ guard_in_tmp() { # <args...>  runs the guard from inside the temp repo
     ( cd "$tmpdir" && sh "$guard_abs" "$@" )
 }
 
+# Git can exit successfully while warning on stderr (for example about line
+# endings). The guard must suppress that warning on successful captures, but it
+# must merge stderr into the diagnostic when a git command actually fails.
+real_git="$(command -v git)"
+noisy_bin="$tmpdir/noisy-git"
+mkdir -p "$noisy_bin"
+printf '%s\n' \
+    '#!/usr/bin/env sh' \
+    'if [ "${1:-}" = diff ] || [ "${1:-}" = ls-files ]; then printf "%s\\n" "warning: synthetic git warning" >&2; fi' \
+    'if [ "${CHECK_RECORDS_FAIL_DIFF:-0}" = 1 ] && [ "${1:-}" = diff ] && [ "${2:-}" = --name-only ] && [ "${3:-}" = HEAD ]; then' \
+    '    printf "%s\\n" "fatal: synthetic git failure" >&2' \
+    '    exit 42' \
+    'fi' \
+    "exec \"$real_git\" \"\$@\"" > "$noisy_bin/git"
+chmod +x "$noisy_bin/git"
+
 # --staged: stage a code file only -> fail, and must suggest both templates
 # (the recovery-hint contract the pre-commit hook's users actually hit,
 # mirroring the --check unit assertions above).
@@ -178,6 +194,24 @@ else
     report FAIL '--branch: records anywhere in the branch passes' "rc=$rc"
 fi
 
+noisy_out="$(cd "$tmpdir" && PATH="$noisy_bin:$PATH" sh "$guard_abs" --branch "$base_sha" 2>&1)"
+rc=$?
+if [ "$rc" -eq 0 ] && ! printf '%s' "$noisy_out" | grep -q 'synthetic git warning'; then
+    report ok '--branch: successful git warnings stay out of the path list'
+else
+    report FAIL '--branch: successful git warnings stay out of the path list' "rc=$rc; output=$noisy_out"
+fi
+
+failure_out="$(cd "$tmpdir" && CHECK_RECORDS_FAIL_DIFF=1 PATH="$noisy_bin:$PATH" sh "$guard_abs" --branch "$base_sha" 2>&1)"
+rc=$?
+if [ "$rc" -eq 1 ] && \
+   printf '%s' "$failure_out" | grep -q "git diff of the working tree failed" && \
+   printf '%s' "$failure_out" | grep -q 'synthetic git failure'; then
+    report ok '--branch: failed git commands retain their stderr diagnostic'
+else
+    report FAIL '--branch: failed git commands retain their stderr diagnostic' "rc=$rc; output=$failure_out"
+fi
+
 # --branch: ordinary working-tree changes count toward the local change set.
 # This mirrors scripts/ship.sh, which runs the branch guard before staging: a
 # tracked record edit plus an untracked substantive file must pass without
@@ -206,12 +240,12 @@ else
 fi
 
 # --branch: missing base ref -> exit 2
-guard_in_tmp --branch no-such-ref >/dev/null 2>&1
+missing_base_out="$(guard_in_tmp --branch no-such-ref 2>&1)"
 rc=$?
-if [ "$rc" -eq 2 ]; then
+if [ "$rc" -eq 2 ] && printf '%s' "$missing_base_out" | grep -q "base ref 'no-such-ref' not found"; then
     report ok '--branch: missing base ref exits 2'
 else
-    report FAIL '--branch: missing base ref exits 2' "rc=$rc"
+    report FAIL '--branch: missing base ref exits 2' "rc=$rc; output=$missing_base_out"
 fi
 
 # --branch: exempt-only branch passes

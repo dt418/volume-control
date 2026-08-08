@@ -15,6 +15,7 @@ pub mod hotkeys;
 pub mod hotkeys_rdev;
 #[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
 pub mod linux_app;
+pub mod linux_host_core;
 #[cfg(target_os = "macos")]
 pub mod macos_app;
 pub mod ui;

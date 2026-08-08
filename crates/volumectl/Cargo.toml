@@ -79,3 +79,9 @@ name = "gtk_smoke"
 path = "tests/gtk_smoke.rs"
 harness = false
 required-features = ["gtk-renderer"]
+# Linux host-loop smoke test: main-thread GTK/GLib action routing and teardown.
+[[test]]
+name = "linux_host_smoke"
+path = "tests/linux_host_smoke.rs"
+harness = false
+required-features = ["gtk-renderer"]
