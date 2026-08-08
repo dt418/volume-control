@@ -41,6 +41,8 @@ jobs:
         run: cargo build
       - name: Test (no GTK features)
         run: cargo test
+      - name: Smoke-test format-lint gates
+        run: bash scripts/test-format-lint.sh
 
   windows:
     name: Windows (build + tests + release artifact)
@@ -53,6 +55,9 @@ jobs:
         run: cargo build
       - name: Test
         run: cargo test
+      - name: Smoke-test format-lint gates
+        shell: bash
+        run: bash scripts/test-format-lint.sh
       - name: Build release and validate artifact
         shell: bash
         run: |
