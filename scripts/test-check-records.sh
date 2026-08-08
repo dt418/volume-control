@@ -63,6 +63,32 @@ else
     report FAIL 'unknown mode exits 2' "rc=$rc"
 fi
 
+# --- recovery templates: a failure must suggest, never create -----------------
+# The whole point of the guard's failure output is a one-step recovery path:
+# copy the template, fill it in, re-run. Assert the hint fires per missing
+# record and never fires on a pass, so a regression that hides the templates
+# (or auto-writes the records) fails loudly.
+both_out="$(printf 'crates/a.rs\n' | sh "$guard" --check 2>&1 || true)"
+if printf '%s' "$both_out" | grep -q 'feature_list.json - add a new entry' && \
+   printf '%s' "$both_out" | grep -q 'claude-progress.md - append a new session entry'; then
+    report ok 'failure: suggests both record templates when both are missing'
+else
+    report FAIL 'failure: suggests both record templates when both are missing'
+fi
+progress_out="$(printf 'crates/a.rs\nfeature_list.json\n' | sh "$guard" --check 2>&1 || true)"
+if printf '%s' "$progress_out" | grep -q 'claude-progress.md - append a new session entry' && \
+   ! printf '%s' "$progress_out" | grep -q 'feature_list.json - add a new entry'; then
+    report ok 'failure: hints only the missing record'
+else
+    report FAIL 'failure: hints only the missing record'
+fi
+pass_out="$(printf 'crates/a.rs\nfeature_list.json\nclaude-progress.md\n' | sh "$guard" --check 2>&1 || true)"
+if printf '%s' "$pass_out" | grep -q 'To fix:'; then
+    report FAIL 'pass: no recovery hint on a passing check'
+else
+    report ok 'pass: no recovery hint on a passing check'
+fi
+
 # --- integration: temporary git repo ------------------------------------------
 # The guard resolves nothing from cwd except git, but --staged/--branch read
 # the repo the guard is INVOKED FROM, so run it inside the temp repo.

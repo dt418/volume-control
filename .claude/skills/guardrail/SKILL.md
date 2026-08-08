@@ -35,9 +35,11 @@ Every task in this repository MUST:
 - CI runs `--branch`: a PR whose branch never updates the records fails.
 - `--check` reads a path list from stdin (used by the self-test).
 
-When the guard fails: add the missing record updates to the same change set
-(`feature_list.json` entry + `claude-progress.md` session entry), re-stage,
-and commit. Never bypass with `--no-verify` except when the user explicitly
+When the guard fails: it prints a copy-paste template for each missing
+record (`feature_list.json` entry shape + `claude-progress.md` session
+entry) — fill in the blanks, add both to the same change set, re-stage,
+and commit. The guard only suggests; it never creates or edits the records
+itself. Never bypass with `--no-verify` except when the user explicitly
 requests it.
 
 ## Exempt (no record update required)

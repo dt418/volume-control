@@ -857,6 +857,12 @@ fn get_window_pid_x11() -> Option<u32> {
   Comment-aware and line-anchored (echo progress lines contain the command
   strings, so the match requires the actual invocation, not merely the
   echo) — a hook edit that drops or comments out any step fails loudly.
+- Follow-up 4: guard failures now print copy-paste recovery templates for
+  each missing record (feature_list.json entry shape + claude-progress.md
+  session entry) — the recovery path is one fill-in step instead of three.
+  The guard only suggests; it never auto-creates. Self-test grew to 22
+  checks, including per-missing-record hint assertions and a no-hint-on-
+  pass assertion.
 
 ## Session 011 (2026-08-08) — format-lint gate toolchain
 

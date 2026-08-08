@@ -7,6 +7,11 @@
 # also contain BOTH records. Exempt paths (docs, READMEs, config, the
 # records themselves) never require record updates.
 #
+# On failure, prints copy-paste templates for the missing record(s) so the
+# recovery path is one step (fill in the blanks) instead of three (figure
+# out the schema, then write both files). It only SUGGESTS - it never
+# creates or edits the records itself.
+#
 # Modes:
 #   --staged             apply the rule to `git diff --cached --name-only`
 #                        (default; used by the pre-commit hook)
@@ -72,6 +77,46 @@ EOF
     fi
 }
 
+# Print a copy-paste template for each missing record. Quoted heredocs
+# (<<'EOF') so nothing is expanded - the user copies the literal shape and
+# fills in the blanks. Only ever prints; never writes the records.
+print_recovery_hint() {
+    if [ "$has_feature" -eq 0 ]; then
+        cat >&2 <<'EOF'
+      feature_list.json - add a new entry (insert at the top of "features"
+      and bump "last_updated"), e.g.:
+
+      {
+        "id": "vol-XXX",
+        "priority": 99,
+        "area": "tooling",
+        "title": "One-line title of the change",
+        "user_visible_behavior": "What users observe after this lands.",
+        "status": "in_progress",
+        "verification": [
+          "The exact command(s) that must pass."
+        ],
+        "evidence": [
+          "The observed output proving the verification."
+        ],
+        "notes": "Optional context."
+      }
+EOF
+    fi
+    if [ "$has_progress" -eq 0 ]; then
+        cat >&2 <<'EOF'
+      claude-progress.md - append a new session entry, e.g.:
+
+      ## Session NNN (YYYY-MM-DD) - Short title
+
+      - Goal: what this change accomplishes.
+      - What landed:
+        - One bullet per file or behavior change.
+      - Verification: the commands run and their observed results.
+EOF
+    fi
+}
+
 # Report pass/fail for a collected LIST with a mode-specific failure header.
 # No `local` (dash-compatible): state lives in globals set by decide().
 report() { # <fail_header_line1> [fail_header_line2]
@@ -86,6 +131,8 @@ report() { # <fail_header_line1> [fail_header_line2]
     echo "FAIL - $header1" >&2
     [ -n "$header2" ] && echo "      $header2" >&2
     echo "      trigger: $trigger; missing:$missing" >&2
+    echo "      To fix: copy and fill the template(s) below, then re-run." >&2
+    print_recovery_hint
     return 1
 }
 
