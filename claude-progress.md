@@ -975,4 +975,8 @@ fn get_window_pid_x11() -> Option<u32> {
   overridden); verified live (stripping the rejection makes the harness
   resolve the shim and fail). pre-push-review skill count 33->34. CI
   ubuntu checks job now passes the PS gate.
+- Follow-up 7: WSL-shim harness cross-platform fix: replaced backslash
+  paths ('git2inash.exe') with nested Join-Path calls so the harness
+  works on Linux pwsh (GitHub CI ubuntu runners) where backslashes are
+  literal characters, not path separators.
 

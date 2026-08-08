@@ -349,7 +349,9 @@ fi
 # can hide the simulation, and asserts three contracts: shim-only machine
 # must yield nothing (not the shim); git-adjacent bash must win over the shim
 # on PATH; a non-shim PATH bash is accepted as a last resort.
-if [ -n "$ps" ]; then
+# The WSL shim only exists on Windows; on Linux/macOS the test is
+# meaningless (no System32\bash.exe) so skip the harness entirely.
+if [ -n "$ps" ] && uname -s | grep -qE 'MINGW|MSYS|CYGWIN'; then
     cat > "$tmpdir/wsl-shim.ps1" <<'PSEOF'
 $ErrorActionPreference = 'Stop'
 $gate = '.agents/skills/format-lint/scripts/format-lint.ps1'
@@ -380,8 +382,11 @@ New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
 $shim = Join-Path $shimDir 'bash.exe'
 Set-Content -LiteralPath $shim -Value 'FAKE-WSL-SHIM'
 $fakeGit = Join-Path $base 'fake-git.exe'                   # no bash anywhere near it
-$adjacent = Join-Path $base 'git2\bin\bash.exe'
-$other = Join-Path $base 'other\bash.exe'
+# Nested Join-Path for cross-platform correctness: backslash paths are
+# literal on Linux pwsh, so use nested calls (not string concatenation)
+# to get the right OS separators.
+$adjacent = Join-Path (Join-Path (Join-Path $base 'git2') 'bin') 'bash.exe'
+$other = Join-Path (Join-Path $base 'other') 'bash.exe'
 
 $oldPF = $env:ProgramFiles; $oldPF86 = ${env:ProgramFiles(x86)}
 $oldSys = $env:SystemRoot; $oldPath = $env:Path
@@ -402,7 +407,7 @@ try {
     # 2. git-adjacent bash exists: must win over the shim on PATH.
     New-Item -ItemType Directory -Force -Path (Split-Path $adjacent) | Out-Null
     Set-Content -LiteralPath $adjacent -Value 'FAKE-GIT-BASH'
-    $git = Join-Path $base 'git2\cmd\git.exe'
+    $git = Join-Path (Join-Path (Join-Path $base 'git2') 'cmd') 'git.exe'
     $r2 = Get-Bash
     if ($r2 -ne $adjacent) { Write-Host "FAIL: expected git-adjacent '$adjacent' got '$r2'"; exit 1 }
 

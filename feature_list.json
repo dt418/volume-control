@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-08T20:10",
+  "last_updated": "2026-08-08T20:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
