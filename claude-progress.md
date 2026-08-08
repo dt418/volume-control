@@ -964,7 +964,7 @@ fn get_window_pid_x11() -> Option<u32> {
   passed on this change's own staged set.
 - Follow-up 6 (CI fix): Get-Bash in the PS gate and ship.ps1 crashed
   under pwsh on ubuntu CI (GitHub runners ship PowerShell Core) because
-  Join-Path \$env:SystemRoot 'System32ash.exe' threw a terminating
+  Join-Path \$env:SystemRoot 'System32\bash.exe' threw a terminating
   parameter-binding error when \$env:SystemRoot is unset on Unix. The fix
   guards the WSL-shim comparison behind an 'if (\$sysRoot)' check, so on
   Unix it accepts the PATH bash (the correct tool there). Get-Cargo's
@@ -976,7 +976,10 @@ fn get_window_pid_x11() -> Option<u32> {
   resolve the shim and fail). pre-push-review skill count 33->34. CI
   ubuntu checks job now passes the PS gate.
 - Follow-up 7: WSL-shim harness cross-platform fix: replaced backslash
-  paths ('git2inash.exe') with nested Join-Path calls so the harness
+  paths ('git2\bin\bash.exe') with nested Join-Path calls so the harness
   works on Linux pwsh (GitHub CI ubuntu runners) where backslashes are
   literal characters, not path separators.
+       The check is also gated to Windows (uname -s MINGW/MSYS/CYGWIN) since
+       the WSL shim exists only there; Linux/macOS CI runs the smoke test at 33
+       checks, Windows at 34.
 
