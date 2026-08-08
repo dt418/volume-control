@@ -557,7 +557,9 @@ mod tests {
         let rect = SurfaceRect::new(2168, 1624, 2840, 1800);
         let (left, bottom, width, height) = appkit_rect_values(rect, work_area, 2.0);
 
-        assert_eq!((left, bottom, width, height), (1084.0, 812.0, 336.0, 88.0));
+        // AppKit uses a lower-left origin: a rect whose physical bottom is
+        // the work-area bottom maps to y=0 points after one scale conversion.
+        assert_eq!((left, bottom, width, height), (1084.0, 0.0, 336.0, 88.0));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-08T19:47",
+  "last_updated": "2026-08-08T19:56",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -85,9 +85,10 @@
         "CI checks job runs `bash scripts/check-records.sh --branch`, `bash scripts/test-check-records.sh`, and the format-lint smoke test.",
         "Session 012 (claude-progress.md) records this landing; the guard's own commits update both records.",
         "Guard failures print copy-paste templates for the missing record(s) (feature_list.json entry shape + claude-progress.md session entry), turning the recovery path into one fill-in step; the guard only suggests, never auto-creates.",
-        "Pre-push adversarial review hardening: git stderr warnings (e.g. CRLF hints) are discarded from path lists so they cannot spuriously fail the guard (fail-closed on real git errors only); the --staged/--branch integration negatives now also assert the recovery templates fire (hint contract tested on the paths users actually hit, not just --check); synthetic git-wrapper tests verify both warning suppression and failure diagnostics; the PowerShell gate's Get-Bash prefers git-adjacent bash and never the WSL shim (System32\bash.exe).",
+        "Pre-push adversarial review hardening: git stderr warnings (e.g. CRLF hints) are discarded from path lists so they cannot spuriously fail the guard (fail-closed on real git errors only); the --staged/--branch integration negatives now also assert the recovery templates fire (hint contract tested on the paths users actually hit, not just --check); synthetic git-wrapper tests verify both warning suppression and failure diagnostics; the PowerShell gate's Get-Bash prefers git-adjacent bash and never the WSL System32 bash shim.",
         "The CI diff gate now applies `git diff --check` to the branch diff before checking forbidden paths, so the documented whitespace rule is enforced on pull requests and pushes rather than only in local working-tree checks.",
-        "WSL-shim regression check in the format-lint smoke test (Windows-gated to MINGW/MSYS/CYGWIN via uname -s, since the shim exists only on Windows): a PowerShell harness extracts the real Get-Bash from the gate and, on a simulated machine whose only PATH bash is System32\bash.exe (SystemRoot/ProgramFiles/Path overridden), asserts it resolves nothing instead of the shim, prefers git-adjacent bash over the shim, and accepts a non-shim PATH bash last; verified live (stripping the rejection makes the harness resolve the shim and fail)."
+        "WSL-shim regression check in the format-lint smoke test (Windows-gated to MINGW/MSYS/CYGWIN via uname -s, since the shim exists only on Windows): a PowerShell harness extracts the real Get-Bash from the gate and, on a simulated machine whose only PATH bash is the Windows System32 bash shim (SystemRoot/ProgramFiles/Path overridden), asserts it resolves nothing instead of the shim, prefers git-adjacent bash over the shim, and accepts a non-shim PATH bash last; verified live (stripping the rejection makes the harness resolve the shim and fail).",
+        "Session 018 (2026-08-08): PR #18 macOS CI caught a stale Retina geometry assertion: AppKit's lower-left coordinate system correctly maps the bottom-aligned physical rect to y=0 points, while the test expected a top-left-style 812 points. The regression assertion now matches the implementation and documents the coordinate convention."
       ],
       "notes": "Tooling feature; enforces the record-keeping rule that was previously documentation-only. Manifest bumped to v3 for the records internal step (user-requested reversal of the initial out-of-scope note)."
     },

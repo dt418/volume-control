@@ -1114,3 +1114,15 @@ fn get_window_pid_x11() -> Option<u32> {
 - Review outcome: no unresolved high/important findings remain. `vol-011`
   remains `in_progress`; Linux tray/global-hotkey and real Wayland evidence are
   still open.
+
+## Session 018 (2026-08-08) — Fix macOS CI Retina assertion
+
+- PR #18's macOS job found one deterministic test failure in
+  `retina_appkit_frame_converts_physical_pixels_to_points_once`: the
+  implementation correctly uses AppKit's lower-left origin, so a physical
+  rect ending at the work-area bottom converts to y=0 points. The test had
+  incorrectly asserted 812 points, which is a top-left-origin interpretation.
+  The expectation now asserts 0 and documents the convention.
+- The other macOS unit tests, plus the Linux/Windows local gates, were already
+  green in the failed CI run. A new push will rerun the full matrix before
+  merge.
