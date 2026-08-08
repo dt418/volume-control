@@ -178,6 +178,33 @@ else
     report FAIL '--branch: records anywhere in the branch passes' "rc=$rc"
 fi
 
+# --branch: ordinary working-tree changes count toward the local change set.
+# This mirrors scripts/ship.sh, which runs the branch guard before staging: a
+# tracked record edit plus an untracked substantive file must pass without
+# requiring the caller to mutate the index first.
+working_repo="$tmpdir/working-tree-check"
+git init -q "$working_repo"
+git -C "$working_repo" config user.email test@example.com
+git -C "$working_repo" config user.name test
+git -C "$working_repo" config core.autocrlf false
+mkdir -p "$working_repo/crates/volumectl/src"
+printf '{"last_updated":"base"}\n' > "$working_repo/feature_list.json"
+printf '# Progress\n' > "$working_repo/claude-progress.md"
+printf 'base\n' > "$working_repo/README.md"
+git -C "$working_repo" add feature_list.json claude-progress.md README.md
+git -C "$working_repo" commit -qm base
+working_base="$(git -C "$working_repo" rev-parse HEAD)"
+printf '{"last_updated":"working"}\n' > "$working_repo/feature_list.json"
+printf '# Progress\nWorking change\n' > "$working_repo/claude-progress.md"
+printf 'new macOS host\n' > "$working_repo/crates/volumectl/src/macos_app.rs"
+working_out="$(cd "$working_repo" && sh "$guard_abs" --branch "$working_base" 2>&1)"
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    report ok '--branch: working-tree records cover an untracked substantive file'
+else
+    report FAIL '--branch: working-tree records cover an untracked substantive file' "rc=$rc; output=$working_out"
+fi
+
 # --branch: missing base ref -> exit 2
 guard_in_tmp --branch no-such-ref >/dev/null 2>&1
 rc=$?

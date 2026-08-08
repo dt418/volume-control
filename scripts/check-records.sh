@@ -16,7 +16,8 @@
 #   --staged             apply the rule to `git diff --cached --name-only`
 #                        (default; used by the pre-commit hook)
 #   --branch [base]      apply the rule to the cumulative change set vs base
-#                        (merge-base base...HEAD + untracked; used by CI)
+#                        plus the working tree and untracked paths (used by CI
+#                        and the pre-staging ship check)
 #   --check              apply the rule to a path list from stdin (self-test)
 #
 # Exit: 0 = pass, 1 = fail (missing record updates), 2 = usage error.
@@ -180,6 +181,13 @@ check_branch() {
         git diff --name-only "$base...HEAD" 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
+    working_list="$(git diff --name-only HEAD 2>/dev/null)"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "FAIL - git diff of the working tree failed (exit $rc):" >&2
+        git diff --name-only HEAD 2>&1 | sed 's/^/      /' >&2
+        return 1
+    fi
     untracked_list="$(git ls-files --others --exclude-standard 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
@@ -189,6 +197,7 @@ check_branch() {
     fi
     collect_list <<EOF
 $branch_list
+$working_list
 $untracked_list
 EOF
     decide

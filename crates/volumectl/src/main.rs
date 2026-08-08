@@ -52,7 +52,17 @@ fn main() -> std::process::ExitCode {
     // global-hotkey host when launched without a CLI command. Explicit
     // `get`/`set`/`mute` invocations remain one-shot commands.
     if std::env::args().nth(1).is_none() {
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(target_os = "macos")]
+        {
+            return match volumectl_lib::macos_app::run() {
+                Ok(()) => std::process::ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("volumectl: macOS host unavailable ({e})");
+                    std::process::ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(not(target_os = "macos"))]
         {
             return match volumectl_lib::hotkeys_rdev::run_headless() {
                 Ok(()) => std::process::ExitCode::SUCCESS,

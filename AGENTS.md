@@ -21,6 +21,10 @@ The hook lives in `.githooks/pre-commit` and runs `cargo fmt --all --check`,
 `git diff --cached --check`, and clippy with `-D warnings`. Use
 `git commit --no-verify` only when the user explicitly requests it.
 
+The pre-commit hook is intentionally lightweight: it runs the records guard,
+format, cached whitespace, and clippy checks. The full workspace test suite is
+enforced by the full gate and CI, not by every local commit hook invocation.
+
 CI enforces the same checks in `.github/workflows/ci.yml`. Never weaken the
 `-D warnings` policy or hide project warnings to make a check pass. See
 `GUARDRAILS.md` for the hard rules.

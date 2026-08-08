@@ -980,6 +980,78 @@ fn get_window_pid_x11() -> Option<u32> {
   works on Linux pwsh (GitHub CI ubuntu runners) where backslashes are
   literal characters, not path separators.
        The check is also gated to Windows (uname -s MINGW/MSYS/CYGWIN) since
-       the WSL shim exists only there; Linux/macOS CI runs the smoke test at 33
-       checks, Windows at 34.
+       the WSL shim exists only there; Linux/macOS CI runs the smoke test at 35
+       checks, Windows at 36.
 
+## Session 015 (2026-08-08) — macOS native host loop
+
+- Goal: wire the existing macOS CoreAudio backend, rdev global hotkeys,
+  shared HostHandle/AppAction contracts, and AppKit renderer into a native
+  host loop while leaving init.sh unchanged, keeping the reset init.ps1 task
+  abandoned, and deferring macOS tray/menu integration.
+- What landed:
+  - `crates/volumectl/src/macos_app.rs` — macOS-only `HostCtx`, capability
+    detection, configured-step hotkey translation, action application,
+    configuration mtime reload, authoritative audio readback, listener
+    failure handling, deferred actions, and main-thread shutdown.
+  - `crates/volumectl/src/lib.rs` — `macos_app` is exposed only under
+    `#[cfg(target_os = "macos")]`.
+  - `crates/volumectl/src/main.rs` — macOS no-argument startup enters
+    `macos_app::run()`; explicit CLI arguments and the non-macOS headless
+    branch remain unchanged.
+  - `crates/volumectl/tests/macos_host_smoke.rs` and the Cargo test target —
+    harness-free AppKit smoke seam; it is intentionally a no-op off macOS.
+  - `docs/superpowers/specs/2026-08-08-macos-host-loop-design.md` and
+    `docs/superpowers/plans/2026-08-08-macos-host-loop.md` — approved scope and
+    implementation plan; the plan now records the implemented manual event
+    polling rather than an NSTimer callback.
+- Architecture: AppKit and `MacosRenderer` remain on the process main thread.
+  The host uses `NSDate::dateWithTimeIntervalSinceNow(0.150)` with
+  `nextEventMatchingMask_untilDate_inMode_dequeue`, sends AppKit events through
+  `NSApplication`, then drains hotkey/renderer action channels and publishes
+  confirmed audio state. Manual polling avoids a new `block2` runtime
+  dependency and avoids timer retain-cycle/MainThreadOnly ownership issues.
+- Scope decisions: `OpenTrayMenu` logs that macOS tray/menu is unavailable and
+  remains non-fatal; config-location, settings persistence, and blacklist
+  actions remain deferred. No Linux refactor, Windows behavior change, or
+  visual redesign is included.
+- Verification recorded before this session: `cargo fmt --all --check` passed;
+  `cargo build` passed; `cargo test -p volumectl` passed (225 tests, 0 failed);
+  `cargo check -p volumectl --target x86_64-apple-darwin --all-targets`
+  compiled with 0 errors and one upstream future-incompatibility warning for
+  transitive `block v0.1.6`; the local macOS host smoke target exited 0 as an
+  intentional Windows no-op and is not macOS runtime evidence.
+- Review found and fixed one gate-chain defect: both local format-lint gates
+  previously used `git diff HEAD --name-only --diff-filter=ACMR`, which omitted
+  deleted forbidden paths. A temporary repository reproduced the omission
+  (`filtered=<>`, while the unfiltered diff contained
+  `.claude/settings.local.json`). The bash gate and both PowerShell mirrors now
+  use `--diff-filter=ACMRD`; `scripts/test-format-lint.sh` covers deleted
+  forbidden paths on both gates and restores the tracked file on exit.
+  The live regression initially failed for the expected pre-existing reason
+  (a blank line at EOF in this progress record), then passed after removing
+  that extra blank line; all smoke checks passed afterward.
+- Review status: guard-core review found no confirmed defect; gate-chain review
+  confirmed and covered the deleted-forbidden-path omission above; wiring/records
+  review confirmed the branch working-tree detection gap, Retina AppKit point
+  conversion, malformed live-reload fallback, and weak host-action smoke seam.
+- Follow-up fixes: the branch records check now includes tracked working-tree
+  paths before staging (with a hermetic self-test); AppKit frame conversion
+  divides physical geometry by the backing scale exactly once; live reload uses
+  fallible `config::load_existing()` and preserves the current config on parse
+  failure; the smoke seam now distinguishes deferred `OpenTrayMenu` from
+  shutdown `Exit`; the spec documents manual `NSDate` deadline polling and the
+  intentionally deferred accessibility queries. Current Windows format-lint
+  smoke evidence is 36/36; Linux/macOS are expected to run 35/35 because the
+  Windows-only WSL-shim check is skipped.
+- Fresh verification after the review fixes: `cargo build --workspace`,
+  `cargo test --workspace --no-default-features` (225 passed), and clippy with
+  `-D warnings` all pass; both Bash and PowerShell full format-lint gates pass;
+  the current Windows smoke run passes 36/36 (Linux/macOS are 35/35 because
+  the WSL-shim check is Windows-gated); `bash scripts/check-records.sh
+  --branch origin/master` passes; `bash scripts/ship.sh --dry-run` passes
+  without changing the tree; and `git diff --check HEAD` is clean. The final
+  staged-records guard will run on the complete staged set immediately before
+  commit. Real AppKit host smoke remains a macos-15 CI requirement; Linux
+  host/tray/Wayland work and the remaining Windows human checks remain open.
+  `vol-011` stays `in_progress`.
