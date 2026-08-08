@@ -43,6 +43,10 @@ jobs:
         run: cargo test
       - name: Smoke-test format-lint gates
         run: bash scripts/test-format-lint.sh
+      - name: Record-keeping guard (branch change set)
+        run: bash scripts/check-records.sh --branch
+      - name: Smoke-test record-keeping guard
+        run: bash scripts/test-check-records.sh
 
   windows:
     name: Windows (build + tests + release artifact)
@@ -58,6 +62,9 @@ jobs:
       - name: Smoke-test format-lint gates
         shell: bash
         run: bash scripts/test-format-lint.sh
+      - name: Smoke-test record-keeping guard
+        shell: bash
+        run: bash scripts/test-check-records.sh
       - name: Build release and validate artifact
         shell: bash
         run: |

@@ -6,6 +6,13 @@
 
 set -e
 
+# Record-keeping guard: substantive changes must stage updates to
+# feature_list.json and claude-progress.md (see scripts/check-records.sh).
+echo "[pre-commit] check record updates (feature_list.json + claude-progress.md)"
+if ! sh scripts/check-records.sh --staged; then
+  exit 1
+fi
+
 # Resolve cargo when the hook runs outside a configured PATH (common on
 # Windows, where git invokes hooks with a minimal environment).
 if ! command -v cargo >/dev/null 2>&1; then

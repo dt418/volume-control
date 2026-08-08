@@ -1,10 +1,11 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-08T15:00",
+  "last_updated": "2026-08-08T16:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
-    "do_not_skip_verification": true
+    "do_not_skip_verification": true,
+    "records_required_with_every_change": true
   },
   "status_legend": {
     "not_started": "Work has not begun.",
@@ -13,6 +14,28 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-014",
+      "priority": 14,
+      "area": "tooling",
+      "title": "Record-keeping guardrail (mandatory workflow + enforced records)",
+      "user_visible_behavior": "Developer-facing: every substantive change must update feature_list.json and claude-progress.md or the pre-commit hook and CI reject it; the superpowers flow (brainstorm/spec/plan/execute/verify/finish) and evidence-before-claims are the codified mandatory workflow.",
+      "status": "passing",
+      "verification": [
+        "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0.",
+        "Run `bash scripts/check-records.sh --staged` on a code-only staged set - must exit 1 with a message naming both records.",
+        "Run `bash scripts/check-records.sh --branch <base>` on a code-only branch - must exit 1; with a records commit - exit 0.",
+        "Run `bash scripts/test-format-lint.sh` and `bash scripts/format-lint.sh --skip-tests` - no regression.",
+        "Run `cargo test` - green."
+      ],
+      "evidence": [
+        "Self-test covers --check unit cases (substantive-only fail, +both records pass, +one record fail, exempt pass, empty pass, unknown mode exit 2), --staged and --branch integration in a temp git repo, and the guardrail skill mirror byte-identity.",
+        "Pre-commit hook rejects code-only staged sets and accepts code+records (verified).",
+        "CI checks job runs `bash scripts/check-records.sh --branch` and `bash scripts/test-check-records.sh`.",
+        "Session 012 (claude-progress.md) records this landing; the guard's own commit updates both records."
+      ],
+      "notes": "Tooling feature; enforces the record-keeping rule that was previously documentation-only. Deliberately not part of the format-lint manifest (avoids PowerShell duplication)."
+    },
     {
       "id": "vol-009",
       "priority": 9,

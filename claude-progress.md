@@ -820,6 +820,26 @@ fn get_window_pid_x11() -> Option<u32> {
 
 ---
 
+## Session 012 (2026-08-08) — Record-keeping guardrail
+
+- Goal: enforce the user's directive that every task follows the superpowers
+  flow + hardness and that every change updates feature_list.json and
+  claude-progress.md; add a guard so the rule cannot be forgotten.
+- What landed:
+  - `scripts/check-records.sh` — POSIX-sh guard (modes `--staged`, `--branch`,
+    `--check`) applying one rule: a change set with any substantive path must
+    also contain both records; exempt: docs, READMEs, config, the records
+    themselves. Fail-closed on unclassified paths.
+  - Pre-commit hook runs `--staged` before the cargo steps; CI `checks` job
+    runs `--branch` + the self-test.
+  - `scripts/test-check-records.sh` — hermetic self-test (unit + temp-repo
+    integration + mirror check).
+  - `guardrail` skill (`.agents` + `.claude` mirror, byte-identical) and
+    CLAUDE.md/GUARDRAILS.md/AGENTS.md codify the mandatory workflow.
+- Verification: self-test all green; guard fails code-only sets and accepts
+  code+records; format-lint smoke 24/24 no regression; cargo test green;
+  the change set itself updates both records (this entry + vol-014).
+
 ## Session 011 (2026-08-08) — format-lint gate toolchain
 
 - Goal: land the deterministic quality gate for Rust changes, shared by local

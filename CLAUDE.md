@@ -46,6 +46,22 @@ you either verify it or document why it is blocked.
 - `windows-sys` is preferred over the `windows` crate (low-level FFI, stable
   signatures). Verify FFI signatures against the crate source before use.
 
+## Mandatory Workflow
+
+Every task follows the superpowers flow and hardness:
+
+1. Load the `guardrail` skill (and process skills: brainstorming before
+   planning, writing-plans before code).
+2. Brainstorm -> spec (`docs/superpowers/specs/`) -> plan
+   (`docs/superpowers/plans/`) -> execute -> verify -> finish.
+3. No completion claim without fresh verification evidence
+   (verification-before-completion: run the command, read output, check the
+   exit code, then claim).
+4. Every substantive change (code, scripts, CI, hooks, skills, this file)
+   updates BOTH `feature_list.json` and `claude-progress.md` in the same
+   commit. `scripts/check-records.sh` enforces this in the pre-commit hook
+   and CI. Never bypass with `--no-verify` unless the user explicitly asks.
+
 ## Required Files
 
 - `feature_list.json`
