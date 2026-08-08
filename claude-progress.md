@@ -818,3 +818,26 @@ fn get_window_pid_x11() -> Option<u32> {
 - Consider adding integration tests with mocked X11 environment
 - Monitor user feedback on Wayland compatibility
 
+---
+
+## Session 011 (2026-08-08) — format-lint gate toolchain
+
+- Goal: land the deterministic quality gate for Rust changes, shared by local
+  Windows/Linux/macOS runs and CI, without duplicated logic.
+- What landed:
+  - `scripts/format-lint-steps.json` (v2) — single source of truth: the 5 gate
+    steps (fmt, diff, forbidden paths, clippy, test) and the 6
+    forbidden-diff-path patterns.
+  - `scripts/format-lint.sh` and
+    `.agents/skills/format-lint/scripts/format-lint.ps1` — both gates read and
+    execute the manifest; flags only transform its default steps.
+  - `scripts/test-format-lint.sh` — 24-check smoke test asserting both gates'
+    exit codes, forbidden-path handling, flag transforms, manifest parsing,
+    per-pattern matching, and mirror byte-identity.
+  - `.claude/skills/format-lint/` mirror (byte-identical) + SKILL.md.
+  - `.gitignore` cleanup; `Cargo.lock` committed for reproducible app builds.
+  - CI: smoke test wired into the ubuntu `checks` and `windows` jobs.
+- Verification: smoke test 24/24; both full gates pass with tests; mirror
+  byte-identity verified; `.claude/settings.local.json` untouched.
+- Out of scope: pre-commit hook changes.
+
