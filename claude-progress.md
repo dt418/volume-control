@@ -839,6 +839,9 @@ fn get_window_pid_x11() -> Option<u32> {
 - Verification: self-test all green; guard fails code-only sets and accepts
   code+records; format-lint smoke 24/24 no regression; cargo test green;
   the change set itself updates both records (this entry + vol-014).
+- Follow-up: self-test extended to 19 checks — it now asserts the pre-commit
+  hook still invokes `check-records.sh --staged` (comment-aware, so a future
+  hook edit that drops or comments out the guard fails loudly).
 
 ## Session 011 (2026-08-08) — format-lint gate toolchain
 

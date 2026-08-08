@@ -170,6 +170,17 @@ else
     report FAIL '--branch: exempt-only branch passes' "rc=$rc"
 fi
 
+# --- guard wiring: the pre-commit hook must still invoke the guard -----------
+# A future hook edit that drops or comments out the records check would
+# silently disable local enforcement; assert the invocation is present and
+# not commented out.
+if awk '!/^[[:space:]]*#/ && /check-records\.sh --staged/' .githooks/pre-commit | grep -q .; then
+    report ok 'pre-commit hook: invokes check-records.sh --staged'
+else
+    report FAIL 'pre-commit hook: invokes check-records.sh --staged' \
+        '(guard dropped or commented out in .githooks/pre-commit?)'
+fi
+
 # --- mirror check: guardrail skill ---------------------------------------------
 if cmp -s .agents/skills/guardrail/SKILL.md .claude/skills/guardrail/SKILL.md; then
     report ok 'guardrail skill: .agents/.claude mirrors are byte-identical'
