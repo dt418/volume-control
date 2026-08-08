@@ -145,11 +145,15 @@ check_stdin() {
 
 # ---- Mode: --staged ----------------------------------------------------------
 check_staged() {
-    staged_list="$(git diff --cached --name-only 2>&1)"
+    # Success capture discards stderr: git may emit warnings (e.g. CRLF hints)
+    # while exiting 0, and any such text must not become an "unclassified
+    # path" in decide() (that would spuriously fail the check). The error
+    # branch re-runs with stderr merged so the real diagnostic still shows.
+    staged_list="$(git diff --cached --name-only 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff --cached failed (exit $rc):" >&2
-        printf '%s\n' "$staged_list" | sed 's/^/      /' >&2
+        git diff --cached --name-only 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
     collect_list <<EOF
@@ -167,18 +171,20 @@ check_branch() {
         echo "FAIL - base ref '$base' not found; pass one explicitly (e.g. origin/master)" >&2
         return 2
     fi
-    branch_list="$(git diff --name-only "$base...HEAD" 2>&1)"
+    # Same stderr discipline as check_staged: warnings must not pollute the
+    # path list; failures re-run with stderr merged for the diagnostic.
+    branch_list="$(git diff --name-only "$base...HEAD" 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff vs '$base' failed (exit $rc):" >&2
-        printf '%s\n' "$branch_list" | sed 's/^/      /' >&2
+        git diff --name-only "$base...HEAD" 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
-    untracked_list="$(git ls-files --others --exclude-standard 2>&1)"
+    untracked_list="$(git ls-files --others --exclude-standard 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git ls-files failed (exit $rc):" >&2
-        printf '%s\n' "$untracked_list" | sed 's/^/      /' >&2
+        git ls-files --others --exclude-standard 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
     collect_list <<EOF

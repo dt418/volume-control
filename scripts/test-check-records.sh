@@ -110,16 +110,20 @@ guard_in_tmp() { # <args...>  runs the guard from inside the temp repo
     ( cd "$tmpdir" && sh "$guard_abs" "$@" )
 }
 
-# --staged: stage a code file only -> fail
+# --staged: stage a code file only -> fail, and must suggest both templates
+# (the recovery-hint contract the pre-commit hook's users actually hit,
+# mirroring the --check unit assertions above).
 mkdir -p "$tmpdir/crates/volumectl/src"
 printf 'code\n' > "$tmpdir/crates/volumectl/src/app.rs"
 git -C "$tmpdir" add crates/volumectl/src/app.rs
-guard_in_tmp --staged >/dev/null 2>&1
+staged_fail_out="$(guard_in_tmp --staged 2>&1)"
 rc=$?
-if [ "$rc" -eq 1 ]; then
-    report ok '--staged: staged code without records fails'
+if [ "$rc" -eq 1 ] && \
+   printf '%s' "$staged_fail_out" | grep -q 'feature_list.json - add a new entry' && \
+   printf '%s' "$staged_fail_out" | grep -q 'claude-progress.md - append a new session entry'; then
+    report ok '--staged: staged code without records fails and suggests both templates'
 else
-    report FAIL '--staged: staged code without records fails' "rc=$rc"
+    report FAIL '--staged: staged code without records fails and suggests both templates' "rc=$rc"
 fi
 
 # --staged: add records too -> pass
@@ -151,12 +155,14 @@ git -C "$tmpdir" reset -q
 rm -f "$tmpdir/feature_list.json" "$tmpdir/claude-progress.md"
 git -C "$tmpdir" add crates/volumectl/src/app.rs
 git -C "$tmpdir" commit -qm 'code only'
-guard_in_tmp --branch "$base_sha" >/dev/null 2>&1
+branch_fail_out="$(guard_in_tmp --branch "$base_sha" 2>&1)"
 rc=$?
-if [ "$rc" -eq 1 ]; then
-    report ok '--branch: committed code without records fails vs base'
+if [ "$rc" -eq 1 ] && \
+   printf '%s' "$branch_fail_out" | grep -q 'feature_list.json - add a new entry' && \
+   printf '%s' "$branch_fail_out" | grep -q 'claude-progress.md - append a new session entry'; then
+    report ok '--branch: committed code without records fails and suggests both templates'
 else
-    report FAIL '--branch: committed code without records fails vs base' "rc=$rc"
+    report FAIL '--branch: committed code without records fails and suggests both templates' "rc=$rc"
 fi
 
 # --branch: add a records commit -> passes (records anywhere in the branch)

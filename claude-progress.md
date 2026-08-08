@@ -863,6 +863,19 @@ fn get_window_pid_x11() -> Option<u32> {
   The guard only suggests; it never auto-creates. Self-test grew to 22
   checks, including per-missing-record hint assertions and a no-hint-on-
   pass assertion.
+- Follow-up 5: pre-push adversarial review (three parallel reviewers)
+  drove hardening fixes: (a) the guard now discards git stderr from its path
+  lists on success (a CRLF-style warning could previously become an
+  "unclassified path" and spuriously fail the check; real git errors still
+  fail loudly with the diagnostic re-run); (b) the --staged/--branch
+  integration negatives now assert the recovery templates actually fire
+  (the hint contract is tested on the paths the pre-commit hook and CI
+  really use, not only --check); (c) the PowerShell gate's Get-Bash prefers
+  the git-adjacent bash and refuses the WSL shim (System32\bash.exe) so the
+  records bridge never runs under WSL's Linux git. Both negative paths
+  verified live (stripped-guard copy fails the suite; a warning-emitting
+  git wrapper no longer fails the guard); self-test still 22/22, format-lint
+  smoke 33/33, both gates pass.
 
 ## Session 011 (2026-08-08) — format-lint gate toolchain
 

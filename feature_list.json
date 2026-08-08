@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-08T18:30",
+  "last_updated": "2026-08-08T18:45",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -36,7 +36,8 @@
         "Pre-commit hook rejects code-only staged sets and accepts code+records (verified).",
         "CI checks job runs `bash scripts/check-records.sh --branch`, `bash scripts/test-check-records.sh`, and the format-lint smoke test.",
         "Session 012 (claude-progress.md) records this landing; the guard's own commits update both records.",
-        "Guard failures print copy-paste templates for the missing record(s) (feature_list.json entry shape + claude-progress.md session entry), turning the recovery path into one fill-in step; the guard only suggests, never auto-creates."
+        "Guard failures print copy-paste templates for the missing record(s) (feature_list.json entry shape + claude-progress.md session entry), turning the recovery path into one fill-in step; the guard only suggests, never auto-creates.",
+        "Pre-push adversarial review hardening: git stderr warnings (e.g. CRLF hints) are discarded from path lists so they cannot spuriously fail the guard (fail-closed on real git errors only); the --staged/--branch integration negatives now also assert the recovery templates fire (hint contract tested on the paths users actually hit, not just --check); the PowerShell gate's Get-Bash prefers git-adjacent bash and never the WSL shim (System32\bash.exe)."
       ],
       "notes": "Tooling feature; enforces the record-keeping rule that was previously documentation-only. Manifest bumped to v3 for the records internal step (user-requested reversal of the initial out-of-scope note)."
     },

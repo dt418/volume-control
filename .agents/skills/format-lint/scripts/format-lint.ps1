@@ -65,9 +65,26 @@ function Get-Git {
 # the rest of the gate; the records step then fails loudly instead of being
 # silently skipped.
 function Get-Bash {
-    $fromPath = Get-Command bash -ErrorAction SilentlyContinue
-    if ($fromPath) {
-        return $fromPath.Source
+    # Prefer the bash that belongs to the same Git for Windows install as
+    # $git. git.exe can live in Git\cmd, Git\bin, or Git\mingw64\bin, while
+    # bash.exe consistently lives at Git\bin\bash.exe (and Git\usr\bin\bash
+    # .exe), so walk up from git.exe's directory looking for a bin\bash.exe.
+    # Only then fall back to the standard install locations and a PATH bash
+    # -- but NEVER the Windows Subsystem for Linux shim (System32\bash.exe),
+    # which would run the records script under WSL's Linux git instead of the
+    # repo's Windows git and fail in confusing ways. A PATH bash from any
+    # other source (e.g. MSYS2/Cygwin) is accepted as a last resort.
+    $dir = Split-Path -Parent $git
+    $hops = 0
+    while ($dir -and $hops -lt 5) {
+        $candidate = Join-Path $dir 'bin\bash.exe'
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+        $parent = Split-Path -Parent $dir
+        if ($parent -eq $dir) { break }
+        $dir = $parent
+        $hops = $hops + 1
     }
     $locations = @()
     foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
@@ -76,6 +93,13 @@ function Get-Bash {
     foreach ($candidate in $locations) {
         if (Test-Path -LiteralPath $candidate) {
             return $candidate
+        }
+    }
+    $fromPath = Get-Command bash -ErrorAction SilentlyContinue
+    if ($fromPath) {
+        $wslShim = Join-Path $env:SystemRoot 'System32\bash.exe'
+        if ($fromPath.Source -ne $wslShim) {
+            return $fromPath.Source
         }
     }
     return $null
