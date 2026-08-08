@@ -18,6 +18,9 @@
 #      canonical gate scripts
 #   7. every manifest forbidden pattern matches a representative path, and
 #      benign/near-miss paths do not, on both parsers
+#   8. Get-Bash never resolves to the WSL shim: on a simulated machine whose
+#      only PATH bash is System32\bash.exe, the records step must resolve
+#      git-adjacent bash first or fail loudly, never invoke WSL
 #
 # The PowerShell gate is exercised only when `powershell`/`pwsh` is on PATH.
 # Tests stay fast by using --skip-tests and relying on cached clippy
@@ -333,6 +336,99 @@ if [ -n "$ps" ]; then
         report ok 'forbidden patterns: all match their samples in PowerShell'
     else
         report FAIL 'forbidden patterns: all match their samples in PowerShell'
+    fi
+fi
+
+# --- WSL shim: Get-Bash must never resolve to System32\bash.exe ---------------
+# Simulates a machine whose only PATH bash is the WSL shim (System32\bash.exe).
+# The records step of the gate delegates to scripts/check-records.sh via
+# Get-Bash; if Get-Bash ever picked the shim, the records script would run
+# under WSL's Linux git and fail confusingly. The harness extracts the REAL
+# Get-Bash from the canonical gate (so an edit that drops or renames it fails
+# the extraction), overrides SystemRoot/ProgramFiles/Path so no real install
+# can hide the simulation, and asserts three contracts: shim-only machine
+# must yield nothing (not the shim); git-adjacent bash must win over the shim
+# on PATH; a non-shim PATH bash is accepted as a last resort.
+if [ -n "$ps" ]; then
+    cat > "$tmpdir/wsl-shim.ps1" <<'PSEOF'
+$ErrorActionPreference = 'Stop'
+$gate = '.agents/skills/format-lint/scripts/format-lint.ps1'
+
+# Extract Get-Bash from the canonical gate (single source of truth).
+$src = Get-Content -Raw -LiteralPath $gate
+$start = $src.IndexOf('function Get-Bash {')
+if ($start -lt 0) { Write-Host 'FAIL: Get-Bash not found in format-lint.ps1'; exit 1 }
+$depth = 0
+$i = $start
+for (; $i -lt $src.Length; $i++) {
+    $c = $src[$i]
+    if ($c -eq '{') { $depth++ }
+    elseif ($c -eq '}') {
+        $depth--
+        if ($depth -eq 0) { break }
+    }
+}
+if ($depth -ne 0) { Write-Host 'FAIL: could not extract Get-Bash (unbalanced braces)'; exit 1 }
+$fn = $src.Substring($start, $i - $start + 1)
+$sb = [scriptblock]::Create($fn)
+. $sb
+
+$base = Join-Path $env:TEMP ('wsl-shim-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force -Path $base | Out-Null
+$shimDir = Join-Path $base 'System32'                       # fake C:\Windows\System32
+New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+$shim = Join-Path $shimDir 'bash.exe'
+Set-Content -LiteralPath $shim -Value 'FAKE-WSL-SHIM'
+$fakeGit = Join-Path $base 'fake-git.exe'                   # no bash anywhere near it
+$adjacent = Join-Path $base 'git2\bin\bash.exe'
+$other = Join-Path $base 'other\bash.exe'
+
+$oldPF = $env:ProgramFiles; $oldPF86 = ${env:ProgramFiles(x86)}
+$oldSys = $env:SystemRoot; $oldPath = $env:Path
+try {
+    # Only the simulation's System32 is discoverable: Program Files and any
+    # real Git layout are hidden, and SystemRoot points at the fake shim dir
+    # so the rejection comparison matches exactly.
+    $env:ProgramFiles = Join-Path $base 'no-pf'
+    ${env:ProgramFiles(x86)} = Join-Path $base 'no-pf86'
+    $env:SystemRoot = $base
+    $env:Path = $shimDir          # ONLY the WSL shim on PATH
+
+    # 1. shim-only machine: must resolve nothing, never the shim.
+    $git = $fakeGit
+    $r1 = Get-Bash
+    if ($null -ne $r1) { Write-Host "FAIL: shim-only machine resolved '$r1'"; exit 1 }
+
+    # 2. git-adjacent bash exists: must win over the shim on PATH.
+    New-Item -ItemType Directory -Force -Path (Split-Path $adjacent) | Out-Null
+    Set-Content -LiteralPath $adjacent -Value 'FAKE-GIT-BASH'
+    $git = Join-Path $base 'git2\cmd\git.exe'
+    $r2 = Get-Bash
+    if ($r2 -ne $adjacent) { Write-Host "FAIL: expected git-adjacent '$adjacent' got '$r2'"; exit 1 }
+
+    # 3. non-shim PATH bash accepted as last resort.
+    New-Item -ItemType Directory -Force -Path (Split-Path $other) | Out-Null
+    Set-Content -LiteralPath $other -Value 'FAKE-OTHER-BASH'
+    $env:Path = Split-Path $other       # the directory, not the file
+    $git = $fakeGit
+    $r3 = Get-Bash
+    if ($r3 -ne $other) { Write-Host "FAIL: expected PATH bash '$other' got '$r3'"; exit 1 }
+
+    Write-Host 'ALL-SHIM-CHECKS-PASSED'
+} finally {
+    $env:ProgramFiles = $oldPF; ${env:ProgramFiles(x86)} = $oldPF86
+    $env:SystemRoot = $oldSys; $env:Path = $oldPath
+    Remove-Item -Recurse -Force -LiteralPath $base -ErrorAction SilentlyContinue
+}
+exit 0
+PSEOF
+    "$ps" -NoProfile -ExecutionPolicy Bypass -File "$tmpdir/wsl-shim.ps1" >"$tmpdir/ps-shim" 2>&1
+    rc=$?
+    if [ "$rc" -eq 0 ] && grep -q 'ALL-SHIM-CHECKS-PASSED' "$tmpdir/ps-shim"; then
+        report ok 'PowerShell gate: Get-Bash never resolves to the WSL shim (System32\bash.exe)'
+    else
+        report FAIL 'PowerShell gate: Get-Bash never resolves to the WSL shim (System32\bash.exe)' "rc=$rc"
+        sed 's/^/      /' "$tmpdir/ps-shim" | tail -8
     fi
 fi
 

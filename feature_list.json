@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-08T19:45",
+  "last_updated": "2026-08-08T20:10",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -71,7 +71,7 @@
       "status": "passing",
       "verification": [
         "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0.",
-        "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (33 checks incl. records-step parity, staged-scratch negatives on both gates, and pre-commit hook wiring for fmt/whitespace/clippy).",
+        "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (34 checks incl. records-step parity, staged-scratch negatives on both gates, and pre-commit hook wiring for fmt/whitespace/clippy).",
         "Run `bash scripts/check-records.sh --staged` on a code-only staged set - must exit 1 with a message naming both records.",
         "Run `bash scripts/check-records.sh --branch <base>` on a code-only branch - must exit 1; with a records commit - exit 0.",
         "Run `bash scripts/format-lint.sh --skip-tests` and the PowerShell gate - both run the record-updates step and pass.",
@@ -79,13 +79,14 @@
       ],
       "evidence": [
         "Self-test covers --check unit cases (substantive-only fail, +both records pass, +one record fail, exempt pass, empty pass, unknown mode exit 2), --staged and --branch integration in a temp git repo, the pre-commit-hook guard invocation, and the guardrail skill mirror byte-identity.",
-        "format-lint smoke test (33 checks): both gates run the manifest v3 record-updates step, a staged code-only scratch fails it on both bash and PowerShell, manifest is v3 with 6 steps, the pre-commit hook still runs its fmt/whitespace/clippy steps (comment-aware, line-anchored), mirrors byte-identical.",
+        "format-lint smoke test (34 checks): both gates run the manifest v3 record-updates step, a staged code-only scratch fails it on both bash and PowerShell, manifest is v3 with 6 steps, the pre-commit hook still runs its fmt/whitespace/clippy steps (comment-aware, line-anchored), mirrors byte-identical.",
         "PowerShell gate bridges to scripts/check-records.sh via Git Bash (resolved next to git) - no rule duplication; both gates reject a non-v3 manifest.",
         "Pre-commit hook rejects code-only staged sets and accepts code+records (verified).",
         "CI checks job runs `bash scripts/check-records.sh --branch`, `bash scripts/test-check-records.sh`, and the format-lint smoke test.",
         "Session 012 (claude-progress.md) records this landing; the guard's own commits update both records.",
         "Guard failures print copy-paste templates for the missing record(s) (feature_list.json entry shape + claude-progress.md session entry), turning the recovery path into one fill-in step; the guard only suggests, never auto-creates.",
-        "Pre-push adversarial review hardening: git stderr warnings (e.g. CRLF hints) are discarded from path lists so they cannot spuriously fail the guard (fail-closed on real git errors only); the --staged/--branch integration negatives now also assert the recovery templates fire (hint contract tested on the paths users actually hit, not just --check); the PowerShell gate's Get-Bash prefers git-adjacent bash and never the WSL shim (System32\bash.exe)."
+        "Pre-push adversarial review hardening: git stderr warnings (e.g. CRLF hints) are discarded from path lists so they cannot spuriously fail the guard (fail-closed on real git errors only); the --staged/--branch integration negatives now also assert the recovery templates fire (hint contract tested on the paths users actually hit, not just --check); the PowerShell gate's Get-Bash prefers git-adjacent bash and never the WSL shim (System32\bash.exe).",
+        "WSL-shim regression check in the format-lint smoke test: a PowerShell harness extracts the real Get-Bash from the gate and, on a simulated machine whose only PATH bash is System32\bash.exe (SystemRoot/ProgramFiles/Path overridden), asserts it resolves nothing instead of the shim, prefers git-adjacent bash over the shim, and accepts a non-shim PATH bash last; verified live (stripping the rejection makes the harness resolve the shim and fail)."
       ],
       "notes": "Tooling feature; enforces the record-keeping rule that was previously documentation-only. Manifest bumped to v3 for the records internal step (user-requested reversal of the initial out-of-scope note)."
     },

@@ -29,11 +29,16 @@ function Get-Cargo {
     if ($fromPath) {
         return $fromPath.Source
     }
-    $fallback = Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe'
-    if (Test-Path -LiteralPath $fallback) {
-        return $fallback
+    # $env:USERPROFILE is Windows-only; on Unix the fallback does not apply
+    # (and Join-Path with a null parent would be a terminating error).
+    if ($env:USERPROFILE) {
+        $fallback = Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe'
+        if (Test-Path -LiteralPath $fallback) {
+            return $fallback
+        }
+        throw "cargo not found on PATH and not at $fallback"
     }
-    throw "cargo not found on PATH and not at $fallback"
+    throw "cargo not found on PATH"
 }
 
 # -- Git resolution ---------------------------------------------------------
@@ -97,10 +102,18 @@ function Get-Bash {
     }
     $fromPath = Get-Command bash -ErrorAction SilentlyContinue
     if ($fromPath) {
-        $wslShim = Join-Path $env:SystemRoot 'System32\bash.exe'
-        if ($fromPath.Source -ne $wslShim) {
-            return $fromPath.Source
+        # The WSL shim (System32\bash.exe) exists only on Windows; on Unix
+        # $env:SystemRoot is unset, so Join-Path with it would be a
+        # terminating error - skip the comparison and accept the PATH bash
+        # (e.g. /usr/bin/bash), which is the correct tool there.
+        $sysRoot = $env:SystemRoot
+        if ($sysRoot) {
+            $wslShim = Join-Path $sysRoot 'System32\bash.exe'
+            if ($fromPath.Source -eq $wslShim) {
+                return $null
+            }
         }
+        return $fromPath.Source
     }
     return $null
 }

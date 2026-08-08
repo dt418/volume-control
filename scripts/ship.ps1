@@ -64,8 +64,15 @@ function Get-Bash {
     }
     $fromPath = Get-Command bash -ErrorAction SilentlyContinue
     if ($fromPath) {
-        $wslShim = Join-Path $env:SystemRoot 'System32\bash.exe'
-        if ($fromPath.Source -ne $wslShim) { return $fromPath.Source }
+        # The WSL shim exists only on Windows; on Unix $env:SystemRoot is
+        # unset (Join-Path with a null parent would be a terminating error),
+        # so accept the PATH bash there.
+        $sysRoot = $env:SystemRoot
+        if ($sysRoot) {
+            $wslShim = Join-Path $sysRoot 'System32\bash.exe'
+            if ($fromPath.Source -eq $wslShim) { return $null }
+        }
+        return $fromPath.Source
     }
     return $null
 }

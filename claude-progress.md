@@ -962,4 +962,17 @@ fn get_window_pid_x11() -> Option<u32> {
 - Verification: test-check-records.sh 24/24; test-format-lint.sh 33/33;
   test-ship.sh 21/21; both gates pass; cargo test 225/225; records guard
   passed on this change's own staged set.
+- Follow-up 6 (CI fix): Get-Bash in the PS gate and ship.ps1 crashed
+  under pwsh on ubuntu CI (GitHub runners ship PowerShell Core) because
+  Join-Path \$env:SystemRoot 'System32ash.exe' threw a terminating
+  parameter-binding error when \$env:SystemRoot is unset on Unix. The fix
+  guards the WSL-shim comparison behind an 'if (\$sysRoot)' check, so on
+  Unix it accepts the PATH bash (the correct tool there). Get-Cargo's
+  \$env:USERPROFILE fallback is guarded the same way (same class of bug).
+  test-format-lint.sh gained a 34th check: a PowerShell harness that
+  extracts the real Get-Bash from the gate and asserts it never resolves
+  to the WSL shim on a simulated shim-only machine (SystemRoot/ProgramFiles
+  overridden); verified live (stripping the rejection makes the harness
+  resolve the shim and fail). pre-push-review skill count 33->34. CI
+  ubuntu checks job now passes the PS gate.
 
