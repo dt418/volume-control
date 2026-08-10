@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T17:30",
+  "last_updated": "2026-08-10T18:00",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,24 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-019",
+      "priority": 19,
+      "area": "ui",
+      "title": "Shared Canvas trait, OverlayContentRenderer, and MixerLayout",
+      "user_visible_behavior": "Platform-neutral drawing canvas trait and overlay/mixer layout. OverlayContentRenderer draws Signal Rail, volume text, and markers using the Canvas trait — same logic on macOS and Linux. MixerLayout provides component rects for the mixer surface. Unit-tested with MockCanvas.",
+      "status": "in_progress",
+      "verification": [
+        "Run `cargo test --workspace --no-default-features -- ui::canvas` — 10 tests pass.",
+        "Run `cargo test --workspace --no-default-features` — 235 tests pass, 0 failures.",
+        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
+        "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — no warnings."
+      ],
+      "evidence": [
+        "Session 024 (2026-08-10): created canvas.rs with Canvas trait, OverlayContentRenderer, MixerLayout, RectF, PointF, TextAlign. 10 unit tests pass. Full suite 235/235 pass. Clippy clean."
+      ],
+      "notes": "Phase 1 foundation for macOS/Linux overlay and mixer rendering. Canvas trait abstracts 2D drawing primitives; platform backends (CoreGraphics, Cairo) will implement it."
+    },
     {
       "id": "vol-017",
       "priority": 17,

@@ -4,6 +4,7 @@
 //! only on Windows; the native renderer contract in [`renderer`] is shared
 //! by every platform adapter.
 
+mod canvas;
 mod capabilities;
 mod model;
 mod renderer;
@@ -14,6 +15,7 @@ mod theme;
 
 pub mod platform;
 
+pub use canvas::{Canvas, MixerLayout, OverlayContentRenderer, PointF, RectF, TextAlign};
 pub use capabilities::{resolve_material, resolve_motion, ResolvedMaterial, UiCapabilities};
 pub use model::{
     AccentMode, AppAction, AppState, MaterialMode, MotionMode, SurfaceId, SurfaceVisibility,

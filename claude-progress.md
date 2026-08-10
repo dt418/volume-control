@@ -1,5 +1,18 @@
 # Progress Log
 
+## Session 024 (2026-08-10) — Canvas trait + OverlayContentRenderer + MixerLayout
+
+- Goal: create platform-neutral Canvas trait and overlay/mixer layout for macOS/Linux rendering (Task 1, Phase 1).
+- What landed:
+  - `crates/volumectl/src/ui/canvas.rs`: new module with `Canvas` trait (7 drawing primitives), `RectF`/`PointF`/`TextAlign` types, `OverlayContentRenderer::render()` (draws background, title, percent/muted label, device name, Signal Rail track+threshold+marker), and `MixerLayout` (7 static methods returning component rects).
+  - `crates/volumectl/src/ui/mod.rs`: added `mod canvas;` and re-exports for `Canvas`, `MixerLayout`, `OverlayContentRenderer`, `PointF`, `RectF`, `TextAlign`.
+  - 10 unit tests using MockCanvas: background fill, text positioning, muted label, thumb vs diamond marker, track background, MixerLayout dimensions.
+- Verification:
+  - `cargo test --workspace --no-default-features -- ui::canvas` — 10/10 pass.
+  - `cargo test --workspace --no-default-features` — 235/235 pass, 0 failures.
+  - `cargo fmt --all --check` — clean.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.
+
 ## Session 023 (2026-08-10) — session handoff refresh
 
 - Goal: update session-handoff.md to reflect current state (Sessions 021-022
