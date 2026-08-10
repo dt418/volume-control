@@ -23,4 +23,7 @@
 //! planning is feature-independent and unit-tested; the GTK smoke tests run
 //! under a display session (CI uses `xvfb-run`) and skip cleanly headless.
 
+#[cfg(feature = "gtk-renderer")]
+mod canvas;
+
 pub mod renderer;

@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T19:00",
+  "last_updated": "2026-08-10T20:00",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,25 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-021",
+      "priority": 21,
+      "area": "ui",
+      "title": "Linux Cairo Canvas implementation",
+      "user_visible_behavior": "Cairo-backed Canvas implementation for Linux using gtk4::cairo::Context. Fills/strokes rects, circles, and diamonds. Text drawing via Cairo toy text API (select_font_face, show_text).",
+      "status": "in_progress",
+      "verification": [
+        "Run `cargo check --target x86_64-unknown-linux-gnu -p volumectl --no-default-features --features gtk-renderer` — compiles clean.",
+        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
+        "Run `cargo test --workspace --no-default-features --features gtk-renderer` — all tests pass."
+      ],
+      "evidence": [
+        "cargo check: Finished dev profile [unoptimized + debuginfo] target(s)",
+        "cargo fmt --all --check: no output (clean)",
+        "cargo test: 16 passed, 0 failed"
+      ],
+      "notes": "Uses gtk4::cairo re-export (no separate cairo-rs dep). draw_text uses Cairo toy text API for initial implementation."
+    },
     {
       "id": "vol-020",
       "priority": 20,

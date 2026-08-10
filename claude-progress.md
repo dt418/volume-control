@@ -1,5 +1,17 @@
 # Progress Log
 
+## Session 026 (2026-08-10) — Linux Cairo Canvas (Task 3)
+
+- Goal: implement the shared Canvas trait using Cairo for Linux (Task 3, Phase 1).
+- What landed:
+  - `crates/volumectl/src/ui/platform/linux/canvas.rs`: new module with `CairoCanvas` struct implementing `Canvas` trait. Uses `gtk4::cairo::Context` for all drawing primitives (fill/stroke rect, circle, diamond). Text drawing via Cairo toy text API (`select_font_face`, `set_font_size`, `show_text`) with alignment support. 1 unit test.
+  - `crates/volumectl/src/ui/platform/linux/mod.rs`: added `#[cfg(feature = "gtk-renderer")] mod canvas;`.
+- Verification:
+  - `cargo check --target x86_64-unknown-linux-gnu -p volumectl --no-default-features --features gtk-renderer` — compiles clean (cross-compile from Windows).
+  - `cargo fmt --all --check` — clean.
+  - `cargo clippy --workspace --all-targets --no-default-features --features gtk-renderer -- -D warnings` — clean.
+  - `cargo test --workspace --no-default-features --features gtk-renderer` — 16/16 pass.
+
 ## Session 025 (2026-08-10) — macOS CoreGraphics Canvas (Task 2)
 
 - Goal: implement the shared Canvas trait using Core Graphics extern functions for macOS (Task 2, Phase 1).
