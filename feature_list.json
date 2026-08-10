@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T18:00",
+  "last_updated": "2026-08-10T19:00",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,25 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-020",
+      "priority": 20,
+      "area": "ui",
+      "title": "macOS CoreGraphics Canvas implementation",
+      "user_visible_behavior": "CoreGraphics-backed Canvas implementation for macOS. Fills/strokes rects, circles, and diamonds using Core Graphics extern functions. Converts logical pixels to physical via display scale factor. Text drawing stub included for follow-up task.",
+      "status": "in_progress",
+      "verification": [
+        "Run `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` — compiles clean.",
+        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
+        "Run `cargo test --workspace --no-default-features -- ui::platform::macos::canvas` — 2 tests pass."
+      ],
+      "evidence": [
+        "cargo check --target x86_64-apple-darwin -p volumectl --no-default-features: Finished dev profile [unoptimized + debuginfo] target(s)",
+        "cargo fmt --all --check: no output (clean)",
+        "2 unit tests: cg_rect_converts_logical_to_physical, cg_point_converts_logical_to_physical"
+      ],
+      "notes": "draw_text is a stub; text rendering will be implemented in a follow-up task using NSString drawInRect:attributes:."
+    },
     {
       "id": "vol-019",
       "priority": 19,

@@ -1,5 +1,16 @@
 # Progress Log
 
+## Session 025 (2026-08-10) — macOS CoreGraphics Canvas (Task 2)
+
+- Goal: implement the shared Canvas trait using Core Graphics extern functions for macOS (Task 2, Phase 1).
+- What landed:
+  - `crates/volumectl/src/ui/platform/macos/canvas.rs`: new module with `CoreGraphicsCanvas` struct implementing `Canvas` trait. Uses Core Graphics extern functions (`CGContextSetRGBFillColor`, `CGContextFillRect`, etc.) for all drawing primitives. Converts logical pixels to physical via display scale factor from `NSScreen::mainScreen().backingScaleFactor()`. `draw_text` is a stub for follow-up task. 2 unit tests for coordinate conversion.
+  - `crates/volumectl/src/ui/platform/macos/mod.rs`: added `pub mod canvas;`.
+- Verification:
+  - `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` — compiles clean.
+  - `cargo fmt --all --check` — clean.
+  - `cargo test --workspace --no-default-features -- ui::platform::macos::canvas` — 2/2 pass.
+
 ## Session 024 (2026-08-10) — Canvas trait + OverlayContentRenderer + MixerLayout
 
 - Goal: create platform-neutral Canvas trait and overlay/mixer layout for macOS/Linux rendering (Task 1, Phase 1).

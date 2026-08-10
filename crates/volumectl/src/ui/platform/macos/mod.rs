@@ -23,4 +23,5 @@
 //! AppKit surface code lives in [`renderer`]'s `appkit` submodule and is
 //! compiled on macOS.
 
+pub mod canvas;
 pub mod renderer;
