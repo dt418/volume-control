@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 032 (2026-08-10) — macOS renderer review fixes (Task 6 findings)
+
+- Goal: fix review findings on the macOS renderer — signal wiring (controls were inert), content-view detach bug, overlay glass eviction, dead import, value label alignment, VoiceOver labels.
+- What landed:
+  - `crates/volumectl/src/ui/platform/macos/renderer.rs`: added `MixerTarget`, an `NSObject` subclass defined via `objc2::define_class!` holding a cloned `HostHandle` ivar, and wired the mixer controls via AppKit target/action (`volumeChanged:` / `toggleMute:` / `resetVolume:` / `closeMixer:`) → `SetVolumePercent` / `ToggleMute` / `ResetVolume` / `HideSurface(SurfaceId::Mixer)`. The panel retains the target (`mixer_target` field); AppKit targets are weak, so no retain cycle back to the panel.
+  - Same file: `set_mixer_controls` now re-attaches existing controls when `apply_plan` replaced the content view (controls previously stayed invisible forever on non-glass material); removed the unused `NSGraphicsContext` import; value label right-aligned per `MixerLayout::value_rect`; VoiceOver labels on all five controls; added `impl Default for Panel` (pre-existing clippy `new_without_default` failure alongside the unused import).
+  - Same file: `set_overlay_content` keeps the glass `NSVisualEffectView` as content view and adds the overlay view as its subview when an effect view is installed (previously the overlay evicted the glass).
+  - `feature_list.json`: vol-023 notes/evidence updated, `last_updated` bumped.
+- Verification:
+  - `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` — compiles clean.
+  - `cargo clippy --target x86_64-apple-darwin -p volumectl --no-default-features -- -D warnings` — clean.
+  - `cargo fmt --all --check` — clean.
+  - `cargo test --workspace --no-default-features` — 251 passed (235 + 16 host-core).
+  - `git diff --check` — clean.
+
 ## Session 031 (2026-08-10) — Overlay + Mixer smoke tests (Task 8)
 
 - Goal: add overlay content + mixer control assertions to the harness-free smoke binaries (Task 8, Phase 1).

@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T23:30",
+  "last_updated": "2026-08-10T23:45",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -57,17 +57,19 @@
       "priority": 23,
       "area": "ui",
       "title": "macOS Mixer Controls with native widgets",
-      "user_visible_behavior": "MacosRenderer creates NSSlider, NSButton × 3, and NSTextField for the mixer surface, positioned via MixerLayout rects with AppKit coordinate conversion.",
+      "user_visible_behavior": "MacosRenderer creates NSSlider, NSButton × 3, and NSTextField for the mixer surface, positioned via MixerLayout rects with AppKit coordinate conversion. Controls are wired to the host via a define_class!-based NSObject target (slider → SetVolumePercent, mute → ToggleMute, reset → ResetVolume, close → HideSurface(Mixer)), re-attach after plan content-view replacement, carry VoiceOver labels, and the value label is right-aligned.",
       "status": "passing",
       "verification": [
         "Run `cargo fmt --all --check` — clean.",
         "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.",
-        "Run `cargo test --workspace --no-default-features` — all 235 tests pass."
+        "Run `cargo test --workspace --no-default-features` — all 235 tests pass.",
+        "Run `cargo clippy --target x86_64-apple-darwin -p volumectl --no-default-features -- -D warnings` — clean (review-fix gate)."
       ],
       "evidence": [
-        "fmt clean, clippy clean, 235 tests passed."
+        "fmt clean, clippy clean, 235 tests passed.",
+        "Session 032 (2026-08-10): review fixes — signal target/action wiring, detach-aware control re-attach, accessibility labels, right-aligned value label, macOS-target clippy clean."
       ],
-      "notes": "Controls created in set_mixer_controls, values updated in update_mixer_value, wired in publish()."
+      "notes": "Controls created in set_mixer_controls, values updated in update_mixer_value, wired in publish(). Session 032: MixerTarget NSObject subclass (objc2 define_class!, HostHandle ivar, panel-retained, weak AppKit target references); reattach_mixer_controls re-adds detached controls; set_overlay_content keeps glass effect view as content view."
     },
     {
       "id": "vol-022",

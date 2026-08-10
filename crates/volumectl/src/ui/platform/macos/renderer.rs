@@ -305,12 +305,12 @@ impl NativeRenderer for MacosRenderer {
 mod appkit {
     use super::*;
     use objc2::rc::Retained;
-    use objc2::runtime::AnyClass;
-    use objc2::{MainThreadMarker, MainThreadOnly};
+    use objc2::runtime::{AnyClass, AnyObject, NSObject};
+    use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
         NSAccessibility, NSAnimatablePropertyContainer, NSApplication, NSAutoresizingMaskOptions,
-        NSBackingStoreType, NSButton, NSColor, NSFloatingWindowLevel, NSGraphicsContext, NSPanel,
-        NSSlider, NSTextField, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
+        NSBackingStoreType, NSButton, NSColor, NSFloatingWindowLevel, NSPanel, NSSlider,
+        NSTextAlignment, NSTextField, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
         NSVisualEffectState, NSVisualEffectView, NSWindowStyleMask,
     };
     use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
@@ -332,6 +332,9 @@ mod appkit {
         mixer_close_btn: Option<Retained<NSButton>>,
         /// Mixer volume value label.
         mixer_value_label: Option<Retained<NSTextField>>,
+        /// Target/action receiver for the mixer controls, retained by the
+        /// panel (AppKit targets are weak).
+        mixer_target: Option<Retained<MixerTarget>>,
     }
 
     /// Ensure the shared application instance exists before creating panels.
@@ -347,6 +350,80 @@ mod appkit {
     fn to_ns_rect(rect: SurfaceRect, work_area: WorkArea, dpi_scale: f32) -> NSRect {
         let (left, bottom, width, height) = appkit_rect_values(rect, work_area, dpi_scale);
         NSRect::new(NSPoint::new(left, bottom), NSSize::new(width, height))
+    }
+
+    /// Ivar payload of the mixer action target: a clone of the host handle so
+    /// control actions can enqueue [`AppAction`] values.
+    struct MixerTargetIvars {
+        host: HostHandle,
+    }
+
+    // `NSObject` subclass that receives the mixer controls' target/action
+    // messages and turns them into `AppAction` values.
+    //
+    // One instance per mixer panel, created in `Panel::set_mixer_controls`.
+    // AppKit controls hold their targets weakly (`setTarget` does not
+    // retain), so the panel must keep the target alive itself; the panel is
+    // the only owner, and the target only references the `HostHandle`
+    // (cheap to clone, `Arc`-backed) — no retain cycle back to the panel.
+    define_class!(
+        // SAFETY:
+        // - `NSObject` has no subclassing requirements.
+        // - `MixerTarget` does not implement `Drop`.
+        #[unsafe(super(NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[ivars = MixerTargetIvars]
+        struct MixerTarget;
+
+        impl MixerTarget {
+            /// Slider action: report the current slider value as a
+            /// `SetVolumePercent` action.
+            #[unsafe(method(volumeChanged:))]
+            fn volume_changed(&self, sender: &AnyObject) {
+                if let Some(slider) = sender.downcast_ref::<NSSlider>() {
+                    self.ivars().host.enqueue(AppAction::SetVolumePercent {
+                        percent: slider.doubleValue().round() as u16,
+                    });
+                }
+            }
+
+            /// Mute button action.
+            #[unsafe(method(toggleMute:))]
+            fn toggle_mute(&self, _sender: &AnyObject) {
+                self.ivars().host.enqueue(AppAction::ToggleMute);
+            }
+
+            /// Reset button action.
+            #[unsafe(method(resetVolume:))]
+            fn reset_volume(&self, _sender: &AnyObject) {
+                self.ivars().host.enqueue(AppAction::ResetVolume);
+            }
+
+            /// Close button action.
+            #[unsafe(method(closeMixer:))]
+            fn close_mixer(&self, _sender: &AnyObject) {
+                self.ivars()
+                    .host
+                    .enqueue(AppAction::HideSurface(SurfaceId::Mixer));
+            }
+        }
+    );
+
+    impl MixerTarget {
+        /// Create a new action target bound to the host.
+        fn new(host: HostHandle) -> Retained<Self> {
+            let this = Self::alloc(MainThreadMarker::new().expect("main thread"))
+                .set_ivars(MixerTargetIvars { host });
+            // SAFETY: `init` completes the allocation started by `alloc`;
+            // the class is registered with the runtime by `define_class!`.
+            unsafe { msg_send![super(this), init] }
+        }
+    }
+
+    impl Default for Panel {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl Panel {
@@ -373,6 +450,7 @@ mod appkit {
                 mixer_reset_btn: None,
                 mixer_close_btn: None,
                 mixer_value_label: None,
+                mixer_target: None,
             }
         }
 
@@ -477,8 +555,11 @@ mod appkit {
         /// Set the panel's content view for overlay rendering.
         ///
         /// Creates an `NSView` sized to the panel's frame and installs it as
-        /// the window content view. Subsequent `render_overlay` calls draw
-        /// into this view via the current `NSGraphicsContext`.
+        /// the window content view. When a glass effect view is installed
+        /// (and is the content view), the overlay view is added as a subview
+        /// of the effect view instead, so the material treatment survives.
+        /// Subsequent `render_overlay` calls draw into this view via the
+        /// current `NSGraphicsContext`.
         pub fn set_overlay_content(&mut self) {
             if self.overlay_view.is_none() {
                 let mtm = MainThreadMarker::new().expect("overlay view on main thread");
@@ -491,7 +572,13 @@ mod appkit {
                 self.overlay_view = Some(view);
             }
             if let Some(view) = &self.overlay_view {
-                self.window.setContentView(Some(&**view));
+                if let Some(effect) = &self.effect {
+                    // Keep the effect view as the content view; the overlay
+                    // draws on top of the glass.
+                    effect.addSubview(view);
+                } else {
+                    self.window.setContentView(Some(&**view));
+                }
             }
         }
 
@@ -530,15 +617,18 @@ mod appkit {
             }
         }
 
-        /// Create mixer controls (slider, buttons, value label) and add them
-        /// to the panel's content view. Idempotent — skips creation if
-        /// widgets already exist.
+        /// Create mixer controls (slider, buttons, value label), wire them
+        /// to the host, and add them to the panel's content view. Idempotent:
+        /// controls are created once; later calls only re-attach them when a
+        /// plan application replaced the content view (which detaches the
+        /// subviews of the previous one).
         ///
         /// The MixerLayout rects use a top-left origin; AppKit uses a
         /// bottom-left origin, so y coordinates are flipped relative to the
         /// mixer panel's 224 px height.
-        pub fn set_mixer_controls(&mut self, _host: &crate::ui::renderer::HostHandle) {
+        pub fn set_mixer_controls(&mut self, host: &crate::ui::renderer::HostHandle) {
             if self.mixer_slider.is_some() {
+                self.reattach_mixer_controls();
                 return;
             }
             let mtm = MainThreadMarker::new().expect("mixer controls on main thread");
@@ -574,6 +664,7 @@ mod appkit {
             slider.setMinValue(0.0);
             slider.setMaxValue(100.0);
             slider.setDoubleValue(50.0);
+            slider.setContinuous(true);
 
             // Mute button
             let mb = crate::ui::canvas::MixerLayout::mute_button_rect();
@@ -601,6 +692,35 @@ mod appkit {
             value_label.setEditable(false);
             value_label.setBordered(false);
             value_label.setDrawsBackground(false);
+            // Right-aligned percent (value_rect is right-aligned in the
+            // mixer layout shared with the other renderers).
+            value_label.setAlignment(NSTextAlignment::Right);
+
+            // Action target: an NSObject subclass holding a clone of the host
+            // handle. The panel retains it (AppKit targets are weak), so the
+            // controls never own a chain back to the panel.
+            let target = MixerTarget::new(host.clone());
+
+            // Wire target/action for every control. AppKit does not retain
+            // the target; the panel does, via `self.mixer_target`.
+            // SAFETY: raw target/selector assignment on main-thread controls.
+            unsafe {
+                slider.setTarget(Some(&*target));
+                slider.setAction(Some(sel!(volumeChanged:)));
+                mute_btn.setTarget(Some(&*target));
+                mute_btn.setAction(Some(sel!(toggleMute:)));
+                reset_btn.setTarget(Some(&*target));
+                reset_btn.setAction(Some(sel!(resetVolume:)));
+                close_btn.setTarget(Some(&*target));
+                close_btn.setAction(Some(sel!(closeMixer:)));
+            }
+
+            // VoiceOver labels (spec §11.2 vocabulary).
+            slider.setAccessibilityLabel(Some(&NSString::from_str("Volume slider")));
+            mute_btn.setAccessibilityLabel(Some(&NSString::from_str("Mute")));
+            reset_btn.setAccessibilityLabel(Some(&NSString::from_str("Reset")));
+            close_btn.setAccessibilityLabel(Some(&NSString::from_str("Close")));
+            value_label.setAccessibilityLabel(Some(&NSString::from_str("Volume value")));
 
             // Add all subviews to the content view.
             content_view.addSubview(&slider);
@@ -614,6 +734,49 @@ mod appkit {
             self.mixer_reset_btn = Some(reset_btn);
             self.mixer_close_btn = Some(close_btn);
             self.mixer_value_label = Some(value_label);
+            self.mixer_target = Some(target);
+        }
+
+        /// Re-add existing mixer controls to the panel's current content
+        /// view when a plan application replaced it (AppKit detaches the
+        /// subviews of the old content view, so the controls would otherwise
+        /// stay invisible forever).
+        fn reattach_mixer_controls(&self) {
+            let Some(content_view) = self.window.contentView() else {
+                return;
+            };
+            let Some(slider) = &self.mixer_slider else {
+                return;
+            };
+            // SAFETY: `superview` is a plain property read on the main
+            // thread; `Retained::as_ptr` is not.
+            let attached = unsafe {
+                slider
+                    .superview()
+                    .is_some_and(|sv| Retained::as_ptr(&sv) == Retained::as_ptr(&content_view))
+            };
+            if attached {
+                return;
+            }
+            if let (
+                Some(slider),
+                Some(mute_btn),
+                Some(reset_btn),
+                Some(close_btn),
+                Some(value_label),
+            ) = (
+                &self.mixer_slider,
+                &self.mixer_mute_btn,
+                &self.mixer_reset_btn,
+                &self.mixer_close_btn,
+                &self.mixer_value_label,
+            ) {
+                content_view.addSubview(slider);
+                content_view.addSubview(mute_btn);
+                content_view.addSubview(reset_btn);
+                content_view.addSubview(close_btn);
+                content_view.addSubview(value_label);
+            }
         }
 
         /// Update mixer widget values from authoritative state.
