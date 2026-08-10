@@ -1130,7 +1130,11 @@ fn get_window_pid_x11() -> Option<u32> {
   physical-pixel to AppKit-point conversion.
 - Removed duplicated embedded RTK command catalog; global RTK instructions remain
   authoritative.
-- Verification pending: run format, diff, records, self-tests, and the full gate
-  before committing this substantive guidance change.
+- Verification (honest): `cargo fmt --all --check` clean, `git diff --check`
+  clean, `check-records.sh --staged` and `--branch origin/master` both pass, and
+  all three gate self-tests pass (`test-check-records.sh`, `test-format-lint.sh`
+  run under a stashed index, `test-ship.sh`). Full `scripts/format-lint.sh` gate
+  passes (`cargo test --workspace --no-default-features` green, "Gate passed").
+  Committed as `3b00063`; the pre-commit hook ran without `--no-verify`.
 - No code behavior changed; `init.sh` remains unchanged and abandoned `init.ps1`
   remains absent.
