@@ -1227,3 +1227,32 @@ fn get_window_pid_x11() -> Option<u32> {
   noted as follow-up. Two LOW pre-existing findings (F3: .claude skill dir
   has extra format-lint.sh vs .agents; F4: .agents volume-control skill has
   opencode-only yaml) — noted as follow-ups.
+
+## Session 021 (2026-08-10) — Post-review hygiene: mirror parity + hook renormalization
+
+- Goal: execute the non-blocking follow-ups from the three-domain pre-push
+  review (Session 020): resolve the `.agents` skill mirror asymmetry (F3)
+  and renormalize the pre-commit hook worktree copy to LF (F2).
+- What landed:
+  - `.agents/skills/format-lint/scripts/format-lint.sh` — new file, mirrored
+    from the root `scripts/format-lint.sh` (byte-identical, asserted by
+    test-format-lint.sh). Pre-existing asymmetry resolved: `.agents` now
+    carries both the ps1 gate and the sh gate, matching `.claude`.
+  - `scripts/test-format-lint.sh` — new mirror assertion: `.agents` copy of
+    format-lint.sh must match the root (38→39 checks on Windows; 37→38 on
+    Linux/macOS). Header updated to reflect both `.agents` and `.claude`
+    mirrors.
+  - `.githooks/pre-commit` — worktree copy renormalized from CRLF to LF
+    (`git checkout --` restored from the LF index blob). No content change;
+    committed blob was already correct. The CRLF was a pre-existing stale
+    stat cache incident (same class as the manifest CRLF in Session 020).
+- Verification (fresh, Git Bash):
+  - `bash scripts/test-check-records.sh` → all 30 checks pass, exit 0.
+  - `bash scripts/test-format-lint.sh` → all 39 checks pass, exit 0 (incl.
+    the new .agents mirror assertion).
+  - `bash scripts/test-ship.sh` → all checks pass, exit 0.
+  - `bash scripts/format-lint.sh` (full gate incl. tests) → "Gate passed."
+  - `cargo fmt --all --check` clean; `git diff --check` clean;
+    `sh scripts/check-records.sh --staged` → exit 0.
+- Records: feature_list.json vol-017 updated (verification 38→39, evidence
+  augmented with mirror fix); this entry is the claude-progress.md half.

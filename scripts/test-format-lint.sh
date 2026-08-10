@@ -4,7 +4,8 @@
 #
 # Exercises both gates - scripts/format-lint.sh (bash) and the PowerShell
 # twin (.agents/skills/format-lint/scripts/format-lint.ps1) - plus the
-# .claude skill mirror, so drift between any of them fails loudly:
+# .agents and .claude skill mirrors, so drift between any of them fails
+# loudly:
 #
 #   1. a clean `--skip-tests` run must exit 0 and print "Gate passed."
 #   2. a forbidden diff path (scratch edit to .claude/settings.local.json)
@@ -557,6 +558,12 @@ if cmp -s scripts/format-lint.sh \
     report ok 'mirrors: format-lint.sh copies are byte-identical'
 else
     report FAIL 'mirrors: format-lint.sh copies differ (resync .claude/skills/format-lint/)'
+fi
+if cmp -s scripts/format-lint.sh \
+          .agents/skills/format-lint/scripts/format-lint.sh; then
+    report ok 'mirrors: format-lint.sh .agents copy matches root'
+else
+    report FAIL 'mirrors: format-lint.sh .agents copy differs (resync .agents/skills/format-lint/)'
 fi
 
 
