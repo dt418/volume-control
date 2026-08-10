@@ -1,5 +1,18 @@
 # Progress Log
 
+## Session 023 (2026-08-10) — session handoff refresh
+
+- Goal: update session-handoff.md to reflect current state (Sessions 021-022
+  completed, all 18 features passing, verification script tooling complete).
+- What landed:
+  - `session-handoff.md`: updated to Session 022, added vol-018 entry,
+    updated test counts to 241 passed, added verification commands for
+    vol-011 script, updated hygiene notes.
+- Verification:
+  - All 18 features passing in feature_list.json.
+  - 241 tests pass (225 + 16).
+  - Working tree clean after commit.
+
 ## Session 022 (2026-08-10) — verify-vol011 screenshot capture
 
 - Goal: add PrintWindow-based screenshot capture to verify-vol011.ps1 so each
