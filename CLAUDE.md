@@ -1,224 +1,160 @@
 # CLAUDE.md
 
-You are working in the VolumeControl repository — a native multiplatform
-volume controller (Rust / Cargo workspace) with global hotkeys, a system
-tray, and an on-screen volume overlay. Windows is the fully implemented
-target; macOS/Linux backends are compile-gated scaffolds.
+This file provides guidance to Claude Code (claude.ai/code) when working with this code repository.
 
-Prioritize reliable completion, continuity across sessions, and explicit
-verification over speed.
+## Project overview
 
-## Project facts
+VolumeControl is a Rust 2021 Cargo workspace (`rust-version = 1.82`) containing the
+`crates/volumectl` library and `volumectl` binary. It is a native volume controller
+with global hotkeys, native audio backends, host-owned confirmed state, and platform
+renderers. Windows has the complete Win32 tray/overlay host. macOS has CoreAudio,
+rdev, and an AppKit host/renderer. Linux has PulseAudio, rdev, a platform-neutral
+host reducer, and an optional GTK4/libadwaita host/renderer. Non-Windows tray/menu,
+full surface interaction, settings persistence actions, and blacklist actions remain
+follow-on work.
 
-- Workspace root: `crates/volumectl` is the app (lib + bin).
-- Audio abstraction: `crate::audio::AudioBackend` trait; Windows impl in
-  `audio_windows.rs` (Win32 WASAPI via `windows-sys`).
-- Hotkeys: Win32 `RegisterHotKey` in `hotkeys_win32.rs`; actions in
-  `crate::hotkeys::HotkeyAction`.
-- Config: JSON at user config dir, `crate::config` module.
-- Shared logic: `crate::core` (threshold colors, step/clamp math).
-- Non-Windows builds fall back to a CLI stub (`cli.rs`) using the
-  `volumecontrol` crate.
+Use `#[cfg(target_os = "...")]` for platform-specific code. Keep `init.sh` unchanged;
+the abandoned `init.ps1` bootstrap task must not be restored.
 
-## Operating Loop
+## Commands
 
-At the start of every session:
+Run the baseline bootstrap from the repository root:
 
-1. Run `pwd` and confirm you are in the expected repository root.
-2. Read `claude-progress.md`.
-3. Read `feature_list.json`.
-4. Review recent commits with `git log --oneline -5`.
-5. Run `./init.sh` (or manually: `cargo build` then `cargo test`).
-6. Check whether the baseline smoke or end-to-end path is already broken.
-
-Then select exactly one unfinished feature and work only on that feature until
-you either verify it or document why it is blocked.
-
-## Rules
-
-- One active feature at a time.
-- Do not claim completion without runnable evidence.
-- Do not rewrite the feature list to hide unfinished work.
-- Do not remove or weaken tests just to make the task look complete.
-- Use repository artifacts as the system of record.
-- Windows-only code must be gated behind `#[cfg(target_os = "windows")]` so
-  the crate still builds on macOS/Linux.
-- `windows-sys` is preferred over the `windows` crate (low-level FFI, stable
-  signatures). Verify FFI signatures against the crate source before use.
-
-## Mandatory Workflow
-
-Every task follows the superpowers flow and hardness:
-
-1. Load the `guardrail` skill (and process skills: brainstorming before
-   planning, writing-plans before code).
-2. Brainstorm -> spec (`docs/superpowers/specs/`) -> plan
-   (`docs/superpowers/plans/`) -> execute -> verify -> finish.
-3. No completion claim without fresh verification evidence
-   (verification-before-completion: run the command, read output, check the
-   exit code, then claim).
-4. Every substantive change (code, scripts, CI, hooks, skills, this file)
-   updates BOTH `feature_list.json` and `claude-progress.md` in the same
-   commit. `scripts/check-records.sh` enforces this in the pre-commit hook
-   and CI. Never bypass with `--no-verify` unless the user explicitly asks.
-
-## Required Files
-
-- `feature_list.json`
-- `claude-progress.md`
-- `init.sh`
-- `session-handoff.md` when a compact handoff is useful
-
-## Completion Gate
-
-A feature can move to `passing` only after the required verification succeeds
-(`cargo build` / `cargo test` on the current target) and the result is
-recorded in `claude-progress.md`.
-
-## Before You Stop
-
-1. Update the progress log.
-2. Update the feature state.
-3. Record what is still broken or unverified.
-4. Commit once the repository is safe to resume.
-5. Leave a clean restart path for the next session.
-
-<!-- rtk-instructions v2 -->
-# RTK (Rust Token Killer) - Token-Optimized Commands
-
-## Golden Rule
-
-**Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
-
-**Important**: Even in command chains with `&&`, use `rtk`:
 ```bash
-# ❌ Wrong
-git add . && git commit -m "msg" && git push
-
-# ✅ Correct
-rtk git add . && rtk git commit -m "msg" && rtk git push
+./init.sh
 ```
 
-## RTK Commands by Workflow
+Windows builds must use the MSVC environment wrapper:
 
-### Build & Compile (80-90% savings)
-```bash
-rtk cargo build         # Cargo build output
-rtk cargo check         # Cargo check output
-rtk cargo clippy        # Clippy warnings grouped by file (80%)
-rtk tsc                 # TypeScript errors grouped by file/code (83%)
-rtk lint                # ESLint/Biome violations grouped (84%)
-rtk prettier --check    # Files needing format only (70%)
-rtk next build          # Next.js build with route metrics (87%)
+```bat
+scripts\win-build.bat build
+scripts\win-build.bat run
+scripts\win-build.bat test
 ```
 
-### Test (60-99% savings)
+Common Rust checks and tests:
+
 ```bash
-rtk cargo test          # Cargo test failures only (90%)
-rtk go test             # Go test failures only (90%)
-rtk jest                # Jest failures only (99.5%)
-rtk vitest              # Vitest failures only (99.5%)
-rtk playwright test     # Playwright failures only (94%)
-rtk pytest              # Python test failures only (90%)
-rtk rake test           # Ruby test failures only (90%)
-rtk rspec               # RSpec test failures only (60%)
-rtk test <cmd>          # Generic test wrapper - failures only
+cargo fmt --all --check
+git diff --check
+cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+cargo test --workspace --no-default-features
+cargo test -p volumectl <filter>
+cargo test -p volumectl --test linux_host_core
+cargo test -p volumectl --test macos_host_smoke
 ```
 
-### Git (59-80% savings)
+The canonical manifest-driven gate is authoritative for local and CI quality checks:
+
 ```bash
-rtk git status          # Compact status
-rtk git log             # Compact log (works with all git flags)
-rtk git diff            # Compact diff (80%)
-rtk git show            # Compact show (80%)
-rtk git add             # Ultra-compact confirmations (59%)
-rtk git commit          # Ultra-compact confirmations (59%)
-rtk git push            # Ultra-compact confirmations
-rtk git pull            # Ultra-compact confirmations
-rtk git branch          # Compact branch list
-rtk git fetch           # Compact fetch
-rtk git stash           # Compact stash
-rtk git worktree        # Compact worktree
+bash scripts/format-lint.sh
+bash scripts/format-lint.sh --skip-tests
+bash scripts/format-lint.sh --all-features
+bash scripts/check-records.sh --staged
+bash scripts/check-records.sh --branch origin/master
+bash scripts/test-check-records.sh
+bash scripts/test-format-lint.sh
+bash scripts/test-ship.sh
+bash scripts/ship.sh --dry-run
 ```
 
-Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
+The pre-commit hook is intentionally lightweight; the full workspace test suite is
+run by the canonical gate and CI. `scripts/format-lint-steps.json` is the single
+source of truth for gate steps and forbidden paths. `AGENTS.md` and `GUARDRAILS.md`
+define the detailed enforcement and shipping rules. Use `rtk` prefixes according to
+the global Claude Code instructions when executing commands.
 
-### GitHub (26-87% savings)
+On macOS, the normal native checks are:
+
 ```bash
-rtk gh pr view <num>    # Compact PR view (87%)
-rtk gh pr checks        # Compact PR checks (79%)
-rtk gh run list         # Compact workflow runs (82%)
-rtk gh issue list       # Compact issue list (80%)
-rtk gh api              # Compact API responses (26%)
+cargo build
+cargo test
 ```
 
-### JavaScript/TypeScript Tooling (70-90% savings)
+Ubuntu/Debian GTK development needs the packages used by CI, including the X11
+libraries required by rdev:
+
 ```bash
-rtk pnpm list           # Compact dependency tree (70%)
-rtk pnpm outdated       # Compact outdated packages (80%)
-rtk pnpm install        # Compact install output (90%)
-rtk npm run <script>    # Compact npm script output
-rtk npx <cmd>           # Compact npx command output
-rtk prisma              # Prisma without ASCII art (88%)
-rtk uv run <cmd>        # Compact uv project command output
+sudo apt-get install libgtk-4-dev libadwaita-1-dev libpulse-dev \
+  libx11-dev libxi-dev libxtst-dev xvfb
 ```
 
-### Files & Search (60-75% savings)
+GTK host and X11 smoke checks:
+
 ```bash
-rtk ls <path>           # Tree format, compact (65%)
-rtk read <file>         # Code reading with filtering (60%)
-rtk grep <pattern>      # Search grouped by file (75%). Format flags (-c, -l, -L, -o, -Z) run raw.
-rtk find <pattern>      # Find grouped by directory (70%)
+cargo build --features gtk-renderer
+xvfb-run -a cargo test --features gtk-renderer
+xvfb-run -a cargo test -p volumectl \
+  --features gtk-renderer \
+  --test linux_host_smoke -- --nocapture
 ```
 
-### Analysis & Debug (70-90% savings)
+Wayland layer-shell is optional and depends on the distribution providing
+`libgtk4-layer-shell-dev`/`gtk4-layer-shell-0.pc`:
+
 ```bash
-rtk err <cmd>           # Filter errors only from any command
-rtk log <file>          # Deduplicated logs with counts
-rtk json <file>         # JSON structure without values
-rtk deps                # Dependency overview
-rtk env                 # Environment variables compact
-rtk summary <cmd>       # Smart summary of command output
-rtk diff                # Ultra-compact diffs
+cargo build --features gtk-renderer,layer-shell
 ```
 
-### Infrastructure (85% savings)
-```bash
-rtk docker ps           # Compact container list
-rtk docker images       # Compact image list
-rtk docker logs <c>     # Deduplicated logs
-rtk kubectl get         # Compact resource list
-rtk kubectl logs        # Deduplicated pod logs
-```
+Missing optional layer-shell libraries or a Wayland compositor are environment
+skips, not passes. Xvfb proves only X11/GTK behavior. Missing PulseAudio/PipeWire
+runtime is audio-unavailable evidence, not a successful audio verification. The
+application must not install packages, invoke `sudo`, enable evdev grabbing, or
+require root/input-group privileges for Wayland hotkeys.
 
-### Network (65-70% savings)
-```bash
-rtk curl <url>          # Compact HTTP responses (70%)
-rtk wget <url>          # Compact download output (65%)
-```
+## Startup behavior
 
-### Meta Commands
-```bash
-rtk gain                # View token savings statistics
-rtk gain --history      # View command history with savings
-rtk discover            # Analyze Claude Code sessions for missed RTK usage
-rtk proxy <cmd>         # Run command without filtering (for debugging)
-rtk init                # Add RTK instructions to CLAUDE.md
-rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
-```
+- Windows starts the native Win32 host.
+- macOS with no arguments starts `macos_app`; explicit `get`, `set <0-100>`, and
+  `mute` arguments use `cli`.
+- Linux with `gtk-renderer` and no arguments starts `linux_app`; explicit CLI
+  arguments still use `cli`.
+- Linux without GTK and no arguments starts the headless `hotkeys_rdev` host;
+  explicit CLI arguments still use `cli`.
+- Linux rdev global hotkeys currently require X11. Wayland keeps GTK/audio/renderer
+  operation available while recording degraded hotkey capability.
 
-## Token Savings Overview
+## Architecture
 
-| Category | Commands | Typical Savings |
-|----------|----------|-----------------|
-| Tests | vitest, playwright, cargo test | 90-99% |
-| Build | next, tsc, lint, prettier | 70-87% |
-| Git | status, log, diff, add, commit | 59-80% |
-| GitHub | gh pr, gh run, gh issue | 26-87% |
-| Package Managers | pnpm, npm, npx | 70-90% |
-| Files | ls, read, grep, find | 60-75% |
-| Infrastructure | docker, kubectl | 85% |
-| Network | curl, wget | 65-70% |
+The shared host boundary is in `ui`: `AppState` is the confirmed state published by
+hosts, `AppAction` carries renderer/hotkey intent, `NativeRenderer` publishes state
+and accepts actions, and `HostHandle` routes actions without letting renderers mutate
+audio or configuration directly. Shared model, theme, capability, placement, and
+surface contracts live beside these interfaces.
 
-Overall average: **60-90% token reduction** on common development operations.
-<!-- /rtk-instructions -->
+Audio uses `crate::audio::AudioBackend` with target adapters in `audio_windows.rs`
+(WASAPI), `audio_macos.rs` (CoreAudio), and `audio_linux.rs` (PulseAudio). Hotkey
+actions live in `crate::hotkeys`; the cross-platform listener and hold-repeat logic
+are in `hotkeys_rdev.rs`. Windows native `RegisterHotKey` wiring is owned by
+`app.rs`.
+
+Platform hosts own event loops, backend state, configuration reload, and confirmed
+state publication:
+
+- `app.rs` owns the Windows message loop, tray, overlay, mixer, settings, and help.
+- `macos_app.rs` owns the AppKit-main-thread loop, CoreAudio, rdev actions, mtime
+  config reload, `MacosRenderer`, and explicit renderer teardown. Retina geometry
+  converts physical pixels to AppKit points exactly once using the backing scale.
+- `linux_host_core.rs` is the display-free reducer and test seam for audio, hotkeys,
+  actions, configuration reload, retries, and degraded state.
+- `linux_app.rs` owns GTK initialization, display capability detection, the GLib fast
+  and slow polls, renderer/action routing, recovery, and teardown. The GTK renderer
+  in `ui/platform/linux` uses Wayland layer-shell when available and X11/plain-window
+  fallbacks otherwise. `ui/platform/macos` contains the AppKit renderer.
+
+Configuration is JSON under the platform user config directory. Hosts use safe mtime
+reload: a valid parsed and normalized config replaces active state; malformed input
+leaves the current configuration intact. Audio failures preserve the last confirmed
+state and use bounded recovery rather than fabricating a zero volume.
+
+## Working rules
+
+- Work on one unfinished feature at a time; keep `feature_list.json` honest.
+- Follow brainstorm/spec -> plan -> execute -> verify -> review (`pre-push-review`)
+  -> finish. Do not claim completion without fresh command output and exit-code
+  evidence.
+- Substantive changes to code, scripts, CI, hooks, skills, or this file update both
+  `feature_list.json` and `claude-progress.md` in the same change set.
+- Preserve tests and add records for blocked or environment-dependent verification.
+- Never bypass repository gates with `--no-verify` unless explicitly authorized.
+- Before stopping, leave a clean restart path and record remaining unverified work.

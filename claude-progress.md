@@ -1115,14 +1115,22 @@ fn get_window_pid_x11() -> Option<u32> {
   remains `in_progress`; Linux tray/global-hotkey and real Wayland evidence are
   still open.
 
-## Session 018 (2026-08-08) — Fix macOS CI Retina assertion
+## Session 019 (2026-08-10) — Refresh repository guidance
 
-- PR #18's macOS job found one deterministic test failure in
-  `retina_appkit_frame_converts_physical_pixels_to_points_once`: the
-  implementation correctly uses AppKit's lower-left origin, so a physical
-  rect ending at the work-area bottom converts to y=0 points. The test had
-  incorrectly asserted 812 points, which is a top-left-origin interpretation.
-  The expectation now asserts 0 and documents the convention.
-- The other macOS unit tests, plus the Linux/Windows local gates, were already
-  green in the failed CI run. A new push will rerun the full matrix before
-  merge.
+- Goal: update `CLAUDE.md` so future sessions match the current native host
+  architecture and enforcement commands instead of the original scaffold claims.
+- Replaced stale macOS/Linux scaffold and CLI-only descriptions with current
+  CoreAudio, PulseAudio, rdev, AppKit, Linux reducer, and GTK host behavior.
+- Added exact Windows/MSVC, macOS, Linux GTK/Xvfb, layer-shell, Rust, records,
+  self-test, and ship commands. Documented that Xvfb proves X11 only and that
+  missing layer-shell/compositor/audio runtime is an honest skip or unavailable
+  result, never a pass.
+- Documented shared `ui` contracts, host-owned confirmed state, safe config mtime
+  reload, bounded audio recovery, Linux X11-only hotkeys, and macOS Retina
+  physical-pixel to AppKit-point conversion.
+- Removed duplicated embedded RTK command catalog; global RTK instructions remain
+  authoritative.
+- Verification pending: run format, diff, records, self-tests, and the full gate
+  before committing this substantive guidance change.
+- No code behavior changed; `init.sh` remains unchanged and abandoned `init.ps1`
+  remains absent.
