@@ -23,6 +23,9 @@
 #   8. Get-Bash never resolves to the WSL shim: on a simulated machine whose
 #      only PATH bash is System32\bash.exe, the records step must resolve
 #      git-adjacent bash first or fail loudly, never invoke WSL
+#   9. a quoted manifest version ("3") is rejected by BOTH gates, so the
+#      PowerShell parser's numeric-version sanity cannot drift from the bash
+#      gate's sed
 #
 # The PowerShell gate is exercised only when `powershell`/`pwsh` is on PATH.
 # Tests stay fast by using --skip-tests and relying on cached clippy
@@ -77,6 +80,10 @@ restore_forbidden() {
 }
 cleanup() {
     restore_forbidden
+    # If interrupted between `git rm` and the test's own restore, the staged
+    # deletion of the forbidden file would break the next run's clean-index
+    # precondition; always clear the index entry too.
+    git restore --staged -q -- "$forbidden_file" 2>/dev/null
     # Records-step negatives stage an untracked scratch file; always unstage
     # and remove it so an interrupted run leaves no trace in the index.
     git reset -q -- "$records_scratch" 2>/dev/null
@@ -310,6 +317,53 @@ if [ -n "$ps" ]; then
     fi
 fi
 
+# --- quoted manifest version: both parsers must reject "3" (a JSON string) ---
+# ConvertFrom-Json yields a STRING for "3", and PowerShell's `-ne 3` would
+# coerce a string to pass the old check - so a quoted-version manifest could
+# sail through the PS gate while the bash gate's numeric-only sed already
+# rejects it. The ps1 gate now fails closed on a [string]; drive both gates
+# against a hermetic copy of the manifest with the version quoted, so the
+# contract cannot drift back.
+mkdir -p "$tmpdir/quoted/repo/scripts"
+cp scripts/format-lint.sh "$tmpdir/quoted/repo/"
+cp .agents/skills/format-lint/scripts/format-lint.ps1 "$tmpdir/quoted/repo/"
+printf '{}\n' > "$tmpdir/quoted/repo/Cargo.toml"   # repo-root marker only
+sed 's/"version": 3,/"version": "3",/' scripts/format-lint-steps.json \
+    > "$tmpdir/quoted/repo/scripts/format-lint-steps.json"
+bash "$tmpdir/quoted/repo/format-lint.sh" >"$tmpdir/quoted/bash.out" 2>&1
+rc=$?
+if [ "$rc" -eq 1 ] && grep -q 'unsupported manifest version' "$tmpdir/quoted/bash.out"; then
+    report ok 'bash gate: quoted manifest version "3" is rejected'
+else
+    report FAIL 'bash gate: quoted manifest version "3" is rejected' "rc=$rc"
+fi
+if [ -n "$ps" ]; then
+    cat > "$tmpdir/quoted/run-ps.ps1" <<'PSEOF'
+$ErrorActionPreference = 'Stop'
+$gate = $args[0]
+try {
+    & $gate 2>$null
+    Write-Host 'gate exited normally: quoted version was accepted'
+    exit 1
+} catch {
+    # Only the version-sanity throw counts as fail-closed rejection; any
+    # other terminating error (e.g. Get-Cargo/Get-Git resolution) is a
+    # harness failure, not a pass.
+    if ($_.Exception.Message -like '*expected numeric 3*') { exit 0 }
+    Write-Host "unexpected failure: $($_.Exception.Message)"
+    exit 1
+}
+PSEOF
+    "$ps" -NoProfile -ExecutionPolicy Bypass -File "$tmpdir/quoted/run-ps.ps1" "$tmpdir/quoted/repo/format-lint.ps1" >"$tmpdir/quoted/ps.out" 2>&1
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+        report ok 'PowerShell gate: quoted manifest version "3" is rejected'
+    else
+        report FAIL 'PowerShell gate: quoted manifest version "3" is rejected' "rc=$rc"
+        sed 's/^/      /' "$tmpdir/quoted/ps.out" | tail -4
+    fi
+fi
+
 # --- forbidden patterns: each manifest pattern must match a representative ---
 # sample, and benign/near-miss paths must not match the combined check. This
 # exercises the manifest patterns themselves on both parsers.
@@ -358,11 +412,11 @@ if [ -n "$ps" ]; then
         $samples = @("target/release/volumectl.exe", ".superpowers/scratch.txt", ".claude/settings.local.json", ".claude/worktrees/agent-a/file", "config.json", "var/log/volume-control.log")
         $ok = $true
         for ($i = 0; $i -lt $fp.Count; $i++) {
-            if ($samples[$i] -notmatch $fp[$i]) { Write-Output "FAIL $($fp[$i])"; $ok = $false }
+            if ($samples[$i] -cnotmatch $fp[$i]) { Write-Output "FAIL $($fp[$i])"; $ok = $false }
         }
         $benign = @("src/main.rs", "target-foo.txt", "configx.json", "logo.txt")
         foreach ($path in $benign) {
-            if ($path -match ($fp -join "|")) { Write-Output "FAIL benign $path"; $ok = $false }
+            if ($path -cmatch ($fp -join "|")) { Write-Output "FAIL benign $path"; $ok = $false }
         }
         if ($ok) { exit 0 } else { exit 1 }
         ' \

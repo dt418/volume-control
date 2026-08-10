@@ -154,8 +154,12 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "step manifest not found at $manifestPath"
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-if ($manifest.version -ne 3) {
-    throw "unsupported manifest version $($manifest.version) (expected 3)"
+# Fail-closed on a QUOTED version: ConvertFrom-Json yields a string for
+# "3" and PowerShell's `-ne 3` would coerce it to pass, while the bash
+# gate's sed `"version": ([0-9]+)` already rejects it. Reject strings so
+# both parsers agree the manifest version must be a JSON number.
+if ($manifest.version -is [string] -or $manifest.version -ne 3) {
+    throw "unsupported manifest version $($manifest.version) (expected numeric 3)"
 }
 $steps = @($manifest.steps)
 if ($steps.Count -eq 0) {
@@ -221,8 +225,10 @@ function Invoke-ForbiddenPaths {
     if ($LASTEXITCODE -ne 0) { $gitFailed = $true }
     $untracked = & $git ls-files --others --exclude-standard
     if ($LASTEXITCODE -ne 0) { $gitFailed = $true }
-    $tracked = $tracked | Where-Object { $_ -match $pattern }
-    $untracked = $untracked | Where-Object { $_ -match $pattern }
+    # Case-sensitive match (-cmatch): the bash gate and CI grep case-sensitively,
+    # so a case-variant forbidden path must not be silently accepted here.
+    $tracked = $tracked | Where-Object { $_ -cmatch $pattern }
+    $untracked = $untracked | Where-Object { $_ -cmatch $pattern }
     if ($gitFailed) {
         Write-Host '  git command failed while listing diff paths' -ForegroundColor Red
         $script:stepFailed = $true

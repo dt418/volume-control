@@ -53,6 +53,8 @@ check_rc 1 '.github/workflows/ci.yml\n' \
     '--check: CI-only change without records fails'
 check_rc 0 '.claude/settings.json\n.rtk/filters.toml\n.codex/config.toml\n' \
     '--check: agent-tool config is exempt'
+check_rc 1 '.claude/skills/volume-control/config.json\n' \
+    '--check: .claude/skills/* stays substantive even for JSON (not caught by .claude/*.json)'
 
 # unknown mode
 sh "$guard" --bogus >/dev/null 2>&1
@@ -142,6 +144,15 @@ else
     report FAIL '--staged: staged code without records fails and suggests both templates' "rc=$rc"
 fi
 
+# --staged: the failing run must NOT have auto-created the records (the guard
+# only prints templates; a regression adding `: > feature_list.json` would
+# still report rc=1 and still print both templates, so assert absence now).
+if [ ! -e "$tmpdir/feature_list.json" ] && [ ! -e "$tmpdir/claude-progress.md" ]; then
+    report ok '--staged: failing run never writes the records (only prints templates)'
+else
+    report FAIL '--staged: failing run never writes the records (only prints templates)'
+fi
+
 # --staged: add records too -> pass
 printf '{"last_updated":"x"}\n' > "$tmpdir/feature_list.json"
 printf '# Progress\n' > "$tmpdir/claude-progress.md"
@@ -179,6 +190,14 @@ if [ "$rc" -eq 1 ] && \
     report ok '--branch: committed code without records fails and suggests both templates'
 else
     report FAIL '--branch: committed code without records fails and suggests both templates' "rc=$rc"
+fi
+
+# --branch: same no-auto-write contract on the real-path failure (records were
+# removed on line above, so the failing run must leave them absent).
+if [ ! -e "$tmpdir/feature_list.json" ] && [ ! -e "$tmpdir/claude-progress.md" ]; then
+    report ok '--branch: failing run never writes the records (only prints templates)'
+else
+    report FAIL '--branch: failing run never writes the records (only prints templates)'
 fi
 
 # --branch: add a records commit -> passes (records anywhere in the branch)
@@ -265,13 +284,20 @@ fi
 
 # --- guard wiring: the pre-commit hook must still invoke the guard -----------
 # A future hook edit that drops or comments out the records check would
-# silently disable local enforcement; assert the invocation is present and
-# not commented out.
-if awk '!/^[[:space:]]*#/ && /check-records\.sh --staged/' .githooks/pre-commit | grep -q .; then
-    report ok 'pre-commit hook: invokes check-records.sh --staged'
+# silently disable local enforcement; assert the invocation is present, not
+# commented out, AND guarded by a fail-closed `if ! ... exit 1` branch. A bare
+# invocation, a positive `if`, or a `|| true`/`then :` fail-open would all
+# still "invoke" the guard yet never abort the commit, so only the exact
+# fail-closed idiom counts.
+if awk 'BEGIN{found=0;scanning=0} \
+    /check-records\.sh --staged/ && !/^[[:space:]]*#/ && /if[[:space:]]*!/ {scanning=1; next} \
+    scanning && /exit[[:space:]]+1/ {found=1; scanning=0} \
+    scanning && /^[[:space:]]*fi[[:space:]]*$/ {scanning=0} \
+    END{exit !found}' .githooks/pre-commit; then
+    report ok 'pre-commit hook: records guard aborts on failure (fail-closed if ! ... exit 1)'
 else
-    report FAIL 'pre-commit hook: invokes check-records.sh --staged' \
-        '(guard dropped or commented out in .githooks/pre-commit?)'
+    report FAIL 'pre-commit hook: records guard aborts on failure (fail-closed if ! ... exit 1)' \
+        '(guard dropped, commented out, or made fail-open in .githooks/pre-commit?)'
 fi
 
 # --- mirror checks: skills ------------------------------------------------------

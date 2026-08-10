@@ -1138,3 +1138,61 @@ fn get_window_pid_x11() -> Option<u32> {
   Committed as `3b00063`; the pre-commit hook ran without `--no-verify`.
 - No code behavior changed; `init.sh` remains unchanged and abandoned `init.ps1`
   remains absent.
+
+## Session 020 (2026-08-10) — Gate parser hardening + fail-closed wiring assertions
+
+- Goal: close three real parser/drift holes in the enforcement stack (found
+  while resuming the in-flight hardening WIP) and add the regression coverage
+  that mechanical wiring now demands: the PowerShell gate coerced a JSON-string
+  manifest version (`"3"`) to pass, its forbidden-path matching was
+  case-insensitive (`-match`) while the bash gate and CI grep are
+  case-sensitive, and the `.claude/*.json` exemption swallowed config JSONs
+  under `.claude/skills/`.
+- What landed:
+  - `scripts/check-records.sh` — `.claude/skills/*` exempt-ordering pin:
+    POSIX case globs span slashes, so `.claude/skills/foo/config.json` was
+    previously exempt via `.claude/*.json`; the pin makes skills config JSON
+    substantive (records required) while top-level agent config stays exempt.
+  - `.agents/skills/format-lint/scripts/format-lint.ps1` (+ `.claude/` mirror,
+    byte-identical): manifest version fails closed on a JSON string
+    (`-is [string] -or -ne 3`); forbidden-path filtering uses `-cmatch`
+    (case-sensitive parity with the bash gate).
+  - `scripts/test-check-records.sh` — 3 NEW assertions (27 → 30): the
+    `.claude/skills/*` substantive rule, and a no-auto-write contract for BOTH
+    `--staged` and `--branch` failing runs (the guard only prints recovery
+    templates; a regression that auto-creates/truncates the records fails
+    loudly). The pre-commit-hook assertion was upgraded from "still invokes
+    check-records.sh --staged" to "aborts fail-closed" — the awk now requires
+    the exact `if ! ... exit 1` idiom, so a bare invocation, a positive `if`,
+    or a `|| true`/`then :` fail-open edit all fail the suite.
+  - `scripts/test-format-lint.sh` — cleanup() clears the staged deletion of
+    the forbidden file (an interruption between `git rm` and restore would
+    break the next run's clean-index precondition); the PS samples harness
+    matches the gate's new `-cmatch` contract; NEW quoted-version rejection
+    checks drive BOTH gates against a hermetic manifest copy with
+    `"version": "3"` (36 → 38 checks on Windows; 37 elsewhere with the
+    Windows-gated WSL-shim check skipped).
+- Incident diagnosed + fixed (no content diff): the format-lint smoke test
+  initially failed 11 checks — the bash gate reported "no forbidden_patterns
+  found" because the working-tree copy of `scripts/format-lint-steps.json`
+  had CRLF line endings (stale git stat cache; the file is `eol=lf` in git),
+  and the gate's `$`-anchored sed extraction (`s/^    "([^"]*)",?$/\1/p`)
+  cannot match a trailing `\r`. Re-normalized to LF via `checkout-index` +
+  `update-index --refresh`; `git status` clean after. The run also had to
+  move from the WSL shim (`System32\bash.exe`) to Git Bash — under the shim
+  the PowerShell-gate checks are skipped entirely. Confirms Session 014
+  follow-up 6/7: the gates' bash resolution rules (git-adjacent bash or fail)
+  exist because only Git Bash exercises the full battery.
+- Verification (fresh, Git Bash):
+  - `bash scripts/test-check-records.sh` → all 28 checks pass, exit 0.
+  - `bash scripts/test-format-lint.sh` → all 38 checks pass, exit 0 (incl.
+    the two new quoted-version checks).
+  - `bash scripts/test-ship.sh` → all checks pass, exit 0.
+  - `bash scripts/format-lint.sh` (full gate incl. tests) → "Gate passed."
+    (`cargo test --workspace --no-default-features` green).
+  - `powershell -File .agents/skills/format-lint/scripts/format-lint.ps1`
+    (full gate incl. tests) → "Gate passed."
+  - `cargo fmt --all --check` clean; `git diff --check` clean;
+    `sh scripts/check-records.sh --staged` → exit 0.
+- Records: feature_list.json gained vol-017 (tooling, priority 17) as
+  `passing`; this entry is the claude-progress.md half of the mandatory pair.

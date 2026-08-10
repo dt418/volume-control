@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T12:00",
+  "last_updated": "2026-08-10T12:39",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,30 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-017",
+      "priority": 17,
+      "area": "tooling",
+      "title": "Gate parser hardening: numeric-only manifest version, case-sensitive forbidden paths, substantive .claude/skills JSON, fail-closed wiring assertions",
+      "user_visible_behavior": "Developer/agent-facing: a manifest version written as a JSON string (\"3\") is now rejected by BOTH gates (PowerShell no longer coerces it to pass); forbidden-diff-path matching is case-sensitive on both parsers so a case-variant forbidden path cannot slip the PS gate; a config JSON under .claude/skills/ is substantive again (requires records) instead of being swallowed by the .claude/*.json exemption; the pre-commit records guard must abort fail-closed (if ! ... exit 1) and failing guard runs are asserted to never auto-create the records.",
+      "status": "passing",
+      "verification": [
+        "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0 (30 checks incl. the new .claude/skills/*.json substantive rule, the no-auto-write contract for --staged/--branch failing runs, and the fail-closed pre-commit-hook assertion).",
+        "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (38 checks on Windows: 36 prior + quoted-version rejection on both gates; Linux/macOS run 37 with the Windows-gated WSL-shim check skipped).",
+        "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
+        "Run both full format-lint gates (bash + PowerShell) with tests - 'Gate passed.' on both.",
+        "Run `cargo fmt --all --check` and `git diff --check` - clean.",
+        "Run `sh scripts/check-records.sh --staged` on the landed change set - exit 0."
+      ],
+      "evidence": [
+        "manifest: `s/\"version\": 3,/\"version\": \"3\",/` tamper copy is rejected by the bash gate (exit 1, 'unsupported manifest version') and by the PowerShell gate (terminating 'expected numeric 3' throw, asserted via try/catch harness), on both CI platforms.",
+        "test-format-lint.sh PS harness and both gate copies now use -cmatch/-cnotmatch; bash gate and ci-diff-check.sh were already case-sensitive, so the parsers cannot diverge.",
+        "check-records.sh pins `.claude/skills/*` BEFORE the `.claude/*.json` exemption (POSIX case globs span slashes), so a skills config JSON requires records while top-level agent config stays exempt; asserted by test-check-records.sh on both sides of the boundary.",
+        "test-check-records.sh asserts a failing --staged/--branch run never creates feature_list.json/claude-progress.md (guard prints templates only) and that the pre-commit hook's records invocation is fail-closed (`if ! ... exit 1`), rejecting bare invocations, positive ifs, and `|| true` fail-open edits.",
+        "Session 020 (claude-progress.md) records the landing incl. the CRLF-manifest incident: a CRLF working copy (stale git stat cache) broke the bash gate's sed pattern extraction; the file is eol=lf in git and was re-normalized with no content diff."
+      ],
+      "notes": "Hardening series following the pre-push-review codification (vol-016): three real parser/drift holes closed (coerced version, case-insensitive PS matching, skills-JSON exemption hole) plus wiring assertions that catch fail-open regressions mechanically. Also adds the missing regression coverage for the PS-gate quoted-version rejection that the WIP originally lacked."
+    },
     {
       "id": "vol-016",
       "priority": 16,

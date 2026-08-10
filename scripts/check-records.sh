@@ -32,6 +32,10 @@ set -u
 # GUARDRAILS.md, and any unclassified path.
 exempt_hit() { # $1 = path
     case "$1" in
+        # `.claude/*.json` spans slashes in POSIX case, so pin the substantive
+        # `.claude/skills/*` rule first: a skills config JSON must still
+        # require records even though top-level .claude/*.json is exempt.
+        .claude/skills/*) return 1 ;;
         feature_list.json|claude-progress.md) return 0 ;;
         docs/*|README.md|README.vi.md|session-handoff.md|init.sh) return 0 ;;
         .gitignore|.gitattributes|.rtk/*|.codex/*|.claude/*.json) return 0 ;;
