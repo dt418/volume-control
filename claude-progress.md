@@ -1157,7 +1157,7 @@ fn get_window_pid_x11() -> Option<u32> {
     byte-identical): manifest version fails closed on a JSON string
     (`-is [string] -or -ne 3`); forbidden-path filtering uses `-cmatch`
     (case-sensitive parity with the bash gate).
-  - `scripts/test-check-records.sh` — 3 NEW assertions (27 → 30): the
+  - `scripts/test-check-records.sh` — 3 NEW assertions (28 → 30): the
     `.claude/skills/*` substantive rule, and a no-auto-write contract for BOTH
     `--staged` and `--branch` failing runs (the guard only prints recovery
     templates; a regression that auto-creates/truncates the records fails
@@ -1184,7 +1184,7 @@ fn get_window_pid_x11() -> Option<u32> {
   follow-up 6/7: the gates' bash resolution rules (git-adjacent bash or fail)
   exist because only Git Bash exercises the full battery.
 - Verification (fresh, Git Bash):
-  - `bash scripts/test-check-records.sh` → all 28 checks pass, exit 0.
+  - `bash scripts/test-check-records.sh` → all 30 checks pass, exit 0.
   - `bash scripts/test-format-lint.sh` → all 38 checks pass, exit 0 (incl.
     the two new quoted-version checks).
   - `bash scripts/test-ship.sh` → all checks pass, exit 0.
@@ -1196,3 +1196,34 @@ fn get_window_pid_x11() -> Option<u32> {
     `sh scripts/check-records.sh --staged` → exit 0.
 - Records: feature_list.json gained vol-017 (tooling, priority 17) as
   `passing`; this entry is the claude-progress.md half of the mandatory pair.
+
+### Pre-push review (three-domain parallel, 2026-08-10)
+
+- Domain A (guard core): PASS. dash/POSIX compatibility, empty-set guard,
+  fail-closed classification, git-error discipline, recovery templates,
+  self-test coverage all clean. One LOW finding (A-7): the hook awk
+  assertion accepted a commented-out `exit 1` between `if !` and `fi`,
+  allowing a fail-open hook to pass the suite — fixed by adding
+  `!/^[[:space:]]*#/` to the exit-match rule; live negative verified
+  (commented-out `exit 1` → suite FAILS, then restored → PASSES).
+- Domain B (gate chain): PASS. Manifest version parity verified empirically
+  (`3` accept/accept, `3.0` accept/accept, `03` reject/accept diverges on
+  invalid JSON only, `"3"` reject/reject, missing reject/reject). NEW
+  quoted-version harness confirmed hermetic (Cargo.toml marker stops repo
+  walk, sed matches real manifest byte-for-byte, PS wrapper try/catch
+  distinguishes version throw from other terminating errors). $LASTEXITCODE
+  discipline, WSL-shim bridge, flag transforms, mirror byte-identity all
+  clean. One LOW finding (B-1): leading-zero `03` divergence — invalid JSON,
+  negligible risk, noted in feature_list.json.
+- Domain C (wiring/records): PASS. CI parity, skill mirrors (all 18
+  byte-identical), feature_list.json honesty (vol-017 30 checks = actual 30,
+  vol-016 28 = true at 6e65dda, vol-015 22/22 = observed), session entries
+  for every landing, docs match enforcement, ship flow clean, records rule
+  holds. One MEDIUM finding (F1): Session 020 records had contradictory check
+  counts (claimed "(27 → 30)" baseline and "28 checks pass" while actual was
+  28 → 30 / 30 checks) — fixed. One LOW finding (F2): pre-commit hook
+  worktree copy is CRLF (stale stat cache, same incident class as the
+  manifest) — not blocking (committed blob is LF-correct, hook works);
+  noted as follow-up. Two LOW pre-existing findings (F3: .claude skill dir
+  has extra format-lint.sh vs .agents; F4: .agents volume-control skill has
+  opencode-only yaml) — noted as follow-ups.

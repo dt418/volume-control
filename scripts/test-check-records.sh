@@ -286,12 +286,12 @@ fi
 # A future hook edit that drops or comments out the records check would
 # silently disable local enforcement; assert the invocation is present, not
 # commented out, AND guarded by a fail-closed `if ! ... exit 1` branch. A bare
-# invocation, a positive `if`, or a `|| true`/`then :` fail-open would all
-# still "invoke" the guard yet never abort the commit, so only the exact
-# fail-closed idiom counts.
+# invocation, a positive `if`, a `|| true`/`then :` fail-open, or a
+# COMMENTED-OUT `exit 1` inside the branch would all still "invoke" the guard
+# yet never abort the commit, so only the exact fail-closed idiom counts.
 if awk 'BEGIN{found=0;scanning=0} \
     /check-records\.sh --staged/ && !/^[[:space:]]*#/ && /if[[:space:]]*!/ {scanning=1; next} \
-    scanning && /exit[[:space:]]+1/ {found=1; scanning=0} \
+    scanning && !/^[[:space:]]*#/ && /exit[[:space:]]+1/ {found=1; scanning=0} \
     scanning && /^[[:space:]]*fi[[:space:]]*$/ {scanning=0} \
     END{exit !found}' .githooks/pre-commit; then
     report ok 'pre-commit hook: records guard aborts on failure (fail-closed if ! ... exit 1)'

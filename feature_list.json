@@ -37,7 +37,7 @@
         "test-check-records.sh asserts a failing --staged/--branch run never creates feature_list.json/claude-progress.md (guard prints templates only) and that the pre-commit hook's records invocation is fail-closed (`if ! ... exit 1`), rejecting bare invocations, positive ifs, and `|| true` fail-open edits.",
         "Session 020 (claude-progress.md) records the landing incl. the CRLF-manifest incident: a CRLF working copy (stale git stat cache) broke the bash gate's sed pattern extraction; the file is eol=lf in git and was re-normalized with no content diff."
       ],
-      "notes": "Hardening series following the pre-push-review codification (vol-016): three real parser/drift holes closed (coerced version, case-insensitive PS matching, skills-JSON exemption hole) plus wiring assertions that catch fail-open regressions mechanically. Also adds the missing regression coverage for the PS-gate quoted-version rejection that the WIP originally lacked."
+      "notes": "Hardening series following the pre-push-review codification (vol-016): three real parser/drift holes closed (coerced version, case-insensitive PS matching, skills-JSON exemption hole) plus wiring assertions that catch fail-open regressions mechanically. Also adds the missing regression coverage for the PS-gate quoted-version rejection that the WIP originally lacked. Follow-ups from pre-push review: (A7) hook awk now excludes commented-out exit; (B1) PS gate accepts leading-zero version 03 while bash rejects (invalid JSON, negligible risk); (F3) .claude skill dir has extra format-lint.sh (pre-existing asymmetry); (F4) .agents volume-control skill has opencode-only yaml with no .claude counterpart."
     },
     {
       "id": "vol-016",
