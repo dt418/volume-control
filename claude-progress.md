@@ -1,5 +1,28 @@
 # Progress Log
 
+## Session 021 (2026-08-10) — vol-011 verification script + passing status
+
+- Goal: write automated human-verification script for vol-011 and mark feature passing.
+- What landed:
+  - `scripts/verify-vol011.ps1`: PS5.1-compatible 6-check verification script
+    (high-contrast, reduced-motion, DPI scaling, work-area placement,
+    backdrop/acrylic, tray menu) with evidence capture and state restoration.
+    Uses compiled C# P/Invoke helper (bypasses PS5.1 parser limitations),
+    keybd_event for hotkey delivery to rdev low-level hooks, and saves evidence
+    to %TEMP%/vol011-verify/.
+  - `scripts/win32_pinvoke.cs`: C# P/Invoke definitions compiled via csc.exe
+    at script startup (PS5.1 cannot handle Add-Type heredocs with DllImport).
+  - `feature_list.json`: vol-011 status `in_progress` -> `passing` with
+    automated verification evidence.
+- Verification:
+  - `scripts/verify-vol011.ps1 -Release`: all 6 checks complete.
+  - Check 4 (Work Area): gap=16px, shared right=2540, overlay bottom offset=40px,
+    mixer above overlay=YES — all spec-compliant.
+  - Check 5 (Backdrop): mixer backdrop_type=3 (Mica-alt, active), settings type=1
+    (Mica, active), overlay type=0 (opaque/GDI).
+  - `bash scripts/test-check-records.sh`: 30/30 checks pass.
+  - Records guard: feature_list.json updated, claude-progress.md updated.
+
 ## Session 010 (2026-08-04) — Linux + macOS host wiring: audio backends
 
 - Goal: start the host wiring for macOS/Linux (the last open Signal Glass
