@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T20:00",
+  "last_updated": "2026-08-10T21:00",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,23 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-022",
+      "priority": 22,
+      "area": "ui",
+      "title": "macOS Overlay Content View wiring",
+      "user_visible_behavior": "MacosRenderer creates an overlay content view and renders Signal Rail + volume text via CoreGraphicsCanvas when the overlay surface is visible.",
+      "status": "passing",
+      "verification": [
+        "Run `cargo check -p volumectl --no-default-features` — compiles clean.",
+        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
+        "Run `cargo test --workspace --no-default-features` — all tests pass."
+      ],
+      "evidence": [
+        "Session 027 (2026-08-10): cargo check compiles clean. Tests pass."
+      ],
+      "notes": "Task 4, Phase 1. Wires OverlayContentRenderer into MacosRenderer::publish() via CoreGraphicsCanvas."
+    },
     {
       "id": "vol-021",
       "priority": 21,

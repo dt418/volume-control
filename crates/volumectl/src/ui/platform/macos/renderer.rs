@@ -265,6 +265,17 @@ impl NativeRenderer for MacosRenderer {
             panel.apply_plan(plan, capabilities);
             let visible = state.is_visible(plan.surface);
             panel.set_visible(visible);
+
+            if plan.surface == SurfaceId::Overlay && visible {
+                panel.set_overlay_content();
+                panel.render_overlay(
+                    state.volume_percent,
+                    state.muted,
+                    tokens,
+                    40, // green_up_to
+                    75, // blue_up_to
+                );
+            }
         }
     }
 
@@ -292,8 +303,9 @@ mod appkit {
     use objc2::{MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
         NSAccessibility, NSAnimatablePropertyContainer, NSApplication, NSAutoresizingMaskOptions,
-        NSBackingStoreType, NSColor, NSFloatingWindowLevel, NSPanel, NSVisualEffectBlendingMode,
-        NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindowStyleMask,
+        NSBackingStoreType, NSColor, NSFloatingWindowLevel, NSGraphicsContext, NSPanel, NSView,
+        NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState,
+        NSVisualEffectView, NSWindowStyleMask,
     };
     use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
 
@@ -302,6 +314,8 @@ mod appkit {
         window: Retained<NSPanel>,
         /// The glass backing view, created lazily under the availability gate.
         effect: Option<Retained<NSVisualEffectView>>,
+        /// Content view for overlay rendering, created lazily on first render.
+        overlay_view: Option<Retained<NSView>>,
     }
 
     /// Ensure the shared application instance exists before creating panels.
@@ -337,6 +351,7 @@ mod appkit {
             Self {
                 window,
                 effect: None,
+                overlay_view: None,
             }
         }
 
@@ -436,6 +451,62 @@ mod appkit {
         /// Whether the panel carries a VoiceOver accessibility label.
         pub fn has_accessibility_label(&self) -> bool {
             self.window.accessibilityLabel().is_some()
+        }
+
+        /// Set the panel's content view for overlay rendering.
+        ///
+        /// Creates an `NSView` sized to the panel's frame and installs it as
+        /// the window content view. Subsequent `render_overlay` calls draw
+        /// into this view via the current `NSGraphicsContext`.
+        pub fn set_overlay_content(&mut self) {
+            if self.overlay_view.is_none() {
+                let mtm = MainThreadMarker::new().expect("overlay view on main thread");
+                let frame = self.window.frame();
+                let view = NSView::initWithFrame(NSView::alloc(mtm), frame);
+                view.setAutoresizingMask(
+                    NSAutoresizingMaskOptions::ViewWidthSizable
+                        | NSAutoresizingMaskOptions::ViewHeightSizable,
+                );
+                self.overlay_view = Some(view);
+            }
+            if let Some(view) = &self.overlay_view {
+                self.window.setContentView(Some(&**view));
+            }
+        }
+
+        /// Render overlay content (Signal Rail + volume text) into the panel.
+        ///
+        /// Must be called after `set_overlay_content`. Obtains the current
+        /// `NSGraphicsContext`, wraps it in a `CoreGraphicsCanvas`, and
+        /// delegates to [`OverlayContentRenderer::render`].
+        pub fn render_overlay(
+            &mut self,
+            volume_percent: u8,
+            muted: bool,
+            tokens: &crate::ui::theme::ThemeTokens,
+            green_up_to: u8,
+            blue_up_to: u8,
+        ) {
+            let rail = crate::ui::signal_rail::SignalRail::new(
+                volume_percent,
+                muted,
+                tokens.volume_threshold_colors,
+                green_up_to,
+                blue_up_to,
+            );
+            let device_name = "System output";
+
+            // Flush the current NSGraphicsContext into a CoreGraphicsCanvas.
+            if let Some(mut canvas) =
+                crate::ui::platform::macos::canvas::CoreGraphicsCanvas::current()
+            {
+                crate::ui::canvas::OverlayContentRenderer::render(
+                    &mut canvas,
+                    &rail,
+                    &tokens.typography,
+                    device_name,
+                );
+            }
         }
     }
 }

@@ -1,5 +1,15 @@
 # Progress Log
 
+## Session 027 (2026-08-10) — macOS Overlay Content View (Task 4)
+
+- Goal: wire overlay content rendering into the existing macOS renderer (Task 4, Phase 1).
+- What landed:
+  - `crates/volumectl/src/ui/platform/macos/renderer.rs`: added `overlay_view: Option<Retained<NSView>>` field to `appkit::Panel`, initialized to `None`. Added `set_overlay_content()` method (creates NSView sized to panel frame, installs as content view). Added `render_overlay()` method (obtains CoreGraphicsCanvas from NSGraphicsContext, constructs SignalRail from volume/muted/thresholds, delegates to `OverlayContentRenderer::render()`). Wired overlay rendering in `MacosRenderer::publish()` — when overlay surface is visible, calls `set_overlay_content()` then `render_overlay()`.
+- Verification:
+  - `cargo check -p volumectl --no-default-features` — compiles clean.
+  - `cargo fmt --all --check` — clean.
+  - `cargo test --workspace --no-default-features` — all tests pass.
+
 ## Session 026 (2026-08-10) — Linux Cairo Canvas (Task 3)
 
 - Goal: implement the shared Canvas trait using Cairo for Linux (Task 3, Phase 1).
