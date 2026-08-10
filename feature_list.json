@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T17:15",
+  "last_updated": "2026-08-10T17:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -396,6 +396,27 @@
         "Known accepted cost: the ubuntu checks job's smoke-test --all-features run fails fast at gtk4-sys pkg-config (no GTK dev libs installed there); assertions are header-only so it still passes."
       ],
       "notes": "Tooling/infrastructure feature, not user-visible app behavior; tracked here as the repository system of record per CLAUDE.md. Pre-commit hook extension deliberately out of scope."
+    },
+    {
+      "id": "vol-018",
+      "priority": 18,
+      "area": "tooling",
+      "title": "vol-011 automated verification script with PrintWindow screenshot capture",
+      "user_visible_behavior": "Developer-facing: a PS5.1-compatible verification script (scripts/verify-vol011.ps1) that automates all 6 vol-011 human-check items (high-contrast, reduced-motion, DPI scaling, work-area placement, backdrop/acrylic, tray menu) with evidence capture. Uses compiled C# P/Invoke helper (scripts/win32_pinvoke.cs) and PrintWindow with PW_RENDERFULLCONTENT to capture layered/transparent windows as PNG screenshots alongside text evidence.",
+      "status": "passing",
+      "verification": [
+        "Run `powershell -ExecutionPolicy Bypass -File scripts/verify-vol011.ps1 -Release` — all 6 checks complete, no errors.",
+        "Verify screenshots captured: mixer 400x224, overlay 336x88, settings 760x620, help 520x500.",
+        "Verify evidence files at %TEMP%\\vol011-verify\\: summary.txt + 6 check directories with window-state.txt and per-window PNGs."
+      ],
+      "evidence": [
+        "Session 022 (2026-08-10): all 6 checks pass, screenshots captured with correct dimensions.",
+        "Session 021 (2026-08-10): initial script written and tested; work-area gap=16px, shared right=2540, overlay offset=40px, mixer backdrop_type=3, settings type=1.",
+        "C# P/Invoke compiled via csc.exe at script startup (PS5.1 compatible).",
+        "keybd_event with BringWindowToTop + SetForegroundWindow delivers hotkeys to rdev low-level hook.",
+        "NoRestore flag available for debugging; state restoration tested."
+      ],
+      "notes": "Tooling feature for vol-011 verification. The script automates 14 of 15 human-only items from the original verification matrix; remaining item (tray-menu clicks) requires real mouse interaction. Overlay capture uses PrintWindow PW_RENDERFULLCONTENT instead of GDI CopyFromScreen (which cannot capture layered/transparent windows)."
     }
   ]
 }

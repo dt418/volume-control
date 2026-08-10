@@ -1,5 +1,22 @@
 # Progress Log
 
+## Session 022 (2026-08-10) — verify-vol011 screenshot capture
+
+- Goal: add PrintWindow-based screenshot capture to verify-vol011.ps1 so each
+  check saves per-window PNG evidence (previously only text evidence was captured).
+- What landed:
+  - `scripts/win32_pinvoke.cs`: added PrintWindow, CreateCompatibleDC,
+    CreateCompatibleBitmap, BitBlt, SelectObject, DeleteDC, DeleteObject,
+    GetStockObject P/Invoke declarations + PW_RENDERFULLCONTENT constant.
+  - `scripts/verify-vol011.ps1`: new `Capture-WindowScreenshot` function uses
+    PrintWindow with PW_RENDERFULLCONTENT to capture layered/transparent windows;
+    `Capture-WindowState` now calls it and saves per-window PNGs alongside text
+    evidence; csc compilation now references System.Drawing.dll.
+- Verification:
+  - `powershell -File scripts/verify-vol011.ps1 -Release` — all 6 checks pass.
+  - Screenshots captured: mixer 400x224, overlay 336x88, settings 760x620,
+    help 520x500 — correct dimensions for each surface.
+
 ## Session 021 (2026-08-10) — vol-011 verification script + passing status
 
 - Goal: write automated human-verification script for vol-011 and mark feature passing.

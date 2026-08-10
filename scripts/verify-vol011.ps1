@@ -64,7 +64,7 @@ $csc = $null
 foreach ($p in $cscPaths) { if (Test-Path -LiteralPath $p) { $csc = $p; break } }
 if (-not $csc) { Write-Error "csc.exe not found"; exit 1 }
 $dllPath = Join-Path $env:TEMP 'win32_pinvoke.dll'
-& $csc /nologo /target:library /out:$dllPath $csFile 2>&1
+& $csc /nologo /target:library /out:$dllPath /reference:System.Drawing.dll $csFile 2>&1
 if ($LASTEXITCODE -ne 0) { Write-Error "csc compilation failed"; exit 1 }
 Add-Type -Path $dllPath
 Add-Type -AssemblyName System.Windows.Forms
@@ -293,6 +293,15 @@ function Capture-WindowState {
             }
             $backdrop = Get-DwmBackdropType $h
             $report += '  DWMWA_SYSTEMBACKDROP_TYPE: ' + $backdrop
+
+            # Capture screenshot using PrintWindow (works with layered/transparent windows)
+            $pngPath = Join-Path (Join-Path $EvidenceDir $CheckName) "$cn.png"
+            $captured = Capture-WindowScreenshot $h $pngPath
+            if ($captured) {
+                $report += "  Screenshot: $cn.png"
+            } else {
+                $report += '  Screenshot: capture failed'
+            }
         }
         $report += ''
     }
@@ -311,6 +320,49 @@ function Capture-WindowState {
     }
 
     Write-Evidence $CheckName 'window-state.txt' ($report -join "`n")
+}
+
+function Capture-WindowScreenshot {
+    param([IntPtr]$Hwnd, [string]$OutputPath)
+    if ($Hwnd -eq [IntPtr]::Zero) { return $false }
+
+    $geo = Get-WindowGeometry $Hwnd
+    $w = $geo.Client.Right
+    $h = $geo.Client.Bottom
+    if ($w -le 0 -or $h -le 0) { return $false }
+
+    $hdcScreen = [Win32]::GetDC([IntPtr]::Zero)
+    $hdcMem = [Win32]::CreateCompatibleDC($hdcScreen)
+    $hBitmap = [Win32]::CreateCompatibleBitmap($hdcScreen, $w, $h)
+    $hOld = [Win32]::SelectObject($hdcMem, $hBitmap)
+
+    # PrintWindow with PW_RENDERFULLCONTENT captures layered/transparent windows
+    $ok = [Win32]::PrintWindow($Hwnd, $hdcMem, [Win32]::PW_RENDERFULLCONTENT)
+    if (-not $ok) {
+        # Fallback: PW_CLIENTONLY
+        [Win32]::PrintWindow($Hwnd, $hdcMem, [Win32]::PW_CLIENTONLY) | Out-Null
+    }
+
+    # Save as PNG via System.Drawing
+    try {
+        $bmp = [System.Drawing.Bitmap]::FromHbitmap($hBitmap)
+        $dir = Split-Path $OutputPath -Parent
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        $bmp.Save($OutputPath, [System.Drawing.Imaging.ImageFormat]::Png)
+        $bmp.Dispose()
+    } catch {
+        [Win32]::SelectObject($hdcMem, $hOld) | Out-Null
+        [Win32]::DeleteObject($hBitmap) | Out-Null
+        [Win32]::DeleteDC($hdcMem) | Out-Null
+        [Win32]::ReleaseDC([IntPtr]::Zero, $hdcScreen) | Out-Null
+        return $false
+    }
+
+    [Win32]::SelectObject($hdcMem, $hOld) | Out-Null
+    [Win32]::DeleteObject($hBitmap) | Out-Null
+    [Win32]::DeleteDC($hdcMem) | Out-Null
+    [Win32]::ReleaseDC([IntPtr]::Zero, $hdcScreen) | Out-Null
+    return $true
 }
 
 # Check 1: High Contrast
