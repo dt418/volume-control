@@ -585,7 +585,7 @@ mod gtk_surfaces {
             let rail = crate::ui::signal_rail::SignalRail::new(
                 volume_percent,
                 muted,
-                tokens.volume_threshold_colors,
+                tokens.volume_threshold,
                 green_up_to,
                 blue_up_to,
             );

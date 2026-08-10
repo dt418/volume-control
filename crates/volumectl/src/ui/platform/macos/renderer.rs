@@ -260,6 +260,7 @@ impl NativeRenderer for MacosRenderer {
 
     fn publish(&mut self, state: &AppState, tokens: &ThemeTokens, capabilities: &UiCapabilities) {
         let plans = plan_surfaces(state, tokens, capabilities);
+        let host = self.host.clone();
         for plan in &plans {
             let panel = self.panel_for(plan.surface);
             panel.apply_plan(plan, capabilities);
@@ -278,7 +279,7 @@ impl NativeRenderer for MacosRenderer {
             }
 
             if plan.surface == SurfaceId::Mixer && visible {
-                panel.set_mixer_controls(&self.host);
+                panel.set_mixer_controls(&host);
                 panel.update_mixer_value(state.volume_percent, state.muted);
             }
         }
@@ -510,7 +511,7 @@ mod appkit {
             let rail = crate::ui::signal_rail::SignalRail::new(
                 volume_percent,
                 muted,
-                tokens.volume_threshold_colors,
+                tokens.volume_threshold,
                 green_up_to,
                 blue_up_to,
             );

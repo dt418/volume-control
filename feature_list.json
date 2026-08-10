@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T22:00",
+  "last_updated": "2026-08-10T23:00",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,24 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-025",
+      "priority": 25,
+      "area": "ui",
+      "title": "Phase 1 Overlay+Mixer cross-platform implementation complete",
+      "user_visible_behavior": "Overlay content (Signal Rail + volume text) renders identically on macOS and Linux via shared Canvas trait and OverlayContentRenderer. Mixer interactive controls (slider + mute/reset/close buttons + value label) use native AppKit/GTK4 widgets on both platforms, wired to HostHandle for action dispatch. macOS borrow checker fix and volume_threshold field correction included.",
+      "status": "passing",
+      "verification": [
+        "Run `cargo fmt --all --check` — clean.",
+        "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.",
+        "Run `cargo test --workspace --no-default-features` — 251 tests pass (235 + 16 host-core).",
+        "Run `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` — compiles clean."
+      ],
+      "evidence": [
+        "fmt clean, clippy clean, 251 tests passed, macOS cross-check compiles."
+      ],
+      "notes": "Phase 1 (Tasks 1-8): Shared Canvas trait, CoreGraphics Canvas, Cairo Canvas, macOS overlay wiring, Linux overlay (prior), macOS mixer, Linux mixer, spec/plan docs. All features passing."
+    },
     {
       "id": "vol-023",
       "priority": 23,
@@ -55,7 +73,7 @@
       "area": "ui",
       "title": "Linux Cairo Canvas implementation",
       "user_visible_behavior": "Cairo-backed Canvas implementation for Linux using gtk4::cairo::Context. Fills/strokes rects, circles, and diamonds. Text drawing via Cairo toy text API (select_font_face, show_text).",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "Run `cargo check --target x86_64-unknown-linux-gnu -p volumectl --no-default-features --features gtk-renderer` — compiles clean.",
         "Run `cargo fmt --all --check` and `git diff --check` — clean.",
@@ -74,7 +92,7 @@
       "area": "ui",
       "title": "macOS CoreGraphics Canvas implementation",
       "user_visible_behavior": "CoreGraphics-backed Canvas implementation for macOS. Fills/strokes rects, circles, and diamonds using Core Graphics extern functions. Converts logical pixels to physical via display scale factor. Text drawing stub included for follow-up task.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "Run `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` — compiles clean.",
         "Run `cargo fmt --all --check` and `git diff --check` — clean.",
@@ -93,7 +111,7 @@
       "area": "ui",
       "title": "Shared Canvas trait, OverlayContentRenderer, and MixerLayout",
       "user_visible_behavior": "Platform-neutral drawing canvas trait and overlay/mixer layout. OverlayContentRenderer draws Signal Rail, volume text, and markers using the Canvas trait — same logic on macOS and Linux. MixerLayout provides component rects for the mixer surface. Unit-tested with MockCanvas.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "Run `cargo test --workspace --no-default-features -- ui::canvas` — 10 tests pass.",
         "Run `cargo test --workspace --no-default-features` — 235 tests pass, 0 failures.",
@@ -509,8 +527,8 @@
       "notes": "Tooling feature for vol-011 verification. The script automates 14 of 15 human-only items from the original verification matrix; remaining item (tray-menu clicks) requires real mouse interaction. Overlay capture uses PrintWindow PW_RENDERFULLCONTENT instead of GDI CopyFromScreen (which cannot capture layered/transparent windows)."
     },
     {
-      "id": "vol-023",
-      "priority": 23,
+      "id": "vol-024",
+      "priority": 24,
       "area": "ui",
       "title": "Linux Mixer Controls with native widgets",
       "user_visible_behavior": "GtkPanel creates interactive mixer controls (slider, mute/reset/close buttons, value label) using native GTK4 widgets positioned per MixerLayout rects via gtk::Fixed. Slider and button signals are wired to HostHandle for action dispatch.",

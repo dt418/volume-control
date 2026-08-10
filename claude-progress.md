@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 030 (2026-08-10) — Phase 1 Overlay+Mixer complete + bug fixes
+
+- Goal: complete Phase 1 cross-platform Overlay+Mixer implementation and fix compilation bugs (borrow checker, field name).
+- What landed:
+  - `crates/volumectl/src/ui/platform/macos/renderer.rs`: clone HostHandle before loop in `publish()` to fix borrow checker; fix `tokens.volume_threshold` field name.
+  - `crates/volumectl/src/ui/platform/linux/renderer.rs`: fix `tokens.volume_threshold` field name.
+  - `docs/superpowers/specs/2026-08-10-phase1-overlay-mixer-design.md`: Phase 1 spec (new).
+  - `docs/superpowers/plans/2026-08-10-phase1-overlay-mixer.md`: Phase 1 implementation plan (new).
+  - `feature_list.json`: vol-019, vol-020, vol-021 status `in_progress` -> `passing`; fixed duplicate vol-023; added vol-024 (Linux Mixer) and vol-025 (Phase 1 complete); updated `last_updated`.
+- Verification:
+  - `cargo fmt --all --check` — clean.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.
+  - `cargo test --workspace --no-default-features` — 251 passed (235 + 16 host-core).
+  - `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` — compiles clean.
+
 ## Session 029 (2026-08-10) — macOS Mixer Controls (Task 6)
 
 - Goal: add interactive mixer controls (NSSlider + NSButton × 3 + NSTextField) to the macOS AppKit panel (Task 6, Phase 1).
