@@ -22,7 +22,8 @@ fn run_smoke() {
         ensure_application, plan_surfaces, Panel, SurfacePlan,
     };
     use volumectl_lib::ui::{
-        tokens_for, AccentMode, AppState, ThemeMode, UiCapabilities, WorkArea,
+        tokens_for, AccentMode, AppState, HostHandle, SurfaceId, ThemeMode, UiCapabilities,
+        WorkArea,
     };
 
     fn caps(high_contrast: bool) -> UiCapabilities {
@@ -82,4 +83,27 @@ fn run_smoke() {
             plan.surface
         );
     }
+
+    // Overlay content rendering: render into the panel without panic.
+    let overlay_plan = normal
+        .iter()
+        .find(|p| p.surface == SurfaceId::Overlay)
+        .unwrap();
+    let mut overlay_panel = Panel::new();
+    overlay_panel.apply_plan(overlay_plan, &caps(false));
+    overlay_panel.set_overlay_content();
+    let overlay_tokens = tokens_for(ThemeMode::Dark, false, AccentMode::System, || Some(true));
+    overlay_panel.render_overlay(50, false, &overlay_tokens, 40, 75);
+
+    // Mixer controls: create and update without panic.
+    let mixer_plan = normal
+        .iter()
+        .find(|p| p.surface == SurfaceId::Mixer)
+        .unwrap();
+    let mut mixer_panel = Panel::new();
+    mixer_panel.apply_plan(mixer_plan, &caps(false));
+    let host = HostHandle::new(|_| {});
+    mixer_panel.set_mixer_controls(&host);
+    mixer_panel.update_mixer_value(72, false);
+    mixer_panel.update_mixer_value(30, true);
 }

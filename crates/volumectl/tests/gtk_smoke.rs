@@ -25,7 +25,8 @@ fn run_smoke() {
         ensure_gtk_initialized, plan_surfaces, GtkPanel,
     };
     use volumectl_lib::ui::{
-        tokens_for, AccentMode, AppState, ThemeMode, UiCapabilities, WorkArea,
+        tokens_for, AccentMode, AppState, HostHandle, SurfaceId, ThemeMode, UiCapabilities,
+        WorkArea,
     };
 
     fn caps() -> UiCapabilities {
@@ -113,4 +114,25 @@ fn run_smoke() {
             "no Wayland glass without layer-shell support"
         );
     }
+
+    // Overlay content rendering via CairoCanvas: no panic.
+    let overlay_plan = plans
+        .iter()
+        .find(|p| p.surface == SurfaceId::Overlay)
+        .unwrap();
+    let mut overlay_panel = GtkPanel::new(overlay_plan.surface, false);
+    overlay_panel.apply_plan(overlay_plan, &caps());
+    overlay_panel.set_overlay_content(50, false, &tokens, 40, 75);
+
+    // Mixer controls via native GTK widgets: no panic.
+    let mixer_plan = plans
+        .iter()
+        .find(|p| p.surface == SurfaceId::Mixer)
+        .unwrap();
+    let mut mixer_panel = GtkPanel::new(mixer_plan.surface, false);
+    mixer_panel.apply_plan(mixer_plan, &caps());
+    let host = HostHandle::new(|_| {});
+    mixer_panel.set_mixer_controls(&host);
+    mixer_panel.update_mixer_value(72, false);
+    mixer_panel.update_mixer_value(30, true);
 }

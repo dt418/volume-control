@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 031 (2026-08-10) — Overlay + Mixer smoke tests (Task 8)
+
+- Goal: add overlay content + mixer control assertions to the harness-free smoke binaries (Task 8, Phase 1).
+- What landed:
+  - `crates/volumectl/tests/appkit_smoke.rs`: after the HC block, added overlay rendering assertions (`apply_plan` → `set_overlay_content()` → `render_overlay(50, false, &tokens, 40, 75)`) and mixer assertions (`set_mixer_controls(&HostHandle::new(|_| {}))` → `update_mixer_value(72, false)` / `update_mixer_value(30, true)`), all on `SurfaceId::Overlay`/`SurfaceId::Mixer` plans found in the normal plan set. Tokens created in the test body (`tokens_for(Dark, false, System, || Some(true))`).
+  - `crates/volumectl/tests/gtk_smoke.rs`: same overlay + mixer assertions via `GtkPanel` (`set_overlay_content` draws a CairoCanvas draw-func; `set_mixer_controls` builds native GTK4 widgets), reusing the existing `tokens` variable.
+  - Import paths adapted from the brief: `SurfaceId`/`HostHandle` live at `volumectl_lib::ui::{SurfaceId, HostHandle}` — `model`/`renderer` modules are private (not re-exported).
+  - `feature_list.json`: added vol-026 (smoke tests); updated `last_updated`.
+- Verification:
+  - `cargo fmt --all --check` — clean.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.
+  - `cargo test --workspace --no-default-features` — 251 passed (235 + 16 host-core).
+  - `cargo check --target x86_64-apple-darwin -p volumectl --tests --no-default-features` — compiles clean (one pre-existing unused `NSGraphicsContext` warning in committed lib code, not introduced here).
+  - Linux cross-check `--target x86_64-unknown-linux-gnu --features gtk-renderer` fails at `libpulse-sys` pkg-config (no Linux sysroot on Windows) — expected environmental; Ubuntu CI covers the native GTK build + xvfb smoke run.
+
 ## Session 030 (2026-08-10) — Phase 1 Overlay+Mixer complete + bug fixes
 
 - Goal: complete Phase 1 cross-platform Overlay+Mixer implementation and fix compilation bugs (borrow checker, field name).

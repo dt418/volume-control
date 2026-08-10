@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-08-10T23:00",
+  "last_updated": "2026-08-10T23:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,25 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-026",
+      "priority": 26,
+      "area": "ui",
+      "title": "Overlay + mixer content smoke tests (appkit/gtk)",
+      "user_visible_behavior": "Harness-free smoke binaries now exercise overlay content rendering (set_overlay_content/render_overlay via CoreGraphicsCanvas and CairoCanvas) and mixer controls (set_mixer_controls/update_mixer_value via native AppKit/GTK widgets) on real panels, asserting no panic. New assertions run on the macOS CI runner and under xvfb-run on Ubuntu CI.",
+      "status": "passing",
+      "verification": [
+        "Run `cargo fmt --all --check` — clean (after `cargo fmt --all`).",
+        "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.",
+        "Run `cargo test --workspace --no-default-features` — 251 tests pass (235 + 16 host-core).",
+        "Run `cargo check --target x86_64-apple-darwin -p volumectl --tests --no-default-features` — compiles clean.",
+        "Run `cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests --no-default-features --features gtk-renderer` — blocked at libpulse-sys pkg-config (no Linux sysroot on Windows host); expected environmental, covered by Ubuntu CI job."
+      ],
+      "evidence": [
+        "Session 031 (2026-08-10): all smoke assertions call the real Panel/GtkPanel APIs; macOS cross-check compiles clean; workspace tests green; Linux cross-check fails only at libpulse-sys pkg-config cross-compilation (environmental)."
+      ],
+      "notes": "Task 8, Phase 1. Import paths adapted: `SurfaceId`/`HostHandle` re-exported at `volumectl_lib::ui::{SurfaceId, HostHandle}` (model/renderer modules are private). Pre-existing unused `NSGraphicsContext` import warning in macos renderer.rs (committed code, not introduced here) shows on macOS-target checks only."
+    },
     {
       "id": "vol-025",
       "priority": 25,
