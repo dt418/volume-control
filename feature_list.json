@@ -490,6 +490,24 @@
         "NoRestore flag available for debugging; state restoration tested."
       ],
       "notes": "Tooling feature for vol-011 verification. The script automates 14 of 15 human-only items from the original verification matrix; remaining item (tray-menu clicks) requires real mouse interaction. Overlay capture uses PrintWindow PW_RENDERFULLCONTENT instead of GDI CopyFromScreen (which cannot capture layered/transparent windows)."
+    },
+    {
+      "id": "vol-023",
+      "priority": 23,
+      "area": "ui",
+      "title": "Linux Mixer Controls with native widgets",
+      "user_visible_behavior": "GtkPanel creates interactive mixer controls (slider, mute/reset/close buttons, value label) using native GTK4 widgets positioned per MixerLayout rects via gtk::Fixed. Slider and button signals are wired to HostHandle for action dispatch.",
+      "status": "passing",
+      "verification": [
+        "Run `cargo check -p volumectl --no-default-features --features gtk-renderer` — compiles clean.",
+        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
+        "Run `cargo clippy --workspace --all-targets --no-default-features --features gtk-renderer -- -D warnings` — clean.",
+        "Run `cargo test --workspace --no-default-features` — 235/235 pass."
+      ],
+      "evidence": [
+        "Session 028 (2026-08-10): cargo check compiles clean. cargo fmt clean. Clippy clean. 235/235 tests pass."
+      ],
+      "notes": "Task 7, Phase 1. Adds GtkPanel::set_mixer_controls() and update_mixer_value() with gtk::Fixed layout, HostHandle wiring for slider/buttons, and publish() integration."
     }
   ]
 }

@@ -1,5 +1,16 @@
 # Progress Log
 
+## Session 028 (2026-08-10) — Linux Mixer Controls (Task 7)
+
+- Goal: add interactive mixer controls (slider + buttons + value label) to the Linux GTK renderer using native GTK4 widgets (Task 7, Phase 1).
+- What landed:
+  - `crates/volumectl/src/ui/platform/linux/renderer.rs`: added 5 optional mixer widget fields to `GtkPanel` (`mixer_scale`, `mixer_mute_btn`, `mixer_reset_btn`, `mixer_close_btn`, `mixer_value_label`). Added `set_mixer_controls(host)` — creates `gtk::Scale`, 3x `gtk::Button`, `gtk::Label` in a `gtk::Fixed` at `MixerLayout` positions; wires scale `connect_value_changed` → `SetVolumePercent`, mute → `ToggleMute`, reset → `ResetVolume`, close → `HideSurface(Mixer)`. Added `update_mixer_value(volume, muted)` — updates scale/label/mute-button text. Wired in `LinuxRenderer::publish()` for visible Mixer surface.
+- Verification:
+  - `cargo check -p volumectl --no-default-features --features gtk-renderer` — compiles clean.
+  - `cargo fmt --all --check` — clean.
+  - `cargo clippy --workspace --all-targets --no-default-features --features gtk-renderer -- -D warnings` — clean.
+  - `cargo test --workspace --no-default-features` — 235/235 pass.
+
 ## Session 027 (2026-08-10) — macOS Overlay Content View (Task 4)
 
 - Goal: wire overlay content rendering into the existing macOS renderer (Task 4, Phase 1).

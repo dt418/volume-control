@@ -301,6 +301,7 @@ impl NativeRenderer for LinuxRenderer {
     fn publish(&mut self, state: &AppState, tokens: &ThemeTokens, capabilities: &UiCapabilities) {
         let plans = plan_surfaces(state, tokens, capabilities, self.layer_shell_ok);
         let layer_shell_ok = self.layer_shell_ok;
+        let host = self.host.clone();
         for plan in &plans {
             let panel = self.panel_for(plan.surface);
             if panel.needs_recreate(plan) {
@@ -309,6 +310,21 @@ impl NativeRenderer for LinuxRenderer {
             panel.apply_plan(plan, capabilities);
             let visible = state.is_visible(plan.surface);
             panel.set_visible(visible);
+
+            if plan.surface == SurfaceId::Overlay && visible {
+                panel.set_overlay_content(
+                    state.volume_percent,
+                    state.muted,
+                    tokens,
+                    40, // green_up_to
+                    75, // blue_up_to
+                );
+            }
+
+            if plan.surface == SurfaceId::Mixer && visible {
+                panel.set_mixer_controls(&host);
+                panel.update_mixer_value(state.volume_percent, state.muted);
+            }
         }
     }
 
@@ -373,6 +389,11 @@ mod gtk_surfaces {
         layer_shell_initialized: bool,
         #[cfg(feature = "layer-shell")]
         layer_shell_mode: bool,
+        mixer_scale: Option<gtk::Scale>,
+        mixer_mute_btn: Option<gtk::Button>,
+        mixer_reset_btn: Option<gtk::Button>,
+        mixer_close_btn: Option<gtk::Button>,
+        mixer_value_label: Option<gtk::Label>,
     }
 
     impl GtkPanel {
@@ -386,6 +407,11 @@ mod gtk_surfaces {
                 layer_shell_initialized: false,
                 #[cfg(feature = "layer-shell")]
                 layer_shell_mode: false,
+                mixer_scale: None,
+                mixer_mute_btn: None,
+                mixer_reset_btn: None,
+                mixer_close_btn: None,
+                mixer_value_label: None,
             }
         }
 
@@ -537,6 +563,128 @@ mod gtk_surfaces {
 
         pub fn set_visible(&mut self, visible: bool) {
             self.window.set_visible(visible);
+        }
+
+        /// Install a `DrawingArea` that renders overlay content via Cairo.
+        ///
+        /// The draw function creates a [`CairoCanvas`] and delegates to
+        /// [`OverlayContentRenderer::render`] so the Signal Rail and volume
+        /// text are drawn identically to the macOS and Windows overlays.
+        pub fn set_overlay_content(
+            &self,
+            volume_percent: u8,
+            muted: bool,
+            tokens: &crate::ui::theme::ThemeTokens,
+            green_up_to: u8,
+            blue_up_to: u8,
+        ) {
+            let draw_area = gtk::DrawingArea::new();
+            let size = logical_size(SurfaceId::Overlay);
+            draw_area.set_size_request(size.width, size.height);
+
+            let rail = crate::ui::signal_rail::SignalRail::new(
+                volume_percent,
+                muted,
+                tokens.volume_threshold_colors,
+                green_up_to,
+                blue_up_to,
+            );
+            let typography = tokens.typography;
+
+            draw_area.set_draw_func(move |_area, ctx, _w, _h| {
+                let mut canvas = crate::ui::platform::linux::canvas::CairoCanvas::new(ctx.clone());
+                crate::ui::canvas::OverlayContentRenderer::render(
+                    &mut canvas,
+                    &rail,
+                    &typography,
+                    "System output",
+                );
+            });
+
+            self.window.set_child(Some(&draw_area));
+        }
+
+        /// Create mixer controls (slider, buttons, value label) and wire them
+        /// to the host. Idempotent — skips creation if widgets already exist.
+        pub fn set_mixer_controls(&mut self, host: &HostHandle) {
+            if self.mixer_scale.is_some() {
+                return;
+            }
+
+            let fixed = gtk::Fixed::new();
+            let size = logical_size(SurfaceId::Mixer);
+            fixed.set_size_request(size.width, size.height);
+
+            // Value label (top-right of mixer).
+            let value_label = gtk::Label::new(Some("0%"));
+            let vr = crate::ui::canvas::MixerLayout::value_rect();
+            value_label.set_size_request(vr.width() as i32, vr.height() as i32);
+            fixed.put(&value_label, vr.left as i32, vr.top as i32);
+
+            // Slider.
+            let scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 1.0);
+            let sr = crate::ui::canvas::MixerLayout::slider_rect();
+            scale.set_size_request(sr.width() as i32, sr.height() as i32);
+            fixed.put(&scale, sr.left as i32, sr.top as i32);
+
+            let host_clone = host.clone();
+            scale.connect_value_changed(move |range| {
+                let percent = range.value().round() as u16;
+                host_clone.enqueue(AppAction::SetVolumePercent { percent });
+            });
+
+            // Mute button.
+            let mute_btn = gtk::Button::with_label("Mute");
+            let mb = crate::ui::canvas::MixerLayout::mute_button_rect();
+            mute_btn.set_size_request(mb.width() as i32, mb.height() as i32);
+            fixed.put(&mute_btn, mb.left as i32, mb.top as i32);
+
+            let host_clone = host.clone();
+            mute_btn.connect_clicked(move |_| {
+                host_clone.enqueue(AppAction::ToggleMute);
+            });
+
+            // Reset button.
+            let reset_btn = gtk::Button::with_label("Reset");
+            let rb = crate::ui::canvas::MixerLayout::reset_button_rect();
+            reset_btn.set_size_request(rb.width() as i32, rb.height() as i32);
+            fixed.put(&reset_btn, rb.left as i32, rb.top as i32);
+
+            let host_clone = host.clone();
+            reset_btn.connect_clicked(move |_| {
+                host_clone.enqueue(AppAction::ResetVolume);
+            });
+
+            // Close button.
+            let close_btn = gtk::Button::with_label("Close");
+            let cb = crate::ui::canvas::MixerLayout::close_button_rect();
+            close_btn.set_size_request(cb.width() as i32, cb.height() as i32);
+            fixed.put(&close_btn, cb.left as i32, cb.top as i32);
+
+            let host_clone = host.clone();
+            close_btn.connect_clicked(move |_| {
+                host_clone.enqueue(AppAction::HideSurface(SurfaceId::Mixer));
+            });
+
+            self.window.set_child(Some(&fixed));
+            self.mixer_scale = Some(scale);
+            self.mixer_mute_btn = Some(mute_btn);
+            self.mixer_reset_btn = Some(reset_btn);
+            self.mixer_close_btn = Some(close_btn);
+            self.mixer_value_label = Some(value_label);
+        }
+
+        /// Update mixer widget values from authoritative state.
+        pub fn update_mixer_value(&self, volume: u8, muted: bool) {
+            if let Some(ref scale) = self.mixer_scale {
+                scale.set_value(volume as f64);
+            }
+            if let Some(ref label) = self.mixer_value_label {
+                label.set_text(&format!("{volume}%"));
+            }
+            if let Some(ref btn) = self.mixer_mute_btn {
+                btn.set_label(if muted { "Unmute" } else { "Mute" });
+            }
         }
 
         /// The material kind last applied.
