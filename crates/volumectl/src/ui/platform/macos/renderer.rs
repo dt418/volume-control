@@ -276,6 +276,11 @@ impl NativeRenderer for MacosRenderer {
                     75, // blue_up_to
                 );
             }
+
+            if plan.surface == SurfaceId::Mixer && visible {
+                panel.set_mixer_controls(&self.host);
+                panel.update_mixer_value(state.volume_percent, state.muted);
+            }
         }
     }
 
@@ -303,9 +308,9 @@ mod appkit {
     use objc2::{MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{
         NSAccessibility, NSAnimatablePropertyContainer, NSApplication, NSAutoresizingMaskOptions,
-        NSBackingStoreType, NSColor, NSFloatingWindowLevel, NSGraphicsContext, NSPanel, NSView,
-        NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState,
-        NSVisualEffectView, NSWindowStyleMask,
+        NSBackingStoreType, NSButton, NSColor, NSFloatingWindowLevel, NSGraphicsContext, NSPanel,
+        NSSlider, NSTextField, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
+        NSVisualEffectState, NSVisualEffectView, NSWindowStyleMask,
     };
     use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
 
@@ -316,6 +321,16 @@ mod appkit {
         effect: Option<Retained<NSVisualEffectView>>,
         /// Content view for overlay rendering, created lazily on first render.
         overlay_view: Option<Retained<NSView>>,
+        /// Mixer slider control (volume trackbar).
+        mixer_slider: Option<Retained<NSSlider>>,
+        /// Mixer mute button.
+        mixer_mute_btn: Option<Retained<NSButton>>,
+        /// Mixer reset button.
+        mixer_reset_btn: Option<Retained<NSButton>>,
+        /// Mixer close button.
+        mixer_close_btn: Option<Retained<NSButton>>,
+        /// Mixer volume value label.
+        mixer_value_label: Option<Retained<NSTextField>>,
     }
 
     /// Ensure the shared application instance exists before creating panels.
@@ -352,6 +367,11 @@ mod appkit {
                 window,
                 effect: None,
                 overlay_view: None,
+                mixer_slider: None,
+                mixer_mute_btn: None,
+                mixer_reset_btn: None,
+                mixer_close_btn: None,
+                mixer_value_label: None,
             }
         }
 
@@ -506,6 +526,113 @@ mod appkit {
                     &tokens.typography,
                     device_name,
                 );
+            }
+        }
+
+        /// Create mixer controls (slider, buttons, value label) and add them
+        /// to the panel's content view. Idempotent — skips creation if
+        /// widgets already exist.
+        ///
+        /// The MixerLayout rects use a top-left origin; AppKit uses a
+        /// bottom-left origin, so y coordinates are flipped relative to the
+        /// mixer panel's 224 px height.
+        pub fn set_mixer_controls(&mut self, _host: &crate::ui::renderer::HostHandle) {
+            if self.mixer_slider.is_some() {
+                return;
+            }
+            let mtm = MainThreadMarker::new().expect("mixer controls on main thread");
+
+            // Ensure the panel has a content view to host the controls.
+            // apply_plan may have already set one (glass effect or opaque);
+            // if not, create a plain NSView.
+            if self.window.contentView().is_none() {
+                let frame = self.window.frame();
+                let container = NSView::initWithFrame(NSView::alloc(mtm), frame);
+                container.setAutoresizingMask(
+                    NSAutoresizingMaskOptions::ViewWidthSizable
+                        | NSAutoresizingMaskOptions::ViewHeightSizable,
+                );
+                self.window.setContentView(Some(&container));
+            }
+            let content_view = self.window.contentView().expect("content view set above");
+
+            // Panel height for y-flip (MixerLayout uses top-left origin).
+            let panel_h = MIXER_SIZE.height as f64;
+
+            // Helper: convert a MixerLayout RectF to AppKit NSRect.
+            let to_ns = |r: crate::ui::canvas::RectF| -> NSRect {
+                NSRect::new(
+                    NSPoint::new(r.left as f64, panel_h - r.top as f64 - r.height() as f64),
+                    NSSize::new(r.width() as f64, r.height() as f64),
+                )
+            };
+
+            // Slider
+            let sr = crate::ui::canvas::MixerLayout::slider_rect();
+            let slider = NSSlider::initWithFrame(NSSlider::alloc(mtm), to_ns(sr));
+            slider.setMinValue(0.0);
+            slider.setMaxValue(100.0);
+            slider.setDoubleValue(50.0);
+
+            // Mute button
+            let mb = crate::ui::canvas::MixerLayout::mute_button_rect();
+            let mute_btn = NSButton::initWithFrame(NSButton::alloc(mtm), to_ns(mb));
+            let mute_title = NSString::from_str("Mute");
+            mute_btn.setTitle(&mute_title);
+
+            // Reset button
+            let rb = crate::ui::canvas::MixerLayout::reset_button_rect();
+            let reset_btn = NSButton::initWithFrame(NSButton::alloc(mtm), to_ns(rb));
+            let reset_title = NSString::from_str("Reset");
+            reset_btn.setTitle(&reset_title);
+
+            // Close button
+            let cb = crate::ui::canvas::MixerLayout::close_button_rect();
+            let close_btn = NSButton::initWithFrame(NSButton::alloc(mtm), to_ns(cb));
+            let close_title = NSString::from_str("Close");
+            close_btn.setTitle(&close_title);
+
+            // Value label
+            let vr = crate::ui::canvas::MixerLayout::value_rect();
+            let value_label = NSTextField::initWithFrame(NSTextField::alloc(mtm), to_ns(vr));
+            let initial = NSString::from_str("50%");
+            value_label.setStringValue(&initial);
+            value_label.setEditable(false);
+            value_label.setBordered(false);
+            value_label.setDrawsBackground(false);
+
+            // Add all subviews to the content view.
+            content_view.addSubview(&slider);
+            content_view.addSubview(&mute_btn);
+            content_view.addSubview(&reset_btn);
+            content_view.addSubview(&close_btn);
+            content_view.addSubview(&value_label);
+
+            self.mixer_slider = Some(slider);
+            self.mixer_mute_btn = Some(mute_btn);
+            self.mixer_reset_btn = Some(reset_btn);
+            self.mixer_close_btn = Some(close_btn);
+            self.mixer_value_label = Some(value_label);
+        }
+
+        /// Update mixer widget values from authoritative state.
+        pub fn update_mixer_value(&self, volume: u8, muted: bool) {
+            if let Some(slider) = &self.mixer_slider {
+                slider.setDoubleValue(volume as f64);
+            }
+            if let Some(label) = &self.mixer_value_label {
+                let text = if muted {
+                    format!("{volume}% (Muted)")
+                } else {
+                    format!("{volume}%")
+                };
+                let ns_text = NSString::from_str(&text);
+                label.setStringValue(&ns_text);
+            }
+            if let Some(btn) = &self.mixer_mute_btn {
+                let title = if muted { "Unmute" } else { "Mute" };
+                let ns_title = NSString::from_str(title);
+                btn.setTitle(&ns_title);
             }
         }
     }

@@ -1,5 +1,15 @@
 # Progress Log
 
+## Session 029 (2026-08-10) — macOS Mixer Controls (Task 6)
+
+- Goal: add interactive mixer controls (NSSlider + NSButton × 3 + NSTextField) to the macOS AppKit panel (Task 6, Phase 1).
+- What landed:
+  - `crates/volumectl/src/ui/platform/macos/renderer.rs`: added 5 mixer widget fields (`mixer_slider`, `mixer_mute_btn`, `mixer_reset_btn`, `mixer_close_btn`, `mixer_value_label`) to `appkit::Panel`. Added imports for `NSSlider`, `NSButton`, `NSTextField`. Added `set_mixer_controls(host)` — creates native widgets at MixerLayout positions with AppKit bottom-left coordinate conversion (`y = panel_h - top - height`). Added `update_mixer_value(volume, muted)` — updates slider/label/mute-button text. Wired in `MacosRenderer::publish()` for visible Mixer surface.
+- Verification:
+  - `cargo fmt --all --check` — clean.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.
+  - `cargo test --workspace --no-default-features` — 235/235 pass.
+
 ## Session 028 (2026-08-10) — Linux Mixer Controls (Task 7)
 
 - Goal: add interactive mixer controls (slider + buttons + value label) to the Linux GTK renderer using native GTK4 widgets (Task 7, Phase 1).
