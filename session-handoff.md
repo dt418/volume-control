@@ -14,7 +14,7 @@ fixes, commit `3e12b0b`). All 26 features are passing on Windows.
   matrix). macOS/Linux renderers implement the same Signal Glass surface
   contract behind the shared `NativeRenderer` bridge.
 - **Enforcement stack hardened** (Sessions 011-033):
-  - Format-lint gate toolchain (v3 manifest, both parsers, 39 checks on
+  - Format-lint gate toolchain (v3 manifest, both parsers, 40 checks on
     Windows / 38 on Linux/macOS).
   - Mandatory ship flow (`scripts/ship.sh` + `scripts/ship.ps1`, 22 checks).
   - Three-domain pre-push review skill (guard core / gate chain / wiring).

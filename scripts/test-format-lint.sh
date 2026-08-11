@@ -282,15 +282,30 @@ if [ -n "$ps" ]; then
 fi
 rm -f "$records_scratch"
 
-# --- unknown flag: bash gate only ----------------------------------------------
-# (The PowerShell twin rejects unknown parameters at parse time with a
-# different exit code, so only the bash contract is asserted here.)
+# --- unknown flag: bash gate --------------------------------------------------
 bash scripts/format-lint.sh --definitely-not-a-flag >"$tmpdir/bash-usage" 2>&1
 rc=$?
 if [ "$rc" -eq 2 ] && grep -q 'unknown option' "$tmpdir/bash-usage"; then
     report ok 'bash gate: unknown flag exits 2 with a usage message'
 else
     report FAIL 'bash gate: unknown flag exits 2 with a usage message' "rc=$rc"
+fi
+
+# --- unknown flag: PowerShell gate (-- form) ---------------------------------
+# PowerShell does NOT reject '--flag' tokens at parse time: they bind as
+# positional arguments and land in $args, so without an explicit guard the
+# gate would silently swallow '--skip-tests' and run the wrong step set. The
+# gate must reject them loudly with the same exit-2 contract as bash.
+if [ -n "$ps" ]; then
+    "$ps" -NoProfile -ExecutionPolicy Bypass -File \
+        .agents/skills/format-lint/scripts/format-lint.ps1 --skip-tests \
+        >"$tmpdir/ps-usage" 2>&1
+    rc=$?
+    if [ "$rc" -eq 2 ] && grep -q 'unknown argument' "$tmpdir/ps-usage"; then
+        report ok 'PowerShell gate: unknown flag (-- form) exits 2 with a usage message'
+    else
+        report FAIL 'PowerShell gate: unknown flag (-- form) exits 2 with a usage message' "rc=$rc"
+    fi
 fi
 
 # --- manifest: the single source of truth must parse on both sides ---------------

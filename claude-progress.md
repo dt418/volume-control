@@ -1,5 +1,43 @@
 # Progress Log
 
+## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
+
+- Goal: three-domain pre-push review of the third-party-skills commit
+  (2e87599); fix genuine defects before push.
+- Review findings:
+  - Domain A (guard core): CLEAN, 33/33 checks, exit 0; two theoretical
+    path-name nits (unquoted `<<EOF` LIST heredoc, a file literally named
+    "EOF") - no genuine defect, accepted.
+  - Domain B (gate chain): DEFECT - PowerShell gate silently swallows
+    `--skip-tests`/`--fix` (binds as positional args in `$args`, no parse-time
+    rejection), so `--skip-tests` ran the FULL suite and `--`-form flags did
+    nothing; bash gate exits 2 on unknown flags. Also 2 nits: stale comment
+    claiming parse-time rejection, ~200 CRLF warnings per gate run from the
+    vendored tauri/rust-async-patterns worktree files.
+  - Domain C (wiring/records): CLEAN - junctions intact (no drift), commit
+    diff clean, vol-028 claims verified live, skills-lock.json = valid
+    skills.sh artifact (53 entries).
+- Fixes landed (review evidence in feature_list.json vol-017 + this entry):
+  - `.agents/skills/format-lint/scripts/format-lint.ps1` + `.claude` mirror:
+    unbound-argument rejection after the param block - exit 2 + usage message,
+    mirroring the bash gate's fail-loudly contract. Live negative: `--skip-tests`
+    -> exit 2 "unknown argument(s): --skip-tests"; positive: `-SkipTests` ->
+    "Gate passed." exit 0.
+  - `scripts/test-format-lint.sh`: Windows-gated assertion that the PS gate
+    rejects the `--` form with exit 2 + "unknown argument" (38 -> 40 checks on
+    Windows; 38 on Linux/macOS where PS checks are skipped); corrected the
+    stale "rejects at parse time" comment.
+  - Vendored skill worktree files renormalized to LF (index content via
+    `git show :path`) - `git diff --check HEAD` warning count 200+ -> 0.
+  - Baselines bumped 39 -> 40 on Windows: pre-push-review SKILL.md (both
+    byte-identical mirrors) + session-handoff.md.
+- Verification:
+  - `bash scripts/test-format-lint.sh` via the ship bridge (powershell on
+    PATH) - all 40 checks pass, exit 0, incl. the new PS exit-2 assertion.
+  - PS gate `--skip-tests` exits 2; `-SkipTests` exits 0 "Gate passed.".
+  - `git status --short` after renormalize: 3 files (the intended edits).
+  - `git diff --check HEAD` - silent.
+
 ## Session 037 (2026-08-12) - third-party skills install (rust-async-patterns + tauri pack)
 
 - Goal: install `rust-async-patterns` from wshobson/agents and the 52-skill

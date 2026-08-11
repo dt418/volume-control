@@ -21,6 +21,18 @@ param(
     [switch]$AllFeatures
 )
 
+# -- flag validation ----------------------------------------------------------
+# PowerShell binds '--flag' tokens as positional arguments (they land in
+# $args) instead of rejecting them at parse time, so an unknown flag would be
+# silently swallowed and the gate would run the wrong step set (e.g.
+# '--skip-tests' running the full suite). Mirror the bash gate's fail-loudly
+# contract: exit 2 with a usage message.
+if ($args.Count -gt 0) {
+    Write-Host "unknown argument(s): $($args -join ' ')" -ForegroundColor Red
+    Write-Host 'usage: format-lint.ps1 [-Fix] [-SkipTests] [-AllFeatures]' -ForegroundColor Yellow
+    exit 2
+}
+
 $ErrorActionPreference = 'Stop'
 
 # -- Rust toolchain resolution ----------------------------------------------
