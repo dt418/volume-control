@@ -94,7 +94,7 @@ bash scripts/test-format-lint.sh
 bash scripts/test-ship.sh
 
 # Records guard + ship:
-sh scripts/check-records.sh --branch origin/master
+bash scripts/check-records.sh --branch origin/master
 powershell -ExecutionPolicy Bypass -File scripts/ship.ps1 -Push
 ```
 
@@ -103,5 +103,7 @@ powershell -ExecutionPolicy Bypass -File scripts/ship.ps1 -Push
 - [ ] No PowerShell Set-Content on tracked .md/.json this session
 - [ ] Skill mirrors byte-identical (`cmp -s` or hash check)
 - [ ] Self-tests run under bash, exit 0
+- [ ] Index clean before ship / test-format-lint.sh (the smoke needs an empty
+      staged set; `git reset` if you staged anything)
 - [ ] session-handoff.md refreshed
 - [ ] feature_list.json + claude-progress.md updated in the same commit

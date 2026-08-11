@@ -350,6 +350,8 @@ else
 fi
 if [ -f .agents/skills/windows-host/SKILL.md ] && \
    [ -f .claude/skills/windows-host/SKILL.md ] && \
+   [ -f .agents/skills/windows-host/scripts/ensure-pkg-config-stub.ps1 ] && \
+   [ -f .claude/skills/windows-host/scripts/ensure-pkg-config-stub.ps1 ] && \
    cmp -s .agents/skills/windows-host/SKILL.md .claude/skills/windows-host/SKILL.md && \
    cmp -s .agents/skills/windows-host/scripts/ensure-pkg-config-stub.ps1 \
          .claude/skills/windows-host/scripts/ensure-pkg-config-stub.ps1; then

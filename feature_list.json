@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-12T12:30",
+    "last_updated":  "2026-08-12T13:00",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -31,7 +31,8 @@
                                               "Run `sh scripts/check-records.sh --branch origin/master` and `--staged` on the landed set - exit 0."
                                           ],
                          "evidence":  [
-                                          "Session 035 (2026-08-12): skill lands in both mirrors byte-identical; helper recreates the stub after deletion and answers --modversion with 1.0; test-check-records.sh grew 32 -> 33 checks; pre-push-review baseline and session-handoff.md bumped to 33; design spec docs/superpowers/specs/2026-08-12-windows-host-skill-design.md."
+                                          "Session 035 (2026-08-12): skill lands in both mirrors byte-identical; helper recreates the stub after deletion and answers --modversion with 1.0; test-check-records.sh grew 32 -> 33 checks; pre-push-review baseline and session-handoff.md bumped to 33; design spec docs/superpowers/specs/2026-08-12-windows-host-skill-design.md.",
+                                          "Session 036 (2026-08-12): post-landing review fixes - SKILL.md verification block now uses `bash scripts/check-records.sh` (was `sh`, contradicting gotcha #3); Before-commit checklist gained the clean-index item (`git reset` before ship/test-format-lint.sh, which cost a failed ship run); test-check-records.sh windows-host block guards the ps1 paths with -f existence checks (no cmp stderr noise); ensure-pkg-config-stub.ps1 exits 1 with a clear ERROR message when the stub write fails (was a native-error under ErrorActionPreference Stop). All mirrors re-synced byte-identical; 33 checks + both gates pass."
                                       ],
                          "notes":  "Packages the Session 034 gotchas (encoding corruption, lost stub, sh-vs-bash, mirror drift, stale trees, handoff staleness, nested quoting) as a skill so future sessions do not repeat them."
                      },

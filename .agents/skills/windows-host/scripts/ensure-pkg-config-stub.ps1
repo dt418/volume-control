@@ -38,6 +38,10 @@ if ($needWrite) {
     Write-Host "Created stub: $stubPath"
 }
 
+if (-not (Test-Path -LiteralPath $stubPath)) {
+    Write-Host "ERROR: stub was not created at $stubPath" -ForegroundColor Red
+    exit 1
+}
 $out = & $stubPath --modversion 2>$null
 if ($LASTEXITCODE -ne 0 -or "$out".Trim() -ne '1.0') {
     Write-Host "ERROR: stub does not answer --modversion correctly" -ForegroundColor Red

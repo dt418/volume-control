@@ -1,5 +1,19 @@
 # Progress Log
 
+## Session 036 (2026-08-12) — windows-host skill review fixes
+
+- Goal: fix the 4 review findings on the windows-host skill commit (ae84054): sh/bash contradiction in the verification block, missing clean-index checklist item, unstaged cmp noise in the mirror check, and the helper's native-error path on a failed stub write.
+- What landed:
+  - `.agents/skills/windows-host/SKILL.md` + `.claude` mirror: verification block now uses `bash scripts/check-records.sh --branch origin/master` (was `sh`, contradicting gotcha #3); Before-commit checklist gained the clean-index item (the smoke needs an empty staged set — `git reset` before ship / test-format-lint.sh).
+  - `scripts/test-check-records.sh`: windows-host mirror block now guards both ps1 paths with `-f` existence checks before `cmp -s` (fail-closed preserved, no cmp stderr noise).
+  - `.agents/skills/windows-host/scripts/ensure-pkg-config-stub.ps1` + `.claude` mirror: Test-Path guard before the `--modversion` verify — a failed stub write now exits 1 with a clear ERROR message instead of a native-error under `$ErrorActionPreference='Stop'`.
+  - Mirrors re-synced byte-identical (SHA match for SKILL.md + ps1); `feature_list.json` vol-027 evidence appended, `last_updated` bumped.
+- Verification:
+  - Helper live test: stub deleted, `ensure-pkg-config-stub.ps1` recreated it, `--modversion` answers 1.0, exit 0.
+  - `bash scripts/test-check-records.sh` — 33 checks, exit 0. `bash scripts/test-format-lint.sh`, `bash scripts/test-ship.sh` — exit 0.
+  - Both gates: `bash scripts/format-lint.sh` + PowerShell gate — "Gate passed." on both.
+  - `sh scripts/check-records.sh --staged` on the landed set — exit 0.
+
 ## Session 035 (2026-08-12) — windows-host skill: environment gotchas + stub helper + wiring
 
 - Goal: package the seven Windows-host tooling gotchas from Session 034 as a
