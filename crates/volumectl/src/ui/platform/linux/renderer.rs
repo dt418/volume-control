@@ -619,13 +619,13 @@ mod gtk_surfaces {
             let value_label = gtk::Label::new(Some("0%"));
             let vr = crate::ui::canvas::MixerLayout::value_rect();
             value_label.set_size_request(vr.width() as i32, vr.height() as i32);
-            fixed.put(&value_label, vr.left as i32, vr.top as i32);
+            fixed.put(&value_label, vr.left as f64, vr.top as f64);
 
             // Slider.
             let scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 1.0);
             let sr = crate::ui::canvas::MixerLayout::slider_rect();
             scale.set_size_request(sr.width() as i32, sr.height() as i32);
-            fixed.put(&scale, sr.left as i32, sr.top as i32);
+            fixed.put(&scale, sr.left as f64, sr.top as f64);
 
             let host_clone = host.clone();
             scale.connect_value_changed(move |range| {
@@ -637,7 +637,7 @@ mod gtk_surfaces {
             let mute_btn = gtk::Button::with_label("Mute");
             let mb = crate::ui::canvas::MixerLayout::mute_button_rect();
             mute_btn.set_size_request(mb.width() as i32, mb.height() as i32);
-            fixed.put(&mute_btn, mb.left as i32, mb.top as i32);
+            fixed.put(&mute_btn, mb.left as f64, mb.top as f64);
 
             let host_clone = host.clone();
             mute_btn.connect_clicked(move |_| {
@@ -648,7 +648,7 @@ mod gtk_surfaces {
             let reset_btn = gtk::Button::with_label("Reset");
             let rb = crate::ui::canvas::MixerLayout::reset_button_rect();
             reset_btn.set_size_request(rb.width() as i32, rb.height() as i32);
-            fixed.put(&reset_btn, rb.left as i32, rb.top as i32);
+            fixed.put(&reset_btn, rb.left as f64, rb.top as f64);
 
             let host_clone = host.clone();
             reset_btn.connect_clicked(move |_| {
@@ -659,7 +659,7 @@ mod gtk_surfaces {
             let close_btn = gtk::Button::with_label("Close");
             let cb = crate::ui::canvas::MixerLayout::close_button_rect();
             close_btn.set_size_request(cb.width() as i32, cb.height() as i32);
-            fixed.put(&close_btn, cb.left as i32, cb.top as i32);
+            fixed.put(&close_btn, cb.left as f64, cb.top as f64);
 
             let host_clone = host.clone();
             close_btn.connect_clicked(move |_| {

@@ -1,5 +1,22 @@
 # Progress Log
 
+## Session 033 (2026-08-11) — Linux canvas gtk-rs 0.19 API-compat fixes + libpulse-sys direct dep
+
+- Goal: finish the uncommitted Linux renderer WIP — adapt the Cairo canvas and GTK mixer wiring to the resolved gtk-rs 0.19 API surface, and promote libpulse-sys to a direct dependency.
+- What landed:
+  - `crates/volumectl/src/ui/platform/linux/canvas.rs`: gtk-rs 0.19 API-compat fixes — `Context::fill()/stroke()/show_text()` now return `Result` (result ignored via `let _ =`), `text_extents()` returns `Result` and `TextExtents` gained `width()/height()/y_bearing()` methods, `Context::new()` returns `Result` (test now `.expect("cairo context failed")`).
+  - `crates/volumectl/src/ui/platform/linux/renderer.rs`: `gtk::Fixed::put` takes `f64` coordinates in gtk-rs 0.19 — mixer widget placement args cast to `f64`.
+  - `crates/volumectl/Cargo.toml` + `Cargo.lock`: `libpulse-sys = "1.23.0"` promoted to a direct dependency (same resolved version as before; lockfile now lists it under volumectl's dependencies).
+  - Environment: the pkg-config cross-check stub (`%TEMP%\rtk-stub-bin\pkg-config.cmd`) had been deleted; recreated (prints `1.0` on `--modversion`, exits 0) so Linux/macOS cross-checks run from the Windows host with `PKG_CONFIG_ALLOW_CROSS=1`. Environment shim only, not a repo artifact.
+  - Also deleted a stray empty untracked file named `^[0-9]+` (accidental redirect artifact).
+  - `feature_list.json`: vol-024 verification/evidence appended, `last_updated` bumped.
+- Verification:
+  - `cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests --no-default-features --features gtk-renderer` — compiles clean.
+  - `cargo check --target x86_64-apple-darwin -p volumectl --tests --no-default-features` — compiles clean (pre-existing `block v0.1.6` future-incompat note only).
+  - `cargo fmt --all --check` — clean. `git diff --check` — clean.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.
+  - `cargo test --workspace --no-default-features` — 251 passed (235 + 16 host-core), 0 failed.
+
 ## Session 032 (2026-08-10) — macOS renderer review fixes (Task 6 findings)
 
 - Goal: fix review findings on the macOS renderer — signal wiring (controls were inert), content-view detach bug, overlay glass eviction, dead import, value label alignment, VoiceOver labels.

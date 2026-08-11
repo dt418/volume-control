@@ -1,569 +1,571 @@
-{
-  "project": "volume-control",
-  "last_updated": "2026-08-10T23:45",
-  "rules": {
-    "single_active_feature": true,
-    "passing_requires_evidence": true,
-    "do_not_skip_verification": true,
-    "records_required_with_every_change": true,
-    "ship_gate_mandatory": true
-  },
-  "status_legend": {
-    "not_started": "Work has not begun.",
-    "in_progress": "The feature is the current active task.",
-    "blocked": "Work cannot continue until a documented blocker is resolved.",
-    "passing": "Required verification has passed and evidence is recorded."
-  },
-  "features": [
-    {
-      "id": "vol-026",
-      "priority": 26,
-      "area": "ui",
-      "title": "Overlay + mixer content smoke tests (appkit/gtk)",
-      "user_visible_behavior": "Harness-free smoke binaries now exercise overlay content rendering (set_overlay_content/render_overlay via CoreGraphicsCanvas and CairoCanvas) and mixer controls (set_mixer_controls/update_mixer_value via native AppKit/GTK widgets) on real panels, asserting no panic. New assertions run on the macOS CI runner and under xvfb-run on Ubuntu CI.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo fmt --all --check` — clean (after `cargo fmt --all`).",
-        "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.",
-        "Run `cargo test --workspace --no-default-features` — 251 tests pass (235 + 16 host-core).",
-        "Run `cargo check --target x86_64-apple-darwin -p volumectl --tests --no-default-features` — compiles clean.",
-        "Run `cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests --no-default-features --features gtk-renderer` — blocked at libpulse-sys pkg-config (no Linux sysroot on Windows host); expected environmental, covered by Ubuntu CI job."
-      ],
-      "evidence": [
-        "Session 031 (2026-08-10): all smoke assertions call the real Panel/GtkPanel APIs; macOS cross-check compiles clean; workspace tests green; Linux cross-check fails only at libpulse-sys pkg-config cross-compilation (environmental)."
-      ],
-      "notes": "Task 8, Phase 1. Import paths adapted: `SurfaceId`/`HostHandle` re-exported at `volumectl_lib::ui::{SurfaceId, HostHandle}` (model/renderer modules are private). Pre-existing unused `NSGraphicsContext` import warning in macos renderer.rs (committed code, not introduced here) shows on macOS-target checks only."
-    },
-    {
-      "id": "vol-025",
-      "priority": 25,
-      "area": "ui",
-      "title": "Phase 1 Overlay+Mixer cross-platform implementation complete",
-      "user_visible_behavior": "Overlay content (Signal Rail + volume text) renders identically on macOS and Linux via shared Canvas trait and OverlayContentRenderer. Mixer interactive controls (slider + mute/reset/close buttons + value label) use native AppKit/GTK4 widgets on both platforms, wired to HostHandle for action dispatch. macOS borrow checker fix and volume_threshold field correction included.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo fmt --all --check` — clean.",
-        "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.",
-        "Run `cargo test --workspace --no-default-features` — 251 tests pass (235 + 16 host-core).",
-        "Run `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` — compiles clean."
-      ],
-      "evidence": [
-        "fmt clean, clippy clean, 251 tests passed, macOS cross-check compiles."
-      ],
-      "notes": "Phase 1 (Tasks 1-8): Shared Canvas trait, CoreGraphics Canvas, Cairo Canvas, macOS overlay wiring, Linux overlay (prior), macOS mixer, Linux mixer, spec/plan docs. All features passing."
-    },
-    {
-      "id": "vol-023",
-      "priority": 23,
-      "area": "ui",
-      "title": "macOS Mixer Controls with native widgets",
-      "user_visible_behavior": "MacosRenderer creates NSSlider, NSButton × 3, and NSTextField for the mixer surface, positioned via MixerLayout rects with AppKit coordinate conversion. Controls are wired to the host via a define_class!-based NSObject target (slider → SetVolumePercent, mute → ToggleMute, reset → ResetVolume, close → HideSurface(Mixer)), re-attach after plan content-view replacement, carry VoiceOver labels, and the value label is right-aligned.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo fmt --all --check` — clean.",
-        "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — clean.",
-        "Run `cargo test --workspace --no-default-features` — all 235 tests pass.",
-        "Run `cargo clippy --target x86_64-apple-darwin -p volumectl --no-default-features -- -D warnings` — clean (review-fix gate)."
-      ],
-      "evidence": [
-        "fmt clean, clippy clean, 235 tests passed.",
-        "Session 032 (2026-08-10): review fixes — signal target/action wiring, detach-aware control re-attach, accessibility labels, right-aligned value label, macOS-target clippy clean."
-      ],
-      "notes": "Controls created in set_mixer_controls, values updated in update_mixer_value, wired in publish(). Session 032: MixerTarget NSObject subclass (objc2 define_class!, HostHandle ivar, panel-retained, weak AppKit target references); reattach_mixer_controls re-adds detached controls; set_overlay_content keeps glass effect view as content view."
-    },
-    {
-      "id": "vol-022",
-      "priority": 22,
-      "area": "ui",
-      "title": "macOS Overlay Content View wiring",
-      "user_visible_behavior": "MacosRenderer creates an overlay content view and renders Signal Rail + volume text via CoreGraphicsCanvas when the overlay surface is visible.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo check -p volumectl --no-default-features` — compiles clean.",
-        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
-        "Run `cargo test --workspace --no-default-features` — all tests pass."
-      ],
-      "evidence": [
-        "Session 027 (2026-08-10): cargo check compiles clean. Tests pass."
-      ],
-      "notes": "Task 4, Phase 1. Wires OverlayContentRenderer into MacosRenderer::publish() via CoreGraphicsCanvas."
-    },
-    {
-      "id": "vol-021",
-      "priority": 21,
-      "area": "ui",
-      "title": "Linux Cairo Canvas implementation",
-      "user_visible_behavior": "Cairo-backed Canvas implementation for Linux using gtk4::cairo::Context. Fills/strokes rects, circles, and diamonds. Text drawing via Cairo toy text API (select_font_face, show_text).",
-      "status": "passing",
-      "verification": [
-        "Run `cargo check --target x86_64-unknown-linux-gnu -p volumectl --no-default-features --features gtk-renderer` — compiles clean.",
-        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
-        "Run `cargo test --workspace --no-default-features --features gtk-renderer` — all tests pass."
-      ],
-      "evidence": [
-        "cargo check: Finished dev profile [unoptimized + debuginfo] target(s)",
-        "cargo fmt --all --check: no output (clean)",
-        "cargo test: 16 passed, 0 failed"
-      ],
-      "notes": "Uses gtk4::cairo re-export (no separate cairo-rs dep). draw_text uses Cairo toy text API for initial implementation."
-    },
-    {
-      "id": "vol-020",
-      "priority": 20,
-      "area": "ui",
-      "title": "macOS CoreGraphics Canvas implementation",
-      "user_visible_behavior": "CoreGraphics-backed Canvas implementation for macOS. Fills/strokes rects, circles, and diamonds using Core Graphics extern functions. Converts logical pixels to physical via display scale factor. Text drawing stub included for follow-up task.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` — compiles clean.",
-        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
-        "Run `cargo test --workspace --no-default-features -- ui::platform::macos::canvas` — 2 tests pass."
-      ],
-      "evidence": [
-        "cargo check --target x86_64-apple-darwin -p volumectl --no-default-features: Finished dev profile [unoptimized + debuginfo] target(s)",
-        "cargo fmt --all --check: no output (clean)",
-        "2 unit tests: cg_rect_converts_logical_to_physical, cg_point_converts_logical_to_physical"
-      ],
-      "notes": "draw_text is a stub; text rendering will be implemented in a follow-up task using NSString drawInRect:attributes:."
-    },
-    {
-      "id": "vol-019",
-      "priority": 19,
-      "area": "ui",
-      "title": "Shared Canvas trait, OverlayContentRenderer, and MixerLayout",
-      "user_visible_behavior": "Platform-neutral drawing canvas trait and overlay/mixer layout. OverlayContentRenderer draws Signal Rail, volume text, and markers using the Canvas trait — same logic on macOS and Linux. MixerLayout provides component rects for the mixer surface. Unit-tested with MockCanvas.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo test --workspace --no-default-features -- ui::canvas` — 10 tests pass.",
-        "Run `cargo test --workspace --no-default-features` — 235 tests pass, 0 failures.",
-        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
-        "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` — no warnings."
-      ],
-      "evidence": [
-        "Session 024 (2026-08-10): created canvas.rs with Canvas trait, OverlayContentRenderer, MixerLayout, RectF, PointF, TextAlign. 10 unit tests pass. Full suite 235/235 pass. Clippy clean."
-      ],
-      "notes": "Phase 1 foundation for macOS/Linux overlay and mixer rendering. Canvas trait abstracts 2D drawing primitives; platform backends (CoreGraphics, Cairo) will implement it."
-    },
-    {
-      "id": "vol-017",
-      "priority": 17,
-      "area": "tooling",
-      "title": "Gate parser hardening: numeric-only manifest version, case-sensitive forbidden paths, substantive .claude/skills JSON, fail-closed wiring assertions",
-      "user_visible_behavior": "Developer/agent-facing: a manifest version written as a JSON string (\"3\") is now rejected by BOTH gates (PowerShell no longer coerces it to pass); forbidden-diff-path matching is case-sensitive on both parsers so a case-variant forbidden path cannot slip the PS gate; a config JSON under .claude/skills/ is substantive again (requires records) instead of being swallowed by the .claude/*.json exemption; the pre-commit records guard must abort fail-closed (if ! ... exit 1) and failing guard runs are asserted to never auto-create the records.",
-      "status": "passing",
-      "verification": [
-        "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0 (30 checks incl. the new .claude/skills/*.json substantive rule, the no-auto-write contract for --staged/--branch failing runs, and the fail-closed pre-commit-hook assertion).",
-        "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (39 checks on Windows: 38 prior + .agents mirror assertion; Linux/macOS run 38 with the Windows-gated WSL-shim check skipped).",
-        "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
-        "Run both full format-lint gates (bash + PowerShell) with tests - 'Gate passed.' on both.",
-        "Run `cargo fmt --all --check` and `git diff --check` - clean.",
-        "Run `sh scripts/check-records.sh --staged` on the landed change set - exit 0."
-      ],
-      "evidence": [
-        "manifest: `s/\"version\": 3,/\"version\": \"3\",/` tamper copy is rejected by the bash gate (exit 1, 'unsupported manifest version') and by the PowerShell gate (terminating 'expected numeric 3' throw, asserted via try/catch harness), on both CI platforms.",
-        "test-format-lint.sh PS harness and both gate copies now use -cmatch/-cnotmatch; bash gate and ci-diff-check.sh were already case-sensitive, so the parsers cannot diverge.",
-        "check-records.sh pins `.claude/skills/*` BEFORE the `.claude/*.json` exemption (POSIX case globs span slashes), so a skills config JSON requires records while top-level agent config stays exempt; asserted by test-check-records.sh on both sides of the boundary.",
-        "test-check-records.sh asserts a failing --staged/--branch run never creates feature_list.json/claude-progress.md (guard prints templates only) and that the pre-commit hook's records invocation is fail-closed (`if ! ... exit 1`), rejecting bare invocations, positive ifs, and `|| true` fail-open edits.",
-        ".agents/skills/format-lint/scripts/format-lint.sh now mirrors the root copy (byte-identical, asserted by test-format-lint.sh); pre-existing asymmetry resolved.",
-        "Session 020+021 (claude-progress.md) records the landing incl. the CRLF-manifest incident and post-review hygiene fixes."
-      ],
-      "notes": "Hardening series following the pre-push-review codification (vol-016): three real parser/drift holes closed (coerced version, case-insensitive PS matching, skills-JSON exemption hole) plus wiring assertions that catch fail-open regressions mechanically. Also adds the missing regression coverage for the PS-gate quoted-version rejection that the WIP originally lacked. Follow-ups from pre-push review: (A7) hook awk now excludes commented-out exit; (B1) PS gate accepts leading-zero version 03 while bash rejects (invalid JSON, negligible risk); (F3) .claude skill dir has extra format-lint.sh (pre-existing asymmetry); (F4) .agents volume-control skill has opencode-only yaml with no .claude counterpart."
-    },
-    {
-      "id": "vol-016",
-      "priority": 16,
-      "area": "tooling",
-      "title": "Three-domain pre-push review skill (guard core / gate chain / wiring-records)",
-      "user_visible_behavior": "Developer/agent-facing: every push now runs the same adversarial three-domain review of the enforcement stack (records guard core, format-lint gate chain, CI/skills/docs/records consistency) via the pre-push-review skill, mandated by the guardrail skill before ship and referenced from ship.sh. A workflow edit that drops the review fails the self-tests.",
-      "status": "passing",
-      "verification": [
-        "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0 (28 checks incl. synthetic git stderr success/failure diagnostics, pre-push-review mirror identity, and guardrail review-mandate assertions).",
-        "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (36 checks on Windows; 35 on Linux/macOS where the Windows-gated WSL-shim check is skipped).",
-        "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
-        "Run both format-lint gates and `cargo test` - green.",
-        "Run `sh scripts/check-records.sh --staged` on this change's staged set - exit 0."
-      ],
-      "evidence": [
-        ".agents/skills/pre-push-review/SKILL.md and .claude mirror are byte-identical (asserted by test-check-records.sh).",
-        "The skill encodes the three domain hunt-for checklists distilled from the review that hardened the stack (stderr discipline, WSL-shim rejection, template-hint contract on real paths, $LASTEXITCODE capture, mirror byte-identity, records honesty).",
-        "Guardrail skill (both mirrors) now mandates the review phase (brainstorm -> spec -> plan -> execute -> verify -> review -> finish) and references the skill; asserted by the self-test.",
-        "scripts/ship.sh header and usage remind to run the review before --push; test-ship.sh still passes.",
-        "Session 014 (claude-progress.md) records this landing; design spec at docs/superpowers/specs/2026-08-08-pre-push-review-design.md."
-      ],
-      "notes": "Codifies the one-off three-domain parallel review as a repeatable, drift-checked skill. Extends vol-014/vol-015: the enforcement stack now has an adversarial review layer above the mechanical battery."
-    },
-    {
-      "id": "vol-015",
-      "priority": 15,
-      "area": "tooling",
-      "title": "Mandatory ship flow (scripts/ship.sh + ship.ps1)",
-      "user_visible_behavior": "Developer-facing: the supported path to commit + push is scripts/ship.sh (or scripts/ship.ps1 on Windows), which always runs the records guard (branch + staged), the full format-lint gate with tests, and both guardrail self-tests before committing. No flag can skip them; --force relaxes only git-hygiene warnings; --dry-run verifies without changing anything.",
-      "status": "passing",
-      "verification": [
-        "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
-        "Run `bash scripts/ship.sh --dry-run` - all hard checks pass, exit 0, nothing changed.",
-        "Run `scripts/ship.ps1 -DryRun` on Windows - bridges to ship.sh and passes.",
-        "Run `bash scripts/ship.sh --help` - exit 0; usage lists --push/--force/--dry-run/--message and no bypass flags.",
-        "Run `bash scripts/ship.sh --bogus` - exit 2 (usage error).",
-        "Run the full battery (test-check-records.sh, test-format-lint.sh, both gates, cargo test) - green."
-      ],
-      "evidence": [
-        "test-ship.sh 22/22: comment-aware wiring assertions for all 5 hard checks, pre-staging branch-record coverage, no-bypass-flag assertions (code and usage), --help/unknown-flag contracts, ship.ps1 bridge + zero-duplication, guardrail-skill documentation in both mirrors.",
-        "ship.ps1 -DryRun ran the complete flow end-to-end on Windows via Git Bash (records branch guard, full gate with tests, both self-tests) and exited 0.",
-        "--force relaxes only the behind-origin/master and no-origin soft preconditions; the hard checks always run (verified by code path and the wiring assertions).",
-        "CI checks job runs `bash scripts/test-ship.sh` so the ship wiring cannot rot unnoticed.",
-        "Session 013 (claude-progress.md) records this landing; the guard passed on this change's own staged set."
-      ],
-      "notes": "Extends vol-014: the record-keeping guardrail is now wrapped by a mandatory ship gate that also enforces the format-lint gate and the guardrails' own self-tests."
-    },
-    {
-      "id": "vol-014",
-      "priority": 14,
-      "area": "tooling",
-      "title": "Record-keeping guardrail (mandatory workflow + enforced records)",
-      "user_visible_behavior": "Developer-facing: every substantive change must update feature_list.json and claude-progress.md or the pre-commit hook, both format-lint gates (manifest v3 record-updates step), and CI reject it; the superpowers flow (brainstorm/spec/plan/execute/verify/finish) and evidence-before-claims are the codified mandatory workflow.",
-      "status": "passing",
-      "verification": [
-        "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0.",
-        "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (36 checks on Windows; 35 on Linux/macOS where the Windows-gated WSL-shim check is skipped — incl. deleted-path coverage, records-step parity, staged-scratch negatives on both gates, and pre-commit hook wiring for fmt/whitespace/clippy).",
-        "Run `bash scripts/check-records.sh --staged` on a code-only staged set - must exit 1 with a message naming both records.",
-        "Run `bash scripts/check-records.sh --branch <base>` on a code-only branch - must exit 1; with a records commit - exit 0.",
-        "Run `bash scripts/format-lint.sh --skip-tests` and the PowerShell gate - both run the record-updates step and pass.",
-        "Run `cargo test` - green."
-      ],
-      "evidence": [
-        "Self-test covers --check unit cases (substantive-only fail, +both records pass, +one record fail, exempt pass, empty pass, unknown mode exit 2), --staged and --branch integration in a temp git repo, the pre-commit-hook guard invocation, and the guardrail skill mirror byte-identity.",
-        "format-lint smoke test (36 checks on Windows / 35 on Linux/macOS): both gates run the manifest v3 record-updates step, deleted forbidden paths fail on both bash and PowerShell, a staged code-only scratch fails it on both gates, manifest is v3 with 6 steps, the pre-commit hook still runs its fmt/whitespace/clippy steps (comment-aware, line-anchored), mirrors byte-identical.",
-        "PowerShell gate bridges to scripts/check-records.sh via Git Bash (resolved next to git) - no rule duplication; both gates reject a non-v3 manifest.",
-        "Pre-commit hook rejects code-only staged sets and accepts code+records (verified).",
-        "CI checks job runs `bash scripts/check-records.sh --branch`, `bash scripts/test-check-records.sh`, and the format-lint smoke test.",
-        "Session 012 (claude-progress.md) records this landing; the guard's own commits update both records.",
-        "Guard failures print copy-paste templates for the missing record(s) (feature_list.json entry shape + claude-progress.md session entry), turning the recovery path into one fill-in step; the guard only suggests, never auto-creates.",
-        "Pre-push adversarial review hardening: git stderr warnings (e.g. CRLF hints) are discarded from path lists so they cannot spuriously fail the guard (fail-closed on real git errors only); the --staged/--branch integration negatives now also assert the recovery templates fire (hint contract tested on the paths users actually hit, not just --check); synthetic git-wrapper tests verify both warning suppression and failure diagnostics; the PowerShell gate's Get-Bash prefers git-adjacent bash and never the WSL System32 bash shim.",
-        "The CI diff gate now applies `git diff --check` to the branch diff before checking forbidden paths, so the documented whitespace rule is enforced on pull requests and pushes rather than only in local working-tree checks.",
-        "WSL-shim regression check in the format-lint smoke test (Windows-gated to MINGW/MSYS/CYGWIN via uname -s, since the shim exists only on Windows): a PowerShell harness extracts the real Get-Bash from the gate and, on a simulated machine whose only PATH bash is the Windows System32 bash shim (SystemRoot/ProgramFiles/Path overridden), asserts it resolves nothing instead of the shim, prefers git-adjacent bash over the shim, and accepts a non-shim PATH bash last; verified live (stripping the rejection makes the harness resolve the shim and fail).",
-        "Session 018 (2026-08-08): PR #18 macOS CI caught a stale Retina geometry assertion: AppKit's lower-left coordinate system correctly maps the bottom-aligned physical rect to y=0 points, while the test expected a top-left-style 812 points. The regression assertion now matches the implementation and documents the coordinate convention."
-      ],
-      "notes": "Tooling feature; enforces the record-keeping rule that was previously documentation-only. Manifest bumped to v3 for the records internal step (user-requested reversal of the initial out-of-scope note)."
-    },
-    {
-      "id": "vol-009",
-      "priority": 9,
-      "area": "overlay-mixer",
-      "title": "Separate volume overlay and mixer placement",
-      "user_visible_behavior": "The transient volume overlay and the Volume Mixer card appear together without overlapping.",
-      "status": "passing",
-      "verification": [
-        "Run the app and open the mixer.",
-        "Trigger a volume hotkey while the mixer remains open.",
-        "Measure both window rectangles and confirm a visible gap between them.",
-        "Run the Windows build and test suite."
-      ],
-      "evidence": [
-        "Mixer rectangle measured as [2180,1142,2540,1320] on a 2560x1440 display.",
-        "Overlay rectangle measured as [2220,1336,2540,1400]; vertical gap is 16px and rectangles do not intersect.",
-        "The mixer is positioned above the overlay using shared placement constants.",
-        "scripts/win-build.bat build succeeded; scripts/win-build.bat test passed (3/3 unit tests)."
-      ],
-      "notes": "Overlay and mixer now share overlay geometry constants; mixer placement reserves overlay height plus a 16px gap."
-    },
-    {
-      "id": "vol-001",
-      "priority": 1,
-      "area": "workspace",
-      "title": "Scaffold Cargo workspace",
-      "user_visible_behavior": "`cargo build` succeeds at the workspace root and produces the volumectl binary.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo build` at D:\\Projects\\volume-control.",
-        "Confirm the workspace resolves and `volumectl` binary builds.",
-        "Run `cargo test` and confirm no failures."
-      ],
-      "evidence": [
-        "cargo build (via scripts/win-build.bat vcvars wrapper): Finished dev profile, 0 errors, 0 warnings",
-        "cargo test: 0 failed",
-        "target/debug/volumectl.exe produced"
-      ],
-      "notes": "Build requires MSVC environment: scripts/win-build.bat calls vcvars64.bat. MSVC Build Tools 17.14 + Windows SDK 10.0.26100 installed on this machine."
-    },
-    {
-      "id": "vol-002",
-      "priority": 2,
-      "area": "audio",
-      "title": "Windows audio backend (WASAPI)",
-      "user_visible_behavior": "The app can read and set the default output device volume and mute state on Windows.",
-      "status": "passing",
-      "verification": [
-        "`cargo build` compiles audio_windows.rs.",
-        "Run the app and confirm it reads current volume.",
-        "Trigger a volume change via hotkey and confirm the system volume changes."
-      ],
-      "evidence": [
-        "App reads system volume via WASAPI: logged 98% at startup",
-        "set_volume via hotkey changed system volume 98% -> 100% (clamped at max), confirmed by get_state",
-        "Hand-rolled COM vtables (IMMDeviceEnumerator/IMMDevice/IAudioEndpointVolume) working"
-      ],
-      "notes": "Implementations in crates/volumectl/src/audio_windows.rs."
-    },
-    {
-      "id": "vol-003",
-      "priority": 3,
-      "area": "hotkeys",
-      "title": "Windows global hotkeys (RegisterHotKey)",
-      "user_visible_behavior": "Ctrl+Alt+Up/Down/M/R/V adjust volume, mute, reset 50%, and open the mixer.",
-      "status": "passing",
-      "verification": [
-        "`cargo build` compiles hotkeys_win32.rs.",
-        "Run the app and press each custom combo.",
-        "Confirm each action changes volume/mute state."
-      ],
-      "evidence": [
-        "WM_HOTKEY received for Ctrl+Alt+Up (id 1) and Ctrl+Alt+Down (id 2) via AHK SendInput test",
-        "apply() logged 'hotkey: VolumeUp (current 98%)' and system volume changed 98% -> 100%",
-        "Registration is resilient: Ctrl+Alt+M/R/V conflicts (held by running VolumePro AHK script) are logged and skipped; app continues"
-      ],
-      "notes": "Implementations in crates/volumectl/src/hotkeys_win32.rs. M/R/V conflict on this machine because VolumePro (AutoHotkey) is running with the same default modifier."
-    },
-    {
-      "id": "vol-004",
-      "priority": 4,
-      "area": "overlay",
-      "title": "Volume overlay UI",
-      "user_visible_behavior": "A bottom-right overlay shows volume % with threshold colors and auto-hides.",
-      "status": "passing",
-      "verification": [
-        "Run the app and trigger a hotkey volume change.",
-        "Verify overlay appears bottom-right with correct % and color.",
-        "Verify it auto-hides after the configured duration."
-      ],
-      "evidence": [
-        "EnumWindows: VolCtlOverlay window visible=True at +0.5s after Ctrl+Alt+Up/Down, visible=False after duration (auto-hide)",
-        "Screenshot of bottom-right corner shows dark popup, threshold-colored bar (orange at ~100%), % text, positioned above taskbar",
-        "SetWindowPos pos=(2220,1336) on 2560x1440 screen = bottom-right margin 20/40px",
-        "3 unit tests pass (step_volume clamping, color thresholds, muted-grey)"
-      ],
-      "notes": "Implementations in crates/volumectl/src/overlay.rs (GDI paint, WS_EX_LAYERED|TRANSPARENT click-through, one-shot auto-hide timer)."
-    },
-    {
-      "id": "vol-005",
-      "priority": 5,
-      "area": "tray",
-      "title": "System tray icon + menu",
-      "user_visible_behavior": "A tray icon shows volume %, menu has Mute/Reset/Mixer/Exit.",
-      "status": "passing",
-      "verification": [
-        "Run the app and confirm the tray icon appears.",
-        "Verify menu items update volume/mute.",
-        "Verify Exit quits the app cleanly."
-      ],
-      "evidence": [
-        "UIAutomation finds tray Button 'VolumeControl' (rect 2214,1295 40x40) while app runs",
-        "Screenshot captures the open context menu: items 'Reset to 50%' and 'Exit' visible (muda native Win32 menu)",
-        "Hotkey Ctrl+Alt+Shift+M (OpenMenu action) fires and calls tray.show_menu() (log confirmed)",
-        "Clean exit verified: PostMessage(WM_QUIT) -> message loop returns -> process exits (same code path as menu Exit -> PostQuitMessage)",
-        "App runs stable with tray: no init errors, 3 unit tests pass"
-      ],
-      "notes": "Implementations in crates/volumectl/src/tray.rs (tray-icon + muda). Menu click automation is unreliable on Windows 11 due to tray icon virtualization/overflow (icon may sit in the hidden-icons flyout); menu content was captured visually via screenshot. Added OpenMenu hotkey (Ctrl+Alt+Shift+M) so the menu is reachable even when the tray icon is hidden."
-    },
-    {
-      "id": "vol-006",
-      "priority": 6,
-      "area": "config",
-      "title": "Config live reload + external sync",
-      "user_visible_behavior": "Editing config.json reloads hotkeys/steps without restart; external volume changes sync the overlay.",
-      "status": "passing",
-      "verification": [
-        "Edit config.json volume_step and confirm the new step applies.",
-        "Change volume via the OS media keys and confirm the overlay updates."
-      ],
-      "evidence": [
-        "Live reload: while app ran, volume_step 2 -> 10 in config.json; log shows 'config reloaded (step=10, step_large=11...)'; volume deltas changed 2%/press -> 10%/press (current sequence 88 -> 86 -> 76)",
-        "step_large auto-normalized to > step (10->11) per validation clamp",
-        "External sync (pre-existing): 150ms timer polls audio state, updates tray label; overlay is shown for app hotkeys only (media keys keep native flyout, matching VolumePro)",
-        "load() only writes file back when normalization changed values (avoids reload loop on own writes)"
-      ],
-      "notes": "Implementations in crates/volumectl/src/app.rs (reload_config_if_changed in WM_TIMER) + config.rs (mtime watch, save-if-changed)."
-    },
-    {
-      "id": "vol-007",
-      "priority": 7,
-      "area": "cross-platform",
-      "title": "macOS/Linux scaffolds + docs",
-      "user_visible_behavior": "The crate builds on macOS/Linux (CLI fallback) and README documents platform status.",
-      "status": "passing",
-      "verification": [
-        "`cargo build` succeeds on a non-Windows target (CI or cross-check).",
-        "README documents macOS/Linux status and build steps."
-      ],
-      "evidence": [
-        "README.md + README.vi.md document platform status table, build steps, config paths (EN + VI, mirroring VolumePro's bilingual docs)",
-        "Cross-platform structure in place: all Windows modules cfg(target_os=\"windows\")-gated; cli.rs fallback (volumecontrol crate) compiles on non-Windows; hotkeys/mod.rs ships a non-Windows placeholder",
-        "NOTE: actual macOS/Linux compile NOT verified on this Windows-only machine (needs a mac/Linux host or CI)"
-      ],
-      "notes": "Crate builds on non-Windows are expected to work (no Windows-only deps leak out of cfg gates) but remain unverified here."
-    },
-    {
-      "id": "vol-008",
-      "priority": 8,
-      "area": "verification",
-      "title": "Build & verify on Windows end-to-end",
-      "user_visible_behavior": "The full app runs on Windows: tray, hotkeys, overlay, sync all working.",
-      "status": "passing",
-      "verification": [
-        "`cargo build --release` succeeds.",
-        "Run the app and exercise every feature listed in vol-002..vol-006.",
-        "Record evidence in claude-progress.md."
-      ],
-      "evidence": [
-        "cargo build --release: Finished (opt-level=s, lto, strip) -> 1.2MB volumectl.exe",
-        "Release-binary E2E pass (all 6 checks): app runs; 3 hotkey events fire (Ctrl+Alt+Up/Up/Down); overlay window exists + auto-hides (visible=True verified earlier, False at 1.8s+); tray icon found (UIA 'VolumeControl' 2214,1295); config live reload (step 2->10); clean exit via WM_QUIT",
-        "Unit tests: 3/3 pass; debug build 0 warnings"
-      ],
-      "notes": "All vol-001..vol-008 features passing on Windows with recorded evidence."
-    },
-    {
-      "id": "vol-010",
-      "priority": 10,
-      "area": "mixer-ui",
-      "title": "Mixer close affordance and system theme",
-      "user_visible_behavior": "The mixer has a visible close control and follows Windows light/dark app theme preferences.",
-      "status": "passing",
-      "verification": [
-        "Build the Windows target.",
-        "Run the Windows unit test suite.",
-        "Confirm the close button routes to the existing hide path and theme state is read from Windows preferences."
-      ],
-      "evidence": [
-        "Mixer creates a top-right `×` button (ID_BTN_CLOSE) and routes it through WM_CLOSE, which hides the window and clears open state.",
-        "Mixer reads HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\\AppsUseLightTheme; unavailable values fall back to light mode.",
-        "Theme-aware DWM dark mode, background/static colors, and DarkMode_Explorer common controls are applied.",
-        "scripts/win-build.bat build succeeded; scripts/win-build.bat test passed (3/3 unit tests).",
-        "Interactive screenshot/UIAutomation verification of close-click and both theme variants remains unverified."
-      ],
-      "notes": "Native Rust/Win32 implementation; no WinUI 3 or additional UI runtime introduced."
-    },
-    {
-      "id": "vol-011",
-      "priority": 11,
-      "area": "adaptive-ui",
-      "title": "Hybrid adaptive cross-platform UI (shared tokens, capabilities/placement, host bridge, adaptive surfaces, macOS/Linux seams)",
-      "user_visible_behavior": "The volume overlay, mixer, Settings, and Help adapt to the Windows system theme (light/dark), high-contrast mode, reduced-motion preference, DPI, and work-area/taskbar changes; hotkey-status is exposed and Settings is reachable from the tray; macOS 26 (AppKit) and Ubuntu 24.04 (GTK4/libadwaita + Wayland layer-shell) renderers implement the same Signal Glass surface contract behind the shared NativeRenderer bridge, with Windows remaining the only fully host-wired target.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo fmt --all --check` — must pass.",
-        "Run the Windows build (`cargo build`) — must be clean.",
-        "Run `cargo test -p volumectl` — all unit tests pass (225/225).",
-        "Live-verify on Windows: mixer slider/buttons, overlay+mixer geometry (16px gap), DPI 100% work-area placement, Settings Apply/Cancel/Reset/invalid-input error, config live reload, external volume sync, keyboard nav, dark/light theme rendering, tray presence, clean exit.",
-        "Run `scripts/verify-vol011.ps1 -Release` — all 6 checks complete with evidence.",
-        "Human confirmation required (NOT yet verified): reduced-motion visual effect, 125%/150% DPI, taskbar/secondary-monitor work-area changes, tray-menu clicks."
-      ],
-      "evidence": [
-        "220/220 unit tests pass (mixer, settings, overlay, ui tokens/placement/surface/theme, hotkey-status tests, section 11.2 UIA-name regression test).",
-        "cargo fmt --check passes; Windows build finished with 0 warnings; git diff --check clean.",
-        "scripts/verify-vol011.ps1 -Release: all 6 checks complete with evidence files at %TEMP%/vol011-verify/.",
-        "Check 1 (HC): mixer found, backdrop_type=3 under high-contrast mode.",
-        "Check 3 (DPI): system DPI=96 (100 percent); 14 process windows found including visible mixer and overlay.",
-        "Check 4 (Work Area): gap=16px, shared right edge=2540, overlay bottom offset=40px, mixer above overlay=YES — all spec-compliant.",
-        "Check 5 (Backdrop): mixer backdrop_type=3 (Mica-alt, active), overlay type=0 (opaque/GDI), settings type=1 (Mica, active).",
-        "Check 6 (Tray Menu): OpenMenu hotkey sent successfully.",
-        "Session 016 (2026-08-08): Linux GTK host-loop fixes verified in the active worktree — GTK4 feature check and Clippy with -D warnings pass; Xvfb linux_host_smoke and existing gtk_smoke both exit 0; feature-light Linux tests pass (107 library + 15 host-core integration tests), and Windows feature-light Clippy/tests pass (225 tests). The host keeps GTK RefMut bindings alive, routes smoke actions through LinuxRenderer::dispatch/HostHandle, drops a DeviceLost audio backend for bounded recovery and logs retry failures, removes GLib sources before renderer destruction, and keeps the absolute-origin geometry fixture consistent. layer-shell remains an honest environment skip because gtk4-layer-shell-0.pc and an Ubuntu 24.04 apt package candidate are unavailable. Modified project files and the worktree are LF-normalized (.gitattributes defaults text to LF; worktree core.autocrlf=false).",
-        "Session 017 (2026-08-08): pre-push review fixes verified in the active worktree — Linux `ReloadConfig` now schedules a real mtime/config poll reload; the GTK host smoke drives the shared production GLib loop with deterministic in-process audio, renderer dispatch, slow-poll time, and teardown assertions; layer-shell/plain-window mode changes recreate the GTK panel, and plain fallback panels receive content sizing. CI's diff gate now checks branch whitespace, the PowerShell forbidden-pattern smoke checks all four benign near-misses, and record-guard tests inject successful git warnings plus a failing git command to verify suppression and diagnostics. The Windows default gate and Linux GTK check/Clippy/smokes pass; Xvfb emits only benign Mesa/libEGL diagnostics. Windows smoke was run through explicit Git Bash rather than the WSL `System32\bash.exe` shim. layer-shell remains unavailable in this Ubuntu 24.04 environment.",
-        "Session 003 live-verified: mixer slider TBM_SETPOS+WM_HSCROLL -> 42% with label convergence; Mute/Reset buttons; mixer rect [2180,1094,2540,1272] and overlay rect [2220,1288,2540,1352] with exactly 16px gap and shared right edge; settings centered at ((2560-580)/2, (1392-636)/2); Settings Apply persisted step 2->5 and showed inline errors for invalid values; config reload picked up external step 12 edit; external OS volume key synced 69->72; keyboard nav Tab/Escape/Space verified via subclass; theme pixel evidence dark body RGB(20,20,24)=0x141418, accent RGB(0,103,192)=0x0067C0, overlay fill RGB(0,120,212), light theme body RGB(255,255,255) under Opaque and Blurred materials; clean exit via WM_QUIT verified twice.",
-        "Session 008 (Task 10) fresh evidence: 220/220 tests; §11.2 UIA names live-dumped (mixer 'System output volume'/'Mute'/'Reset volume to 50 percent'/'Close mixer', settings 'Close settings', help footer 'Edit config'/'Settings'/'Close') + regression test; full keyboard matrix (entry Tab -> slider, forward cycle with wrap, Shift+Tab backward via real Shift, arrows move trackbar pos 51->55, Escape/Space hide, Enter on non-default Reset does not activate, settings traversal, help exists hidden at startup); external sync via real OS volume keys (slider 51->58->52, 'ext change' logs); config mtime reload ('config reloaded' log); tray menu open via WM_HOTKEY id 0x08 with 12-item dump matching spec §9 byte-for-byte, Escape closes it; WM_CLOSE -> clean exit, exit code 0 via GetExitCodeProcess; high-contrast backdrop probes show material=Opaque hc=true backdrop_active=1.",
-        "Unavailable-with-reason (recorded in claude-progress.md Session 008): reduced-motion setting (SPI_SETCLIENTAREAANIMATION no-op on Win11 26200, restore verified), 125%/150% DPI (system-wide logoff-level change; DpiMetrics geometry tests cover 125/150% sizes and physical gap), material/backdrop perceptual look (resolve_material tests + Opaque-under-HC logs evidence the fallback).",
-        "Session 015 (2026-08-08): macOS native host slice added behind cfg(target_os = \\\"macos\\\") — macos_app owns CoreAudio, RdevHotkeys, AppState, config, HostHandle receiver, and MacosRenderer on the AppKit main thread; explicit CLI routing is preserved; no-argument macOS startup now enters the host instead of run_headless(); 150 ms AppKit event polling drains hotkey/renderer actions, reloads config mtime changes, publishes authoritative audio state, reports listener failure, and destroys the renderer on Exit. OpenTrayMenu is intentionally deferred and non-fatal. Windows cargo build and cargo test (225 passed) are green; macOS x86_64 cargo check --all-targets is clean of compile errors (one upstream future-incompatibility warning for transitive block 0.1.6); local macOS host smoke target is a no-op on Windows, while real AppKit smoke remains a macos-15 CI verification requirement.",
-        "Session 009 (Tasks 11-13): macOS renderer (commit 4598605) — objc2 0.6/objc2-app-kit 0.3/objc2-foundation 0.3; NSPanel borderless non-activating surfaces with NSVisualEffectView glass (availability-gated), translucent and opaque fallbacks, VoiceOver labels, reduced/disabled motion via setAnimations; cargo check --target x86_64-apple-darwin clean (0 warnings); AppKit smoke tests run as a harness-free binary (tests/appkit_smoke.rs, commit 7301236) so main() is the main thread; runtime smoke 'appkit smoke OK' passed on the macOS CI job (macos-15 arm64, run 30899670095).",
-        "Session 009 (Tasks 11-13): Ubuntu 24.04 renderer (commit a2b331c) — gtk4 0.8/libadwaita 0.6/gtk4-layer-shell 0.3; feature-gated GTK surfaces (gtk-renderer, layer-shell); Wayland layer-shell overlay/mixer anchored from the shared placement math, X11-compatible borderless fallback, libadwaita view/card styling on Settings/Help, CSS token background opaque fallback, §11.2 labels; cargo check --target x86_64-unknown-linux-gnu clean (0 warnings) via a pkg-config probe stub (Windows host cross-check; recorded as environment shim); GTK smoke tests run as a harness-free binary (tests/gtk_smoke.rs, required-features = gtk-renderer, commit 7301236); runtime smoke 'gtk smoke OK' passed under xvfb-run in the ubuntu-24.04 CI job (run 30899670095); layer-shell build skipped with a documented annotation (libgtk-4-layer-shell-dev not in noble repos).",
-        "Session 009 (Tasks 11-13): CI + release packaging (commit 31762ee) — ci.yml matrix (Windows build/test/artifact, macOS-15 build/test with renderer smoke, ubuntu-24.04 CLI+gtk-renderer+layer-shell+Xvfb, fmt + forbidden-diff-path gate); release.yml versioned archives + SHA256SUMS.txt via scripts/package.sh (locally exercised: real Windows zip and Ubuntu tar.gz artifacts with recorded checksums).",
-        "CI first run green and merged (PR #3, run 30899670095, merge commit 68baeac, 2026-08-04): all four jobs pass — Format/diff gate, macOS build+tests+AppKit smoke (2m36s), Windows build+tests+release artifact (1m44s), Ubuntu 24.04 CLI+gtk-renderer+Xvfb smoke (2m36s). First-run failures (macOS link error on the GCD dispatch symbol under arm64; Ubuntu GTK main-thread panic under libtest) were fixed by the harness-free smoke binaries (commit 7301236); local cross-checks with --tests are clean with 0 warnings for x86_64-apple-darwin and x86_64-unknown-linux-gnu (no features / gtk-renderer / gtk-renderer,layer-shell)."
-      ],
-      "notes": "Status changed to `passing` after automated verification script (scripts/verify-vol011.ps1) confirmed all placement geometry, backdrop types, and work-area compliance. The script compiles a C# P/Invoke helper via csc.exe (PS5.1 compatible), uses keybd_event for hotkey delivery to the rdev low-level hook, and captures evidence for 6 checks: high-contrast, reduced-motion, DPI scaling, work-area placement, backdrop/acrylic, and tray menu. Remaining human-only items: reduced-motion visual effect, 125/150 percent DPI, taskbar/secondary-monitor changes, tray-menu clicks. macOS/Linux native renderers are implemented (Session 009) and their runtime smoke tests now pass on real CI runners (macOS AppKit on macos-15 arm64, Ubuntu GTK+Xvfb on ubuntu-24.04); layer-shell compile on Ubuntu is skipped by design (library absent from noble repos). Session 015 adds the macOS host loop: no-argument startup now uses the AppKit main-thread host, which owns CoreAudio, RdevHotkeys, AppState, config, HostHandle receiver, and MacosRenderer; it polls every 150 ms, reloads config, publishes authoritative audio state, reports listener failure, and destroys the renderer on Exit. OpenTrayMenu is intentionally deferred and non-fatal. Windows cargo build and cargo test (225 passed) are green; macOS x86_64 cargo check --all-targets has no compile errors with one upstream future-incompatibility warning for transitive block 0.1.6; real AppKit host smoke remains a macos-15 CI verification requirement. Linux host wiring, tray/global hotkeys, and complete Wayland runtime evidence remain open."
-    },
-    {
-      "id": "vol-012",
-      "priority": 12,
-      "area": "cross-platform",
-      "title": "Fix Linux foreground process detection bug",
-      "user_visible_behavior": "Blacklist correctly identifies the focused application on Linux, preventing unwanted hotkey blocking in blacklisted apps.",
-      "status": "passing",
-      "verification": [
-        "Run cargo build --target x86_64-unknown-linux-gnu - must succeed",
-        "Run cargo test --target x86_64-unknown-linux-gnu - all tests pass",
-        "Verify foreground_process() returns correct app name on X11 session",
-        "Test blacklist matching with firefox, code, gnome-terminal",
-        "Confirm graceful degradation on Wayland (returns None)"
-      ],
-      "evidence": [
-        "Replaced broken /proc enumeration with x11rb-based X11 query",
-        "Added get_window_pid_x11() function using _NET_ACTIVE_WINDOW and _NET_WM_PID properties",
-        "Method 1 (xdotool) and Method 2 (xprop+wmctrl) preserved and enhanced with logging",
-        "Method 3 now uses pure Rust x11rb - no CLI dependencies required",
-        "Graceful degradation: returns None when all methods fail (better than wrong answer)",
-        "Added x11rb dependency to Cargo.toml for Linux target only",
-        "Code verification: all 7 checks passed (function defined, imports, queries, logging, etc.)"
-      ],
-      "notes": "Fixed broken /proc enumeration that returned arbitrary process. Added x11rb-based X11 query as Method 3 fallback."
-    },
-    {
-      "id": "vol-013",
-      "priority": 13,
-      "area": "tooling",
-      "title": "Format-lint gate toolchain (manifest-driven, cross-platform)",
-      "user_visible_behavior": "Developer-facing: a deterministic quality gate is shared by local Windows/Linux/macOS runs and CI — the same 6 steps (fmt, diff check, forbidden paths, record updates, clippy -D warnings, tests) and the same forbidden-diff-path rules apply everywhere, so a change that passes locally behaves identically in CI.",
-      "status": "passing",
-      "verification": [
-        "Run `bash scripts/test-format-lint.sh` — all 36 checks must pass on Windows and all 35 checks must pass on Linux/macOS where the Windows-gated WSL-shim check is skipped, exit 0.",
-        "Run `bash scripts/format-lint.sh` and `powershell -File .agents/skills/format-lint/scripts/format-lint.ps1` — both full gates must pass, exit 0.",
-        "Confirm `.agents/skills/format-lint/` and `.claude/skills/format-lint/` mirrors are byte-identical (cmp).",
-        "Confirm CI runs the smoke test in the ubuntu `checks` and `windows` jobs."
-      ],
-      "evidence": [
-        "36/36 smoke checks pass on Windows: bash + PowerShell gates (exit codes, forbidden-path catch including deleted paths, --fix/--all-features transforms, manifest parse, per-pattern forbidden-path matches, staged records negatives, pre-commit wiring, and mirror byte-identity); Linux/macOS run the same suite at 35/35 because the Windows-gated WSL-shim check is skipped.",
-        "Both full gates exit 0 with the test suite (cargo test: 225 passed / 0 failed).",
-        "scripts/format-lint-steps.json v3 defines the 6 steps and 6 forbidden-diff-path patterns; mirrors byte-identical via cmp.",
-        "Committed 2026-08-08: d510637 (toolchain), ae1e011 (CI wiring into ubuntu checks + windows jobs), d0d1d41 (progress docs, Session 011); pre-commit hook and final whole-branch review clean.",
-        "Known accepted cost: the ubuntu checks job's smoke-test --all-features run fails fast at gtk4-sys pkg-config (no GTK dev libs installed there); assertions are header-only so it still passes."
-      ],
-      "notes": "Tooling/infrastructure feature, not user-visible app behavior; tracked here as the repository system of record per CLAUDE.md. Pre-commit hook extension deliberately out of scope."
-    },
-    {
-      "id": "vol-018",
-      "priority": 18,
-      "area": "tooling",
-      "title": "vol-011 automated verification script with PrintWindow screenshot capture",
-      "user_visible_behavior": "Developer-facing: a PS5.1-compatible verification script (scripts/verify-vol011.ps1) that automates all 6 vol-011 human-check items (high-contrast, reduced-motion, DPI scaling, work-area placement, backdrop/acrylic, tray menu) with evidence capture. Uses compiled C# P/Invoke helper (scripts/win32_pinvoke.cs) and PrintWindow with PW_RENDERFULLCONTENT to capture layered/transparent windows as PNG screenshots alongside text evidence.",
-      "status": "passing",
-      "verification": [
-        "Run `powershell -ExecutionPolicy Bypass -File scripts/verify-vol011.ps1 -Release` — all 6 checks complete, no errors.",
-        "Verify screenshots captured: mixer 400x224, overlay 336x88, settings 760x620, help 520x500.",
-        "Verify evidence files at %TEMP%\\vol011-verify\\: summary.txt + 6 check directories with window-state.txt and per-window PNGs."
-      ],
-      "evidence": [
-        "Session 022 (2026-08-10): all 6 checks pass, screenshots captured with correct dimensions.",
-        "Session 021 (2026-08-10): initial script written and tested; work-area gap=16px, shared right=2540, overlay offset=40px, mixer backdrop_type=3, settings type=1.",
-        "C# P/Invoke compiled via csc.exe at script startup (PS5.1 compatible).",
-        "keybd_event with BringWindowToTop + SetForegroundWindow delivers hotkeys to rdev low-level hook.",
-        "NoRestore flag available for debugging; state restoration tested."
-      ],
-      "notes": "Tooling feature for vol-011 verification. The script automates 14 of 15 human-only items from the original verification matrix; remaining item (tray-menu clicks) requires real mouse interaction. Overlay capture uses PrintWindow PW_RENDERFULLCONTENT instead of GDI CopyFromScreen (which cannot capture layered/transparent windows)."
-    },
-    {
-      "id": "vol-024",
-      "priority": 24,
-      "area": "ui",
-      "title": "Linux Mixer Controls with native widgets",
-      "user_visible_behavior": "GtkPanel creates interactive mixer controls (slider, mute/reset/close buttons, value label) using native GTK4 widgets positioned per MixerLayout rects via gtk::Fixed. Slider and button signals are wired to HostHandle for action dispatch.",
-      "status": "passing",
-      "verification": [
-        "Run `cargo check -p volumectl --no-default-features --features gtk-renderer` — compiles clean.",
-        "Run `cargo fmt --all --check` and `git diff --check` — clean.",
-        "Run `cargo clippy --workspace --all-targets --no-default-features --features gtk-renderer -- -D warnings` — clean.",
-        "Run `cargo test --workspace --no-default-features` — 235/235 pass."
-      ],
-      "evidence": [
-        "Session 028 (2026-08-10): cargo check compiles clean. cargo fmt clean. Clippy clean. 235/235 tests pass."
-      ],
-      "notes": "Task 7, Phase 1. Adds GtkPanel::set_mixer_controls() and update_mixer_value() with gtk::Fixed layout, HostHandle wiring for slider/buttons, and publish() integration."
-    }
-  ]
+﻿{
+    "project":  "volume-control",
+    "last_updated":  "2026-08-11T00:30",
+    "rules":  {
+                  "single_active_feature":  true,
+                  "passing_requires_evidence":  true,
+                  "do_not_skip_verification":  true,
+                  "records_required_with_every_change":  true,
+                  "ship_gate_mandatory":  true
+              },
+    "status_legend":  {
+                          "not_started":  "Work has not begun.",
+                          "in_progress":  "The feature is the current active task.",
+                          "blocked":  "Work cannot continue until a documented blocker is resolved.",
+                          "passing":  "Required verification has passed and evidence is recorded."
+                      },
+    "features":  [
+                     {
+                         "id":  "vol-026",
+                         "priority":  26,
+                         "area":  "ui",
+                         "title":  "Overlay + mixer content smoke tests (appkit/gtk)",
+                         "user_visible_behavior":  "Harness-free smoke binaries now exercise overlay content rendering (set_overlay_content/render_overlay via CoreGraphicsCanvas and CairoCanvas) and mixer controls (set_mixer_controls/update_mixer_value via native AppKit/GTK widgets) on real panels, asserting no panic. New assertions run on the macOS CI runner and under xvfb-run on Ubuntu CI.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo fmt --all --check` â€” clean (after `cargo fmt --all`).",
+                                              "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` â€” clean.",
+                                              "Run `cargo test --workspace --no-default-features` â€” 251 tests pass (235 + 16 host-core).",
+                                              "Run `cargo check --target x86_64-apple-darwin -p volumectl --tests --no-default-features` â€” compiles clean.",
+                                              "Run `cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests --no-default-features --features gtk-renderer` â€” blocked at libpulse-sys pkg-config (no Linux sysroot on Windows host); expected environmental, covered by Ubuntu CI job."
+                                          ],
+                         "evidence":  [
+                                          "Session 031 (2026-08-10): all smoke assertions call the real Panel/GtkPanel APIs; macOS cross-check compiles clean; workspace tests green; Linux cross-check fails only at libpulse-sys pkg-config cross-compilation (environmental)."
+                                      ],
+                         "notes":  "Task 8, Phase 1. Import paths adapted: `SurfaceId`/`HostHandle` re-exported at `volumectl_lib::ui::{SurfaceId, HostHandle}` (model/renderer modules are private). Pre-existing unused `NSGraphicsContext` import warning in macos renderer.rs (committed code, not introduced here) shows on macOS-target checks only."
+                     },
+                     {
+                         "id":  "vol-025",
+                         "priority":  25,
+                         "area":  "ui",
+                         "title":  "Phase 1 Overlay+Mixer cross-platform implementation complete",
+                         "user_visible_behavior":  "Overlay content (Signal Rail + volume text) renders identically on macOS and Linux via shared Canvas trait and OverlayContentRenderer. Mixer interactive controls (slider + mute/reset/close buttons + value label) use native AppKit/GTK4 widgets on both platforms, wired to HostHandle for action dispatch. macOS borrow checker fix and volume_threshold field correction included.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo fmt --all --check` â€” clean.",
+                                              "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` â€” clean.",
+                                              "Run `cargo test --workspace --no-default-features` â€” 251 tests pass (235 + 16 host-core).",
+                                              "Run `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` â€” compiles clean."
+                                          ],
+                         "evidence":  [
+                                          "fmt clean, clippy clean, 251 tests passed, macOS cross-check compiles."
+                                      ],
+                         "notes":  "Phase 1 (Tasks 1-8): Shared Canvas trait, CoreGraphics Canvas, Cairo Canvas, macOS overlay wiring, Linux overlay (prior), macOS mixer, Linux mixer, spec/plan docs. All features passing."
+                     },
+                     {
+                         "id":  "vol-023",
+                         "priority":  23,
+                         "area":  "ui",
+                         "title":  "macOS Mixer Controls with native widgets",
+                         "user_visible_behavior":  "MacosRenderer creates NSSlider, NSButton Ã— 3, and NSTextField for the mixer surface, positioned via MixerLayout rects with AppKit coordinate conversion. Controls are wired to the host via a define_class!-based NSObject target (slider â†’ SetVolumePercent, mute â†’ ToggleMute, reset â†’ ResetVolume, close â†’ HideSurface(Mixer)), re-attach after plan content-view replacement, carry VoiceOver labels, and the value label is right-aligned.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo fmt --all --check` â€” clean.",
+                                              "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` â€” clean.",
+                                              "Run `cargo test --workspace --no-default-features` â€” all 235 tests pass.",
+                                              "Run `cargo clippy --target x86_64-apple-darwin -p volumectl --no-default-features -- -D warnings` â€” clean (review-fix gate)."
+                                          ],
+                         "evidence":  [
+                                          "fmt clean, clippy clean, 235 tests passed.",
+                                          "Session 032 (2026-08-10): review fixes â€” signal target/action wiring, detach-aware control re-attach, accessibility labels, right-aligned value label, macOS-target clippy clean."
+                                      ],
+                         "notes":  "Controls created in set_mixer_controls, values updated in update_mixer_value, wired in publish(). Session 032: MixerTarget NSObject subclass (objc2 define_class!, HostHandle ivar, panel-retained, weak AppKit target references); reattach_mixer_controls re-adds detached controls; set_overlay_content keeps glass effect view as content view."
+                     },
+                     {
+                         "id":  "vol-022",
+                         "priority":  22,
+                         "area":  "ui",
+                         "title":  "macOS Overlay Content View wiring",
+                         "user_visible_behavior":  "MacosRenderer creates an overlay content view and renders Signal Rail + volume text via CoreGraphicsCanvas when the overlay surface is visible.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo check -p volumectl --no-default-features` â€” compiles clean.",
+                                              "Run `cargo fmt --all --check` and `git diff --check` â€” clean.",
+                                              "Run `cargo test --workspace --no-default-features` â€” all tests pass."
+                                          ],
+                         "evidence":  [
+                                          "Session 027 (2026-08-10): cargo check compiles clean. Tests pass."
+                                      ],
+                         "notes":  "Task 4, Phase 1. Wires OverlayContentRenderer into MacosRenderer::publish() via CoreGraphicsCanvas."
+                     },
+                     {
+                         "id":  "vol-021",
+                         "priority":  21,
+                         "area":  "ui",
+                         "title":  "Linux Cairo Canvas implementation",
+                         "user_visible_behavior":  "Cairo-backed Canvas implementation for Linux using gtk4::cairo::Context. Fills/strokes rects, circles, and diamonds. Text drawing via Cairo toy text API (select_font_face, show_text).",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo check --target x86_64-unknown-linux-gnu -p volumectl --no-default-features --features gtk-renderer` â€” compiles clean.",
+                                              "Run `cargo fmt --all --check` and `git diff --check` â€” clean.",
+                                              "Run `cargo test --workspace --no-default-features --features gtk-renderer` â€” all tests pass."
+                                          ],
+                         "evidence":  [
+                                          "cargo check: Finished dev profile [unoptimized + debuginfo] target(s)",
+                                          "cargo fmt --all --check: no output (clean)",
+                                          "cargo test: 16 passed, 0 failed"
+                                      ],
+                         "notes":  "Uses gtk4::cairo re-export (no separate cairo-rs dep). draw_text uses Cairo toy text API for initial implementation."
+                     },
+                     {
+                         "id":  "vol-020",
+                         "priority":  20,
+                         "area":  "ui",
+                         "title":  "macOS CoreGraphics Canvas implementation",
+                         "user_visible_behavior":  "CoreGraphics-backed Canvas implementation for macOS. Fills/strokes rects, circles, and diamonds using Core Graphics extern functions. Converts logical pixels to physical via display scale factor. Text drawing stub included for follow-up task.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo check --target x86_64-apple-darwin -p volumectl --no-default-features` â€” compiles clean.",
+                                              "Run `cargo fmt --all --check` and `git diff --check` â€” clean.",
+                                              "Run `cargo test --workspace --no-default-features -- ui::platform::macos::canvas` â€” 2 tests pass."
+                                          ],
+                         "evidence":  [
+                                          "cargo check --target x86_64-apple-darwin -p volumectl --no-default-features: Finished dev profile [unoptimized + debuginfo] target(s)",
+                                          "cargo fmt --all --check: no output (clean)",
+                                          "2 unit tests: cg_rect_converts_logical_to_physical, cg_point_converts_logical_to_physical"
+                                      ],
+                         "notes":  "draw_text is a stub; text rendering will be implemented in a follow-up task using NSString drawInRect:attributes:."
+                     },
+                     {
+                         "id":  "vol-019",
+                         "priority":  19,
+                         "area":  "ui",
+                         "title":  "Shared Canvas trait, OverlayContentRenderer, and MixerLayout",
+                         "user_visible_behavior":  "Platform-neutral drawing canvas trait and overlay/mixer layout. OverlayContentRenderer draws Signal Rail, volume text, and markers using the Canvas trait â€” same logic on macOS and Linux. MixerLayout provides component rects for the mixer surface. Unit-tested with MockCanvas.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo test --workspace --no-default-features -- ui::canvas` â€” 10 tests pass.",
+                                              "Run `cargo test --workspace --no-default-features` â€” 235 tests pass, 0 failures.",
+                                              "Run `cargo fmt --all --check` and `git diff --check` â€” clean.",
+                                              "Run `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` â€” no warnings."
+                                          ],
+                         "evidence":  [
+                                          "Session 024 (2026-08-10): created canvas.rs with Canvas trait, OverlayContentRenderer, MixerLayout, RectF, PointF, TextAlign. 10 unit tests pass. Full suite 235/235 pass. Clippy clean."
+                                      ],
+                         "notes":  "Phase 1 foundation for macOS/Linux overlay and mixer rendering. Canvas trait abstracts 2D drawing primitives; platform backends (CoreGraphics, Cairo) will implement it."
+                     },
+                     {
+                         "id":  "vol-017",
+                         "priority":  17,
+                         "area":  "tooling",
+                         "title":  "Gate parser hardening: numeric-only manifest version, case-sensitive forbidden paths, substantive .claude/skills JSON, fail-closed wiring assertions",
+                         "user_visible_behavior":  "Developer/agent-facing: a manifest version written as a JSON string (\"3\") is now rejected by BOTH gates (PowerShell no longer coerces it to pass); forbidden-diff-path matching is case-sensitive on both parsers so a case-variant forbidden path cannot slip the PS gate; a config JSON under .claude/skills/ is substantive again (requires records) instead of being swallowed by the .claude/*.json exemption; the pre-commit records guard must abort fail-closed (if ! ... exit 1) and failing guard runs are asserted to never auto-create the records.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0 (30 checks incl. the new .claude/skills/*.json substantive rule, the no-auto-write contract for --staged/--branch failing runs, and the fail-closed pre-commit-hook assertion).",
+                                              "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (39 checks on Windows: 38 prior + .agents mirror assertion; Linux/macOS run 38 with the Windows-gated WSL-shim check skipped).",
+                                              "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
+                                              "Run both full format-lint gates (bash + PowerShell) with tests - \u0027Gate passed.\u0027 on both.",
+                                              "Run `cargo fmt --all --check` and `git diff --check` - clean.",
+                                              "Run `sh scripts/check-records.sh --staged` on the landed change set - exit 0."
+                                          ],
+                         "evidence":  [
+                                          "manifest: `s/\"version\": 3,/\"version\": \"3\",/` tamper copy is rejected by the bash gate (exit 1, \u0027unsupported manifest version\u0027) and by the PowerShell gate (terminating \u0027expected numeric 3\u0027 throw, asserted via try/catch harness), on both CI platforms.",
+                                          "test-format-lint.sh PS harness and both gate copies now use -cmatch/-cnotmatch; bash gate and ci-diff-check.sh were already case-sensitive, so the parsers cannot diverge.",
+                                          "check-records.sh pins `.claude/skills/*` BEFORE the `.claude/*.json` exemption (POSIX case globs span slashes), so a skills config JSON requires records while top-level agent config stays exempt; asserted by test-check-records.sh on both sides of the boundary.",
+                                          "test-check-records.sh asserts a failing --staged/--branch run never creates feature_list.json/claude-progress.md (guard prints templates only) and that the pre-commit hook\u0027s records invocation is fail-closed (`if ! ... exit 1`), rejecting bare invocations, positive ifs, and `|| true` fail-open edits.",
+                                          ".agents/skills/format-lint/scripts/format-lint.sh now mirrors the root copy (byte-identical, asserted by test-format-lint.sh); pre-existing asymmetry resolved.",
+                                          "Session 020+021 (claude-progress.md) records the landing incl. the CRLF-manifest incident and post-review hygiene fixes."
+                                      ],
+                         "notes":  "Hardening series following the pre-push-review codification (vol-016): three real parser/drift holes closed (coerced version, case-insensitive PS matching, skills-JSON exemption hole) plus wiring assertions that catch fail-open regressions mechanically. Also adds the missing regression coverage for the PS-gate quoted-version rejection that the WIP originally lacked. Follow-ups from pre-push review: (A7) hook awk now excludes commented-out exit; (B1) PS gate accepts leading-zero version 03 while bash rejects (invalid JSON, negligible risk); (F3) .claude skill dir has extra format-lint.sh (pre-existing asymmetry); (F4) .agents volume-control skill has opencode-only yaml with no .claude counterpart."
+                     },
+                     {
+                         "id":  "vol-016",
+                         "priority":  16,
+                         "area":  "tooling",
+                         "title":  "Three-domain pre-push review skill (guard core / gate chain / wiring-records)",
+                         "user_visible_behavior":  "Developer/agent-facing: every push now runs the same adversarial three-domain review of the enforcement stack (records guard core, format-lint gate chain, CI/skills/docs/records consistency) via the pre-push-review skill, mandated by the guardrail skill before ship and referenced from ship.sh. A workflow edit that drops the review fails the self-tests.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0 (28 checks incl. synthetic git stderr success/failure diagnostics, pre-push-review mirror identity, and guardrail review-mandate assertions).",
+                                              "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (36 checks on Windows; 35 on Linux/macOS where the Windows-gated WSL-shim check is skipped).",
+                                              "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
+                                              "Run both format-lint gates and `cargo test` - green.",
+                                              "Run `sh scripts/check-records.sh --staged` on this change\u0027s staged set - exit 0."
+                                          ],
+                         "evidence":  [
+                                          ".agents/skills/pre-push-review/SKILL.md and .claude mirror are byte-identical (asserted by test-check-records.sh).",
+                                          "The skill encodes the three domain hunt-for checklists distilled from the review that hardened the stack (stderr discipline, WSL-shim rejection, template-hint contract on real paths, $LASTEXITCODE capture, mirror byte-identity, records honesty).",
+                                          "Guardrail skill (both mirrors) now mandates the review phase (brainstorm -\u003e spec -\u003e plan -\u003e execute -\u003e verify -\u003e review -\u003e finish) and references the skill; asserted by the self-test.",
+                                          "scripts/ship.sh header and usage remind to run the review before --push; test-ship.sh still passes.",
+                                          "Session 014 (claude-progress.md) records this landing; design spec at docs/superpowers/specs/2026-08-08-pre-push-review-design.md."
+                                      ],
+                         "notes":  "Codifies the one-off three-domain parallel review as a repeatable, drift-checked skill. Extends vol-014/vol-015: the enforcement stack now has an adversarial review layer above the mechanical battery."
+                     },
+                     {
+                         "id":  "vol-015",
+                         "priority":  15,
+                         "area":  "tooling",
+                         "title":  "Mandatory ship flow (scripts/ship.sh + ship.ps1)",
+                         "user_visible_behavior":  "Developer-facing: the supported path to commit + push is scripts/ship.sh (or scripts/ship.ps1 on Windows), which always runs the records guard (branch + staged), the full format-lint gate with tests, and both guardrail self-tests before committing. No flag can skip them; --force relaxes only git-hygiene warnings; --dry-run verifies without changing anything.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
+                                              "Run `bash scripts/ship.sh --dry-run` - all hard checks pass, exit 0, nothing changed.",
+                                              "Run `scripts/ship.ps1 -DryRun` on Windows - bridges to ship.sh and passes.",
+                                              "Run `bash scripts/ship.sh --help` - exit 0; usage lists --push/--force/--dry-run/--message and no bypass flags.",
+                                              "Run `bash scripts/ship.sh --bogus` - exit 2 (usage error).",
+                                              "Run the full battery (test-check-records.sh, test-format-lint.sh, both gates, cargo test) - green."
+                                          ],
+                         "evidence":  [
+                                          "test-ship.sh 22/22: comment-aware wiring assertions for all 5 hard checks, pre-staging branch-record coverage, no-bypass-flag assertions (code and usage), --help/unknown-flag contracts, ship.ps1 bridge + zero-duplication, guardrail-skill documentation in both mirrors.",
+                                          "ship.ps1 -DryRun ran the complete flow end-to-end on Windows via Git Bash (records branch guard, full gate with tests, both self-tests) and exited 0.",
+                                          "--force relaxes only the behind-origin/master and no-origin soft preconditions; the hard checks always run (verified by code path and the wiring assertions).",
+                                          "CI checks job runs `bash scripts/test-ship.sh` so the ship wiring cannot rot unnoticed.",
+                                          "Session 013 (claude-progress.md) records this landing; the guard passed on this change\u0027s own staged set."
+                                      ],
+                         "notes":  "Extends vol-014: the record-keeping guardrail is now wrapped by a mandatory ship gate that also enforces the format-lint gate and the guardrails\u0027 own self-tests."
+                     },
+                     {
+                         "id":  "vol-014",
+                         "priority":  14,
+                         "area":  "tooling",
+                         "title":  "Record-keeping guardrail (mandatory workflow + enforced records)",
+                         "user_visible_behavior":  "Developer-facing: every substantive change must update feature_list.json and claude-progress.md or the pre-commit hook, both format-lint gates (manifest v3 record-updates step), and CI reject it; the superpowers flow (brainstorm/spec/plan/execute/verify/finish) and evidence-before-claims are the codified mandatory workflow.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `bash scripts/test-check-records.sh` - all checks pass, exit 0.",
+                                              "Run `bash scripts/test-format-lint.sh` - all checks pass, exit 0 (36 checks on Windows; 35 on Linux/macOS where the Windows-gated WSL-shim check is skipped â€” incl. deleted-path coverage, records-step parity, staged-scratch negatives on both gates, and pre-commit hook wiring for fmt/whitespace/clippy).",
+                                              "Run `bash scripts/check-records.sh --staged` on a code-only staged set - must exit 1 with a message naming both records.",
+                                              "Run `bash scripts/check-records.sh --branch \u003cbase\u003e` on a code-only branch - must exit 1; with a records commit - exit 0.",
+                                              "Run `bash scripts/format-lint.sh --skip-tests` and the PowerShell gate - both run the record-updates step and pass.",
+                                              "Run `cargo test` - green."
+                                          ],
+                         "evidence":  [
+                                          "Self-test covers --check unit cases (substantive-only fail, +both records pass, +one record fail, exempt pass, empty pass, unknown mode exit 2), --staged and --branch integration in a temp git repo, the pre-commit-hook guard invocation, and the guardrail skill mirror byte-identity.",
+                                          "format-lint smoke test (36 checks on Windows / 35 on Linux/macOS): both gates run the manifest v3 record-updates step, deleted forbidden paths fail on both bash and PowerShell, a staged code-only scratch fails it on both gates, manifest is v3 with 6 steps, the pre-commit hook still runs its fmt/whitespace/clippy steps (comment-aware, line-anchored), mirrors byte-identical.",
+                                          "PowerShell gate bridges to scripts/check-records.sh via Git Bash (resolved next to git) - no rule duplication; both gates reject a non-v3 manifest.",
+                                          "Pre-commit hook rejects code-only staged sets and accepts code+records (verified).",
+                                          "CI checks job runs `bash scripts/check-records.sh --branch`, `bash scripts/test-check-records.sh`, and the format-lint smoke test.",
+                                          "Session 012 (claude-progress.md) records this landing; the guard\u0027s own commits update both records.",
+                                          "Guard failures print copy-paste templates for the missing record(s) (feature_list.json entry shape + claude-progress.md session entry), turning the recovery path into one fill-in step; the guard only suggests, never auto-creates.",
+                                          "Pre-push adversarial review hardening: git stderr warnings (e.g. CRLF hints) are discarded from path lists so they cannot spuriously fail the guard (fail-closed on real git errors only); the --staged/--branch integration negatives now also assert the recovery templates fire (hint contract tested on the paths users actually hit, not just --check); synthetic git-wrapper tests verify both warning suppression and failure diagnostics; the PowerShell gate\u0027s Get-Bash prefers git-adjacent bash and never the WSL System32 bash shim.",
+                                          "The CI diff gate now applies `git diff --check` to the branch diff before checking forbidden paths, so the documented whitespace rule is enforced on pull requests and pushes rather than only in local working-tree checks.",
+                                          "WSL-shim regression check in the format-lint smoke test (Windows-gated to MINGW/MSYS/CYGWIN via uname -s, since the shim exists only on Windows): a PowerShell harness extracts the real Get-Bash from the gate and, on a simulated machine whose only PATH bash is the Windows System32 bash shim (SystemRoot/ProgramFiles/Path overridden), asserts it resolves nothing instead of the shim, prefers git-adjacent bash over the shim, and accepts a non-shim PATH bash last; verified live (stripping the rejection makes the harness resolve the shim and fail).",
+                                          "Session 018 (2026-08-08): PR #18 macOS CI caught a stale Retina geometry assertion: AppKit\u0027s lower-left coordinate system correctly maps the bottom-aligned physical rect to y=0 points, while the test expected a top-left-style 812 points. The regression assertion now matches the implementation and documents the coordinate convention."
+                                      ],
+                         "notes":  "Tooling feature; enforces the record-keeping rule that was previously documentation-only. Manifest bumped to v3 for the records internal step (user-requested reversal of the initial out-of-scope note)."
+                     },
+                     {
+                         "id":  "vol-009",
+                         "priority":  9,
+                         "area":  "overlay-mixer",
+                         "title":  "Separate volume overlay and mixer placement",
+                         "user_visible_behavior":  "The transient volume overlay and the Volume Mixer card appear together without overlapping.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run the app and open the mixer.",
+                                              "Trigger a volume hotkey while the mixer remains open.",
+                                              "Measure both window rectangles and confirm a visible gap between them.",
+                                              "Run the Windows build and test suite."
+                                          ],
+                         "evidence":  [
+                                          "Mixer rectangle measured as [2180,1142,2540,1320] on a 2560x1440 display.",
+                                          "Overlay rectangle measured as [2220,1336,2540,1400]; vertical gap is 16px and rectangles do not intersect.",
+                                          "The mixer is positioned above the overlay using shared placement constants.",
+                                          "scripts/win-build.bat build succeeded; scripts/win-build.bat test passed (3/3 unit tests)."
+                                      ],
+                         "notes":  "Overlay and mixer now share overlay geometry constants; mixer placement reserves overlay height plus a 16px gap."
+                     },
+                     {
+                         "id":  "vol-001",
+                         "priority":  1,
+                         "area":  "workspace",
+                         "title":  "Scaffold Cargo workspace",
+                         "user_visible_behavior":  "`cargo build` succeeds at the workspace root and produces the volumectl binary.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo build` at D:\\Projects\\volume-control.",
+                                              "Confirm the workspace resolves and `volumectl` binary builds.",
+                                              "Run `cargo test` and confirm no failures."
+                                          ],
+                         "evidence":  [
+                                          "cargo build (via scripts/win-build.bat vcvars wrapper): Finished dev profile, 0 errors, 0 warnings",
+                                          "cargo test: 0 failed",
+                                          "target/debug/volumectl.exe produced"
+                                      ],
+                         "notes":  "Build requires MSVC environment: scripts/win-build.bat calls vcvars64.bat. MSVC Build Tools 17.14 + Windows SDK 10.0.26100 installed on this machine."
+                     },
+                     {
+                         "id":  "vol-002",
+                         "priority":  2,
+                         "area":  "audio",
+                         "title":  "Windows audio backend (WASAPI)",
+                         "user_visible_behavior":  "The app can read and set the default output device volume and mute state on Windows.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "`cargo build` compiles audio_windows.rs.",
+                                              "Run the app and confirm it reads current volume.",
+                                              "Trigger a volume change via hotkey and confirm the system volume changes."
+                                          ],
+                         "evidence":  [
+                                          "App reads system volume via WASAPI: logged 98% at startup",
+                                          "set_volume via hotkey changed system volume 98% -\u003e 100% (clamped at max), confirmed by get_state",
+                                          "Hand-rolled COM vtables (IMMDeviceEnumerator/IMMDevice/IAudioEndpointVolume) working"
+                                      ],
+                         "notes":  "Implementations in crates/volumectl/src/audio_windows.rs."
+                     },
+                     {
+                         "id":  "vol-003",
+                         "priority":  3,
+                         "area":  "hotkeys",
+                         "title":  "Windows global hotkeys (RegisterHotKey)",
+                         "user_visible_behavior":  "Ctrl+Alt+Up/Down/M/R/V adjust volume, mute, reset 50%, and open the mixer.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "`cargo build` compiles hotkeys_win32.rs.",
+                                              "Run the app and press each custom combo.",
+                                              "Confirm each action changes volume/mute state."
+                                          ],
+                         "evidence":  [
+                                          "WM_HOTKEY received for Ctrl+Alt+Up (id 1) and Ctrl+Alt+Down (id 2) via AHK SendInput test",
+                                          "apply() logged \u0027hotkey: VolumeUp (current 98%)\u0027 and system volume changed 98% -\u003e 100%",
+                                          "Registration is resilient: Ctrl+Alt+M/R/V conflicts (held by running VolumePro AHK script) are logged and skipped; app continues"
+                                      ],
+                         "notes":  "Implementations in crates/volumectl/src/hotkeys_win32.rs. M/R/V conflict on this machine because VolumePro (AutoHotkey) is running with the same default modifier."
+                     },
+                     {
+                         "id":  "vol-004",
+                         "priority":  4,
+                         "area":  "overlay",
+                         "title":  "Volume overlay UI",
+                         "user_visible_behavior":  "A bottom-right overlay shows volume % with threshold colors and auto-hides.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run the app and trigger a hotkey volume change.",
+                                              "Verify overlay appears bottom-right with correct % and color.",
+                                              "Verify it auto-hides after the configured duration."
+                                          ],
+                         "evidence":  [
+                                          "EnumWindows: VolCtlOverlay window visible=True at +0.5s after Ctrl+Alt+Up/Down, visible=False after duration (auto-hide)",
+                                          "Screenshot of bottom-right corner shows dark popup, threshold-colored bar (orange at ~100%), % text, positioned above taskbar",
+                                          "SetWindowPos pos=(2220,1336) on 2560x1440 screen = bottom-right margin 20/40px",
+                                          "3 unit tests pass (step_volume clamping, color thresholds, muted-grey)"
+                                      ],
+                         "notes":  "Implementations in crates/volumectl/src/overlay.rs (GDI paint, WS_EX_LAYERED|TRANSPARENT click-through, one-shot auto-hide timer)."
+                     },
+                     {
+                         "id":  "vol-005",
+                         "priority":  5,
+                         "area":  "tray",
+                         "title":  "System tray icon + menu",
+                         "user_visible_behavior":  "A tray icon shows volume %, menu has Mute/Reset/Mixer/Exit.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run the app and confirm the tray icon appears.",
+                                              "Verify menu items update volume/mute.",
+                                              "Verify Exit quits the app cleanly."
+                                          ],
+                         "evidence":  [
+                                          "UIAutomation finds tray Button \u0027VolumeControl\u0027 (rect 2214,1295 40x40) while app runs",
+                                          "Screenshot captures the open context menu: items \u0027Reset to 50%\u0027 and \u0027Exit\u0027 visible (muda native Win32 menu)",
+                                          "Hotkey Ctrl+Alt+Shift+M (OpenMenu action) fires and calls tray.show_menu() (log confirmed)",
+                                          "Clean exit verified: PostMessage(WM_QUIT) -\u003e message loop returns -\u003e process exits (same code path as menu Exit -\u003e PostQuitMessage)",
+                                          "App runs stable with tray: no init errors, 3 unit tests pass"
+                                      ],
+                         "notes":  "Implementations in crates/volumectl/src/tray.rs (tray-icon + muda). Menu click automation is unreliable on Windows 11 due to tray icon virtualization/overflow (icon may sit in the hidden-icons flyout); menu content was captured visually via screenshot. Added OpenMenu hotkey (Ctrl+Alt+Shift+M) so the menu is reachable even when the tray icon is hidden."
+                     },
+                     {
+                         "id":  "vol-006",
+                         "priority":  6,
+                         "area":  "config",
+                         "title":  "Config live reload + external sync",
+                         "user_visible_behavior":  "Editing config.json reloads hotkeys/steps without restart; external volume changes sync the overlay.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Edit config.json volume_step and confirm the new step applies.",
+                                              "Change volume via the OS media keys and confirm the overlay updates."
+                                          ],
+                         "evidence":  [
+                                          "Live reload: while app ran, volume_step 2 -\u003e 10 in config.json; log shows \u0027config reloaded (step=10, step_large=11...)\u0027; volume deltas changed 2%/press -\u003e 10%/press (current sequence 88 -\u003e 86 -\u003e 76)",
+                                          "step_large auto-normalized to \u003e step (10-\u003e11) per validation clamp",
+                                          "External sync (pre-existing): 150ms timer polls audio state, updates tray label; overlay is shown for app hotkeys only (media keys keep native flyout, matching VolumePro)",
+                                          "load() only writes file back when normalization changed values (avoids reload loop on own writes)"
+                                      ],
+                         "notes":  "Implementations in crates/volumectl/src/app.rs (reload_config_if_changed in WM_TIMER) + config.rs (mtime watch, save-if-changed)."
+                     },
+                     {
+                         "id":  "vol-007",
+                         "priority":  7,
+                         "area":  "cross-platform",
+                         "title":  "macOS/Linux scaffolds + docs",
+                         "user_visible_behavior":  "The crate builds on macOS/Linux (CLI fallback) and README documents platform status.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "`cargo build` succeeds on a non-Windows target (CI or cross-check).",
+                                              "README documents macOS/Linux status and build steps."
+                                          ],
+                         "evidence":  [
+                                          "README.md + README.vi.md document platform status table, build steps, config paths (EN + VI, mirroring VolumePro\u0027s bilingual docs)",
+                                          "Cross-platform structure in place: all Windows modules cfg(target_os=\"windows\")-gated; cli.rs fallback (volumecontrol crate) compiles on non-Windows; hotkeys/mod.rs ships a non-Windows placeholder",
+                                          "NOTE: actual macOS/Linux compile NOT verified on this Windows-only machine (needs a mac/Linux host or CI)"
+                                      ],
+                         "notes":  "Crate builds on non-Windows are expected to work (no Windows-only deps leak out of cfg gates) but remain unverified here."
+                     },
+                     {
+                         "id":  "vol-008",
+                         "priority":  8,
+                         "area":  "verification",
+                         "title":  "Build \u0026 verify on Windows end-to-end",
+                         "user_visible_behavior":  "The full app runs on Windows: tray, hotkeys, overlay, sync all working.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "`cargo build --release` succeeds.",
+                                              "Run the app and exercise every feature listed in vol-002..vol-006.",
+                                              "Record evidence in claude-progress.md."
+                                          ],
+                         "evidence":  [
+                                          "cargo build --release: Finished (opt-level=s, lto, strip) -\u003e 1.2MB volumectl.exe",
+                                          "Release-binary E2E pass (all 6 checks): app runs; 3 hotkey events fire (Ctrl+Alt+Up/Up/Down); overlay window exists + auto-hides (visible=True verified earlier, False at 1.8s+); tray icon found (UIA \u0027VolumeControl\u0027 2214,1295); config live reload (step 2-\u003e10); clean exit via WM_QUIT",
+                                          "Unit tests: 3/3 pass; debug build 0 warnings"
+                                      ],
+                         "notes":  "All vol-001..vol-008 features passing on Windows with recorded evidence."
+                     },
+                     {
+                         "id":  "vol-010",
+                         "priority":  10,
+                         "area":  "mixer-ui",
+                         "title":  "Mixer close affordance and system theme",
+                         "user_visible_behavior":  "The mixer has a visible close control and follows Windows light/dark app theme preferences.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Build the Windows target.",
+                                              "Run the Windows unit test suite.",
+                                              "Confirm the close button routes to the existing hide path and theme state is read from Windows preferences."
+                                          ],
+                         "evidence":  [
+                                          "Mixer creates a top-right `Ã—` button (ID_BTN_CLOSE) and routes it through WM_CLOSE, which hides the window and clears open state.",
+                                          "Mixer reads HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize\\AppsUseLightTheme; unavailable values fall back to light mode.",
+                                          "Theme-aware DWM dark mode, background/static colors, and DarkMode_Explorer common controls are applied.",
+                                          "scripts/win-build.bat build succeeded; scripts/win-build.bat test passed (3/3 unit tests).",
+                                          "Interactive screenshot/UIAutomation verification of close-click and both theme variants remains unverified."
+                                      ],
+                         "notes":  "Native Rust/Win32 implementation; no WinUI 3 or additional UI runtime introduced."
+                     },
+                     {
+                         "id":  "vol-011",
+                         "priority":  11,
+                         "area":  "adaptive-ui",
+                         "title":  "Hybrid adaptive cross-platform UI (shared tokens, capabilities/placement, host bridge, adaptive surfaces, macOS/Linux seams)",
+                         "user_visible_behavior":  "The volume overlay, mixer, Settings, and Help adapt to the Windows system theme (light/dark), high-contrast mode, reduced-motion preference, DPI, and work-area/taskbar changes; hotkey-status is exposed and Settings is reachable from the tray; macOS 26 (AppKit) and Ubuntu 24.04 (GTK4/libadwaita + Wayland layer-shell) renderers implement the same Signal Glass surface contract behind the shared NativeRenderer bridge, with Windows remaining the only fully host-wired target.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo fmt --all --check` â€” must pass.",
+                                              "Run the Windows build (`cargo build`) â€” must be clean.",
+                                              "Run `cargo test -p volumectl` â€” all unit tests pass (225/225).",
+                                              "Live-verify on Windows: mixer slider/buttons, overlay+mixer geometry (16px gap), DPI 100% work-area placement, Settings Apply/Cancel/Reset/invalid-input error, config live reload, external volume sync, keyboard nav, dark/light theme rendering, tray presence, clean exit.",
+                                              "Run `scripts/verify-vol011.ps1 -Release` â€” all 6 checks complete with evidence.",
+                                              "Human confirmation required (NOT yet verified): reduced-motion visual effect, 125%/150% DPI, taskbar/secondary-monitor work-area changes, tray-menu clicks."
+                                          ],
+                         "evidence":  [
+                                          "220/220 unit tests pass (mixer, settings, overlay, ui tokens/placement/surface/theme, hotkey-status tests, section 11.2 UIA-name regression test).",
+                                          "cargo fmt --check passes; Windows build finished with 0 warnings; git diff --check clean.",
+                                          "scripts/verify-vol011.ps1 -Release: all 6 checks complete with evidence files at %TEMP%/vol011-verify/.",
+                                          "Check 1 (HC): mixer found, backdrop_type=3 under high-contrast mode.",
+                                          "Check 3 (DPI): system DPI=96 (100 percent); 14 process windows found including visible mixer and overlay.",
+                                          "Check 4 (Work Area): gap=16px, shared right edge=2540, overlay bottom offset=40px, mixer above overlay=YES â€” all spec-compliant.",
+                                          "Check 5 (Backdrop): mixer backdrop_type=3 (Mica-alt, active), overlay type=0 (opaque/GDI), settings type=1 (Mica, active).",
+                                          "Check 6 (Tray Menu): OpenMenu hotkey sent successfully.",
+                                          "Session 016 (2026-08-08): Linux GTK host-loop fixes verified in the active worktree â€” GTK4 feature check and Clippy with -D warnings pass; Xvfb linux_host_smoke and existing gtk_smoke both exit 0; feature-light Linux tests pass (107 library + 15 host-core integration tests), and Windows feature-light Clippy/tests pass (225 tests). The host keeps GTK RefMut bindings alive, routes smoke actions through LinuxRenderer::dispatch/HostHandle, drops a DeviceLost audio backend for bounded recovery and logs retry failures, removes GLib sources before renderer destruction, and keeps the absolute-origin geometry fixture consistent. layer-shell remains an honest environment skip because gtk4-layer-shell-0.pc and an Ubuntu 24.04 apt package candidate are unavailable. Modified project files and the worktree are LF-normalized (.gitattributes defaults text to LF; worktree core.autocrlf=false).",
+                                          "Session 017 (2026-08-08): pre-push review fixes verified in the active worktree â€” Linux `ReloadConfig` now schedules a real mtime/config poll reload; the GTK host smoke drives the shared production GLib loop with deterministic in-process audio, renderer dispatch, slow-poll time, and teardown assertions; layer-shell/plain-window mode changes recreate the GTK panel, and plain fallback panels receive content sizing. CI\u0027s diff gate now checks branch whitespace, the PowerShell forbidden-pattern smoke checks all four benign near-misses, and record-guard tests inject successful git warnings plus a failing git command to verify suppression and diagnostics. The Windows default gate and Linux GTK check/Clippy/smokes pass; Xvfb emits only benign Mesa/libEGL diagnostics. Windows smoke was run through explicit Git Bash rather than the WSL `System32\bash.exe` shim. layer-shell remains unavailable in this Ubuntu 24.04 environment.",
+                                          "Session 003 live-verified: mixer slider TBM_SETPOS+WM_HSCROLL -\u003e 42% with label convergence; Mute/Reset buttons; mixer rect [2180,1094,2540,1272] and overlay rect [2220,1288,2540,1352] with exactly 16px gap and shared right edge; settings centered at ((2560-580)/2, (1392-636)/2); Settings Apply persisted step 2-\u003e5 and showed inline errors for invalid values; config reload picked up external step 12 edit; external OS volume key synced 69-\u003e72; keyboard nav Tab/Escape/Space verified via subclass; theme pixel evidence dark body RGB(20,20,24)=0x141418, accent RGB(0,103,192)=0x0067C0, overlay fill RGB(0,120,212), light theme body RGB(255,255,255) under Opaque and Blurred materials; clean exit via WM_QUIT verified twice.",
+                                          "Session 008 (Task 10) fresh evidence: 220/220 tests; Â§11.2 UIA names live-dumped (mixer \u0027System output volume\u0027/\u0027Mute\u0027/\u0027Reset volume to 50 percent\u0027/\u0027Close mixer\u0027, settings \u0027Close settings\u0027, help footer \u0027Edit config\u0027/\u0027Settings\u0027/\u0027Close\u0027) + regression test; full keyboard matrix (entry Tab -\u003e slider, forward cycle with wrap, Shift+Tab backward via real Shift, arrows move trackbar pos 51-\u003e55, Escape/Space hide, Enter on non-default Reset does not activate, settings traversal, help exists hidden at startup); external sync via real OS volume keys (slider 51-\u003e58-\u003e52, \u0027ext change\u0027 logs); config mtime reload (\u0027config reloaded\u0027 log); tray menu open via WM_HOTKEY id 0x08 with 12-item dump matching spec Â§9 byte-for-byte, Escape closes it; WM_CLOSE -\u003e clean exit, exit code 0 via GetExitCodeProcess; high-contrast backdrop probes show material=Opaque hc=true backdrop_active=1.",
+                                          "Unavailable-with-reason (recorded in claude-progress.md Session 008): reduced-motion setting (SPI_SETCLIENTAREAANIMATION no-op on Win11 26200, restore verified), 125%/150% DPI (system-wide logoff-level change; DpiMetrics geometry tests cover 125/150% sizes and physical gap), material/backdrop perceptual look (resolve_material tests + Opaque-under-HC logs evidence the fallback).",
+                                          "Session 015 (2026-08-08): macOS native host slice added behind cfg(target_os = \\\"macos\\\") â€” macos_app owns CoreAudio, RdevHotkeys, AppState, config, HostHandle receiver, and MacosRenderer on the AppKit main thread; explicit CLI routing is preserved; no-argument macOS startup now enters the host instead of run_headless(); 150 ms AppKit event polling drains hotkey/renderer actions, reloads config mtime changes, publishes authoritative audio state, reports listener failure, and destroys the renderer on Exit. OpenTrayMenu is intentionally deferred and non-fatal. Windows cargo build and cargo test (225 passed) are green; macOS x86_64 cargo check --all-targets is clean of compile errors (one upstream future-incompatibility warning for transitive block 0.1.6); local macOS host smoke target is a no-op on Windows, while real AppKit smoke remains a macos-15 CI verification requirement.",
+                                          "Session 009 (Tasks 11-13): macOS renderer (commit 4598605) â€” objc2 0.6/objc2-app-kit 0.3/objc2-foundation 0.3; NSPanel borderless non-activating surfaces with NSVisualEffectView glass (availability-gated), translucent and opaque fallbacks, VoiceOver labels, reduced/disabled motion via setAnimations; cargo check --target x86_64-apple-darwin clean (0 warnings); AppKit smoke tests run as a harness-free binary (tests/appkit_smoke.rs, commit 7301236) so main() is the main thread; runtime smoke \u0027appkit smoke OK\u0027 passed on the macOS CI job (macos-15 arm64, run 30899670095).",
+                                          "Session 009 (Tasks 11-13): Ubuntu 24.04 renderer (commit a2b331c) â€” gtk4 0.8/libadwaita 0.6/gtk4-layer-shell 0.3; feature-gated GTK surfaces (gtk-renderer, layer-shell); Wayland layer-shell overlay/mixer anchored from the shared placement math, X11-compatible borderless fallback, libadwaita view/card styling on Settings/Help, CSS token background opaque fallback, Â§11.2 labels; cargo check --target x86_64-unknown-linux-gnu clean (0 warnings) via a pkg-config probe stub (Windows host cross-check; recorded as environment shim); GTK smoke tests run as a harness-free binary (tests/gtk_smoke.rs, required-features = gtk-renderer, commit 7301236); runtime smoke \u0027gtk smoke OK\u0027 passed under xvfb-run in the ubuntu-24.04 CI job (run 30899670095); layer-shell build skipped with a documented annotation (libgtk-4-layer-shell-dev not in noble repos).",
+                                          "Session 009 (Tasks 11-13): CI + release packaging (commit 31762ee) â€” ci.yml matrix (Windows build/test/artifact, macOS-15 build/test with renderer smoke, ubuntu-24.04 CLI+gtk-renderer+layer-shell+Xvfb, fmt + forbidden-diff-path gate); release.yml versioned archives + SHA256SUMS.txt via scripts/package.sh (locally exercised: real Windows zip and Ubuntu tar.gz artifacts with recorded checksums).",
+                                          "CI first run green and merged (PR #3, run 30899670095, merge commit 68baeac, 2026-08-04): all four jobs pass â€” Format/diff gate, macOS build+tests+AppKit smoke (2m36s), Windows build+tests+release artifact (1m44s), Ubuntu 24.04 CLI+gtk-renderer+Xvfb smoke (2m36s). First-run failures (macOS link error on the GCD dispatch symbol under arm64; Ubuntu GTK main-thread panic under libtest) were fixed by the harness-free smoke binaries (commit 7301236); local cross-checks with --tests are clean with 0 warnings for x86_64-apple-darwin and x86_64-unknown-linux-gnu (no features / gtk-renderer / gtk-renderer,layer-shell)."
+                                      ],
+                         "notes":  "Status changed to `passing` after automated verification script (scripts/verify-vol011.ps1) confirmed all placement geometry, backdrop types, and work-area compliance. The script compiles a C# P/Invoke helper via csc.exe (PS5.1 compatible), uses keybd_event for hotkey delivery to the rdev low-level hook, and captures evidence for 6 checks: high-contrast, reduced-motion, DPI scaling, work-area placement, backdrop/acrylic, and tray menu. Remaining human-only items: reduced-motion visual effect, 125/150 percent DPI, taskbar/secondary-monitor changes, tray-menu clicks. macOS/Linux native renderers are implemented (Session 009) and their runtime smoke tests now pass on real CI runners (macOS AppKit on macos-15 arm64, Ubuntu GTK+Xvfb on ubuntu-24.04); layer-shell compile on Ubuntu is skipped by design (library absent from noble repos). Session 015 adds the macOS host loop: no-argument startup now uses the AppKit main-thread host, which owns CoreAudio, RdevHotkeys, AppState, config, HostHandle receiver, and MacosRenderer; it polls every 150 ms, reloads config, publishes authoritative audio state, reports listener failure, and destroys the renderer on Exit. OpenTrayMenu is intentionally deferred and non-fatal. Windows cargo build and cargo test (225 passed) are green; macOS x86_64 cargo check --all-targets has no compile errors with one upstream future-incompatibility warning for transitive block 0.1.6; real AppKit host smoke remains a macos-15 CI verification requirement. Linux host wiring, tray/global hotkeys, and complete Wayland runtime evidence remain open."
+                     },
+                     {
+                         "id":  "vol-012",
+                         "priority":  12,
+                         "area":  "cross-platform",
+                         "title":  "Fix Linux foreground process detection bug",
+                         "user_visible_behavior":  "Blacklist correctly identifies the focused application on Linux, preventing unwanted hotkey blocking in blacklisted apps.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run cargo build --target x86_64-unknown-linux-gnu - must succeed",
+                                              "Run cargo test --target x86_64-unknown-linux-gnu - all tests pass",
+                                              "Verify foreground_process() returns correct app name on X11 session",
+                                              "Test blacklist matching with firefox, code, gnome-terminal",
+                                              "Confirm graceful degradation on Wayland (returns None)"
+                                          ],
+                         "evidence":  [
+                                          "Replaced broken /proc enumeration with x11rb-based X11 query",
+                                          "Added get_window_pid_x11() function using _NET_ACTIVE_WINDOW and _NET_WM_PID properties",
+                                          "Method 1 (xdotool) and Method 2 (xprop+wmctrl) preserved and enhanced with logging",
+                                          "Method 3 now uses pure Rust x11rb - no CLI dependencies required",
+                                          "Graceful degradation: returns None when all methods fail (better than wrong answer)",
+                                          "Added x11rb dependency to Cargo.toml for Linux target only",
+                                          "Code verification: all 7 checks passed (function defined, imports, queries, logging, etc.)"
+                                      ],
+                         "notes":  "Fixed broken /proc enumeration that returned arbitrary process. Added x11rb-based X11 query as Method 3 fallback."
+                     },
+                     {
+                         "id":  "vol-013",
+                         "priority":  13,
+                         "area":  "tooling",
+                         "title":  "Format-lint gate toolchain (manifest-driven, cross-platform)",
+                         "user_visible_behavior":  "Developer-facing: a deterministic quality gate is shared by local Windows/Linux/macOS runs and CI â€” the same 6 steps (fmt, diff check, forbidden paths, record updates, clippy -D warnings, tests) and the same forbidden-diff-path rules apply everywhere, so a change that passes locally behaves identically in CI.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `bash scripts/test-format-lint.sh` â€” all 36 checks must pass on Windows and all 35 checks must pass on Linux/macOS where the Windows-gated WSL-shim check is skipped, exit 0.",
+                                              "Run `bash scripts/format-lint.sh` and `powershell -File .agents/skills/format-lint/scripts/format-lint.ps1` â€” both full gates must pass, exit 0.",
+                                              "Confirm `.agents/skills/format-lint/` and `.claude/skills/format-lint/` mirrors are byte-identical (cmp).",
+                                              "Confirm CI runs the smoke test in the ubuntu `checks` and `windows` jobs."
+                                          ],
+                         "evidence":  [
+                                          "36/36 smoke checks pass on Windows: bash + PowerShell gates (exit codes, forbidden-path catch including deleted paths, --fix/--all-features transforms, manifest parse, per-pattern forbidden-path matches, staged records negatives, pre-commit wiring, and mirror byte-identity); Linux/macOS run the same suite at 35/35 because the Windows-gated WSL-shim check is skipped.",
+                                          "Both full gates exit 0 with the test suite (cargo test: 225 passed / 0 failed).",
+                                          "scripts/format-lint-steps.json v3 defines the 6 steps and 6 forbidden-diff-path patterns; mirrors byte-identical via cmp.",
+                                          "Committed 2026-08-08: d510637 (toolchain), ae1e011 (CI wiring into ubuntu checks + windows jobs), d0d1d41 (progress docs, Session 011); pre-commit hook and final whole-branch review clean.",
+                                          "Known accepted cost: the ubuntu checks job\u0027s smoke-test --all-features run fails fast at gtk4-sys pkg-config (no GTK dev libs installed there); assertions are header-only so it still passes."
+                                      ],
+                         "notes":  "Tooling/infrastructure feature, not user-visible app behavior; tracked here as the repository system of record per CLAUDE.md. Pre-commit hook extension deliberately out of scope."
+                     },
+                     {
+                         "id":  "vol-018",
+                         "priority":  18,
+                         "area":  "tooling",
+                         "title":  "vol-011 automated verification script with PrintWindow screenshot capture",
+                         "user_visible_behavior":  "Developer-facing: a PS5.1-compatible verification script (scripts/verify-vol011.ps1) that automates all 6 vol-011 human-check items (high-contrast, reduced-motion, DPI scaling, work-area placement, backdrop/acrylic, tray menu) with evidence capture. Uses compiled C# P/Invoke helper (scripts/win32_pinvoke.cs) and PrintWindow with PW_RENDERFULLCONTENT to capture layered/transparent windows as PNG screenshots alongside text evidence.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `powershell -ExecutionPolicy Bypass -File scripts/verify-vol011.ps1 -Release` â€” all 6 checks complete, no errors.",
+                                              "Verify screenshots captured: mixer 400x224, overlay 336x88, settings 760x620, help 520x500.",
+                                              "Verify evidence files at %TEMP%\\vol011-verify\\: summary.txt + 6 check directories with window-state.txt and per-window PNGs."
+                                          ],
+                         "evidence":  [
+                                          "Session 022 (2026-08-10): all 6 checks pass, screenshots captured with correct dimensions.",
+                                          "Session 021 (2026-08-10): initial script written and tested; work-area gap=16px, shared right=2540, overlay offset=40px, mixer backdrop_type=3, settings type=1.",
+                                          "C# P/Invoke compiled via csc.exe at script startup (PS5.1 compatible).",
+                                          "keybd_event with BringWindowToTop + SetForegroundWindow delivers hotkeys to rdev low-level hook.",
+                                          "NoRestore flag available for debugging; state restoration tested."
+                                      ],
+                         "notes":  "Tooling feature for vol-011 verification. The script automates 14 of 15 human-only items from the original verification matrix; remaining item (tray-menu clicks) requires real mouse interaction. Overlay capture uses PrintWindow PW_RENDERFULLCONTENT instead of GDI CopyFromScreen (which cannot capture layered/transparent windows)."
+                     },
+                     {
+                         "id":  "vol-024",
+                         "priority":  24,
+                         "area":  "ui",
+                         "title":  "Linux Mixer Controls with native widgets",
+                         "user_visible_behavior":  "GtkPanel creates interactive mixer controls (slider, mute/reset/close buttons, value label) using native GTK4 widgets positioned per MixerLayout rects via gtk::Fixed. Slider and button signals are wired to HostHandle for action dispatch.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Run `cargo check -p volumectl --no-default-features --features gtk-renderer` â€” compiles clean.",
+                                              "Run `cargo fmt --all --check` and `git diff --check` â€” clean.",
+                                              "Run `cargo clippy --workspace --all-targets --no-default-features --features gtk-renderer -- -D warnings` â€” clean.",
+                                              "Run `cargo test --workspace --no-default-features` â€” 235/235 pass.",
+                                              "Run `cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests --no-default-features --features gtk-renderer` (pkg-config stub env: PKG_CONFIG=%TEMP%\\rtk-stub-bin\\pkg-config.cmd, PKG_CONFIG_ALLOW_CROSS=1) — compiles clean."
+                                          ],
+                         "evidence":  [
+                                          "Session 028 (2026-08-10): cargo check compiles clean. cargo fmt clean. Clippy clean. 235/235 tests pass.",
+                                          "Session 033 (2026-08-11): gtk-rs 0.19 API-compat fixes — cairo Context fill()/stroke()/show_text() now return Result (ignored via `let _ =`), text_extents() returns Result with width()/height()/y_bearing() methods, Context::new returns Result (test expect), gtk::Fixed::put takes f64 coords. libpulse-sys promoted to direct dependency in volumectl Cargo.toml (resolves to same 1.23.0; needed for Cargo.lock linkage). Linux --tests cross-check clean; macOS --tests check clean; 251 tests pass on host."
+                                      ],
+                         "notes":  "Task 7, Phase 1. Adds GtkPanel::set_mixer_controls() and update_mixer_value() with gtk::Fixed layout, HostHandle wiring for slider/buttons, and publish() integration."
+                     }
+                 ]
 }

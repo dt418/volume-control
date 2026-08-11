@@ -40,7 +40,7 @@ impl Canvas for CairoCanvas {
             rect.width() as f64,
             rect.height() as f64,
         );
-        self.ctx.fill();
+        let _ = self.ctx.fill();
     }
 
     fn stroke_rect(&mut self, rect: RectF, color: Rgba, width_px: f32) {
@@ -52,7 +52,7 @@ impl Canvas for CairoCanvas {
             rect.width() as f64,
             rect.height() as f64,
         );
-        self.ctx.stroke();
+        let _ = self.ctx.stroke();
     }
 
     fn fill_circle(&mut self, center: PointF, radius: f32, color: Rgba) {
@@ -64,7 +64,7 @@ impl Canvas for CairoCanvas {
             0.0,
             std::f64::consts::TAU,
         );
-        self.ctx.fill();
+        let _ = self.ctx.fill();
     }
 
     fn stroke_circle(&mut self, center: PointF, radius: f32, color: Rgba, width_px: f32) {
@@ -77,7 +77,7 @@ impl Canvas for CairoCanvas {
             0.0,
             std::f64::consts::TAU,
         );
-        self.ctx.stroke();
+        let _ = self.ctx.stroke();
     }
 
     fn fill_diamond(&mut self, center: PointF, half_size: f32, color: Rgba) {
@@ -90,7 +90,7 @@ impl Canvas for CairoCanvas {
         self.ctx.line_to(cx, cy + hs);
         self.ctx.line_to(cx - hs, cy);
         self.ctx.close_path();
-        self.ctx.fill();
+        let _ = self.ctx.fill();
     }
 
     fn stroke_diamond(&mut self, center: PointF, half_size: f32, color: Rgba, width_px: f32) {
@@ -104,7 +104,7 @@ impl Canvas for CairoCanvas {
         self.ctx.line_to(cx, cy + hs);
         self.ctx.line_to(cx - hs, cy);
         self.ctx.close_path();
-        self.ctx.stroke();
+        let _ = self.ctx.stroke();
     }
 
     fn draw_text(
@@ -124,9 +124,12 @@ impl Canvas for CairoCanvas {
         );
         self.ctx.set_font_size(size_px as f64);
 
-        let extents = self.ctx.text_extents(text);
-        let text_width = extents.width;
-        let text_height = extents.height;
+        let extents = self
+            .ctx
+            .text_extents(text)
+            .expect("cairo text_extents failed");
+        let text_width = extents.width();
+        let text_height = extents.height();
 
         let x = match align {
             TextAlign::Left => rect.left as f64,
@@ -137,10 +140,10 @@ impl Canvas for CairoCanvas {
             TextAlign::Right => rect.right as f64 - text_width,
         };
 
-        let y = rect.top as f64 + (rect.height() as f64 + text_height) / 2.0 - extents.y_bearing;
+        let y = rect.top as f64 + (rect.height() as f64 + text_height) / 2.0 - extents.y_bearing();
 
         self.ctx.move_to(x, y);
-        self.ctx.show_text(text);
+        let _ = self.ctx.show_text(text);
     }
 }
 
@@ -152,7 +155,7 @@ mod tests {
     fn cairo_canvas_new_does_not_panic() {
         let surface =
             gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 100, 100).unwrap();
-        let ctx = gtk4::cairo::Context::new(&surface);
+        let ctx = gtk4::cairo::Context::new(&surface).expect("cairo context failed");
         let _canvas = CairoCanvas::new(ctx);
     }
 }
