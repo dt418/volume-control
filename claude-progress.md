@@ -1,5 +1,37 @@
 # Progress Log
 
+## Session 035 (2026-08-12) — windows-host skill: environment gotchas + stub helper + wiring
+
+- Goal: package the seven Windows-host tooling gotchas from Session 034 as a
+  skill so future sessions do not repeat them; ship a helper that recreates
+  the pkg-config cross-check stub; wire the mirror into the records self-test.
+- What landed:
+  - `.agents/skills/windows-host/SKILL.md` + `.claude/...` (byte-identical):
+    seven gotchas with trigger/symptom/fix — encoding-safe edits (no
+    Set-Content on tracked text), pkg-config stub recreation, Git Bash vs sh,
+    skill mirror sync, stale-tree hygiene, session-handoff refresh, safe
+    shell invocation from PowerShell.
+  - `.agents/skills/windows-host/scripts/ensure-pkg-config-stub.ps1` +
+    `.claude/...`: idempotent stub creator/verifier; writes UTF-8 no-BOM;
+    verifies `--modversion` answers 1.0; prints the env vars to set.
+  - `scripts/test-check-records.sh`: windows-host mirror byte-identity
+    assertion (32 -> 33 checks).
+  - Baselines bumped: pre-push-review SKILL.md (both mirrors) and
+    session-handoff.md say records 33; feature_list vol-017 verification line
+    updated to 33.
+  - `feature_list.json`: vol-027 entry, `last_updated` bumped.
+  - Plan doc corrected (docs/superpowers/plans/2026-08-12-windows-host-skill.md):
+    the helper's stub-content line quote doubling (`==""--modversion""`) and
+    the gotcha-6 Symptom line, per implementer/reviewer findings.
+- Verification:
+  - Helper run twice: first "Created stub", second idempotent, both exit 0.
+  - `bash scripts/test-check-records.sh` - 33 checks pass.
+  - `bash scripts/test-format-lint.sh`, `bash scripts/test-ship.sh`, both
+    gates with tests - all green.
+  - Linux cross-check with stub env - compiles clean.
+  - `sh scripts/check-records.sh --branch origin/master` + `--staged` - exit 0.
+  - Shipped via `scripts/ship.ps1 -Push`.
+
 ## Session 034 (2026-08-11) — Pre-push review of the enforcement stack + hygiene sweep
 
 - Goal: adversarial three-domain re-review (guard core / gate chain / wiring-records) before pushing, per the pre-push-review skill; fix every genuine defect with a live negative verification, then record and ship.

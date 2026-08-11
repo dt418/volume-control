@@ -57,7 +57,7 @@ fixes, commit `3e12b0b`). All 26 features are passing on Windows.
 
 | Self-test | Checks | Notes |
 |---|---|---|
-| `test-check-records.sh` | 32 | Windows; Linux/macOS same |
+| `test-check-records.sh` | 33 | Windows; Linux/macOS same |
 | `test-format-lint.sh` | 39 Windows / 38 Linux-macOS | WSL-shim check is Windows-gated |
 | `test-ship.sh` | 22 | |
 

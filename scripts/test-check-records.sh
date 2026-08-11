@@ -348,6 +348,15 @@ if grep -q 'pre-push-review' .agents/skills/guardrail/SKILL.md && \
 else
     report FAIL 'guardrail skill (both mirrors): mandates the three-domain pre-push review'
 fi
+if [ -f .agents/skills/windows-host/SKILL.md ] && \
+   [ -f .claude/skills/windows-host/SKILL.md ] && \
+   cmp -s .agents/skills/windows-host/SKILL.md .claude/skills/windows-host/SKILL.md && \
+   cmp -s .agents/skills/windows-host/scripts/ensure-pkg-config-stub.ps1 \
+         .claude/skills/windows-host/scripts/ensure-pkg-config-stub.ps1; then
+    report ok 'windows-host skill: .agents/.claude mirrors are byte-identical'
+else
+    report FAIL 'windows-host skill: .agents/.claude mirrors differ (resync .claude/skills/windows-host/)'
+fi
 
 if [ "$failures" -eq 0 ]; then
     echo "All record-keeping guard checks passed."

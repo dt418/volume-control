@@ -52,7 +52,7 @@ $stubDir = Join-Path $env:TEMP 'rtk-stub-bin'
 $stubPath = Join-Path $stubDir 'pkg-config.cmd'
 # A pure exit-0 stub panics inside pkg-config-0.3.33 parse_modversion
 # (Option::unwrap on empty --modversion output), so it must print a version.
-$stubContent = "@echo off`r`nfor %%a in (%*) do if ""%%a""=="--modversion" echo 1.0`r`nexit /b 0`r`n"
+$stubContent = "@echo off`r`nfor %%a in (%*) do if ""%%a""==""--modversion"" echo 1.0`r`nexit /b 0`r`n"
 
 if (-not (Test-Path -LiteralPath $stubDir)) {
     New-Item -ItemType Directory -Path $stubDir | Out-Null
@@ -212,6 +212,8 @@ These cost real time in Session 034; follow them to avoid repeating.
 ## 6. Session handoff refresh
 
 - Trigger: after every substantive landing.
+- Symptom: session-handoff.md shows an older session number, feature count, or
+  test count, and the next session trusts the stale numbers.
 - Fix: update `session-handoff.md` — session number, feature count, unit-test
   count, enforcement self-test counts (records/format-lint/ship). Stale counts
   there are how sessions 022-033 drifted.
