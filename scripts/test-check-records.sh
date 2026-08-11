@@ -55,6 +55,8 @@ check_rc 0 '.claude/settings.json\n.rtk/filters.toml\n.codex/config.toml\n' \
     '--check: agent-tool config is exempt'
 check_rc 1 '.claude/skills/volume-control/config.json\n' \
     '--check: .claude/skills/* stays substantive even for JSON (not caught by .claude/*.json)'
+check_rc 1 'weird.txt\n' \
+    '--check: unclassified path is substantive (fail-closed)'
 
 # unknown mode
 sh "$guard" --bogus >/dev/null 2>&1
@@ -95,7 +97,14 @@ fi
 # The guard resolves nothing from cwd except git, but --staged/--branch read
 # the repo the guard is INVOKED FROM, so run it inside the temp repo.
 guard_abs="$(cd "$(dirname "$guard")" && pwd)/$(basename "$guard")"
-tmpdir="$(mktemp -d)"
+# mktemp -d alone yields an MSYS /tmp path that native git.exe cannot enter
+# (e.g. on Windows, `git -C /tmp/...` fails), so pin the template under the
+# host temp dir and convert to a Windows path when cygpath is available.
+# On Linux/macOS, TEMP/TMPDIR are unset and cygpath is absent: /tmp stays.
+tmpdir="$(mktemp -d "${TEMP:-${TMPDIR:-/tmp}}/check-records.XXXXXX")"
+if command -v cygpath >/dev/null 2>&1; then
+    tmpdir="$(cygpath -w "$tmpdir")"
+fi
 trap 'rm -rf "$tmpdir"' EXIT
 git -C "$tmpdir" init -q
 git -C "$tmpdir" config user.email test@example.com
@@ -123,6 +132,10 @@ printf '%s\n' \
     'if [ "${1:-}" = diff ] || [ "${1:-}" = ls-files ]; then printf "%s\\n" "warning: synthetic git warning" >&2; fi' \
     'if [ "${CHECK_RECORDS_FAIL_DIFF:-0}" = 1 ] && [ "${1:-}" = diff ] && [ "${2:-}" = --name-only ] && [ "${3:-}" = HEAD ]; then' \
     '    printf "%s\\n" "fatal: synthetic git failure" >&2' \
+    '    exit 42' \
+    'fi' \
+    'if [ "${CHECK_RECORDS_FAIL_STAGED:-0}" = 1 ] && [ "${1:-}" = diff ] && [ "${2:-}" = --cached ] && [ "${3:-}" = --name-only ]; then' \
+    '    printf "%s\\n" "fatal: synthetic git failure (staged)" >&2' \
     '    exit 42' \
     'fi' \
     "exec \"$real_git\" \"\$@\"" > "$noisy_bin/git"
@@ -175,6 +188,19 @@ else
     report FAIL '--staged: empty staged set passes' "rc=$rc"
 fi
 git -C "$tmpdir" add crates/volumectl/src/app.rs feature_list.json claude-progress.md
+
+# --staged: a failing git command must abort with the diagnostic retained
+# (the same fail-closed contract as the --branch case below; a regression
+# that swallows `git diff --cached` errors would silently pass here).
+staged_failure_out="$(cd "$tmpdir" && CHECK_RECORDS_FAIL_STAGED=1 PATH="$noisy_bin:$PATH" sh "$guard_abs" --staged 2>&1)"
+rc=$?
+if [ "$rc" -eq 1 ] && \
+   printf '%s' "$staged_failure_out" | grep -q 'git diff --cached failed' && \
+   printf '%s' "$staged_failure_out" | grep -q 'synthetic git failure (staged)'; then
+    report ok '--staged: failed git commands retain their stderr diagnostic'
+else
+    report FAIL '--staged: failed git commands retain their stderr diagnostic' "rc=$rc; output=$staged_failure_out"
+fi
 
 # Reset the index AND remove the untracked record files (left over from the
 # staged test) so the branch change set is truly code-only -> --branch fails.

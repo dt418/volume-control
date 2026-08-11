@@ -1,5 +1,29 @@
 # Progress Log
 
+## Session 034 (2026-08-11) — Pre-push review of the enforcement stack + hygiene sweep
+
+- Goal: adversarial three-domain re-review (guard core / gate chain / wiring-records) before pushing, per the pre-push-review skill; fix every genuine defect with a live negative verification, then record and ship.
+- What landed:
+  - `scripts/test-check-records.sh` (30 → 32 checks):
+    - tmpdir now created under `${TEMP:-${TMPDIR:-/tmp}}` with `cygpath -w` conversion when available — native git.exe can enter it from plain PowerShell/`sh` (MSYS `/tmp` paths previously caused 9 spurious FAILs under `sh`; `bash` was unaffected). Linux CI unaffected (TEMP unset, no cygpath).
+    - New bare unknown-path unit (`weird.txt`) asserts unclassified paths are substantive — fail-closed.
+    - New `--staged` git-failure coverage: `CHECK_RECORDS_FAIL_STAGED` noisy-git wrapper variant + test asserts rc 1 with the diagnostic on a staged git failure.
+  - `scripts/format-lint.sh`: version sed is now full-line anchored (`s/^[[:space:]]*"version": ([0-9]+),$/\1/p`) so a malformed `"version": 3.5` is rejected by the bash gate exactly like the PS gate (was: leading-integer grab passed bash, failed PS — fail-open asymmetry). Live negative verified with a tampered manifest copy (gate rejected 3.5).
+  - Sync'd the edited gates into both skill mirrors (`.agents/skills/format-lint/scripts/format-lint.sh`, `.claude/...`) — byte-identical, asserted by test-format-lint.sh.
+  - Deleted the stale third skills tree `agent/skills/` (~50 files, zero references) and the unwired stale `skills-lock.json` (zero references). Both recoverable in git.
+  - Resolved F4: `.agents/skills/volume-control/agents/openai.yaml` mirrored to `.claude/skills/volume-control/agents/openai.yaml` — mirror trees now identical.
+  - `claude-progress.md`: restored the dropped Session 018 entry (was removed by 3b00063; recovered from 5e527c1) into the old series; disambiguated duplicate Session 010/021 numbers with `(earlier series)` markers. Also reverted an accidental PowerShell `Set-Content` that had double-encoded em-dashes and added a BOM (rewrote the whole file) — now a clean minimal diff via the edit tool. NOTE for future: never rewrite claude-progress.md with `Set-Content -Encoding UTF8`.
+  - `session-handoff.md` refreshed: Session 033, 26 features, 251 tests, self-test counts 32/39-38/22, `.plans/` hygiene note added.
+  - `pre-push-review` SKILL.md baseline text updated to `records 32, format-lint 39 on Windows / 38 on Linux/macOS, ship 22` in BOTH mirrors (byte-identical, hash-checked).
+  - `.gitignore`: added `.plans/` (scratch dir).
+  - `feature_list.json`: vol-017 verification/evidence appended, notes F4 marked resolved, `last_updated` bumped.
+- Verification:
+  - `bash scripts/test-check-records.sh` — 32 checks, all pass, exit 0 (both `sh` and `bash`).
+  - `bash scripts/test-format-lint.sh` — all pass, exit 0 (mirrors resynced).
+  - `bash scripts/test-ship.sh` — 22 checks, all pass, exit 0.
+  - Both full gates: `bash scripts/format-lint.sh` and the PowerShell gate — "Gate passed." on both (incl. `cargo test --workspace --no-default-features`).
+  - `sh scripts/check-records.sh --branch origin/master` — exit 0; `--staged` on the landed set — exit 0 (after records staged).
+
 ## Session 033 (2026-08-11) — Linux canvas gtk-rs 0.19 API-compat fixes + libpulse-sys direct dep
 
 - Goal: finish the uncommitted Linux renderer WIP — adapt the Cairo canvas and GTK mixer wiring to the resolved gtk-rs 0.19 API surface, and promote libpulse-sys to a direct dependency.
@@ -939,7 +963,7 @@ captured the window's own rendering:
   - superpowers plugin SessionStart hook + rtk PreToolUse hook activate on a fresh Claude Code session.
 - Next best step: optional future work — macOS CoreAudio backend, Linux PulseAudio/PipeWire backend, OpenMixer GUI (vol-003/005 mention), per-app volume via IAudioSessionManager, startup-on-boot shortcut.
 
-## Session 010: Fix Linux Foreground Process Detection Bug (vol-012)
+## Session 010 (earlier series): Fix Linux Foreground Process Detection Bug (vol-012)
 
 **Date**: 2026-01-15  
 **Status**: ✅ PASSING  
@@ -1297,6 +1321,14 @@ fn get_window_pid_x11() -> Option<u32> {
   remains `in_progress`; Linux tray/global-hotkey and real Wayland evidence are
   still open.
 
+## Session 018 (2026-08-08) — Fix macOS CI Retina assertion
+
+- PR #18's macOS job found one deterministic test failure in
+  `retina_appkit_frame_converts_physical_pixels_to_points_once`: the
+  implementation correctly uses AppKit's lower-left origin, so a physical
+  rect ending at the work-area bottom converts to y=0 points. The test had
+  incorrectly asserted 812 points, which is a top-left-origin interpretation.
+
 ## Session 019 (2026-08-10) — Refresh repository guidance
 
 - Goal: update `CLAUDE.md` so future sessions match the current native host
@@ -1410,7 +1442,7 @@ fn get_window_pid_x11() -> Option<u32> {
   has extra format-lint.sh vs .agents; F4: .agents volume-control skill has
   opencode-only yaml) — noted as follow-ups.
 
-## Session 021 (2026-08-10) — Post-review hygiene: mirror parity + hook renormalization
+## Session 021 (earlier series, 2026-08-10) — Post-review hygiene: mirror parity + hook renormalization
 
 - Goal: execute the non-blocking follow-ups from the three-domain pre-push
   review (Session 020): resolve the `.agents` skill mirror asymmetry (F3)

@@ -83,3 +83,4 @@ ENV/
 Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
+.plans/

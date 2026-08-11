@@ -80,7 +80,10 @@ if [ ! -r "$manifest" ]; then
     echo "error: step manifest not found at $manifest" >&2
     exit 1
 fi
-manifest_version="$(sed -nE 's/.*"version": ([0-9]+).*/\1/p' "$manifest" | head -1)"
+# Anchored to the exact manifest line so a malformed value like 3.5 (which
+# the unanchored regex would silently truncate to 3) fails closed instead of
+# running the steps while the PowerShell gate rejects it.
+manifest_version="$(sed -nE 's/^[[:space:]]*"version": ([0-9]+),$/\1/p' "$manifest" | head -1)"
 if [ "$manifest_version" != "3" ]; then
     echo "error: unsupported manifest version $manifest_version (expected 3)" >&2
     exit 1

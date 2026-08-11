@@ -1,7 +1,7 @@
 # Session Handoff
 
-Handoff after Session 022 (verify-vol011 screenshot capture, commit `a63a921`).
-All 18 features are passing on Windows.
+Handoff after Session 033 (2026-08-11, Linux canvas gtk-rs 0.19 API-compat
+fixes, commit `3e12b0b`). All 26 features are passing on Windows.
 
 ## Where we are
 
@@ -13,14 +13,17 @@ All 18 features are passing on Windows.
 - Windows is the fully implemented and live-verified target (Session 008
   matrix). macOS/Linux renderers implement the same Signal Glass surface
   contract behind the shared `NativeRenderer` bridge.
-- **Enforcement stack hardened** (Sessions 011-022):
-  - Format-lint gate toolchain (v3 manifest, both parsers, 38 checks on
-    Windows / 37 on Linux/macOS).
+- **Enforcement stack hardened** (Sessions 011-033):
+  - Format-lint gate toolchain (v3 manifest, both parsers, 39 checks on
+    Windows / 38 on Linux/macOS).
   - Mandatory ship flow (`scripts/ship.sh` + `scripts/ship.ps1`, 22 checks).
   - Three-domain pre-push review skill (guard core / gate chain / wiring).
   - Gate parser hardening (vol-017): numeric-only manifest version,
     case-sensitive forbidden paths, substantive `.claude/skills/*` JSON,
     fail-closed wiring assertions.
+  - Records guard self-test hardened (Session 033): Windows-safe tmpdir
+    (`mktemp` + `cygpath -w`), unclassified-path fail-closed case, `--staged`
+    git-failure coverage; bash-gate version sed now full-line anchored.
 - **Native host loops** (Sessions 015-017): macOS CoreAudio + AppKit
   event loop, Linux PulseAudio + GTK/X11 host loop. Both compile and
   smoke-test on CI (macos-15 arm64 + Ubuntu 24.04 under xvfb-run).
@@ -31,10 +34,10 @@ All 18 features are passing on Windows.
   added in Session 022.
 - **vol-018** is **`passing`** — verify script tooling with PrintWindow
   screenshot capture.
-- Unit suite: **241 passed / 0 failed** (225 volumectl + 16 host-core).
+- Unit suite: **251 passed / 0 failed** (235 volumectl + 16 host-core).
   `cargo fmt --all --check` passes. Clippy `-D warnings` clean.
   Windows build clean (0 warnings). Cross-checks clean for macOS and Linux
-  (GTK4/libadwaita).
+  (GTK4/libadwaita) with the pkg-config stub env.
 
 ## What still needs doing (follow-on)
 
@@ -46,16 +49,16 @@ All 18 features are passing on Windows.
 2. **Optional**: add `libgtk-4-layer-shell-dev` install to the Ubuntu CI job if
    it ever appears in noble repos, to get a real layer-shell compile+smoke
    (currently skipped by design).
-3. **Session handoff hygiene**: this document was updated in Session 022 to
-   reflect the current state (all features passing, verification script
-   tooling complete).
+3. **Session handoff hygiene**: refresh this document after each substantive
+   landing (Session 033: Linux canvas gtk-rs 0.19 API-compat fixes +
+   libpulse-sys direct dep + enforcement-stack hardening).
 
 ## Enforcement stack self-test counts
 
 | Self-test | Checks | Notes |
 |---|---|---|
-| `test-check-records.sh` | 30 | Windows; Linux/macOS same |
-| `test-format-lint.sh` | 38 Windows / 37 Linux-macOS | WSL-shim check is Windows-gated |
+| `test-check-records.sh` | 32 | Windows; Linux/macOS same |
+| `test-format-lint.sh` | 39 Windows / 38 Linux-macOS | WSL-shim check is Windows-gated |
 | `test-ship.sh` | 22 | |
 
 ## Verification commands (Windows host)
@@ -97,11 +100,15 @@ cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests
 ## Hygiene notes
 
 - Do not stage or commit `.claude/settings.local.json`, `.superpowers/`,
-  runtime config.json, scratch scripts, `target/`, or `dist/`.
-- The pkg-config probe stub at `/tmp/rtk-stub-bin/pkg-config.cmd` is an
-  environment shim for cross-checks from Windows, not a repo artifact.
+  `.plans/`, runtime config.json, scratch scripts, `target/`, or `dist/`.
+- The pkg-config probe stub at `%TEMP%\rtk-stub-bin\pkg-config.cmd` is an
+  environment shim for cross-checks from Windows, not a repo artifact. Set
+  `PKG_CONFIG` to it and `PKG_CONFIG_ALLOW_CROSS=1` for cross-target checks.
 - Run self-tests under Git Bash (`C:\Program Files\Git\bin\bash.exe`), not
   the WSL shim (`System32\bash.exe`). The WSL shim skips PowerShell checks.
 - claude-progress.md Session 008 holds the live Windows verification matrix;
   Session 009 holds the renderer/CI evidence; Session 022 holds the
-  verification script tooling + screenshot capture.
+  verification script tooling + screenshot capture; Session 033 holds the
+  Linux canvas gtk-rs 0.19 fixes and enforcement-stack hardening.
+- Do not rewrite `claude-progress.md` with PowerShell `Set-Content -Encoding
+  UTF8` — it double-encodes em-dashes and adds a BOM. Prefer the edit tool.
