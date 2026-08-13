@@ -117,4 +117,16 @@ impl EventSink for TauriSink {
             }
         }
     }
+
+    fn toggle_surface(&self, label: &str) {
+        let Some(surface) = SurfaceId::from_label(label) else {
+            log::warn!("toggle_surface: unknown label {label:?}");
+            return;
+        };
+        if let Some(window_manager) = self.app.try_state::<WindowManager>() {
+            if let Err(e) = window_manager.toggle(surface) {
+                log::warn!("toggle_surface {label} failed: {e}");
+            }
+        }
+    }
 }

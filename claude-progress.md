@@ -72,6 +72,8 @@ Task 3 fix round (mixer keys): session rows keyed `id-name-index` so duplicate p
 
 Task 4: Settings webview surface (restricted recorder, key cards, conflict badges, step/appearance controls). Plan-gap discovery: the plan's save_config(partial) contract does not exist in the backend; added update_settings(SettingsPatch) command + AppCore::update_settings (mutation-only, persistence via save_config by the command layer) with 2 host_core tests; 6 settings vitest tests; full gate green (271 tests, clippy, fmt, frontend build).
 
+Smoke-test fix (mixer auto-close): the mixer webview did not close on blur or Esc. Root cause 1: the Rust WindowManager emits close_mixer_request on WindowEvent::Focused(false) but no frontend listener existed - wired in MixerSurface (listen close_mixer_request -> invoke close_surface, cleanup on unmount). Root cause 2: the mixer window did not take focus after hotkey-open so keybd_event Escape went elsewhere - WindowManager now calls set_focus() on the mixer open (fail-soft). +1 vitest (28 total); fmt/clippy/build green. Mixer hotkey (Ctrl+Alt+V) now toggles: EventSink toggle_surface seam + WindowManager::toggle + host_core routes ToggleSurface(Mixer) to toggle (ShowSurface stays open) + routing test (13 host_core tests).
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
 
-import { invoke } from "../lib/ipc";
+import { invoke, listen } from "../lib/ipc";
 import { SessionRow } from "./SessionRow";
 import { useSessions } from "./sessionStore";
 
@@ -34,6 +34,20 @@ export function MixerSurface() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // The Rust WindowManager emits `close_mixer_request` when the window loses
+  // focus (outside click / Alt+Tab) — WindowEvent::Focused(false) is reliable
+  // on Win32 and Wayland, JS blur is not (spec §9.3). Close through the same
+  // command so the surface leaves the `active` set and can be reopened.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<void>("close_mixer_request", () => {
+      void invoke<void>("close_surface", { surface: "window-mixer" }).catch(() => {});
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => unlisten?.();
   }, []);
 
   const filtered = useMemo(() => {

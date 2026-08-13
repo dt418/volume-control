@@ -9,6 +9,9 @@ vi.mock("../lib/ipc", () => ({
   listen: vi.fn(async () => () => {}),
 }));
 
+// Captured `listen` handlers keyed by event name (reset in beforeEach).
+const listeners: Record<string, (payload: unknown) => void> = {};
+
 const bootstrap = {
   volume_pct: 55,
   muted: false,
@@ -24,6 +27,13 @@ const bootstrap = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  for (const key of Object.keys(listeners)) delete listeners[key];
+  vi.mocked(ipc.listen).mockImplementation(
+    async (event: string, handler: (payload: unknown) => void) => {
+      listeners[event] = handler;
+      return () => {};
+    },
+  );
   vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
     if (cmd === "get_bootstrap") return bootstrap;
     return {};
@@ -69,6 +79,16 @@ describe("MixerSurface", () => {
   it("closes the window on Escape", async () => {
     await renderSurface();
     fireEvent.keyDown(window, { key: "Escape" });
+    expect(ipc.invoke).toHaveBeenCalledWith("close_surface", {
+      surface: "window-mixer",
+    });
+  });
+
+  it("closes the window when the Rust side emits close_mixer_request (blur auto-close)", async () => {
+    await renderSurface();
+    // The surface subscribes to the Rust Focused(false) event.
+    expect(listeners["close_mixer_request"]).toBeDefined();
+    listeners["close_mixer_request"](null);
     expect(ipc.invoke).toHaveBeenCalledWith("close_surface", {
       surface: "window-mixer",
     });

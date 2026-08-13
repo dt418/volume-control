@@ -67,6 +67,12 @@ impl EventSink for RecordingSink {
             .unwrap()
             .push(format!("overlay:{}", text.unwrap_or_default()));
     }
+    fn open_surface(&self, label: &str) {
+        self.events.lock().unwrap().push(format!("open:{label}"));
+    }
+    fn toggle_surface(&self, label: &str) {
+        self.events.lock().unwrap().push(format!("toggle:{label}"));
+    }
 }
 
 fn core_with(sink: Arc<RecordingSink>) -> AppCore {
@@ -354,4 +360,28 @@ fn set_modifier_resyncs_mtime_so_reload_does_not_echo() {
         None => std::env::remove_var("VOLUMECTL_CONFIG_DIR"),
     }
     let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn toggle_mixer_routes_to_toggle_surface_but_show_routes_to_open() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+    // The Mixer hotkey is ToggleSurface: it must toggle (open if closed,
+    // close if open) — legacy app.rs behavior, spec §5.1.
+    core.handle_action(volumectl_lib::ui::AppAction::ToggleSurface(
+        volumectl_lib::ui::SurfaceId::Mixer,
+    ));
+    // Explicit Show stays an open.
+    core.handle_action(volumectl_lib::ui::AppAction::ShowSurface(
+        volumectl_lib::ui::SurfaceId::Mixer,
+    ));
+    let events = sink.events.lock().unwrap().clone();
+    assert!(
+        events.iter().any(|e| e == "toggle:window-mixer"),
+        "{events:?}"
+    );
+    assert!(
+        events.iter().any(|e| e == "open:window-mixer"),
+        "{events:?}"
+    );
 }

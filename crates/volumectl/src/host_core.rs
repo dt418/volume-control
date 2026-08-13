@@ -120,6 +120,11 @@ pub trait EventSink: Send + Sync {
     fn open_surface(&self, _label: &str) {}
     /// The host should close/destroy the surface with `label`.
     fn close_surface(&self, _label: &str) {}
+    /// Toggle the surface: open it if closed, close it if open. Defaults to
+    /// open so sinks that predate the toggle seam keep their behavior.
+    fn toggle_surface(&self, label: &str) {
+        self.open_surface(label);
+    }
     /// Show the native HUD overlay. `text: None` renders the volume HUD;
     /// `Some` renders a short text card (e.g. "Config reloaded"). The state
     /// and config are passed along so the host renderer never needs to lock
@@ -293,9 +298,15 @@ impl AppCore {
                 }
                 self.publish_confirmed_state(true);
             }
-            // ── Surfaces: routed to the host window manager. ─────────────
-            A::ShowSurface(S::Mixer) | A::ToggleSurface(S::Mixer) => {
+            // ── Surfaces: routed to the host window manager. The Mixer is
+            //    toggled by its hotkey (legacy app.rs behavior); Show/Hide
+            //    keep explicit semantics. Settings/Help open on toggle (their
+            //    current behavior). ──────────────────────────────────────────
+            A::ShowSurface(S::Mixer) => {
                 self.sink.open_surface("window-mixer");
+            }
+            A::ToggleSurface(S::Mixer) => {
+                self.sink.toggle_surface("window-mixer");
             }
             A::HideSurface(S::Mixer) => {
                 self.sink.close_surface("window-mixer");

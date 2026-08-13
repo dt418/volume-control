@@ -84,6 +84,11 @@ impl WindowManager {
             }
         }
         let window = builder.build().map_err(|e| e.to_string())?;
+        // Take focus so the webview receives keyboard input (Esc close).
+        // Fail-soft: some Wayland compositors may deny focus requests.
+        if surface == SurfaceId::Mixer {
+            let _ = window.set_focus();
+        }
         let app_handle = self.app.clone();
         window.on_window_event(move |event| {
             // Mixer auto-closes on losing focus. Rust-level focus events are
@@ -113,6 +118,16 @@ impl WindowManager {
         }
         self.active.lock().unwrap().remove(&surface);
         Ok(())
+    }
+
+    /// Open the surface if it is closed, close it if it is open (the legacy
+    /// mixer hotkey toggled; spec §5.1 keeps that behavior for the Mixer).
+    pub fn toggle(&self, surface: SurfaceId) -> Result<(), String> {
+        if self.is_open(surface) {
+            self.close(surface)
+        } else {
+            self.open(surface)
+        }
     }
 
     /// Part of the planned WindowManager API surface (used by host teardown
