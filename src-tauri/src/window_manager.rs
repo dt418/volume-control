@@ -93,6 +93,15 @@ impl WindowManager {
                     let _ = app_handle.emit("close_mixer_request", ());
                 }
             }
+            // The decorated settings/help windows can be destroyed by the
+            // user's OS close button; drop the surface from `active` so it
+            // can be reopened (a stale entry would make open() a permanent
+            // no-op).
+            if let tauri::WindowEvent::Destroyed = event {
+                if let Some(wm) = app_handle.try_state::<WindowManager>() {
+                    wm.active.lock().unwrap().remove(&surface);
+                }
+            }
         });
         self.active.lock().unwrap().insert(surface);
         Ok(())
