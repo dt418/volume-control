@@ -3,6 +3,14 @@
 Handoff after Session 040 (2026-08-13, global-hotkey migration + Hybrid Tauri UI:
 `rdev` → `global-hotkey` 0.8.0 + 1% default step, commits `190d02b`..`HEAD`
 on branch `feature/tauri-ui-hybrid`). All 30 features are passing on
+Windows. **Wave 1 + Wave 2 of the ui-restoration-plan landed at `03cc22f`
+(mixer SystemOutputRow + threshold SignalRail) and `392348a` (Settings full
+config surface — six-section shell, draft lifecycle, blacklist/feedback/
+thresholds/storage + legacy window geometry parity: mixer 400×224 bottom-right
+above the overlay, settings 760×620 centered, help 520×500 bottom-right).**
+Next: Wave 3 (Help legacy parity — HotkeyStatusBadge, ConflictCallout,
+HelpFooter) then Wave 4 (verification + records).
+on branch `feature/tauri-ui-hybrid`). All 30 features are passing on
 Windows.
 
 ## Where we are
