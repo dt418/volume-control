@@ -126,6 +126,8 @@ CI catch and fix: the macOS job failed on macos_app::tests::hotkeys_use_configur
 
 Outcome: PR #19 merged to master (0b5a481) after CI went fully green on the fix (all four jobs: checks, Windows, macOS, Ubuntu GTK). vol-029 marked passing with CI run evidence.
 
+Manual smoke test (Windows, release build, clean config): 8/8 combos registered, 1% step per action, 50ms hold-repeat, M/R/V actions fire, idle CPU 0.17% over 10s. User config pins volume_step=2 (config wins over the new 1% default - expected). Shift variants could not be injection-verified: keybd_event/SendInput from a background console never propagates the Shift modifier to the system hotkey state (proven with a raw RegisterHotKey harness: plain variant fired with async shift=up); needs a physical keyboard check.
+
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
 - Goal: three-domain pre-push review of the third-party-skills commit
