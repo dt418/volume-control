@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import * as ipc from "../lib/ipc";
@@ -28,6 +28,10 @@ beforeEach(() => {
     if (cmd === "get_bootstrap") return bootstrap;
     return {};
   });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 async function renderSurface() {
@@ -107,5 +111,48 @@ describe("MixerSurface", () => {
     expect(
       await screen.findByText("Per-app mixing is Windows-only"),
     ).toBeInTheDocument();
+  });
+
+  it("renders two distinct rows when sessions share the same id and name", async () => {
+    // AudioSessionInfo ids are process ids: a single process (e.g. a
+    // Chromium-style multi-stream process) can own several sessions with the
+    // SAME id and the SAME display name. Row keys must stay unique or React
+    // warns "Encountered two children with the same key" and mis-reconciles
+    // on updates.
+    const consoleErrors: string[] = [];
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(
+      (...args: unknown[]) => {
+        consoleErrors.push(args.map(String).join(" "));
+      },
+    );
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") {
+        return {
+          ...bootstrap,
+          sessions: [
+            { id: "42", name: "Chrome", pct: 30, muted: false, active: true },
+            { id: "42", name: "Chrome", pct: 60, muted: false, active: false },
+          ],
+        };
+      }
+      return {};
+    });
+    render(<MixerSurface />);
+    await screen.findAllByTestId("session-row");
+    expect(screen.getAllByTestId("session-row")).toHaveLength(2);
+    // Exercise an update pass (search re-render) so keyed reconciliation runs.
+    fireEvent.change(screen.getByPlaceholderText(/search/i), {
+      target: { value: "chr" },
+    });
+    expect(screen.getAllByTestId("session-row")).toHaveLength(2);
+    fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: "" } });
+    expect(screen.getAllByTestId("session-row")).toHaveLength(2);
+    // The regression this test guards: the old `${id}-${name}` key was
+    // identical for both rows and made React warn about duplicate keys.
+    expect(
+      consoleErrors.some((c) => c.includes("same key")),
+      `unexpected React key warnings: ${JSON.stringify(consoleErrors)}`,
+    ).toBe(false);
+    errorSpy.mockRestore();
   });
 });

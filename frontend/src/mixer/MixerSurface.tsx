@@ -103,7 +103,11 @@ export function MixerSurface() {
           </p>
         ) : (
           filtered.map((session, index) => (
-            <motion.div key={`${session.id}-${session.name}`} layout transition={{ duration: 0.15 }}>
+            <motion.div
+              key={`${session.id}-${session.name}-${index}`}
+              layout
+              transition={{ duration: 0.15 }}
+            >
               <SessionRow
                 session={session}
                 onMute={handleMute}
