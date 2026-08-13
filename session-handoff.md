@@ -1,7 +1,9 @@
 # Session Handoff
 
-Handoff after Session 033 (2026-08-11, Linux canvas gtk-rs 0.19 API-compat
-fixes, commit `3e12b0b`). All 26 features are passing on Windows.
+Handoff after Session 039 (2026-08-13, global-hotkey migration:
+`rdev` → `global-hotkey` 0.8.0 + 1% default step, commits `f5542d6`..`HEAD`
+on branch `refactor/hotkey-and-ci-fix`). All 29 features are passing on
+Windows.
 
 ## Where we are
 
@@ -34,7 +36,7 @@ fixes, commit `3e12b0b`). All 26 features are passing on Windows.
   added in Session 022.
 - **vol-018** is **`passing`** — verify script tooling with PrintWindow
   screenshot capture.
-- Unit suite: **251 passed / 0 failed** (235 volumectl + 16 host-core).
+- Unit suite: **257 passed / 0 failed** (241 volumectl + 16 host-core).
   `cargo fmt --all --check` passes. Clippy `-D warnings` clean.
   Windows build clean (0 warnings). Cross-checks clean for macOS and Linux
   (GTK4/libadwaita) with the pkg-config stub env.
@@ -43,9 +45,12 @@ fixes, commit `3e12b0b`). All 26 features are passing on Windows.
 
 1. **Host wiring runtime verification** — audio backends compile and smoke-test
    on CI. **Remaining** (need native system services, out of scope for a
-   Windows-hosted session): Linux/macOS **tray**, **global hotkeys**, and the
-   **renderer host event loop** on real desktops (AppKit/GTK binders are
-   implemented; runtime evidence needs a real machine).
+   Windows-hosted session): Linux/macOS **tray** and the **renderer host event
+   loop** on real desktops (AppKit/GTK binders are implemented; runtime
+   evidence needs a real machine). Global hotkeys were migrated to native
+   registration (`global-hotkey`: RegisterHotKey / Carbon / X11) in Session
+   039; Windows hotkeys are runtime-verified by the existing host, Linux/macOS
+   hotkey runtime verification on real desktops is still outstanding.
 2. **Optional**: add `libgtk-4-layer-shell-dev` install to the Ubuntu CI job if
    it ever appears in noble repos, to get a real layer-shell compile+smoke
    (currently skipped by design).
@@ -58,7 +63,7 @@ fixes, commit `3e12b0b`). All 26 features are passing on Windows.
 | Self-test | Checks | Notes |
 |---|---|---|
 | `test-check-records.sh` | 33 | Windows; Linux/macOS same |
-| `test-format-lint.sh` | 39 Windows / 38 Linux-macOS | WSL-shim check is Windows-gated |
+| `test-format-lint.sh` | 40 Windows / 38 Linux-macOS | WSL-shim check is Windows-gated |
 | `test-ship.sh` | 22 | |
 
 ## Verification commands (Windows host)
@@ -100,7 +105,8 @@ cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests
 ## Hygiene notes
 
 - Do not stage or commit `.claude/settings.local.json`, `.superpowers/`,
-  `.plans/`, runtime config.json, scratch scripts, `target/`, or `dist/`.
+  `.plans/`, `.pi/`, runtime config.json, scratch scripts, `target/`, or
+  `dist/`.
 - The pkg-config probe stub at `%TEMP%\rtk-stub-bin\pkg-config.cmd` is an
   environment shim for cross-checks from Windows, not a repo artifact. Set
   `PKG_CONFIG` to it and `PKG_CONFIG_ALLOW_CROSS=1` for cross-target checks.

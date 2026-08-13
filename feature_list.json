@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-13T19:15",
+    "last_updated":  "2026-08-13T19:25",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -615,16 +615,18 @@
                          "area":  "hotkeys",
                          "title":  "Global hotkeys via global-hotkey crate (1% step)",
                          "user_visible_behavior":  "Global hotkeys (Ctrl+Alt+Up/Down/M/R/V, Shift variants, hold-to-repeat) are migrated from the rdev listener to the global-hotkey crate; the default small volume step is 1%.",
-                         "status":  "in_progress",
+                         "status":  "passing",
                          "verification":  [
                                               "Run `cargo test -p volumectl config::tests::default_volume_step_is_one_percent` — passes (default volume_step == 1, volume_step_large == 10).",
                                               "Run `cargo test -p volumectl hotkeys_global` — 11 tests pass (combos_for per modifier, CapsLock fallback, macOS ⌘/⌃ dual, hold/repeat state machine, one-shot commands, repeat worker cadence).",
                                               "Run cross-target checks via the pkg-config stub: `cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests --no-default-features --features gtk-renderer` and `cargo check --target x86_64-apple-darwin -p volumectl --tests --no-default-features` — both compile clean (Linux pulls in global-hotkey + x11rb; macOS pulls in the Carbon path + ⌘+⌥ combo branch).",
-                                              "Run `rg \"rdev|RdevHotkeys\"` excluding target/Cargo.lock/docs/records — no hits in crates/, Cargo.toml, CLAUDE.md, scripts/, .github/ (historical mentions remain only in old docs, records, and scripts/verify-vol011.ps1)."
+                                              "Run `rg \"rdev|RdevHotkeys\"` excluding target/Cargo.lock/docs/records — no hits in crates/, Cargo.toml, CLAUDE.md, scripts/, .github/ (historical mentions remain only in old docs, records, and scripts/verify-vol011.ps1).",
+                                              "Run the full enforcement battery (Session 039 Task 4): `bash scripts/check-records.sh --branch`, `bash scripts/format-lint.sh` (full gate: fmt, whitespace, forbidden paths, records, clippy -D warnings, tests), `bash scripts/test-check-records.sh`, `bash scripts/test-format-lint.sh`, `bash scripts/test-ship.sh` — all exit 0 on the Windows host."
                                           ],
                          "evidence":  [
                                           "Task 1 (Session 039, 2026-08-13): TDD RED then GREEN — `cargo test -p volumectl --no-default-features` — 252/252 pass on host.",
-                                          "Task 3 (Session 039, 2026-08-13): `cargo build` + `cargo test --workspace --no-default-features` — 257/257 pass; clippy -D warnings clean; fmt + git diff --check clean; both cross-target cargo check commands compile clean; rg-clean for rdev/RdevHotkeys."
+                                          "Task 3 (Session 039, 2026-08-13): `cargo build` + `cargo test --workspace --no-default-features` — 257/257 pass; clippy -D warnings clean; fmt + git diff --check clean; both cross-target cargo check commands compile clean; rg-clean for rdev/RdevHotkeys.",
+                                          "Task 4 (Session 039, 2026-08-13): full enforcement battery passes — check-records --branch exit 0; format-lint.sh (full gate incl. tests) exit 0; test-check-records.sh / test-format-lint.sh / test-ship.sh all exit 0. docs/global-hotkeys.md rewritten for the global-hotkey backend (no macOS Accessibility, combo layout, hold-to-repeat nuance)."
                                       ],
                          "notes":  "Task 3 of the global-hotkey migration (vol-003 superseded). rdev is fully removed (workspace + crate deps, hotkeys_rdev.rs deleted); all hosts use hotkeys_global::GlobalHotkeys; CI workflows unchanged (global-hotkey needs no new system packages). global-hotkey 0.8.0 emits combo-level Pressed/Released on all platforms; CapsLock config falls back to Ctrl+Alt combos with a warning."
                      }

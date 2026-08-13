@@ -10,6 +10,7 @@ config.json
 
 # Agent tooling state
 .superpowers/
+.pi/
 
 # Rust build artifacts
 /target/

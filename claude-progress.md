@@ -64,6 +64,25 @@
   --features gtk-renderer` and `--target x86_64-apple-darwin -p volumectl
   --tests --no-default-features` both compile clean via the pkg-config stub.
 
+- Task 4: docs + verification + records finalize.
+  - `docs/global-hotkeys.md` rewritten for the `global-hotkey` backend:
+    registration per platform (Windows RegisterHotKey hidden window — no
+    hook; macOS Carbon — no Accessibility permission; Linux X11 x11rb —
+    Wayland limitation unchanged), combo layout table (incl. MOD+Shift+M),
+    macOS ⌘+⌥ spellings, CapsLock → Ctrl+Alt fallback, hold-to-repeat 50 ms
+    + combo-level release nuance, conflict reporting (Conflicted in Help).
+  - `feature_list.json`: vol-029 → `passing` + battery evidence,
+    `last_updated` bumped.
+  - `session-handoff.md` refreshed (Session 039, 29 features, 257 unit
+    tests, self-test counts 33/40/22).
+  - `.gitignore`: `.pi/` added under agent tooling state (prevents the pi
+    runtime dir from being staged by `git add -A`).
+- Verification (Task 4): full enforcement battery, all exit 0 —
+  `bash scripts/check-records.sh --branch`; `bash scripts/format-lint.sh`
+  (full gate incl. tests); `bash scripts/test-check-records.sh`;
+  `bash scripts/test-format-lint.sh`; `bash scripts/test-ship.sh`.
+- Commit: `docs: document global-hotkey backend and 1% step`
+
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
 - Goal: three-domain pre-push review of the third-party-skills commit
