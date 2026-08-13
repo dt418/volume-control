@@ -441,6 +441,46 @@ pub fn validate(cfg: &Config) -> Result<(), ConfigValidationError> {
     Ok(())
 }
 
+/// Validate the color threshold order. Percentages must be 0..=100 and the
+/// bands must be monotonic: green_up_to <= blue_up_to <= orange_up_to.
+pub fn validate_thresholds(
+    green_up_to: u8,
+    blue_up_to: u8,
+    orange_up_to: u8,
+) -> Result<(), ConfigValidationError> {
+    if green_up_to > 100 {
+        return Err(validation(
+            "color_thresholds.green_up_to",
+            "must be between 0 and 100",
+        ));
+    }
+    if blue_up_to > 100 {
+        return Err(validation(
+            "color_thresholds.blue_up_to",
+            "must be between 0 and 100",
+        ));
+    }
+    if orange_up_to > 100 {
+        return Err(validation(
+            "color_thresholds.orange_up_to",
+            "must be between 0 and 100",
+        ));
+    }
+    if green_up_to > blue_up_to {
+        return Err(validation(
+            "color_thresholds.green_up_to",
+            "must not exceed blue_up_to",
+        ));
+    }
+    if blue_up_to > orange_up_to {
+        return Err(validation(
+            "color_thresholds.blue_up_to",
+            "must not exceed orange_up_to",
+        ));
+    }
+    Ok(())
+}
+
 /// Normalize a blacklist entry for the current platform.
 ///
 /// Windows: ensures .exe extension
@@ -798,6 +838,59 @@ mod tests {
             assert!(rec.iter().any(|e| e == "code"));
             assert!(rec.iter().any(|e| e == "firefox"));
         }
+    }
+
+    #[test]
+    fn validate_thresholds_accepts_valid_band_orders() {
+        // Equal bands are legal (0/0/0); the defaults 40/75/100 are the
+        // canonical monotonic order.
+        assert!(validate_thresholds(0, 0, 0).is_ok());
+        assert!(validate_thresholds(40, 75, 100).is_ok());
+        assert!(validate_thresholds(100, 100, 100).is_ok());
+    }
+
+    #[test]
+    fn validate_thresholds_rejects_out_of_range_percentages() {
+        // u8 cannot be negative, so the only out-of-range direction is >100.
+        let err = validate_thresholds(101, 75, 100).unwrap_err();
+        assert_eq!(err.field, "color_thresholds.green_up_to");
+        assert_eq!(
+            err.to_string(),
+            "color_thresholds.green_up_to: must be between 0 and 100"
+        );
+
+        let err = validate_thresholds(40, 255, 100).unwrap_err();
+        assert_eq!(err.field, "color_thresholds.blue_up_to");
+        assert_eq!(
+            err.to_string(),
+            "color_thresholds.blue_up_to: must be between 0 and 100"
+        );
+
+        let err = validate_thresholds(40, 75, 150).unwrap_err();
+        assert_eq!(err.field, "color_thresholds.orange_up_to");
+        assert_eq!(
+            err.to_string(),
+            "color_thresholds.orange_up_to: must be between 0 and 100"
+        );
+    }
+
+    #[test]
+    fn validate_thresholds_rejects_order_violations() {
+        // Green above blue is rejected with the green field name.
+        let err = validate_thresholds(60, 40, 100).unwrap_err();
+        assert_eq!(err.field, "color_thresholds.green_up_to");
+        assert_eq!(
+            err.to_string(),
+            "color_thresholds.green_up_to: must not exceed blue_up_to"
+        );
+
+        // Blue above orange is rejected with the blue field name.
+        let err = validate_thresholds(20, 90, 80).unwrap_err();
+        assert_eq!(err.field, "color_thresholds.blue_up_to");
+        assert_eq!(
+            err.to_string(),
+            "color_thresholds.blue_up_to: must not exceed orange_up_to"
+        );
     }
 
     #[test]

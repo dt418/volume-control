@@ -35,6 +35,34 @@ pub struct SettingsPatch {
     pub motion: Option<String>,
     /// Enum variant names: "System" | "Blue" | "Green" | "Purple" | "Orange".
     pub accent: Option<String>,
+    /// Overlay visible time in ms (200..=10_000).
+    pub overlay_duration_ms: Option<u64>,
+    /// Beep feedback fields (all optional within the group).
+    pub beep: Option<BeepPatch>,
+    /// Colour legend thresholds (all optional within the group).
+    pub color_thresholds: Option<ColorThresholdsPatch>,
+    /// Full-list replace for the blacklist (draft commits the whole list
+    /// atomically; entries are normalized per-platform).
+    pub blacklist: Option<Vec<String>>,
+}
+
+/// Optional beep feedback patch (mirrors [`crate::config::BeepConfig`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct BeepPatch {
+    pub enabled: Option<bool>,
+    pub blocked_freq: Option<u32>,
+    pub blocked_duration_ms: Option<u32>,
+    pub limit_freq: Option<u32>,
+    pub limit_duration_ms: Option<u32>,
+}
+
+/// Optional colour-threshold patch (mirrors
+/// [`crate::config::ColorThresholds`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ColorThresholdsPatch {
+    pub green_up_to: Option<u8>,
+    pub blue_up_to: Option<u8>,
+    pub orange_up_to: Option<u8>,
 }
 
 /// One application audio session in the per-app mixer. The Windows WASAPI
@@ -370,11 +398,25 @@ impl AppCore {
                     self.config.clone(),
                 );
             }
-            A::AddBlacklistEntry(_)
-            | A::RemoveBlacklistEntry(_)
-            | A::ClearBlacklist
-            | A::ApplyRecommendedBlacklist => {
-                log::debug!("blacklist edits are wired via the Settings webview (later task)");
+            A::AddBlacklistEntry(entry) => {
+                let entry = crate::config::normalize_blacklist_entry(&entry);
+                if !self.config.blacklist.iter().any(|e| e == &entry) {
+                    self.config.blacklist.push(entry);
+                }
+                self.save_and_adopt();
+            }
+            A::RemoveBlacklistEntry(entry) => {
+                let entry = crate::config::normalize_blacklist_entry(&entry);
+                self.config.blacklist.retain(|e| e != &entry);
+                self.save_and_adopt();
+            }
+            A::ClearBlacklist => {
+                self.config.blacklist.clear();
+                self.save_and_adopt();
+            }
+            A::ApplyRecommendedBlacklist => {
+                crate::config::apply_recommended_blacklist(&mut self.config);
+                self.save_and_adopt();
             }
             A::Exit => {
                 log::info!("Exit requested — host teardown");
@@ -391,14 +433,15 @@ impl AppCore {
         Ok(())
     }
 
-    /// Apply a partial settings patch to the in-memory config. Step sizes are
-    /// validated against the config.rs rules (1..=50, large > small) BEFORE
-    /// mutating, so a rejected patch never leaves the in-memory config
-    /// diverging from what `save_validated` accepts; appearance strings must
-    /// be exact enum variant names. Persistence is deliberately NOT part of
-    /// this method so tests can exercise the mutation without touching the
-    /// user's config file — the command layer calls [`AppCore::save_config`]
-    /// afterwards.
+    /// Apply a partial settings patch to the in-memory config. Step sizes,
+    /// overlay duration, beep ranges and colour thresholds are validated
+    /// against the config.rs rules BEFORE mutating, so a rejected patch never
+    /// leaves the in-memory config diverging from what `save_validated`
+    /// accepts; appearance strings must be exact enum variant names. The
+    /// blacklist patch is a full-list replace (draft semantics). Persistence
+    /// is deliberately NOT part of this method so tests can exercise the
+    /// mutation without touching the user's config file — the command layer
+    /// calls [`AppCore::save_config`] afterwards.
     pub fn update_settings(&mut self, patch: SettingsPatch) -> Result<(), String> {
         // Parse appearance fields first so a bad enum string fails before any
         // step mutation (same fail-early behavior as before).
@@ -416,6 +459,55 @@ impl AppCore {
             .unwrap_or(self.config.volume_step_large);
         crate::config::validate_steps(step, large).map_err(|e| e.to_string())?;
 
+        // Overlay duration: 200..=10_000, identical string to config::validate.
+        let overlay = patch
+            .overlay_duration_ms
+            .unwrap_or(self.config.overlay_duration_ms);
+        if !(200..=10_000).contains(&overlay) {
+            return Err("overlay_duration_ms: must be between 200 and 10000".into());
+        }
+
+        // Beep fields: prospective values validated against the same ranges
+        // and strings as config::validate (37..=32_767 Hz, 10..=2_000 ms).
+        if let Some(beep) = &patch.beep {
+            let blocked_freq = beep.blocked_freq.unwrap_or(self.config.beep.blocked_freq);
+            if !(37..=32_767).contains(&blocked_freq) {
+                return Err("beep.blocked_freq: must be between 37 and 32767".into());
+            }
+            let blocked_ms = beep
+                .blocked_duration_ms
+                .unwrap_or(self.config.beep.blocked_duration_ms);
+            if !(10..=2_000).contains(&blocked_ms) {
+                return Err("beep.blocked_duration_ms: must be between 10 and 2000".into());
+            }
+            let limit_freq = beep.limit_freq.unwrap_or(self.config.beep.limit_freq);
+            if !(37..=32_767).contains(&limit_freq) {
+                return Err("beep.limit_freq: must be between 37 and 32767".into());
+            }
+            let limit_ms = beep
+                .limit_duration_ms
+                .unwrap_or(self.config.beep.limit_duration_ms);
+            if !(10..=2_000).contains(&limit_ms) {
+                return Err("beep.limit_duration_ms: must be between 10 and 2000".into());
+            }
+        }
+
+        // Colour thresholds: prospective values through the shared
+        // config::validate_thresholds (0..=100 + monotonic band order).
+        if let Some(thresholds) = &patch.color_thresholds {
+            let green = thresholds
+                .green_up_to
+                .unwrap_or(self.config.color_thresholds.green_up_to);
+            let blue = thresholds
+                .blue_up_to
+                .unwrap_or(self.config.color_thresholds.blue_up_to);
+            let orange = thresholds
+                .orange_up_to
+                .unwrap_or(self.config.color_thresholds.orange_up_to);
+            crate::config::validate_thresholds(green, blue, orange).map_err(|e| e.to_string())?;
+        }
+
+        // Mutate — only after every prospective value passed.
         if let Some(step) = patch.volume_step {
             self.config.volume_step = step;
         }
@@ -434,7 +526,50 @@ impl AppCore {
         if let Some(accent) = accent {
             self.config.appearance.accent = accent;
         }
+        if let Some(overlay) = patch.overlay_duration_ms {
+            self.config.overlay_duration_ms = overlay;
+        }
+        if let Some(beep) = patch.beep {
+            if let Some(v) = beep.enabled {
+                self.config.beep.enabled = v;
+            }
+            if let Some(v) = beep.blocked_freq {
+                self.config.beep.blocked_freq = v;
+            }
+            if let Some(v) = beep.blocked_duration_ms {
+                self.config.beep.blocked_duration_ms = v;
+            }
+            if let Some(v) = beep.limit_freq {
+                self.config.beep.limit_freq = v;
+            }
+            if let Some(v) = beep.limit_duration_ms {
+                self.config.beep.limit_duration_ms = v;
+            }
+        }
+        if let Some(thresholds) = patch.color_thresholds {
+            if let Some(v) = thresholds.green_up_to {
+                self.config.color_thresholds.green_up_to = v;
+            }
+            if let Some(v) = thresholds.blue_up_to {
+                self.config.color_thresholds.blue_up_to = v;
+            }
+            if let Some(v) = thresholds.orange_up_to {
+                self.config.color_thresholds.orange_up_to = v;
+            }
+        }
+        if let Some(list) = patch.blacklist {
+            self.config.blacklist = list
+                .iter()
+                .map(|s| crate::config::normalize_blacklist_entry(s))
+                .collect();
+        }
         Ok(())
+    }
+
+    /// The recommended blacklist presets for the current modifier (read-only;
+    /// feeds the Settings Blacklist editor's "Apply Recommended" draft merge).
+    pub fn recommended_blacklist(&self) -> Vec<String> {
+        crate::config::recommended_blacklist(self.config.modifier)
     }
 
     /// Change the hotkey modifier: re-register every combo, persist the

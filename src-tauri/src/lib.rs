@@ -7,9 +7,9 @@ use volumectl_lib::audio::AudioBackend;
 use volumectl_lib::host_core::AppCore;
 
 use commands::{
-    adjust_volume, close_surface, get_audio_sessions, get_bootstrap, mute_session, open_surface,
-    reset_volume, save_config, set_modifier, set_session_volume, set_volume, toggle_mute,
-    update_settings,
+    adjust_volume, close_surface, config_path, get_audio_sessions, get_bootstrap, mute_session,
+    open_config_location, open_surface, recommended_blacklist, reset_volume, save_config,
+    set_modifier, set_session_volume, set_volume, toggle_mute, update_settings,
 };
 use events_sink::TauriSink;
 use window_manager::WindowManager;
@@ -33,6 +33,9 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         set_modifier,
         save_config,
         update_settings,
+        recommended_blacklist,
+        config_path,
+        open_config_location,
         get_audio_sessions,
         set_session_volume,
         mute_session,
@@ -134,6 +137,9 @@ pub fn run() -> tauri::Result<()> {
             set_modifier,
             save_config,
             update_settings,
+            recommended_blacklist,
+            config_path,
+            open_config_location,
             get_audio_sessions,
             set_session_volume,
             mute_session,

@@ -71,6 +71,32 @@ pub fn update_settings(
     core.save_config()
 }
 
+/// Read-only: the recommended blacklist presets for the current modifier
+/// (feeds the Blacklist editor's "Apply Recommended" draft merge).
+#[tauri::command]
+pub fn recommended_blacklist(core: State<'_, Mutex<AppCore>>) -> Result<Vec<String>, String> {
+    core.lock()
+        .map_err(|e| e.to_string())
+        .map(|core| core.recommended_blacklist())
+}
+
+/// Read-only: the on-disk config path for the Storage section.
+#[tauri::command]
+pub fn config_path() -> Result<String, String> {
+    Ok(volumectl_lib::config::config_path()
+        .to_string_lossy()
+        .into_owned())
+}
+
+/// Open the config file in the default editor (the host shows the
+/// "Editing config — changes reload automatically" overlay).
+#[tauri::command]
+pub fn open_config_location(core: State<'_, Mutex<AppCore>>) -> Result<(), String> {
+    core.lock()
+        .map_err(|e| e.to_string())
+        .map(|mut core| core.handle_action(AppAction::OpenConfigLocation))
+}
+
 #[tauri::command]
 pub fn save_config(core: State<'_, Mutex<AppCore>>) -> Result<(), String> {
     core.lock().map_err(|e| e.to_string())?.save_config()
