@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
 
 export interface AudioSession {
@@ -14,7 +15,7 @@ export interface BootstrapPayload {
   volume_pct: number;
   muted: boolean;
   hotkey_status: unknown[];
-  appearance: Record<string, string>;
+  appearance: AppearancePayload;
   sessions: AudioSession[];
   sessions_supported: boolean;
 }
@@ -50,6 +51,7 @@ export function useSessions() {
     invoke<BootstrapPayload>("get_bootstrap")
       .then((b) => {
         if (disposed) return;
+        applyAppearance(b.appearance);
         setSessions(b.sessions ?? []);
         setVolumePct(b.volume_pct);
         setMuted(b.muted);

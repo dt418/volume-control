@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
 import {
   type HotkeyRegResult,
@@ -27,6 +28,7 @@ interface SettingsConfig {
 interface BootstrapPayload {
   config: SettingsConfig;
   hotkey_status: HotkeyRegResult[];
+  appearance: AppearancePayload;
 }
 
 const THEME_OPTIONS = ["System", "Light", "Dark"];
@@ -48,6 +50,7 @@ export function SettingsSurface() {
     void invoke<BootstrapPayload>("get_bootstrap")
       .then((payload) => {
         if (disposed) return;
+        applyAppearance(payload.appearance);
         setConfig(payload.config);
         setHotkeyStatus(payload.hotkey_status);
       })
@@ -114,7 +117,7 @@ export function SettingsSurface() {
   const modifier = modifierForId(config.modifier);
 
   return (
-    <main className="flex flex-col gap-4 p-4">
+    <main className="flex min-h-screen flex-col gap-4 bg-background p-4">
       {formError && (
         <p role="alert" className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-500">
           {formError}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card, CardContent } from "../components/ui/card";
 import { Kbd } from "../components/ui/kbd";
+import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke } from "../lib/ipc";
 import { helpGroups, helpNote, HelpShortcut } from "./shortcuts";
 
@@ -35,9 +36,12 @@ export function HelpSurface() {
 
   useEffect(() => {
     let alive = true;
-    invoke<{ config: { modifier?: string } }>("get_bootstrap")
+    invoke<{ config: { modifier?: string }; appearance: AppearancePayload }>("get_bootstrap")
       .then((bootstrap) => {
-        if (alive) setModifier(bootstrap.config?.modifier ?? "CtrlAlt");
+        if (alive) {
+          applyAppearance(bootstrap.appearance as AppearancePayload);
+          setModifier(bootstrap.config?.modifier ?? "CtrlAlt");
+        }
       })
       .catch(() => {
         // Fail-soft: keep the default modifier so the grid still renders.
@@ -76,7 +80,7 @@ export function HelpSurface() {
   }, [onKeyDown]);
 
   return (
-    <main className="p-4">
+    <main className="min-h-screen bg-background p-4">
       <h1 className="mb-1 text-lg font-semibold">Shortcuts</h1>
       <p className="mb-3 text-sm text-foreground/60">
         Global keyboard shortcuts{note ? ` — ${note}` : ""}
