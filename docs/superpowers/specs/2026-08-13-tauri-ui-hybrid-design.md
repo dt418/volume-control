@@ -268,7 +268,152 @@ same resolver today. One resolver, all surfaces — no drift.
   stay single binaries; ship.sh updated to call the Tauri build and keep the
   enforcement battery intact.
 
-## 9. Out of scope (YAGNI)
+## 9. Technical edge cases & remedies
+
+### 9.1 Slider echo jitter (IPC race)
+
+Dragging a Mixer slider at ~60 Hz fires `invoke("set_session_volume")` per
+change; if the backend echoes `state://sessions`/`state://volume` back
+immediately, the phase difference between the UI's in-flight drag value and
+the echoed state makes the thumb jitter.
+
+**Remedy (frontend):** optimistic local state + an `isDragging` ref; server
+state is applied only while NOT dragging.
+
+```tsx
+// frontend/src/mixer/components/AppSlider.tsx (pattern)
+export function AppSlider({ session }: { session: AudioSession }) {
+  const [localVal, setLocalVal] = useState(session.pct);
+  const isDragging = useRef(false);
+  useEffect(() => { if (!isDragging.current) setLocalVal(session.pct); }, [session.pct]);
+  const onChange = (v: number) => {
+    setLocalVal(v); // immediate UI
+    invoke("set_session_volume", { id: session.id, pct: v }); // async, no await
+  };
+  return <Slider value={[localVal]} onPointerDown={() => (isDragging.current = true)}
+    onPointerUp={() => (isDragging.current = false)} onValueChange={([v]) => onChange(v)} />;
+}
+```
+
+### 9.2 WebView2 idle-RAM leak
+
+On Windows, after `destroy()`, the WebView2 runtime sub-processes
+(`msedgewebview2.exe`) sometimes linger, pushing idle RAM past the < 15 MB
+target.
+
+**Remedy (host discipline + empirical verification):**
+
+- `WindowManager::close_surface` destroys the webview window and removes it
+  from the active-windows map in one place.
+- Register a `tauri::WindowEvent::Destroyed` listener per surface to reap any
+  per-window resources/event listeners; the WindowManager state is the only
+  owner of webview handles.
+- **Verify empirically in the plan:** after closing the last surface, confirm
+  the WebView2 browser processes exit. If Tauri keeps the environment
+  resident, lazy-init the WebView2 environment on first `open_surface` and
+  measure the true idle footprint (Rust daemon alone must stay < 15 MB;
+  record the measured numbers in the implementation plan).
+
+```rust
+// src-tauri/src/window_manager.rs (pattern)
+impl WindowManager {
+    pub fn close_surface(&self, app: &AppHandle, surface: SurfaceId) -> Result<(), String> {
+        if let Some(window) = app.get_webview_window(surface.as_label()) {
+            window.destroy().map_err(|e| e.to_string())?;
+            self.active_windows.lock().unwrap().remove(&surface);
+        }
+        Ok(())
+    }
+}
+```
+
+### 9.3 Wayland focus-loss & auto-close
+
+`window-mixer` is frameless and auto-closes on losing focus. Browser-level
+`blur` events are unreliable on Wayland (Hyprland/Sway/GNOME Wayland) for
+transparent/frameless windows.
+
+**Remedy:** close from the Rust `WindowEvent::Focused(false)` handler (reliable
+on Win32 and Wayland compositors that send focus), and keep an Esc handler in
+the React component as the always-works fallback.
+
+```rust
+// src-tauri/src/main.rs (pattern)
+let app_handle = app.clone();
+window.on_window_event(move |event| {
+    if let tauri::WindowEvent::Focused(false) = event {
+        let _ = app_handle.emit("close_mixer_request", ());
+    }
+});
+```
+
+**Platform caveat (honest):** Wayland per-pixel transparency is compositor-
+dependent (xdg-shell has no standard alpha; Hyprland uses its own protocol).
+The Mixer's transparent/acrylic look is best-effort on Wayland and falls back
+to a solid themed background; X11 and Windows retain full transparency.
+
+### 9.4 Tauri v2 capability & release-mode ACL gotchas
+
+Tauri v2 ACL (default-deny) gates **core and plugin** APIs, not custom
+`#[tauri::command]`s. The classic release-mode silent failures are: (a) the
+surfaces use core window APIs (`close`, `hide`, `show`, `destroy`) that DO
+need capability permissions; (b) a strict CSP blocks inline scripts/assets
+— this directly interacts with the FOUC fix in §9.5 (an inline theme script
+needs `script-src 'unsafe-inline'` or a nonce in `tauri.conf.json`'s CSP);
+(c) wrong asset paths after bundling.
+
+**Remedy:** one capability file covering the three surface windows, listing
+`core:default` + the window permissions the surfaces actually use; CSP tuned
+to allow the pre-hydrate theme script; asset paths verified by the CI
+`--no-bundle` build.
+
+```json
+// src-tauri/capabilities/default.json (pattern)
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default-capability",
+  "description": "Allow core commands for interactive surfaces",
+  "windows": ["window-mixer", "window-settings", "window-help"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-hide",
+    "core:window:allow-show"
+  ]
+}
+```
+
+### 9.5 FOUC (theme flash) with Tailwind v4
+
+Tailwind v4 reads theme tokens from CSS (`@theme`/`data-theme`). If React waits
+for `get_bootstrap` before applying the theme, every surface flashes
+white/dark on open.
+
+**Remedy:** apply the cached theme synchronously in each entry `index.html`
+`<head>` before React mounts (cache from localStorage, seeded by the first
+bootstrap). Must be paired with the CSP allowance from §9.4.
+
+```html
+<!-- frontend/src/mixer/index.html (pattern) -->
+<script>
+  const cached = localStorage.getItem("app-theme") || "dark";
+  document.documentElement.setAttribute("data-theme", cached);
+  if (cached === "dark") document.documentElement.classList.add("dark");
+</script>
+```
+
+### 9.6 Stale audio-session race
+
+The user drags a Mixer row for an app that closes / loses its audio device
+mid-drag.
+
+**Remedy (fail-soft):** `set_session_volume` returns `Result<(), String>`; a
+stale `session_id` returns a lightweight error (no panic) and the backend
+re-emits `state://sessions` so the frontend removes the dead row and shows a
+brief inline notice instead of erroring.
+
+## 10. Out of scope (YAGNI)
 
 - Free-form per-action keybinding (config schema stays fixed).
 - Installers / code signing / auto-updater (single-binary only for now).
@@ -276,7 +421,7 @@ same resolver today. One resolver, all surfaces — no drift.
 - Webview E2E test infrastructure.
 - Mobile targets.
 
-## 10. Rollout
+## 11. Rollout
 
 1. Scaffold `frontend/` (Vite + React + TS + Tailwind + shadcn) and
    `src-tauri/` (empty windows); prove a webview window opens from a native
