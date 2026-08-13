@@ -3,7 +3,7 @@
 //! A fixed set of hotkey combos is registered through the operating system's
 //! native APIs — Windows `RegisterHotKey` (hidden window, no low-level hook),
 //! macOS Carbon `RegisterEventHotKey` (no Accessibility permission), Linux
-//! X11 via pure-Rust `x11rb` XRecord. Press and release are reported per
+//! X11 via pure-Rust `x11rb` XGrabKey. Press and release are reported per
 //! combo, and Hold-to-Repeat is implemented here: the first press emits
 //! immediately, then a worker repeats the volume action every 50 ms until the
 //! combo is released.

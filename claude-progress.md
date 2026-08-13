@@ -82,6 +82,12 @@
   (full gate incl. tests); `bash scripts/test-check-records.sh`;
   `bash scripts/test-format-lint.sh`; `bash scripts/test-ship.sh`.
 - Commit: `docs: document global-hotkey backend and 1% step`
+- Fix round (Task 4 review): corrected the Linux backend mechanism in
+  `docs/global-hotkeys.md`, the `hotkeys_global.rs` module doc, and the
+  design spec/plan — global-hotkey 0.8.0 uses `XGrabKey` (via x11rb), not
+  XRecord; also reworded the Help-surface conflict description ("In use"
+  badge + "Shortcut conflict" callout) and reordered the combo table to
+  match `ALL_HOTKEY_ACTIONS`. Commit: `docs: correct Linux backend mechanism (XGrabKey)`
 
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 

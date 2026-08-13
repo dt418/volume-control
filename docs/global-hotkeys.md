@@ -16,7 +16,7 @@ by the host when an action is received. The origin key layout remains
   desktops may not receive the same events.
 - **macOS** uses the Carbon `RegisterEventHotKey` API, which needs **no
   Accessibility permission** (unlike the previous `rdev` CGEventTap).
-- **Linux** uses X11 via the pure-Rust `x11rb` XRecord backend. An X11
+- **Linux** uses X11 via the pure-Rust `x11rb` XGrabKey backend. An X11
   `DISPLAY` session with access to that display is required. `global-hotkey`
   0.8 has no Wayland backend, so the Wayland limitation is unchanged from the
   previous backend.
@@ -32,9 +32,9 @@ by the host when an action is received. The origin key layout remains
 | Volume +10 % | `MOD+Shift+↑` |
 | Volume −10 % | `MOD+Shift+↓` |
 | Mute | `MOD+M` |
-| Open tray menu | `MOD+Shift+M` |
 | Reset to 50 % | `MOD+R` |
 | Open mixer | `MOD+V` |
+| Open tray menu | `MOD+Shift+M` |
 
 On macOS the `CtrlAlt` config also registers the `⌘+⌥` spelling of every
 combo, so both `⌃+⌥` and the macOS-native `⌘+⌥` work. The `CapsLock`
@@ -59,7 +59,8 @@ via `GetAsyncKeyState`.
 Combos are registered per action. If a combo is already owned by another
 application, `register` returns `Err(AlreadyRegistered)`; that combo is
 skipped with a warning and the remaining combos still register. The Help
-surface shows `Conflicted` for actions whose combos could not be registered.
+surface marks actions whose combos could not be registered with an "In use"
+badge and a "Shortcut conflict" callout.
 
 ## Lifecycle
 

@@ -22,7 +22,7 @@ costs:
 `global-hotkey` 0.8.0 (the crate behind `tauri-plugin-global-shortcut`)
 registers the same combos through native APIs — Windows `RegisterHotKey`
 (hidden window, no hook), macOS Carbon `RegisterEventHotKey` (no Accessibility
-permission), Linux X11 via pure-Rust `x11rb` XRecord — and reports per-combo
+permission), Linux X11 via pure-Rust `x11rb` XGrabKey — and reports per-combo
 conflicts (`Err(AlreadyRegistered)`).
 
 ## 2. Goals

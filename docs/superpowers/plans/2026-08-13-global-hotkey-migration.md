@@ -135,7 +135,7 @@ Create `crates/volumectl/src/hotkeys_global.rs` containing ONLY the module doc c
 //! A fixed set of hotkey combos is registered through the operating system's
 //! native APIs — Windows `RegisterHotKey` (hidden window, no low-level hook),
 //! macOS Carbon `RegisterEventHotKey` (no Accessibility permission), Linux
-//! X11 via pure-Rust `x11rb` XRecord. Press and release are reported per
+//! X11 via pure-Rust `x11rb` XGrabKey. Press and release are reported per
 //! combo, and Hold-to-Repeat is implemented here: the first press emits
 //! immediately, then a worker repeats the volume action every 50 ms until the
 //! combo is released.
@@ -351,7 +351,7 @@ Replace the file content with the full implementation below (keep the test modul
 //! A fixed set of hotkey combos is registered through the operating system's
 //! native APIs — Windows `RegisterHotKey` (hidden window, no low-level hook),
 //! macOS Carbon `RegisterEventHotKey` (no Accessibility permission), Linux
-//! X11 via pure-Rust `x11rb` XRecord. Press and release are reported per
+//! X11 via pure-Rust `x11rb` XGrabKey. Press and release are reported per
 //! combo, and Hold-to-Repeat is implemented here: the first press emits
 //! immediately, then a worker repeats the volume action every 50 ms until the
 //! combo is released.
@@ -989,7 +989,7 @@ Expected: pre-commit hook passes. (`git add -A` is safe here — verify `git sta
 - [ ] **Step 1: Rewrite `docs/global-hotkeys.md`**
 
 Rewrite the document to describe the `global-hotkey` backend:
-- Registration: Windows `RegisterHotKey` (hidden window, no low-level hook, no extra permission), macOS Carbon `RegisterEventHotKey` (**no Accessibility permission** — delete the whole Accessibility/permission section), Linux X11 via `x11rb` XRecord (X11 `DISPLAY` required; same Wayland limitation as before — no Wayland backend in global-hotkey 0.8).
+- Registration: Windows `RegisterHotKey` (hidden window, no low-level hook, no extra permission), macOS Carbon `RegisterEventHotKey` (**no Accessibility permission** — delete the whole Accessibility/permission section), Linux X11 via `x11rb` XGrabKey (X11 `DISPLAY` required; same Wayland limitation as before — no Wayland backend in global-hotkey 0.8).
 - Combo layout: `MOD+↑/↓`, `MOD+Shift+↑/↓`, `MOD+M`, `MOD+Shift+M`, `MOD+R`, `MOD+V`; `MOD` = configured modifier; macOS `CtrlAlt` also registers `⌘+⌥` spellings; `CapsLock` config falls back to `Ctrl+Alt` with a warning.
 - Hold-to-Repeat: unchanged (first press immediate, 50 ms worker, combo-level release ends it). Document the accepted nuance: releasing only a modifier early does not end the hold while the main key stays down (Windows release detection polls the hotkey's own key via `GetAsyncKeyState`).
 - Conflict reporting: per-combo `Err(AlreadyRegistered)` → Help surface shows `Conflicted`.
