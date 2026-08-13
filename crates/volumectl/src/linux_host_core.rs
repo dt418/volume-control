@@ -15,7 +15,7 @@ use crate::ui::{AppAction, AppState, SurfaceId, SurfaceVisibility, UiCapabilitie
 /// The small interface the host needs from a global-hotkey provider.
 ///
 /// Keeping this seam local to the Linux host allows deterministic tests without
-/// starting an rdev listener or requiring an X11 display.
+/// starting a global hotkey listener or requiring an X11 display.
 pub trait HotkeySource {
     fn try_recv(&self) -> Option<HotkeyAction>;
     fn listener_failure(&self) -> Option<String>;
@@ -354,7 +354,7 @@ fn hotkey_to_action(action: HotkeyAction, config: &Config) -> AppAction {
 }
 
 #[cfg(target_os = "linux")]
-impl HotkeySource for crate::hotkeys_rdev::RdevHotkeys {
+impl HotkeySource for crate::hotkeys_global::GlobalHotkeys {
     fn try_recv(&self) -> Option<HotkeyAction> {
         self.try_recv()
     }

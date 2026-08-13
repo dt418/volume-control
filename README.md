@@ -10,7 +10,7 @@ application: no webview, no Electron, no runtime dependencies beyond the OS.
 ## Features
 
 - **Global hotkeys** (default `Ctrl+Alt`):
-  - `Ctrl+Alt+↑ / ↓` — volume ±2%
+  - `Ctrl+Alt+↑ / ↓` — volume ±1%
   - `Ctrl+Alt+Shift+↑ / ↓` — volume ±10%
   - `Ctrl+Alt+M` — mute toggle
   - `Ctrl+Alt+R` — reset to 50%
@@ -121,7 +121,7 @@ path, the resolved modifier, and the permission state — useful for debugging.
 | Feature                | Windows | macOS | Linux |
 |------------------------|:-------:|:-----:|:-----:|
 | Volume control         | ✅ WASAPI | ✅ CoreAudio | ✅ PulseAudio |
-| Global hotkeys         | ✅ rdev | ✅ rdev (Accessibility permission) | ✅ rdev (X11) |
+| Global hotkeys         | ✅ global-hotkey | ✅ global-hotkey | ✅ global-hotkey (X11) |
 | Overlay                | ✅ | 🔜 | 🔜 |
 | Mixer                  | ✅ | 🔜 | 🔜 |
 | Settings window        | ✅ | 🔜 | 🔜 |
@@ -129,7 +129,7 @@ path, the resolved modifier, and the permission state — useful for debugging.
 | Live config reload     | ✅ | 🔜 | 🔜 |
 | Adaptive UI renderer   | ✅ native Win32 | ✅ AppKit (surfaces + smoke-tested) | ✅ GTK4/libadwaita (surfaces, CI-tested under Xvfb) |
 
-macOS and Linux currently run the cross-platform `rdev` hotkey host (with
+macOS and Linux currently run the cross-platform `global-hotkey` hotkey host (with
 their native audio backends); the full overlay/mixer/settings/tray surfaces
 are Windows-first and land on the other platforms as follow-on work. The
 AppKit and GTK4/libadwaita renderers already implement the same Signal Glass
@@ -162,7 +162,7 @@ crates/volumectl/
 │   ├── audio_macos     CoreAudio via the volumecontrol crate
 │   ├── audio_linux     PulseAudio via the volumecontrol crate
 │   ├── hotkeys/        HotkeyAction types
-│   ├── hotkeys_rdev    global listener + hold-to-repeat (all platforms)
+│   ├── hotkeys_global   global listener + hold-to-repeat (all platforms)
 │   ├── overlay         GDI-painted native popup (click-through, auto-hide)
 │   ├── tray            tray-icon + muda context menu
 │   ├── linux_app       GTK4 host (Linux, gtk-renderer feature)
@@ -174,7 +174,7 @@ crates/volumectl/
 ```
 
 Windows-only modules are `#[cfg(target_os = "windows")]`-gated. The non-Windows
-entry points run the `rdev` hotkey host with the native audio backend
+entry points run the `global-hotkey` hotkey host with the native audio backend
 (CoreAudio on macOS, PulseAudio on Linux); Linux additionally builds the GTK4
 host with the `gtk-renderer` feature. The `ui` module defines the shared
 renderer contract, and `ui/platform/macos` + `ui/platform/linux` are the

@@ -57,7 +57,7 @@ fn main() -> std::process::ExitCode {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            return match volumectl_lib::hotkeys_rdev::run_headless() {
+            return match volumectl_lib::hotkeys_global::run_headless() {
                 Ok(()) => std::process::ExitCode::SUCCESS,
                 Err(e) => {
                     eprintln!("volumectl: global hotkey host unavailable ({e})");

@@ -116,7 +116,7 @@ pub enum HotkeyModifier {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// Small step percent (default 2).
+    /// Small step percent (default 1).
     pub volume_step: u32,
     /// Large step percent for Shift variants (default 10).
     pub volume_step_large: u32,
@@ -176,7 +176,7 @@ pub struct ColorThresholds {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            volume_step: 2,
+            volume_step: 1,
             volume_step_large: 10,
             overlay_duration_ms: 1800,
             modifier: HotkeyModifier::CtrlAlt,
@@ -884,5 +884,12 @@ mod tests {
         let error = save_validated(&cfg).expect_err("invalid relationship must not save");
 
         assert!(matches!(error, ConfigError::Validation(_)));
+    }
+
+    #[test]
+    fn default_volume_step_is_one_percent() {
+        let cfg = Config::default();
+        assert_eq!(cfg.volume_step, 1, "small step must default to 1%");
+        assert_eq!(cfg.volume_step_large, 10, "large step stays 10%");
     }
 }

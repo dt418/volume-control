@@ -2,7 +2,7 @@
 //!
 //! The host owns CoreAudio, configuration, global hotkeys, confirmed UI state,
 //! and the AppKit renderer. AppKit work stays on the process main thread while
-//! the rdev listener continues to receive events on its existing worker thread.
+//! the global-hotkey listener continues to receive events on its worker thread.
 //! Renderer intent crosses the boundary through [`crate::ui::HostHandle`].
 
 #![cfg(target_os = "macos")]
@@ -18,7 +18,7 @@ use crate::audio::AudioBackend;
 use crate::config::{self, Config};
 use crate::core;
 use crate::hotkeys::HotkeyAction;
-use crate::hotkeys_rdev::RdevHotkeys;
+use crate::hotkeys_global::GlobalHotkeys;
 use crate::ui::platform::macos::renderer::MacosRenderer;
 use crate::ui::{
     tokens_for, AppAction, AppState, HostHandle, NativeRenderer, SurfaceId, SurfaceVisibility,
@@ -31,7 +31,7 @@ const FALLBACK_WORK_AREA: WorkArea = WorkArea::new(0, 0, 1600, 900);
 /// Everything required to process one host poll on the AppKit main thread.
 struct HostCtx {
     audio: Box<dyn AudioBackend>,
-    hotkeys: RdevHotkeys,
+    hotkeys: GlobalHotkeys,
     renderer: MacosRenderer,
     config: Config,
     last_config_mtime: Option<SystemTime>,
@@ -290,7 +290,7 @@ pub fn run() -> Result<(), String> {
     let config = config::load();
     let last_config_mtime = config_mtime();
     let audio = crate::audio::default_backend().map_err(|error| error.to_string())?;
-    let hotkeys = RdevHotkeys::new(config.modifier).map_err(|error| error.to_string())?;
+    let hotkeys = GlobalHotkeys::new(config.modifier).map_err(|error| error.to_string())?;
     let caps = detect_caps();
 
     let (sender, receiver) = mpsc::channel::<AppAction>();
@@ -370,7 +370,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(
             hotkey_to_action(HotkeyAction::VolumeUp, &config),
-            AppAction::AdjustVolume { delta_percent: 2 }
+            AppAction::AdjustVolume { delta_percent: 1 }
         );
         assert_eq!(
             hotkey_to_action(HotkeyAction::VolumeDownLarge, &config),

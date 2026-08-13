@@ -1,5 +1,129 @@
 # Progress Log
 
+## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
+
+- Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
+  preserving all hotkey behavior (8 actions, hold-to-repeat, Shift variants,
+  macOS ⌘/⌃ dual modifier, per-action status), and set the default volume
+  step to 1%.
+- Task 1: default volume step 2 → 1.
+  - `crates/volumectl/src/config.rs`: `volume_step` default 2 → 1 (doc
+    comments updated); `volume_step_large` stays 10. New test
+    `default_volume_step_is_one_percent` (TDD: RED `left: 2, right: 1` → GREEN).
+  - `README.md` / `README.vi.md`: `volume ±2%` → `±1%`.
+  - `feature_list.json`: vol-029 added (`in_progress`), `last_updated` bumped.
+- Verification: `cargo test -p volumectl config::tests::default_volume_step_is_one_percent`
+  RED then GREEN; `cargo test -p volumectl --no-default-features` — 252/252 pass on host.
+- Task 2: global-hotkey dependency + hotkey core (11 unit tests).
+  - `Cargo.toml` (workspace): added `global-hotkey = "0.8"` (rdev kept for
+    this task; removed in Task 3). `crates/volumectl/Cargo.toml`: added
+    `global-hotkey = { workspace = true }`. `Cargo.lock` regenerated.
+  - `crates/volumectl/src/lib.rs`: `pub mod hotkeys_global;` added.
+  - `crates/volumectl/src/hotkeys_global.rs` (new): `combos_for()` per
+    modifier (CapsLock falls back to Ctrl+Alt; macOS CtrlAlt also registers
+    ⌘+⌥ spellings), `HotkeyHold` hold/repeat state machine, `on_event()`
+    (auto-repeat dedup, one-shot commands, volume hold switching),
+    `run_listener()` (drains `GlobalHotKeyEvent::receiver()`),
+    `run_repeat_worker()` (50 ms condvar), `register_combos()` with real
+    per-action `AlreadyRegistered` conflict status,
+    `GlobalHotkeys::{new, try_recv, set_modifier, listener_failure, status}`,
+    `run_headless()` (non-Windows). TDD: RED = compile error (tests-only
+    module); GREEN = 11/11 pass.
+  - Plan-code deviations (compile fixes): the brief's test
+    `shift_variants_carry_the_shift_modifier` bound a reference into a
+    temporary `Vec` (E0716) — bound `let combos = combos();` first; removed
+    the unused `Code` test import (clippy -D warnings).
+  - `feature_list.json`: vol-029 verification extended + notes added;
+    `last_updated` bumped.
+- Verification: `cargo test -p volumectl hotkeys_global` — 11/11 pass;
+  `cargo test -p volumectl --no-default-features` — 263/263 pass;
+  `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+  clean; `cargo fmt --all --check` + `git diff --check` clean.
+- Task 3: wire the global-hotkey backend, remove rdev.
+  - `Cargo.toml` (workspace) + `crates/volumectl/Cargo.toml`: `rdev` removed;
+    `Cargo.lock` regenerated. `crates/volumectl/src/lib.rs`: removed
+    `pub mod hotkeys_rdev;`. Deleted `crates/volumectl/src/hotkeys_rdev.rs`.
+  - Hosts rewired to `crate::hotkeys_global::GlobalHotkeys`:
+    `app.rs` (import, `AppContext.hotkeys` type, construction, drain doc),
+    `linux_host_core.rs` (`impl HotkeySource for GlobalHotkeys`, trait doc),
+    `linux_app.rs` + `macos_app.rs` (imports + construction),
+    `main.rs` (`hotkeys_global::run_headless()`).
+  - Comments updated: `hotkeys/mod.rs` (status doc), `wheel_win32.rs`,
+    `macos_app.rs`, `hotkeys_global.rs` module docs, `app.rs` drain doc.
+  - `CLAUDE.md` architecture notes: rdev → global-hotkey (host lines,
+    headless host name, X11 requirement note, module reference).
+  - `README.md`: hotkey backend table (no macOS Accessibility claim),
+    backend name + module tree reference → global-hotkey.
+  - `feature_list.json`: vol-029 verification extended (cross-target + rg
+    clean), notes updated, `last_updated` bumped.
+- Verification: `cargo build` + `cargo test --workspace --no-default-features`
+  (257/257 pass) + clippy `-D warnings` clean + `cargo fmt --all --check` +
+  `git diff --check` clean; `rg "rdev|RdevHotkeys"` clean outside historical
+  docs/records/verify-vol011.ps1; cross-target `cargo check
+  --target x86_64-unknown-linux-gnu -p volumectl --tests --no-default-features
+  --features gtk-renderer` and `--target x86_64-apple-darwin -p volumectl
+  --tests --no-default-features` both compile clean via the pkg-config stub.
+
+- Task 4: docs + verification + records finalize.
+  - `docs/global-hotkeys.md` rewritten for the `global-hotkey` backend:
+    registration per platform (Windows RegisterHotKey hidden window — no
+    hook; macOS Carbon — no Accessibility permission; Linux X11 x11rb —
+    Wayland limitation unchanged), combo layout table (incl. MOD+Shift+M),
+    macOS ⌘+⌥ spellings, CapsLock → Ctrl+Alt fallback, hold-to-repeat 50 ms
+    + combo-level release nuance, conflict reporting (Conflicted in Help).
+  - `feature_list.json`: vol-029 → `passing` + battery evidence,
+    `last_updated` bumped.
+  - `session-handoff.md` refreshed (Session 039, 29 features, 257 unit
+    tests, self-test counts 33/40/22).
+  - `.gitignore`: `.pi/` added under agent tooling state (prevents the pi
+    runtime dir from being staged by `git add -A`).
+- Verification (Task 4): full enforcement battery, all exit 0 —
+  `bash scripts/check-records.sh --branch`; `bash scripts/format-lint.sh`
+  (full gate incl. tests); `bash scripts/test-check-records.sh`;
+  `bash scripts/test-format-lint.sh`; `bash scripts/test-ship.sh`.
+- Commit: `docs: document global-hotkey backend and 1% step`
+- Fix round (Task 4 review): corrected the Linux backend mechanism in
+  `docs/global-hotkeys.md`, the `hotkeys_global.rs` module doc, and the
+  design spec/plan — global-hotkey 0.8.0 uses `XGrabKey` (via x11rb), not
+  XRecord; also reworded the Help-surface conflict description ("In use"
+  badge + "Shortcut conflict" callout) and reordered the combo table to
+  match `ALL_HOTKEY_ACTIONS`. Commit: `docs: correct Linux backend mechanism (XGrabKey)`
+- Final-review fixes (whole-branch review): `GlobalHotkeys::drop` hardened
+  against the crate's blocking X11 unregister — the explicit unregister
+  loop was removed (native cleanup is delegated to the crate manager's
+  `Drop`, which covers macOS/Windows/X11); `set_modifier` documents the
+  accepted X11-death edge; `wheel_win32.rs` header comment corrected
+  (global-hotkey registers combos only, not mouse events).
+  Commit: `fix: harden hotkey Drop against blocking X11 unregister`
+
+## Pre-push review (three domains) - enforcement stack
+
+Adversarial three-domain pre-push review (guardrail mandatory phase) dispatched
+in parallel reviewers: Domain A (guard core), Domain B (gate chain), Domain C
+(wiring/records). Findings triaged:
+
+- [Important -> fixed] `.githooks/pre-commit` committed as mode 100644
+  (non-executable); git on POSIX silently skips non-executable hooks, so the
+  local records guard could be skipped. Fixed by `git update-index --chmod=+x`
+  (index now 100755, verified via `git ls-files -s`).
+- [Minor -> fixed] stale format-lint self-test baseline "38 on Linux/macOS":
+  actual inventory is 40 on Windows / 39 on Linux and macOS with PowerShell
+  (26 without). Corrected in pre-push-review SKILL.md (both mirrors),
+  session-handoff.md, feature_list.json vol-017.
+- [Minor -> deferred, fail-closed] check-records.sh heredoc `EOF` delimiter
+  collision and core.quotePath C-quoting of non-ASCII paths (both cause
+  spurious failures only, never silent passes).
+- [Minor -> deferred, defense-in-depth] gate-chain nits: PS version check
+  accepts JSON float "3.0", unknown manifest step ids not validated,
+  `--fix` smoke run mutates a fmt-dirty tree (CI-safe), `--diff-filter=ACMRD`
+  omits type changes (caught by ci-diff-check.sh). Pre-existing, not
+  introduced by this change set.
+
+Review evidence: full battery re-run green after fixes (records 33,
+format-lint 40 on Windows, ship 22, cargo test 241+16), mirrors byte-identical.
+
+CI catch and fix: the macOS job failed on macos_app::tests::hotkeys_use_configured_small_and_large_steps, which asserted the old 2% default volume_step (missed when Task 1 changed the default to 1%). Corrected to 1%; cross-checked that app.rs tests use explicit STEP fixtures, not the default. CI re-run green.
+
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
 - Goal: three-domain pre-push review of the third-party-skills commit
