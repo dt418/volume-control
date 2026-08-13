@@ -32,6 +32,13 @@
 - `host_core.rs`: SessionsSource trait (supported/list/set_volume/mute) + NoopSessions seam; AppCore delegates sessions()/set_session_volume/mute_session; bootstrap reports sessions_supported=true on Windows. Stale session ids -> Err and src-tauri commands.rs re-emits state://sessions so the frontend drops the dead row (spec 9.6).
 - Tests: 4 pure-helper tests (resolved_session_name fallbacks, session_id round-trip); host_core tests updated to the platform contract (Windows: stale id is Err; others: no-op Ok). Verified: 269 tests, clippy/fmt clean, cross-target linux-gnu + apple-darwin compile clean.
 
+### Task 3: Mixer webview surface - complete
+
+- `sessionStore.ts`: `useSessions()` hook (bootstrap load + state://sessions + state://volume subscriptions, active-first then pct-desc sort, local removeSession/updateSession for the optimistic patterns).
+- `AppSlider.tsx`: spec 9.1 echo-jitter guard (optimistic local value + isDragging ref), `set_session_volume` invoked without awaiting; write failure -> onError.
+- `SessionRow.tsx` + `MixerSurface.tsx`: per-session slider + mute toggle, search filter, Esc closes the window (`close_surface` window-mixer), stale-session row removal + amber notice, empty states ("No audio sessions" / "Per-app mixing is Windows-only"), framer-motion layout animation, master volume indicator in the header.
+- Tests: 7 vitest tests (sort order, search filter, mute invoke, Esc close, stale-row removal + notice, both empty states); test-setup.ts gained afterEach(cleanup) (vitest runs without globals, RTL auto-cleanup never fired) + a ResizeObserver stub for framer-motion layout. Verified: npm test 7/7, npm run build (tsc + vite multi-entry) green.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0

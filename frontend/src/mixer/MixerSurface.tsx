@@ -1,3 +1,118 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { Search } from "lucide-react";
+
+import { invoke } from "../lib/ipc";
+import { SessionRow } from "./SessionRow";
+import { useSessions } from "./sessionStore";
+
+/**
+ * Mixer webview surface (spec §5.1): per-app sliders with quick mute, search
+ * filter, active-first sort, live updates via state:// events, Esc-to-close
+ * and the fail-soft stale-session handling of spec §9.6.
+ */
 export function MixerSurface() {
-  return <main className="p-4 text-sm">Mixer placeholder</main>;
+  const {
+    sessions,
+    volumePct,
+    muted,
+    sessionsSupported,
+    notice,
+    setNotice,
+    removeSession,
+    updateSession,
+  } = useSessions();
+  const [query, setQuery] = useState("");
+
+  // Esc fallback for closing the frameless mixer window (spec §9.3); the Rust
+  // side additionally closes it on Focused(false) for outside clicks.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        void invoke<void>("close_surface", { surface: "window-mixer" }).catch(() => {});
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => s.name.toLowerCase().includes(q));
+  }, [sessions, query]);
+
+  const handleMute = useCallback(
+    (id: string) => {
+      const row = sessions.find((s) => s.id === id);
+      const nextMuted = !row?.muted;
+      updateSession(id, { muted: nextMuted }); // optimistic; backend does not re-emit on success
+      void invoke<void>("mute_session", { id }).catch(() => {
+        updateSession(id, { muted: !nextMuted }); // revert on failure
+      });
+    },
+    [sessions, updateSession],
+  );
+
+  const handleVolumeError = useCallback(
+    (id: string, error: string) => {
+      // Stale session: drop the row and inform the user instead of erroring (spec §9.6).
+      removeSession(id);
+      setNotice(`${error} — session removed (no longer playing audio)`);
+    },
+    [removeSession, setNotice],
+  );
+
+  return (
+    <main className="flex h-screen flex-col gap-3 p-4">
+      <header className="flex items-center justify-between">
+        <h1 className="text-sm font-semibold">Volume Mixer</h1>
+        <div className="text-xs text-foreground/60">
+          {muted ? <span className="font-medium">Muted</span> : `Volume ${volumePct}%`}
+        </div>
+      </header>
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40" />
+        <input
+          type="text"
+          placeholder="Search apps…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="w-full rounded-md border border-foreground/10 bg-background/60 py-1.5 pl-8 pr-3 text-xs outline-none placeholder:text-foreground/40 focus:border-accent"
+        />
+      </div>
+
+      {notice && (
+        <div
+          role="status"
+          className="rounded-md bg-amber-500/15 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400"
+        >
+          {notice}
+        </div>
+      )}
+
+      <div className="flex-1 space-y-2 overflow-y-auto">
+        {!sessionsSupported ? (
+          <p className="py-8 text-center text-xs text-foreground/50">
+            Per-app mixing is Windows-only
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="py-8 text-center text-xs text-foreground/50">
+            {sessions.length === 0 ? "No audio sessions" : "No matching apps"}
+          </p>
+        ) : (
+          filtered.map((session, index) => (
+            <motion.div key={`${session.id}-${session.name}`} layout transition={{ duration: 0.15 }}>
+              <SessionRow
+                session={session}
+                onMute={handleMute}
+                onVolumeError={handleVolumeError}
+              />
+            </motion.div>
+          ))
+        )}
+      </div>
+    </main>
+  );
 }
