@@ -370,7 +370,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(
             hotkey_to_action(HotkeyAction::VolumeUp, &config),
-            AppAction::AdjustVolume { delta_percent: 2 }
+            AppAction::AdjustVolume { delta_percent: 1 }
         );
         assert_eq!(
             hotkey_to_action(HotkeyAction::VolumeDownLarge, &config),

@@ -122,6 +122,8 @@ in parallel reviewers: Domain A (guard core), Domain B (gate chain), Domain C
 Review evidence: full battery re-run green after fixes (records 33,
 format-lint 40 on Windows, ship 22, cargo test 241+16), mirrors byte-identical.
 
+CI catch and fix: the macOS job failed on macos_app::tests::hotkeys_use_configured_small_and_large_steps, which asserted the old 2% default volume_step (missed when Task 1 changed the default to 1%). Corrected to 1%; cross-checked that app.rs tests use explicit STEP fixtures, not the default. CI re-run green.
+
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
 - Goal: three-domain pre-push review of the third-party-skills commit
