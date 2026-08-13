@@ -42,7 +42,7 @@
     pub enum SurfaceId { Mixer, Settings, Help }
     impl SurfaceId {
         pub fn label(&self) -> &'static str;   // "window-mixer" | "window-settings" | "window-help"
-        pub fn entry(&self) -> &'static str;   // "mixer.html" | "settings.html" | "help.html"
+        pub fn entry(&self) -> &'static str;   // "src/mixer/index.html" | "src/settings/index.html" | "src/help/index.html" (Vite preserves input paths under dist/)
         pub fn all() -> [SurfaceId; 3];
     }
     pub struct WindowManager { app: tauri::AppHandle, active: Mutex<HashSet<SurfaceId>> }
@@ -269,7 +269,7 @@ impl SurfaceId {
         match self { Self::Mixer => "window-mixer", Self::Settings => "window-settings", Self::Help => "window-help" }
     }
     pub fn entry(&self) -> &'static str {
-        match self { Self::Mixer => "mixer.html", Self::Settings => "settings.html", Self::Help => "help.html" }
+        match self { Self::Mixer => "src/mixer/index.html", Self::Settings => "src/settings/index.html", Self::Help => "src/help/index.html" }
     }
     pub fn all() -> [SurfaceId; 3] { [Self::Mixer, Self::Settings, Self::Help] }
     pub fn from_label(label: &str) -> Option<Self> {
@@ -344,7 +344,7 @@ mod tests {
     #[test]
     fn surface_labels_and_entries_are_stable() {
         assert_eq!(SurfaceId::Mixer.label(), "window-mixer");
-        assert_eq!(SurfaceId::Mixer.entry(), "mixer.html");
+        assert_eq!(SurfaceId::Mixer.entry(), "src/mixer/index.html");
         assert_eq!(SurfaceId::Settings.label(), "window-settings");
         assert_eq!(SurfaceId::Help.entry(), "help.html");
     }
@@ -417,6 +417,8 @@ cargo tauri dev --no-watch                     # dev build; then from the shell 
 #   invoke('open_surface', { surface: 'window-mixer' })  → window appears
 #   invoke('close_surface', { surface: 'window-mixer' }) → window disappears
 # Record: does the window open transparent + frameless? Close cleanly?
+# Verify the dist layout matches SurfaceId::entry(): after `npm run build --prefix frontend`,
+#   `ls frontend/dist/src/mixer/index.html` must exist (Vite preserves input paths under dist/).
 # Idle RAM: with ALL webview windows closed, measure the process set:
 #   PowerShell: (Get-Process -Name VolumeControl).WorkingSet64 / 1MB
 # Record the number in the task report (target: Rust daemon < 15 MB, WebView2 runtime reaped).
