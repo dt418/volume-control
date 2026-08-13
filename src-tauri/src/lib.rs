@@ -52,6 +52,16 @@ pub fn run() -> tauri::Result<()> {
     volumectl_lib::init_logging();
     tauri::Builder::default()
         .setup(|app| {
+            // Prevent two instances (mirrors the legacy host's named-mutex
+            // guard: a second instance would double-apply hotkeys/wheel and
+            // create a second tray icon). The check runs before any native
+            // surface or managed state is created.
+            #[cfg(target_os = "windows")]
+            if !native_win32::ensure_single_instance() {
+                log::warn!("another VolumeControl instance is already running");
+                std::process::exit(0);
+            }
+
             let handle = app.handle().clone();
             app.manage(WindowManager::new(handle.clone()));
 
@@ -101,6 +111,10 @@ pub fn run() -> tauri::Result<()> {
             std::thread::spawn(move || loop {
                 if let Ok(mut core) = slow_shared.lock() {
                     core.reload_config_if_changed();
+                    // External audio-state sync: volume changed outside the
+                    // app (media keys, other apps) — keeps the tray tooltip
+                    // and open webviews fresh (legacy 150 ms host timer).
+                    core.sync_external_state();
                     #[cfg(target_os = "windows")]
                     while let Some(cmd) = slow_native.poll_tray() {
                         core.handle_action(volumectl_lib::host_core::tray_command_to_action(cmd));

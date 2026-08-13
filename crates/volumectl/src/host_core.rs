@@ -248,7 +248,7 @@ impl AppCore {
                 if let Err(e) = self.audio.set_volume(pct) {
                     log::warn!("{e}");
                 }
-                self.publish_confirmed_state();
+                self.publish_confirmed_state(true);
             }
             A::AdjustVolume { delta_percent } => {
                 // Step actions use the cached audio-truth as the base so the
@@ -267,27 +267,25 @@ impl AppCore {
                 if target == old.volume && (old.volume == 0.0 || old.volume == 1.0) {
                     beep_limit(&self.config);
                 }
-                self.publish_confirmed_state();
+                self.publish_confirmed_state(true);
             }
             A::ToggleMute => {
                 if let Err(e) = self.audio.toggle_mute() {
                     log::warn!("{e}");
                 }
-                self.publish_confirmed_state();
+                self.publish_confirmed_state(true);
             }
             A::SetMute { muted } => {
                 if let Err(e) = self.audio.set_mute(muted) {
                     log::warn!("{e}");
                 }
-                self.publish_confirmed_state();
+                self.publish_confirmed_state(true);
             }
             A::ResetVolume => {
                 if let Err(e) = self.audio.set_volume(0.5) {
                     log::warn!("{e}");
                 }
-                self.publish_confirmed_state();
-                self.sink
-                    .overlay(None, self.last_state, self.config.clone());
+                self.publish_confirmed_state(true);
             }
             // ── Surfaces: routed to the host window manager. ─────────────
             A::ShowSurface(S::Mixer) | A::ToggleSurface(S::Mixer) => {
@@ -427,10 +425,14 @@ impl AppCore {
     pub fn set_modifier(&mut self, modifier: HotkeyModifier) -> Result<(), String> {
         self.config.modifier = modifier;
         self.hotkeys.set_modifier(modifier);
+        // Keep the wheel-bridge modifier in sync on Windows (legacy synced
+        // the wheel in every modifier-change path).
+        #[cfg(target_os = "windows")]
+        crate::wheel_win32::set_modifier(modifier);
         self.hotkey_status = self.hotkeys.status();
         self.sink.hotkeys(&self.hotkey_status);
         crate::config::save_validated(&self.config).map_err(|e| e.to_string())?;
-        self.publish_confirmed_state();
+        self.publish_confirmed_state(false);
         Ok(())
     }
 
@@ -454,15 +456,39 @@ impl AppCore {
     }
 
     /// Re-read the audio state and push the confirmed volume/mute to the
-    /// host. The native overlay/tray renderers are host concerns and are
-    /// driven through the sink's `overlay`/`volume` notifications.
-    pub fn publish_confirmed_state(&mut self) {
+    /// host. `show_overlay` controls whether the native HUD overlay is shown:
+    /// volume-mutating actions pass `true` (mirroring the legacy host's
+    /// `publish_confirmed_state(ctx, show_overlay)`, which showed the HUD on
+    /// every volume action); config-only paths pass `false`. The native
+    /// overlay/tray renderers are host concerns and are driven through the
+    /// sink's `overlay`/`volume` notifications.
+    pub fn publish_confirmed_state(&mut self, show_overlay: bool) {
         let Ok(st) = self.audio.get_state() else {
             return;
         };
         self.last_state = st;
         log::debug!("publish: state={}%% muted={}", st.percent(), st.muted);
         self.sink.volume(st.percent(), st.muted);
+        if show_overlay {
+            self.sink.overlay(None, st, self.config.clone());
+        }
+    }
+
+    /// Periodic external audio-state sync (media keys, other apps changing
+    /// the volume OUTSIDE this app). Publishes when the confirmed state
+    /// changed so the tray tooltip and open webviews stay fresh. The overlay
+    /// is NOT re-shown for external changes — the native media-key flyout
+    /// stays authoritative (mirrors the legacy 150 ms host timer, which only
+    /// re-showed the HUD when the config had just reloaded).
+    pub fn sync_external_state(&mut self) {
+        let Ok(st) = self.audio.get_state() else {
+            return;
+        };
+        if st != self.last_state {
+            log::debug!("ext change: {}% muted={}", st.percent(), st.muted);
+            self.last_state = st;
+            self.sink.volume(st.percent(), st.muted);
+        }
     }
 
     /// Snapshot getters for the host renderers (native overlay/tray).
@@ -516,9 +542,7 @@ impl AppCore {
             self.hotkey_status = self.hotkeys.status();
             self.sink.hotkeys(&self.hotkey_status);
         }
-        self.publish_confirmed_state();
-        self.sink
-            .overlay(None, self.last_state, self.config.clone());
+        self.publish_confirmed_state(true);
         true
     }
 
@@ -531,13 +555,18 @@ impl AppCore {
     fn adopt_saved_config(&mut self, saved: Config) {
         let modifier_changed = saved.modifier != self.config.modifier;
         self.config = saved;
+        // Resync the mtime so a save never triggers the 150 ms reloader into
+        // a spurious reload + HUD flash (legacy resynced here too).
+        self.last_config_mtime = config_mtime();
         if modifier_changed {
             log::info!("config: modifier changed — updating global listener");
             self.hotkeys.set_modifier(self.config.modifier);
+            #[cfg(target_os = "windows")]
+            crate::wheel_win32::set_modifier(self.config.modifier);
             self.hotkey_status = self.hotkeys.status();
             self.sink.hotkeys(&self.hotkey_status);
         }
-        self.publish_confirmed_state();
+        self.publish_confirmed_state(false);
     }
 
     fn save_and_adopt(&mut self) {

@@ -43,6 +43,12 @@ impl EventSink for RecordingSink {
     }
     fn hotkeys(&self, _status: &[HotkeyRegResult]) {}
     fn sessions(&self, _sessions: &[AudioSessionInfo]) {}
+    fn overlay(&self, text: Option<String>, _state: VolumeState, _config: Config) {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("overlay:{}", text.unwrap_or_default()));
+    }
 }
 
 fn core_with(sink: Arc<RecordingSink>) -> AppCore {
@@ -227,4 +233,77 @@ fn update_settings_validates_large_against_patched_small() {
         err.contains("greater than volume_step"),
         "unexpected error: {err}"
     );
+}
+
+#[test]
+fn volume_action_shows_overlay() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+    core.apply_hotkey(volumectl_lib::hotkeys::HotkeyAction::VolumeUp);
+    assert!(
+        sink.events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|e| e.starts_with("overlay:")),
+        "hotkey volume change must show the HUD overlay (legacy parity), got {:?}",
+        *sink.events.lock().unwrap()
+    );
+    assert!(
+        sink.events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|e| e.starts_with("volume:")),
+        "volume event must also be emitted"
+    );
+}
+
+#[test]
+fn config_only_paths_do_not_show_overlay() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+    // A non-volume action (open a surface) must not flash the HUD overlay.
+    core.handle_action(AppAction::ShowSurface(
+        volumectl_lib::ui::SurfaceId::Settings,
+    ));
+    assert!(
+        !sink
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|e| e.starts_with("overlay:")),
+        "non-volume actions must not show the overlay, got {:?}",
+        *sink.events.lock().unwrap()
+    );
+}
+
+#[test]
+fn save_config_resyncs_mtime_so_reload_does_not_echo() {
+    // Point the config path at a temp dir so the test never touches the real
+    // user config.
+    let tmp = std::env::temp_dir().join(format!("volumectl-hostcore-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let old = std::env::var_os("APPDATA");
+    std::env::set_var("APPDATA", &tmp);
+
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+
+    // A save adopts the config and must resync the mtime: the next
+    // reload_config_if_changed() call must NOT fire a spurious reload (which
+    // would re-show the HUD + re-register hotkeys after every Settings save).
+    core.save_config().unwrap();
+    assert!(
+        !core.reload_config_if_changed(),
+        "save must resync the config mtime (no spurious reload)"
+    );
+
+    // Restore the environment.
+    match old {
+        Some(v) => std::env::set_var("APPDATA", v),
+        None => std::env::remove_var("APPDATA"),
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
 }

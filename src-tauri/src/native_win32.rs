@@ -16,8 +16,11 @@ use volumectl_lib::tray::{Tray, TrayCommand};
 use volumectl_lib::ui::UiCapabilities;
 use volumectl_lib::wheel_win32;
 
-use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM,
+};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::Threading::CreateMutexW;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     keybd_event, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_MENU,
 };
@@ -46,6 +49,29 @@ pub struct NativeWin32 {
 unsafe impl Send for NativeWin32 {}
 unsafe impl Sync for NativeWin32 {}
 
+/// Prevent two app instances (VolumePro's `#SingleInstance Force`
+/// equivalent). Mirrors the legacy host's named-mutex guard verbatim.
+/// Returns `false` when another instance already holds the mutex (the caller
+/// logs the warning and exits); the mutex handle is intentionally kept for
+/// the owning instance's lifetime.
+pub fn ensure_single_instance() -> bool {
+    unsafe {
+        let h = CreateMutexW(
+            std::ptr::null(),
+            1, // bInitialOwner
+            windows_sys::core::w!("Local\\VolumeControl.SingleInstance"),
+        );
+        if h == 0 {
+            return true; // could not create — allow (unusual)
+        }
+        if GetLastError() == ERROR_ALREADY_EXISTS {
+            CloseHandle(h);
+            log::warn!("another VolumeControl instance is already running");
+            return false;
+        }
+        true
+    }
+}
 impl NativeWin32 {
     /// Create the hidden wheel-bridge window, install the wheel hook, and
     /// create the native overlay + tray.
