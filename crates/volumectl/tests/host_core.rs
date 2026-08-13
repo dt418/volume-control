@@ -8,6 +8,24 @@ use volumectl_lib::host_core::{AppCore, AudioSessionInfo, EventSink};
 use volumectl_lib::hotkeys::HotkeyRegResult;
 use volumectl_lib::ui::AppAction;
 
+/// Serializes tests that mutate the process-global `VOLUMECTL_CONFIG_DIR` env
+/// var (which `config_path()` reads).
+///
+/// WHY THE LOCK IS THE ROOT-CAUSE FIX (not a band-aid): the two mtime tests
+/// run concurrently in this binary. Without the lock, one test's set/restore
+/// of the env var interleaves with the other's save->resync->reload window,
+/// so `config_path()` changes mid-test: `save_config` writes + resyncs the
+/// mtime in dir A while `reload_config_if_changed` reads the mtime from dir B
+/// (or the real user config), the mtimes differ, the reload fires spuriously
+/// and the assertion panics. Reproduced: 5/8 runs failed with
+/// "set_modifier must resync the config mtime (no spurious reload)" at the
+/// reload assertion. The production save path is flush-safe (config.rs
+/// save_at_path: temp file + write_all + sync_all + atomic rename) and NTFS/
+/// ext4 mtime resolution is fine-grained, so there is no secondary mtime
+/// granularity or flush mechanism — the env race is the only failure mode.
+/// The lock makes each test see a stable config path for its whole body.
+static CONFIG_DIR_LOCK: Mutex<()> = Mutex::new(());
+
 struct StubAudio {
     state: Mutex<VolumeState>,
 }
@@ -281,6 +299,7 @@ fn config_only_paths_do_not_show_overlay() {
 
 #[test]
 fn save_config_resyncs_mtime_so_reload_does_not_echo() {
+    let _guard = CONFIG_DIR_LOCK.lock().unwrap();
     // Point the config path at a temp dir (cross-platform `VOLUMECTL_CONFIG_DIR`
     // override) so the test never touches the real user config.
     let tmp = std::env::temp_dir().join(format!("volumectl-hostcore-{}", std::process::id()));
@@ -311,6 +330,7 @@ fn save_config_resyncs_mtime_so_reload_does_not_echo() {
 
 #[test]
 fn set_modifier_resyncs_mtime_so_reload_does_not_echo() {
+    let _guard = CONFIG_DIR_LOCK.lock().unwrap();
     let tmp = std::env::temp_dir().join(format!("volumectl-modifier-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp).unwrap();
