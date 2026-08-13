@@ -43,6 +43,8 @@ Skills install (npx skills CLI): antfu/skills full collection (vitest/vite/vue/v
 
 Task 4 fix round: update_settings validates steps via shared config::validate_steps (1..=50 + large>small) on prospective values before mutating (no silent divergence); SettingsSurface inputs clamped 1..=50 + form-level IPC error alert; 273 cargo + 15 vitest green.
 
+Gitignore optimization (user request, re-applied after a Task 4 fix implementer reverted it): all 76 third-party skills (github-sourced, reproducible via skills-lock.json + npx skills) untracked (git rm --cached, 1882 files, working tree kept) and gitignored via .agents/skills/* + .claude/skills/* with negation-whitelist of the 19 project-authored skills. Convention amended: third-party skills are NOT versioned; skills-lock.json is the tracked manifest.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
