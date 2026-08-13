@@ -281,12 +281,13 @@ fn config_only_paths_do_not_show_overlay() {
 
 #[test]
 fn save_config_resyncs_mtime_so_reload_does_not_echo() {
-    // Point the config path at a temp dir so the test never touches the real
-    // user config.
+    // Point the config path at a temp dir (cross-platform `VOLUMECTL_CONFIG_DIR`
+    // override) so the test never touches the real user config.
     let tmp = std::env::temp_dir().join(format!("volumectl-hostcore-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp).unwrap();
-    let old = std::env::var_os("APPDATA");
-    std::env::set_var("APPDATA", &tmp);
+    let old = std::env::var_os("VOLUMECTL_CONFIG_DIR");
+    std::env::set_var("VOLUMECTL_CONFIG_DIR", &tmp);
 
     let sink = Arc::new(RecordingSink::default());
     let mut core = core_with(sink.clone());
@@ -302,8 +303,35 @@ fn save_config_resyncs_mtime_so_reload_does_not_echo() {
 
     // Restore the environment.
     match old {
-        Some(v) => std::env::set_var("APPDATA", v),
-        None => std::env::remove_var("APPDATA"),
+        Some(v) => std::env::set_var("VOLUMECTL_CONFIG_DIR", v),
+        None => std::env::remove_var("VOLUMECTL_CONFIG_DIR"),
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn set_modifier_resyncs_mtime_so_reload_does_not_echo() {
+    let tmp = std::env::temp_dir().join(format!("volumectl-modifier-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let old = std::env::var_os("VOLUMECTL_CONFIG_DIR");
+    std::env::set_var("VOLUMECTL_CONFIG_DIR", &tmp);
+
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+
+    // Changing the modifier persists + adopts; the next reload must NOT fire a
+    // spurious reload (regression: set_modifier previously saved without
+    // resyncing the mtime, flashing the HUD ~150 ms after every pick).
+    core.set_modifier(HotkeyModifier::Alt).unwrap();
+    assert!(
+        !core.reload_config_if_changed(),
+        "set_modifier must resync the config mtime (no spurious reload)"
+    );
+
+    match old {
+        Some(v) => std::env::set_var("VOLUMECTL_CONFIG_DIR", v),
+        None => std::env::remove_var("VOLUMECTL_CONFIG_DIR"),
     }
     let _ = std::fs::remove_dir_all(&tmp);
 }

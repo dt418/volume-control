@@ -315,7 +315,14 @@ pub fn apply_recommended_blacklist(cfg: &mut Config) -> usize {
 }
 
 /// Compute the config file path (user config dir + `volume-control/config.json`).
+///
+/// The `VOLUMECTL_CONFIG_DIR` environment variable overrides the base on
+/// every platform (used by tests to point at a temp dir; also handy for
+/// portable deployments).
 pub fn config_path() -> PathBuf {
+    if let Some(dir) = std::env::var_os("VOLUMECTL_CONFIG_DIR") {
+        return PathBuf::from(dir).join("config.json");
+    }
     #[cfg(target_os = "windows")]
     let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
     #[cfg(target_os = "macos")]

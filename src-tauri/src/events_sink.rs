@@ -82,6 +82,15 @@ impl EventSink for TauriSink {
 
     fn exit(&self) {
         log::info!("exiting via tray command");
+        // Release native resources first: uninstall the wheel hook and destroy
+        // the bridge window (legacy host did the same on exit).
+        #[cfg(target_os = "windows")]
+        if let Some(native) = self
+            .app
+            .try_state::<Arc<crate::native_win32::NativeWin32>>()
+        {
+            native.shutdown();
+        }
         self.app.exit(0);
     }
 

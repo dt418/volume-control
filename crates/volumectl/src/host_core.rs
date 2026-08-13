@@ -423,15 +423,27 @@ impl AppCore {
     /// Change the hotkey modifier: re-register every combo, persist the
     /// config, push the fresh status and confirmed state to the host.
     pub fn set_modifier(&mut self, modifier: HotkeyModifier) -> Result<(), String> {
-        self.config.modifier = modifier;
-        self.hotkeys.set_modifier(modifier);
-        // Keep the wheel-bridge modifier in sync on Windows (legacy synced
-        // the wheel in every modifier-change path).
-        #[cfg(target_os = "windows")]
-        crate::wheel_win32::set_modifier(modifier);
-        self.hotkey_status = self.hotkeys.status();
-        self.sink.hotkeys(&self.hotkey_status);
-        crate::config::save_validated(&self.config).map_err(|e| e.to_string())?;
+        // Persist first so a failed save leaves no running side-effects
+        // (legacy saved before adopting). `save_validated` returns the
+        // normalized config; adopt it so memory matches disk.
+        let mut next = self.config.clone();
+        next.modifier = modifier;
+        let saved = crate::config::save_validated(&next).map_err(|e| e.to_string())?;
+        let modifier_changed = saved.modifier != self.config.modifier;
+        self.config = saved;
+        // Resync the mtime so the 150 ms reloader never sees our own write as
+        // an external change (same class as `adopt_saved_config`).
+        self.last_config_mtime = config_mtime();
+        if modifier_changed {
+            log::info!("config: modifier changed — updating global listener");
+            self.hotkeys.set_modifier(self.config.modifier);
+            // Keep the wheel-bridge modifier in sync on Windows (legacy synced
+            // the wheel in every modifier-change path).
+            #[cfg(target_os = "windows")]
+            crate::wheel_win32::set_modifier(self.config.modifier);
+            self.hotkey_status = self.hotkeys.status();
+            self.sink.hotkeys(&self.hotkey_status);
+        }
         self.publish_confirmed_state(false);
         Ok(())
     }
@@ -499,20 +511,6 @@ impl AppCore {
     /// A clone of the running config for host renderers.
     pub fn config(&self) -> Config {
         self.config.clone()
-    }
-
-    /// Resolve the native overlay's adaptive appearance. Windows-only type;
-    /// called by the Windows host (the caps snapshot it captured at startup).
-    #[cfg(target_os = "windows")]
-    pub fn overlay_appearance(
-        &self,
-        caps: &crate::ui::UiCapabilities,
-    ) -> crate::overlay::OverlayAppearance {
-        crate::overlay::OverlayAppearance::resolve(
-            &self.config,
-            caps,
-            crate::ui::primitives::system_theme,
-        )
     }
 
     /// Reload the config when the file changed on disk. Re-registers hotkeys
@@ -966,5 +964,129 @@ pub fn tray_command_to_action(cmd: crate::tray::TrayCommand) -> AppAction {
         C::EditConfig => AppAction::OpenConfigLocation,
         C::ReloadConfig => AppAction::ReloadConfig,
         C::Exit => AppAction::Exit,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::AppAction;
+
+    #[test]
+    fn hotkey_to_action_maps_all_actions_with_steps() {
+        use crate::hotkeys::HotkeyAction as H;
+        let step: i16 = 1;
+        let large: i16 = 10;
+        assert_eq!(
+            hotkey_to_action(H::VolumeUp, step, large),
+            AppAction::AdjustVolume { delta_percent: 1 }
+        );
+        assert_eq!(
+            hotkey_to_action(H::VolumeDown, step, large),
+            AppAction::AdjustVolume { delta_percent: -1 }
+        );
+        assert_eq!(
+            hotkey_to_action(H::VolumeUpLarge, step, large),
+            AppAction::AdjustVolume { delta_percent: 10 }
+        );
+        assert_eq!(
+            hotkey_to_action(H::VolumeDownLarge, step, large),
+            AppAction::AdjustVolume { delta_percent: -10 }
+        );
+        assert_eq!(
+            hotkey_to_action(H::ToggleMute, step, large),
+            AppAction::ToggleMute
+        );
+        assert_eq!(
+            hotkey_to_action(H::Reset50, step, large),
+            AppAction::ResetVolume
+        );
+        assert_eq!(
+            hotkey_to_action(H::OpenMixer, step, large),
+            AppAction::ToggleSurface(SurfaceId::Mixer)
+        );
+        assert_eq!(
+            hotkey_to_action(H::OpenMenu, step, large),
+            AppAction::OpenTrayMenu
+        );
+    }
+
+    #[test]
+    fn hotkey_to_action_respects_configured_step_sizes() {
+        use crate::hotkeys::HotkeyAction as H;
+        assert_eq!(
+            hotkey_to_action(H::VolumeUp, 5, 25),
+            AppAction::AdjustVolume { delta_percent: 5 }
+        );
+        assert_eq!(
+            hotkey_to_action(H::VolumeUpLarge, 5, 25),
+            AppAction::AdjustVolume { delta_percent: 25 }
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn tray_command_to_action_maps_all_commands() {
+        use crate::tray::TrayCommand as C;
+        assert_eq!(tray_command_to_action(C::ToggleMute), AppAction::ToggleMute);
+        assert_eq!(tray_command_to_action(C::Reset50), AppAction::ResetVolume);
+        assert_eq!(
+            tray_command_to_action(C::OpenMixer),
+            AppAction::ToggleSurface(SurfaceId::Mixer)
+        );
+        assert_eq!(
+            tray_command_to_action(C::Help),
+            AppAction::ShowSurface(SurfaceId::Help)
+        );
+        assert_eq!(
+            tray_command_to_action(C::Settings),
+            AppAction::ToggleSurface(SurfaceId::Settings)
+        );
+        assert_eq!(
+            tray_command_to_action(C::EditConfig),
+            AppAction::OpenConfigLocation
+        );
+        assert_eq!(
+            tray_command_to_action(C::ReloadConfig),
+            AppAction::ReloadConfig
+        );
+        assert_eq!(tray_command_to_action(C::Exit), AppAction::Exit);
+    }
+
+    #[test]
+    fn config_mtime_is_none_then_some_and_stable() {
+        // Point the config path at a fresh temp dir (hermetic; never touches
+        // the real user config on any platform).
+        let tmp = std::env::temp_dir().join(format!("volumectl-mtime-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let old = std::env::var_os("VOLUMECTL_CONFIG_DIR");
+        std::env::set_var("VOLUMECTL_CONFIG_DIR", &tmp);
+
+        // Fresh: the config file does not exist yet.
+        assert_eq!(config_mtime(), None, "fresh config dir has no mtime");
+
+        // Write the config: mtime becomes Some and stays stable on re-reads.
+        std::fs::write(crate::config::config_path(), b"{}").unwrap();
+        let t1 = config_mtime().expect("mtime after write");
+        assert_eq!(config_mtime(), Some(t1), "mtime stable without writes");
+
+        // Changed: rewriting the file moves the mtime. The 30 ms sleep covers
+        // coarse-granularity filesystems (NTFS is ~100 ns); ext4 uses 1 s so
+        // the change assertion is Windows-gated to stay deterministic.
+        #[cfg(target_os = "windows")]
+        {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            std::fs::write(crate::config::config_path(), b"{ \"x\": 1 }").unwrap();
+            let t2 = config_mtime().expect("mtime after rewrite");
+            assert_ne!(config_mtime(), Some(t1), "rewrite moves the mtime");
+            let _ = t2;
+        }
+
+        match old {
+            Some(v) => std::env::set_var("VOLUMECTL_CONFIG_DIR", v),
+            None => std::env::remove_var("VOLUMECTL_CONFIG_DIR"),
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

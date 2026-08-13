@@ -25,8 +25,8 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     keybd_event, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_MENU,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, RegisterClassW, SetWindowLongPtrW,
-    CW_USEDEFAULT, GWLP_USERDATA, WNDCLASSW, WS_EX_TOOLWINDOW, WS_OVERLAPPED,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, RegisterClassW,
+    SetWindowLongPtrW, CW_USEDEFAULT, GWLP_USERDATA, WNDCLASSW, WS_EX_TOOLWINDOW, WS_OVERLAPPED,
 };
 
 /// Native surfaces for the Windows host. All state is interior-mutable so the
@@ -43,9 +43,14 @@ pub struct NativeWin32 {
 // Safety: the native handles (overlay/tray windows, wheel bridge hwnd) are
 // only ever touched through their own win32 message queues — ShowWindow,
 // tray-icon and wheel-hook calls marshal to the owning threads — and the
-// wheel channel is an `mpsc::Receiver`. This mirrors the existing
-// `unsafe impl Send + Sync` for `GlobalHotkeys`/`WindowsAudio` in the
-// volumectl crate (documented trust boundary, single native-owner per handle).
+// wheel channel is an `mpsc::Receiver`. The overlay is the only cross-thread
+// data path: `show_overlay`/`show_overlay_text` run on the hotkey poll / IPC
+// command threads and write `OverlayData` under `Mutex<Overlay>` before
+// posting a paint message; the read happens in the overlay's `WM_PAINT` on
+// the main thread, ordered after the write by the win32 message queue's
+// cross-thread posting edge (the same documented trust boundary the legacy
+// host used). This mirrors the existing `unsafe impl Send + Sync` for
+// `GlobalHotkeys`/`WindowsAudio` in the volumectl crate.
 unsafe impl Send for NativeWin32 {}
 unsafe impl Sync for NativeWin32 {}
 
@@ -94,11 +99,7 @@ impl NativeWin32 {
 
     /// Show the volume HUD overlay (volume state + adaptive appearance).
     pub fn show_overlay(&self, state: &VolumeState, config: &Config) {
-        let appearance = OverlayAppearance::resolve(
-            config,
-            &self.caps,
-            volumectl_lib::ui::primitives::system_theme,
-        );
+        let appearance = self.overlay_appearance(config);
         self.overlay
             .lock()
             .expect("overlay mutex poisoned")
@@ -107,15 +108,32 @@ impl NativeWin32 {
 
     /// Show a short text card on the overlay (e.g. "Config reloaded").
     pub fn show_overlay_text(&self, text: &str, config: &Config) {
-        let appearance = OverlayAppearance::resolve(
-            config,
-            &self.caps,
-            volumectl_lib::ui::primitives::system_theme,
-        );
+        let appearance = self.overlay_appearance(config);
         self.overlay
             .lock()
             .expect("overlay mutex poisoned")
             .show_text(text, config, &appearance);
+    }
+
+    /// Single resolution point for the native overlay's adaptive appearance
+    /// (config theme/material/motion/accent + the startup capability snapshot).
+    fn overlay_appearance(&self, config: &Config) -> OverlayAppearance {
+        OverlayAppearance::resolve(
+            config,
+            &self.caps,
+            volumectl_lib::ui::primitives::system_theme,
+        )
+    }
+
+    /// Release native resources on shutdown: uninstall the low-level wheel
+    /// hook (restores the legacy host's `uninstall_wheel_hook` exit path) and
+    /// destroy the hidden wheel-bridge window. The overlay/tray windows are
+    /// OS-reclaimed at process exit.
+    pub fn shutdown(&self) {
+        wheel_win32::uninstall_wheel_hook();
+        unsafe {
+            DestroyWindow(self._wheel_hwnd);
+        }
     }
 
     /// Open the tray menu. Background processes cannot SetForegroundWindow
