@@ -113,3 +113,56 @@ fn bootstrap_reports_default_step_and_session_support() {
     assert_eq!(payload.sessions_supported, cfg!(target_os = "windows"));
     assert_eq!(payload.hotkey_status.len(), 8);
 }
+
+#[test]
+fn update_settings_mutates_steps_and_appearance_without_writing_disk() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+    let patch = volumectl_lib::host_core::SettingsPatch {
+        volume_step: Some(5),
+        volume_step_large: Some(999), // clamped to the 1..=100 range
+        theme: Some("Dark".into()),
+        material: Some("Opaque".into()),
+        motion: Some("Reduced".into()),
+        accent: Some("Purple".into()),
+    };
+    core.update_settings(patch).unwrap();
+    let payload = core.bootstrap();
+    assert_eq!(payload.config.volume_step, 5);
+    assert_eq!(payload.config.volume_step_large, 100);
+    assert_eq!(
+        payload.config.appearance.theme,
+        volumectl_lib::ui::ThemeMode::Dark
+    );
+    assert_eq!(
+        payload.config.appearance.material,
+        volumectl_lib::ui::MaterialMode::Opaque
+    );
+    assert_eq!(
+        payload.config.appearance.motion,
+        volumectl_lib::ui::MotionMode::Reduced
+    );
+    assert_eq!(
+        payload.config.appearance.accent,
+        volumectl_lib::ui::AccentMode::Purple
+    );
+}
+
+#[test]
+fn update_settings_rejects_unknown_enum_strings() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+    let err = core
+        .update_settings(volumectl_lib::host_core::SettingsPatch {
+            volume_step: None,
+            volume_step_large: None,
+            theme: Some("Neon".into()),
+            material: None,
+            motion: None,
+            accent: None,
+        })
+        .unwrap_err();
+    assert!(err.contains("theme"), "unexpected error: {err}");
+    // No partial application on error: the step stays at the default.
+    assert_eq!(core.bootstrap().config.volume_step, 1);
+}

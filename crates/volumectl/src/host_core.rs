@@ -19,6 +19,24 @@ use crate::hotkeys::{HotkeyAction, HotkeyRegResult};
 use crate::hotkeys_global::GlobalHotkeys;
 use crate::ui::{AccentMode, AppAction, MaterialMode, MotionMode, SurfaceId, ThemeMode};
 
+/// Partial settings patch from the Settings webview. Every field is
+/// optional; absent fields are left unchanged. `update_settings` mutates the
+/// in-memory config only — the caller (command layer) persists via
+/// [`AppCore::save_config`] so tests never touch the user's config file.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SettingsPatch {
+    pub volume_step: Option<u32>,
+    pub volume_step_large: Option<u32>,
+    /// Enum variant names: "System" | "Light" | "Dark".
+    pub theme: Option<String>,
+    /// Enum variant names: "Auto" | "Translucent" | "Opaque".
+    pub material: Option<String>,
+    /// Enum variant names: "Full" | "Reduced" | "Disabled".
+    pub motion: Option<String>,
+    /// Enum variant names: "System" | "Blue" | "Green" | "Purple" | "Orange".
+    pub accent: Option<String>,
+}
+
 /// One application audio session in the per-app mixer. The Windows WASAPI
 /// source (Task 2b) enumerates these; other platforms report an empty list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -332,6 +350,33 @@ impl AppCore {
         Ok(())
     }
 
+    /// Apply a partial settings patch to the in-memory config. Step sizes are
+    /// clamped to the 1..=100 range; appearance strings must be exact enum
+    /// variant names. Persistence is deliberately NOT part of this method so
+    /// tests can exercise the mutation without touching the user's config
+    /// file — the command layer calls [`AppCore::save_config`] afterwards.
+    pub fn update_settings(&mut self, patch: SettingsPatch) -> Result<(), String> {
+        if let Some(step) = patch.volume_step {
+            self.config.volume_step = step.clamp(1, 100);
+        }
+        if let Some(large) = patch.volume_step_large {
+            self.config.volume_step_large = large.clamp(1, 100);
+        }
+        if let Some(theme) = patch.theme {
+            self.config.appearance.theme = parse_theme(&theme)?;
+        }
+        if let Some(material) = patch.material {
+            self.config.appearance.material = parse_material(&material)?;
+        }
+        if let Some(motion) = patch.motion {
+            self.config.appearance.motion = parse_motion(&motion)?;
+        }
+        if let Some(accent) = patch.accent {
+            self.config.appearance.accent = parse_accent(&accent)?;
+        }
+        Ok(())
+    }
+
     /// Change the hotkey modifier: re-register every combo, persist the
     /// config, push the fresh status and confirmed state to the host.
     pub fn set_modifier(&mut self, modifier: HotkeyModifier) -> Result<(), String> {
@@ -422,6 +467,52 @@ fn material_str(m: MaterialMode) -> &'static str {
         MaterialMode::Auto => "Auto",
         MaterialMode::Translucent => "Translucent",
         MaterialMode::Opaque => "Opaque",
+    }
+}
+
+fn parse_material(s: &str) -> Result<MaterialMode, String> {
+    match s {
+        "Auto" => Ok(MaterialMode::Auto),
+        "Translucent" => Ok(MaterialMode::Translucent),
+        "Opaque" => Ok(MaterialMode::Opaque),
+        _ => Err(format!(
+            "unknown material {s:?} (expected Auto | Translucent | Opaque)"
+        )),
+    }
+}
+
+fn parse_theme(s: &str) -> Result<ThemeMode, String> {
+    match s {
+        "System" => Ok(ThemeMode::System),
+        "Light" => Ok(ThemeMode::Light),
+        "Dark" => Ok(ThemeMode::Dark),
+        _ => Err(format!(
+            "unknown theme {s:?} (expected System | Light | Dark)"
+        )),
+    }
+}
+
+fn parse_motion(s: &str) -> Result<MotionMode, String> {
+    match s {
+        "Full" => Ok(MotionMode::Full),
+        "Reduced" => Ok(MotionMode::Reduced),
+        "Disabled" => Ok(MotionMode::Disabled),
+        _ => Err(format!(
+            "unknown motion {s:?} (expected Full | Reduced | Disabled)"
+        )),
+    }
+}
+
+fn parse_accent(s: &str) -> Result<AccentMode, String> {
+    match s {
+        "System" => Ok(AccentMode::System),
+        "Blue" => Ok(AccentMode::Blue),
+        "Green" => Ok(AccentMode::Green),
+        "Purple" => Ok(AccentMode::Purple),
+        "Orange" => Ok(AccentMode::Orange),
+        _ => Err(format!(
+            "unknown accent {s:?} (expected System | Blue | Green | Purple | Orange)"
+        )),
     }
 }
 

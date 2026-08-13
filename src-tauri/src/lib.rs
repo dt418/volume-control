@@ -9,6 +9,7 @@ use volumectl_lib::host_core::AppCore;
 use commands::{
     adjust_volume, close_surface, get_audio_sessions, get_bootstrap, mute_session, open_surface,
     reset_volume, save_config, set_modifier, set_session_volume, set_volume, toggle_mute,
+    update_settings,
 };
 use events_sink::TauriSink;
 use window_manager::WindowManager;
@@ -26,6 +27,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         reset_volume,
         set_modifier,
         save_config,
+        update_settings,
         get_audio_sessions,
         set_session_volume,
         mute_session,
@@ -72,6 +74,7 @@ pub fn run() -> tauri::Result<()> {
             reset_volume,
             set_modifier,
             save_config,
+            update_settings,
             get_audio_sessions,
             set_session_volume,
             mute_session,

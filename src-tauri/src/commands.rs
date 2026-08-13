@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, State};
 
 use volumectl_lib::config::HotkeyModifier;
-use volumectl_lib::host_core::{AppCore, AudioSessionInfo, BootstrapPayload};
+use volumectl_lib::host_core::{AppCore, AudioSessionInfo, BootstrapPayload, SettingsPatch};
 use volumectl_lib::ui::AppAction;
 
 use crate::window_manager::{SurfaceId, WindowManager};
@@ -56,6 +56,19 @@ pub fn set_modifier(
     core.lock()
         .map_err(|e| e.to_string())?
         .set_modifier(modifier)
+}
+
+/// Apply a partial settings patch (step sizes, appearance) and persist it.
+/// Mutation happens in [`AppCore::update_settings`]; persistence re-adopts
+/// the config (publishes state, refreshes appearance) on success.
+#[tauri::command]
+pub fn update_settings(
+    core: State<'_, Mutex<AppCore>>,
+    patch: SettingsPatch,
+) -> Result<(), String> {
+    let mut core = core.lock().map_err(|e| e.to_string())?;
+    core.update_settings(patch)?;
+    core.save_config()
 }
 
 #[tauri::command]

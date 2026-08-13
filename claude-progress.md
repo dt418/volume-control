@@ -169,6 +169,8 @@ Manual smoke test (Windows, release build, clean config): 8/8 combos registered,
 
 Task 3 fix round (mixer keys): session rows keyed `id-name-index` so duplicate process ids with identical names cannot collide React keys (regression test asserts no duplicate-key warning).
 
+Task 4: Settings webview surface (restricted recorder, key cards, conflict badges, step/appearance controls). Plan-gap discovery: the plan's save_config(partial) contract does not exist in the backend; added update_settings(SettingsPatch) command + AppCore::update_settings (mutation-only, persistence via save_config by the command layer) with 2 host_core tests; 6 settings vitest tests; full gate green (271 tests, clippy, fmt, frontend build).
+
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
 - Goal: three-domain pre-push review of the third-party-skills commit
