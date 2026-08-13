@@ -39,6 +39,8 @@
 - `SessionRow.tsx` + `MixerSurface.tsx`: per-session slider + mute toggle, search filter, Esc closes the window (`close_surface` window-mixer), stale-session row removal + amber notice, empty states ("No audio sessions" / "Per-app mixing is Windows-only"), framer-motion layout animation, master volume indicator in the header.
 - Tests: 7 vitest tests (sort order, search filter, mute invoke, Esc close, stale-row removal + notice, both empty states); test-setup.ts gained afterEach(cleanup) (vitest runs without globals, RTL auto-cleanup never fired) + a ResizeObserver stub for framer-motion layout. Verified: npm test 7/7, npm run build (tsc + vite multi-entry) green.
 
+Skills install (npx skills CLI): antfu/skills full collection (vitest/vite/vue/vitepress/web-design-guidelines and more — all mirrored byte-identical into .claude/skills), vercel-labs vercel-react-best-practices + vercel-composition-patterns (for the React 19 + shadcn frontend), affaan-m/ecc windows-desktop-e2e, tovimx maestro-mobile-testing. skills-lock.json provenance updated (+157 lines, 23 new entries). No enforcement-battery impact (test-format-lint mirrors still byte-identical).
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
