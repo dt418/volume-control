@@ -536,7 +536,9 @@ Expected: FAIL — `host_core` module and `AppCore` not found.
 
 - [ ] **Step 3: Implement `host_core.rs`**
 
-Extract from the Windows `app.rs` `AppContext`: keep `handle_action`/`apply_hotkey`/`publish_confirmed_state`/blacklist gate/beep/appearance resolution behavior, but replace the win32 surface plumbing with `EventSink` calls + the existing `ui::AppAction` dispatcher. Provide the struct + methods above with `pub(crate)` free helpers `step_volume` (already in `core`), `hotkey_to_action` (move from `app.rs` — it is already cross-platform pure code). Session enumeration on Windows reuses the WASAPI code path used by the current mixer; on Linux/macOS `sessions()` returns `vec![]` and `sessions_supported = false`. `set_session_volume`/`mute_session` return `Ok(())` on unsupported platforms (no-op) and `Err(String)` with a re-emitted `sessions` event on Windows when the `id` is stale (spec §9.6).
+Extract from the Windows `app.rs` `AppContext`: keep `handle_action`/`apply_hotkey`/`publish_confirmed_state`/blacklist gate/beep/appearance resolution behavior, but replace the win32 surface plumbing with `EventSink` calls + the existing `ui::AppAction` dispatcher. Provide the struct + methods above with `pub(crate)` free helpers `step_volume` (already in `core`), `hotkey_to_action` (move from `app.rs` — it is already cross-platform pure code). Session interface contract ONLY in this task: `sessions()` returns `vec![]` and `sessions_supported = false` on ALL platforms for now; `set_session_volume`/`mute_session` return `Ok(())` (no-op) — the Windows WASAPI session source is a separate task (Task 2b), so the AppCore interface must stay source-agnostic (a `SessionsSource: Send + Sync` trait with a `WindowsSessions` impl added later, or a `Box<dyn SessionsSource>` field — the implementer picks the seam; Task 2b fills it in on Windows). Do NOT build WASAPI enumeration in this task.
+
+**Plan correction (controller, 2026-08-13):** the plan's original text said session enumeration "reuses the WASAPI code path used by the current mixer" — no such code path exists (the current `mixer.rs` is a display-only surface). Session enumeration is now a dedicated Task 2b; this task defines the interface and no-op implementations only.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -618,6 +620,23 @@ git commit -m "feat: AppCore SSOT with Tauri commands and state:// events"
 ```
 
 ---
+
+### Task 2b: Windows WASAPI audio session source
+
+**Files:**
+- Create: `crates/volumectl/src/audio_sessions_win32.rs` (Windows-only `#[cfg(target_os = "windows")]`), `crates/volumectl/tests/audio_sessions_win32.rs` (if the enumerator can be unit-tested without a device; otherwise a manual-smoke note)
+- Modify: `crates/volumectl/src/host_core.rs` (wire the `SessionsSource` seam from Task 2: on Windows construct `WindowsSessions`, else `NoopSessions`), `crates/volumectl/src/lib.rs` (module decl)
+
+**Interfaces:**
+- Consumes: the `SessionsSource` seam / `AudioSessionInfo` struct defined in Task 2's `host_core.rs`.
+- Produces: `WindowsSessions` implementing the Task 2 seam — `list() -> Vec<AudioSessionInfo>`, `set_volume(id, pct) -> Result<(), String>`, `mute(id) -> Result<(), String>` — using WASAPI `IAudioSessionManager2` (from `IAudioClient` via the default device) → `GetSessionEnumerator` → `IAudioSessionControl2` (`GetProcessId`, `GetDisplayName`) + `ISimpleAudioVolume` (`GetMasterVolume`/`SetMasterVolume`/`GetMute`/`SetMute`). `id` is the process id as a string. Missing sessions (stale id) return `Err(String)` (spec §9.6); no sessions / no device → empty list, never panic.
+
+- [ ] **Step 1: Write the failing test** — a pure helper test (e.g. `display_name_from_proc_id` fallback formatting, id round-trip) in `crates/volumectl/tests/audio_sessions_win32.rs`; assert the helper behaves. (The full COM enumeration cannot run headless; the test targets the pure parts.)
+- [ ] **Step 2: Run to verify it fails** (`cargo test --workspace --no-default-features`)
+- [ ] **Step 3: Implement `audio_sessions_win32.rs`** — `windows-sys` (already a workspace dep, 0.52) with `Win32_Media_Audio` + `Win32_System_Com` + `Win32_System_Threading` features; follow the WASAPI activation pattern used by `audio_windows.rs` (CoInitialize, `IMMDeviceEnumerator` → default render device → `IAudioClient` → `IAudioSessionManager2`).
+- [ ] **Step 4: Run the test + the gate** — `cargo test --workspace --no-default-features`, `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`, `cargo fmt --all --check`; cross-target `cargo check --target x86_64-unknown-linux-gnu` must compile (module is Windows-gated).
+- [ ] **Step 5: Manual smoke (Windows)** — in the running app: Mixer shows real sessions (apps playing audio), a stale row disappears after the app closes, dragging a slider + mute work (this depends on Task 3's UI; if Task 3 is not merged yet, verify via a `cargo test` log probe or defer the visual check to Task 3's manual step).
+- [ ] **Step 6: Commit** (message `feat: Windows WASAPI audio session source`; records in the same commit)
 
 ### Task 3: Mixer webview surface
 
@@ -761,7 +780,7 @@ Open mixer → rows render; drag a slider (no jitter); press `Ctrl+Alt+↑` whil
 - Delete (Windows-only, replaced by webview): `crates/volumectl/src/mixer.rs`, `crates/volumectl/src/settings.rs`, `crates/volumectl/src/help.rs` native window implementations — **only after the webview surfaces pass their manual checks (Tasks 3–5)**; keep `overlay.rs` + `tray.rs`.
 
 **Interfaces:**
-- Consumes: everything from Tasks 1–2; existing `volumectl::app` (Windows) re-homed: the `AppContext`-equivalent logic now lives in `host_core::AppCore`; the old `app.rs` message loop is replaced by the Tauri event loop + the poll task from Task 2.
+- Consumes: everything from Tasks 1–2b; existing `volumectl::app` (Windows) re-homed: the `AppContext`-equivalent logic now lives in `host_core::AppCore`; the old `app.rs` message loop is replaced by the Tauri event loop + the poll task from Task 2.
 - Produces: the production binary behaves exactly like today's app (hotkeys, HUD overlay, tray, wheel, blacklist, beep) plus the three webview surfaces; `crates/volumectl/src/main.rs` builds on all platforms via the Tauri host.
 
 - [ ] **Step 1: Write the failing cross-target compile check** — `cargo check --workspace --no-default-features` on Linux/macOS target fails because `main.rs` still references the old native-only entry.
