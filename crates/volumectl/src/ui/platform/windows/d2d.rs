@@ -907,7 +907,7 @@ mod tests {
 
     fn init_com() {
         unsafe {
-            CoInitializeEx(std::ptr::null(), 0);
+            CoInitializeEx(std::ptr::null(), 2); // COINIT_APARTMENTTHREADED (never MTA: tao needs STA on the main thread)
         }
     }
 

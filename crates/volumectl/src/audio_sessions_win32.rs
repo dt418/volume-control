@@ -27,7 +27,7 @@ use windows_sys::Win32::{
     Foundation::CloseHandle,
     Media::Audio::{eConsole, eRender, EDataFlow, ERole},
     System::{
-        Com::{CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL},
+        Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL},
         Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION},
     },
 };
@@ -285,22 +285,28 @@ impl SessionsSource for WindowsSessions {
 
 /// Owned COM chain for one enumeration round: enumerator → device → client →
 /// session manager → session enumerator. Released in reverse on drop, then
-/// the COM apartment is uninitialized.
+/// the COM apartment is uninitialized iff this round initialized it (STA).
 struct SessionChain {
     enumerator: *mut c_void,
     device: *mut c_void,
     client: *mut c_void,
     manager: *mut c_void,
     sessions: *mut c_void,
+    /// STA apartment guard (see `com_guard`): the Tauri main thread must stay
+    /// STA or tao's window creation panics with RPC_E_CHANGED_MODE.
+    /// RAII-only: never read, uninitializes on drop.
+    #[allow(dead_code)]
+    com: crate::com_guard::ComGuard,
 }
 
 impl SessionChain {
     fn acquire() -> Result<Self, String> {
         unsafe {
-            let hr = CoInitializeEx(std::ptr::null(), 0);
-            if hr != 0 && hr != 1 {
-                return Err(format!("CoInitializeEx: 0x{hr:x}"));
-            }
+            // STA (never MTA): Tauri commands run on the main thread, and an
+            // MTA init there breaks tao's OleInitialize (RPC_E_CHANGED_MODE)
+            // for every webview window creation.
+            let com = crate::com_guard::ComGuard::init_apartment_sta()
+                .map_err(|hr| format!("CoInitializeEx(STA): 0x{hr:x}"))?;
             let mut enumerator: *mut c_void = std::ptr::null_mut();
             let hr = CoCreateInstance(
                 &CLSID_MMDEVICE_ENUMERATOR,
@@ -310,7 +316,6 @@ impl SessionChain {
                 &mut enumerator,
             );
             if hr != 0 {
-                CoUninitialize();
                 return Err(format!("CoCreateInstance(MMDeviceEnumerator): 0x{hr:x}"));
             }
             let mut device: *mut c_void = std::ptr::null_mut();
@@ -322,7 +327,6 @@ impl SessionChain {
             );
             if hr != 0 {
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                CoUninitialize();
                 return Err(format!("GetDefaultAudioEndpoint: 0x{hr:x}"));
             }
             let mut client: *mut c_void = std::ptr::null_mut();
@@ -336,7 +340,6 @@ impl SessionChain {
             if hr != 0 {
                 (vtbl::<IMMDeviceVtbl>(device).release)(device);
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                CoUninitialize();
                 return Err(format!("Activate(IAudioClient): 0x{hr:x}"));
             }
             let mut manager: *mut c_void = std::ptr::null_mut();
@@ -349,7 +352,6 @@ impl SessionChain {
                 (vtbl::<IAudioClientVtbl>(client).release)(client);
                 (vtbl::<IMMDeviceVtbl>(device).release)(device);
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                CoUninitialize();
                 return Err(format!("GetService(IAudioSessionManager2): 0x{hr:x}"));
             }
             let mut sessions: *mut c_void = std::ptr::null_mut();
@@ -362,7 +364,6 @@ impl SessionChain {
                 (vtbl::<IAudioClientVtbl>(client).release)(client);
                 (vtbl::<IMMDeviceVtbl>(device).release)(device);
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                CoUninitialize();
                 return Err(format!("GetSessionEnumerator: 0x{hr:x}"));
             }
             Ok(Self {
@@ -371,6 +372,7 @@ impl SessionChain {
                 client,
                 manager,
                 sessions,
+                com,
             })
         }
     }
@@ -394,7 +396,8 @@ impl Drop for SessionChain {
             if !self.enumerator.is_null() {
                 (vtbl::<IMMDeviceEnumeratorVtbl>(self.enumerator).release)(self.enumerator);
             }
-            CoUninitialize();
+            // self.com drops after this and uninitializes the apartment iff
+            // this round initialized it (S_OK); S_FALSE leaves it alone.
         }
     }
 }

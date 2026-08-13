@@ -59,6 +59,8 @@ Task 6 residuals fix (user request): AppCore::new syncs the wheel modifier from 
 
 Fix round 2 (Task 6 residual item 1, re-review NOT-ADDRESSED): AppCore::new now calls wheel_win32::set_modifier(modifier) on Windows at startup (parity with legacy app.rs:423; the previous residual-fix report had claimed this without implementing it). Added 3 wheel_win32 unit tests covering the modifier encoding round-trip, stable distinct encodings, and set_modifier updating the active state. 284 cargo + 18 vitest green; linux-gnu cross check clean.
 
+CRITICAL fix (Task 8 manual smoke): Windows webview open panicked RPC_E_CHANGED_MODE — WindowsAudio::new + SessionChain::acquire initialized COM as MTA on the Tauri main thread, so tao's OleInitialize (window creation, needs STA) failed and the app crashed on every mixer/settings/help open. New crates/volumectl/src/com_guard.rs (init_apartment_sta: COINIT_APARTMENTTHREADED + S_FALSE-aware balanced CoUninitialize, unit-tested) wired into both sites; test-only D2D helpers aligned. Runtime re-verified: Ctrl+Alt+V opens the mixer (msedgewebview2 +6), 0 panics, M/R actions fire, second instance exits (single-instance), idle WS 15.7MB with all webviews closed. Smoke also found: close_mixer_request blur-listener is NOT wired in the frontend (mixer Esc/outside-click auto-close UX gap, reported not fixed).
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
