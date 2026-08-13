@@ -45,6 +45,8 @@ Task 4 fix round: update_settings validates steps via shared config::validate_st
 
 Gitignore optimization (user request, re-applied after a Task 4 fix implementer reverted it): all 76 third-party skills (github-sourced, reproducible via skills-lock.json + npx skills) untracked (git rm --cached, 1882 files, working tree kept) and gitignored via .agents/skills/* + .claude/skills/* with negation-whitelist of the 19 project-authored skills. Convention amended: third-party skills are NOT versioned; skills-lock.json is the tracked manifest.
 
+Task 5 (Help webview surface): shortcuts.ts (fixed set keyed by modifier, reusing the restricted-recorder combos; CapsLock renders the Ctrl+Alt fallback with a note) + HelpSurface.tsx (Card grid grouped Volume/Commands, search filter, Kbd badges, Esc -> close_surface('window-help')); 3 vitest tests, 18/18 frontend green, tsc + vite build clean.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
