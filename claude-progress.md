@@ -14,6 +14,31 @@
   - `feature_list.json`: vol-029 added (`in_progress`), `last_updated` bumped.
 - Verification: `cargo test -p volumectl config::tests::default_volume_step_is_one_percent`
   RED then GREEN; `cargo test -p volumectl --no-default-features` — 252/252 pass on host.
+- Task 2: global-hotkey dependency + hotkey core (11 unit tests).
+  - `Cargo.toml` (workspace): added `global-hotkey = "0.8"` (rdev kept for
+    this task; removed in Task 3). `crates/volumectl/Cargo.toml`: added
+    `global-hotkey = { workspace = true }`. `Cargo.lock` regenerated.
+  - `crates/volumectl/src/lib.rs`: `pub mod hotkeys_global;` added.
+  - `crates/volumectl/src/hotkeys_global.rs` (new): `combos_for()` per
+    modifier (CapsLock falls back to Ctrl+Alt; macOS CtrlAlt also registers
+    ⌘+⌥ spellings), `HotkeyHold` hold/repeat state machine, `on_event()`
+    (auto-repeat dedup, one-shot commands, volume hold switching),
+    `run_listener()` (drains `GlobalHotKeyEvent::receiver()`),
+    `run_repeat_worker()` (50 ms condvar), `register_combos()` with real
+    per-action `AlreadyRegistered` conflict status,
+    `GlobalHotkeys::{new, try_recv, set_modifier, listener_failure, status}`,
+    `run_headless()` (non-Windows). TDD: RED = compile error (tests-only
+    module); GREEN = 11/11 pass.
+  - Plan-code deviations (compile fixes): the brief's test
+    `shift_variants_carry_the_shift_modifier` bound a reference into a
+    temporary `Vec` (E0716) — bound `let combos = combos();` first; removed
+    the unused `Code` test import (clippy -D warnings).
+  - `feature_list.json`: vol-029 verification extended + notes added;
+    `last_updated` bumped.
+- Verification: `cargo test -p volumectl hotkeys_global` — 11/11 pass;
+  `cargo test -p volumectl --no-default-features` — 263/263 pass;
+  `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+  clean; `cargo fmt --all --check` + `git diff --check` clean.
 
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 

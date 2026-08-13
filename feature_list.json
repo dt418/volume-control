@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-13T18:56",
+    "last_updated":  "2026-08-13T19:03",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -617,12 +617,13 @@
                          "user_visible_behavior":  "Global hotkeys (Ctrl+Alt+Up/Down/M/R/V, Shift variants, hold-to-repeat) are migrated from the rdev listener to the global-hotkey crate; the default small volume step is 1%.",
                          "status":  "in_progress",
                          "verification":  [
-                                              "Run `cargo test -p volumectl config::tests::default_volume_step_is_one_percent` — passes (default volume_step == 1, volume_step_large == 10)."
+                                              "Run `cargo test -p volumectl config::tests::default_volume_step_is_one_percent` — passes (default volume_step == 1, volume_step_large == 10).",
+                                              "Run `cargo test -p volumectl hotkeys_global` — 11 tests pass (combos_for per modifier, CapsLock fallback, macOS ⌘/⌃ dual, hold/repeat state machine, one-shot commands, repeat worker cadence)."
                                           ],
                          "evidence":  [
                                           "Task 1 (Session 039, 2026-08-13): TDD RED then GREEN — `cargo test -p volumectl --no-default-features` — 252/252 pass on host."
                                       ],
-                         "notes":  "Task 1 of the global-hotkey migration (vol-003 superseded). Backend migration rdev -> global-hotkey lands in later tasks."
+                         "notes":  "Task 1 of the global-hotkey migration (vol-003 superseded). Backend migration rdev -> global-hotkey lands in later tasks. global-hotkey 0.8.0 emits combo-level Pressed/Released on all platforms; CapsLock config falls back to Ctrl+Alt combos with a warning."
                      }
                  ]
 }
