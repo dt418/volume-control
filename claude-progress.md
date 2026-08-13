@@ -47,6 +47,8 @@ Gitignore optimization (user request, re-applied after a Task 4 fix implementer 
 
 Task 5 (Help webview surface): shortcuts.ts (fixed set keyed by modifier, reusing the restricted-recorder combos; CapsLock renders the Ctrl+Alt fallback with a note) + HelpSurface.tsx (Card grid grouped Volume/Commands, search filter, Kbd badges, Esc -> close_surface('window-help')); 3 vitest tests, 18/18 frontend green, tsc + vite build clean.
 
+Task 6 (host integration): volumectl lib-only ([[bin]] removed — src-tauri is the sole binary; CLI via args on non-Windows); native_win32.rs (overlay + tray + wheel-bridge hidden hwnd -> mpsc channel -> apply_hotkey); native_headless.rs (Linux/macOS doc module); EventSink extended (overlay/show_tray_menu/exit, state+config passed to avoid re-entrant core locks); AppCore config live-reload (mtime) + force_reload + tray_command_to_action; 150ms host poll (reload + tray + external sync); unsafe Send+Sync for NativeWin32 (documented). Gate: 273+4 tests, clippy/fmt clean, linux-gnu workspace check clean, darwin workspace blocked on objc2-exception-helper cross-build (CI covers). Runtime smoke: 8/8 hotkeys, -2% step pipeline, wheel installed, 0 errors, 0 webview children idle, host WS 22.6MB.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0

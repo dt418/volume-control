@@ -14,6 +14,11 @@ use commands::{
 use events_sink::TauriSink;
 use window_manager::WindowManager;
 
+#[cfg(not(target_os = "windows"))]
+pub mod native_headless;
+#[cfg(target_os = "windows")]
+mod native_win32;
+
 mod commands;
 mod events_sink;
 mod window_manager;
@@ -36,6 +41,12 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
     ])
 }
 
+/// The hotkey channel poll cadence (keeps the first key press responsive).
+const FAST_POLL_MS: u64 = 20;
+/// The config-reload / tray / external-sync poll cadence (mirrors the old
+/// host's 150 ms `WM_TIMER`).
+const SLOW_POLL_MS: u64 = 150;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> tauri::Result<()> {
     volumectl_lib::init_logging();
@@ -43,6 +54,15 @@ pub fn run() -> tauri::Result<()> {
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(WindowManager::new(handle.clone()));
+
+            // Native surfaces. Windows: HUD overlay + tray + wheel bridge.
+            // Linux/macOS: none (the headless host is AppCore alone).
+            #[cfg(target_os = "windows")]
+            let native = {
+                let native = Arc::new(native_win32::NativeWin32::new()?);
+                app.manage(native.clone());
+                native
+            };
 
             let audio = create_audio_backend()?;
             let config = volumectl_lib::config::load();
@@ -52,16 +72,41 @@ pub fn run() -> tauri::Result<()> {
                 .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
             // AppCore is shared behind a Mutex so commands can mutate it and
-            // the poll thread can drain hotkeys concurrently.
+            // the poll threads can drain hotkeys/wheel/config concurrently.
             let shared = Arc::new(Mutex::new(core));
             app.manage(shared.clone());
 
-            // Drain the global-hotkey channel on a background thread. The
-            // channel is filled by the platform listener threads started
-            // inside GlobalHotkeys::new.
+            // Fast poll (20 ms): drain the global-hotkey channel and the
+            // wheel-bridge channel into AppCore.apply_hotkey.
+            let fast_shared = shared.clone();
+            #[cfg(target_os = "windows")]
+            let fast_native = native.clone();
             std::thread::spawn(move || loop {
-                let _ = shared.lock().map(|mut core| core.poll_hotkeys());
-                std::thread::sleep(Duration::from_millis(20));
+                if let Ok(mut core) = fast_shared.lock() {
+                    core.poll_hotkeys();
+                    #[cfg(target_os = "windows")]
+                    while let Some(action) = fast_native.try_recv_wheel() {
+                        core.apply_hotkey(action);
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
+            });
+
+            // Slow poll (150 ms): live config reload (mtime watch), tray
+            // menu commands, and the external audio-state sync (the reload
+            // path re-reads and publishes the confirmed state).
+            let slow_shared = shared.clone();
+            #[cfg(target_os = "windows")]
+            let slow_native = native.clone();
+            std::thread::spawn(move || loop {
+                if let Ok(mut core) = slow_shared.lock() {
+                    core.reload_config_if_changed();
+                    #[cfg(target_os = "windows")]
+                    while let Some(cmd) = slow_native.poll_tray() {
+                        core.handle_action(volumectl_lib::host_core::tray_command_to_action(cmd));
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
             });
 
             Ok(())

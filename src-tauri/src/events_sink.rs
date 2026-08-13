@@ -1,11 +1,16 @@
 //! Tauri implementation of the [`EventSink`] contract: pushes `state://*`
-//! events to open webviews and routes surface open/close to the lazy
-//! [`WindowManager`].
+//! events to open webviews, routes surface open/close to the lazy
+//! [`WindowManager`], and drives the native HUD overlay/tray on Windows.
 
 use tauri::{AppHandle, Emitter, Manager};
 
+use volumectl_lib::audio::VolumeState;
+use volumectl_lib::config::Config;
 use volumectl_lib::host_core::{AudioSessionInfo, EventSink};
 use volumectl_lib::hotkeys::HotkeyRegResult;
+
+#[cfg(target_os = "windows")]
+use std::sync::Arc;
 
 use crate::window_manager::{SurfaceId, WindowManager};
 
@@ -27,6 +32,17 @@ impl EventSink for TauriSink {
             "state://volume",
             serde_json::json!({ "pct": pct, "muted": muted }),
         );
+        // Keep the tray tooltip/menu volume display in sync.
+        #[cfg(target_os = "windows")]
+        if let Some(native) = self
+            .app
+            .try_state::<Arc<crate::native_win32::NativeWin32>>()
+        {
+            native.set_tray_volume(&VolumeState {
+                volume: pct as f32 / 100.0,
+                muted,
+            });
+        }
     }
 
     fn hotkeys(&self, status: &[HotkeyRegResult]) {
@@ -35,6 +51,38 @@ impl EventSink for TauriSink {
 
     fn sessions(&self, sessions: &[AudioSessionInfo]) {
         let _ = self.app.emit("state://sessions", sessions);
+    }
+
+    fn overlay(&self, text: Option<String>, state: VolumeState, config: Config) {
+        #[cfg(target_os = "windows")]
+        if let Some(native) = self
+            .app
+            .try_state::<Arc<crate::native_win32::NativeWin32>>()
+        {
+            match text {
+                None => native.show_overlay(&state, &config),
+                Some(text) => native.show_overlay_text(&text, &config),
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = (text, state, config); // no native overlay on Linux/macOS
+    }
+
+    fn show_tray_menu(&self) {
+        #[cfg(target_os = "windows")]
+        if let Some(native) = self
+            .app
+            .try_state::<Arc<crate::native_win32::NativeWin32>>()
+        {
+            native.show_tray_menu();
+        }
+        #[cfg(not(target_os = "windows"))]
+        log::debug!("tray menu unavailable on this platform");
+    }
+
+    fn exit(&self) {
+        log::info!("exiting via tray command");
+        self.app.exit(0);
     }
 
     fn open_surface(&self, label: &str) {

@@ -120,6 +120,17 @@ pub trait EventSink: Send + Sync {
     fn open_surface(&self, _label: &str) {}
     /// The host should close/destroy the surface with `label`.
     fn close_surface(&self, _label: &str) {}
+    /// Show the native HUD overlay. `text: None` renders the volume HUD;
+    /// `Some` renders a short text card (e.g. "Config reloaded"). The state
+    /// and config are passed along so the host renderer never needs to lock
+    /// the core (avoids re-entrant locking from within `handle_action`).
+    /// No-op on hosts without a native overlay.
+    fn overlay(&self, _text: Option<String>, _state: VolumeState, _config: Config) {}
+    /// Open the native tray menu (the platform host may need a foreground
+    /// unlock first).
+    fn show_tray_menu(&self) {}
+    /// The user asked to quit — the host tears down and exits.
+    fn exit(&self) {}
 }
 
 /// Cross-platform application state. One instance per app, owned by the host
@@ -132,6 +143,7 @@ pub struct AppCore {
     hotkey_status: Vec<HotkeyRegResult>,
     sink: Arc<dyn EventSink>,
     sessions_source: Box<dyn SessionsSource>,
+    last_config_mtime: Option<std::time::SystemTime>,
 }
 
 impl AppCore {
@@ -162,6 +174,7 @@ impl AppCore {
             hotkey_status,
             sink,
             sessions_source,
+            last_config_mtime: config_mtime(),
         })
     }
 
@@ -273,6 +286,8 @@ impl AppCore {
                     log::warn!("{e}");
                 }
                 self.publish_confirmed_state();
+                self.sink
+                    .overlay(None, self.last_state, self.config.clone());
             }
             // ── Surfaces: routed to the host window manager. ─────────────
             A::ShowSurface(S::Mixer) | A::ToggleSurface(S::Mixer) => {
@@ -298,11 +313,11 @@ impl AppCore {
             | A::ToggleSurface(S::Overlay) => {
                 log::debug!("overlay surface not wired in AppCore (host integration task)");
             }
-            A::OpenTrayMenu
-            | A::ShowSurface(S::Tray)
-            | A::HideSurface(S::Tray)
-            | A::ToggleSurface(S::Tray) => {
-                log::debug!("tray menu not wired in AppCore (host integration task)");
+            A::OpenTrayMenu | A::ShowSurface(S::Tray) | A::ToggleSurface(S::Tray) => {
+                self.sink.show_tray_menu();
+            }
+            A::HideSurface(S::Tray) => {
+                log::debug!("tray surface hide is a no-op (the tray is always resident)");
             }
             // ── Appearance: persist + adopt (keeps modifier re-registration
             //    and the confirmed-state publish in one place). ──────────
@@ -326,9 +341,19 @@ impl AppCore {
             }
             A::OpenConfigLocation => {
                 crate::config::open_in_editor();
+                self.sink.overlay(
+                    Some("Editing config — changes reload automatically".into()),
+                    self.last_state,
+                    self.config.clone(),
+                );
             }
             A::ReloadConfig => {
-                log::debug!("config reload not wired in AppCore (host integration task)");
+                self.force_reload_config();
+                self.sink.overlay(
+                    Some("Config reloaded".into()),
+                    self.last_state,
+                    self.config.clone(),
+                );
             }
             A::AddBlacklistEntry(_)
             | A::RemoveBlacklistEntry(_)
@@ -337,7 +362,8 @@ impl AppCore {
                 log::debug!("blacklist edits are wired via the Settings webview (later task)");
             }
             A::Exit => {
-                log::info!("Exit requested (host teardown lands in the host integration task)");
+                log::info!("Exit requested — host teardown");
+                self.sink.exit();
             }
         }
     }
@@ -428,8 +454,8 @@ impl AppCore {
     }
 
     /// Re-read the audio state and push the confirmed volume/mute to the
-    /// host. The native overlay/tray renderers are host concerns (later task)
-    /// and are deliberately not touched here.
+    /// host. The native overlay/tray renderers are host concerns and are
+    /// driven through the sink's `overlay`/`volume` notifications.
     pub fn publish_confirmed_state(&mut self) {
         let Ok(st) = self.audio.get_state() else {
             return;
@@ -437,6 +463,69 @@ impl AppCore {
         self.last_state = st;
         log::debug!("publish: state={}%% muted={}", st.percent(), st.muted);
         self.sink.volume(st.percent(), st.muted);
+    }
+
+    /// Snapshot getters for the host renderers (native overlay/tray).
+    pub fn last_state(&self) -> VolumeState {
+        self.last_state
+    }
+
+    /// A clone of the running config for host renderers.
+    pub fn config(&self) -> Config {
+        self.config.clone()
+    }
+
+    /// Resolve the native overlay's adaptive appearance. Windows-only type;
+    /// called by the Windows host (the caps snapshot it captured at startup).
+    #[cfg(target_os = "windows")]
+    pub fn overlay_appearance(
+        &self,
+        caps: &crate::ui::UiCapabilities,
+    ) -> crate::overlay::OverlayAppearance {
+        crate::overlay::OverlayAppearance::resolve(
+            &self.config,
+            caps,
+            crate::ui::primitives::system_theme,
+        )
+    }
+
+    /// Reload the config when the file changed on disk. Re-registers hotkeys
+    /// (and the wheel modifier on Windows) when the modifier changed, pushes
+    /// the fresh state and shows the volume HUD. Returns true when a reload
+    /// happened.
+    pub fn reload_config_if_changed(&mut self) -> bool {
+        let mtime = config_mtime();
+        if mtime == self.last_config_mtime {
+            return false;
+        }
+        self.last_config_mtime = mtime;
+        let new_cfg = crate::config::load();
+        let modifier_changed = new_cfg.modifier != self.config.modifier;
+        log::info!(
+            "config reloaded (step={}, step_large={}, overlay_ms={}, modifier={:?})",
+            new_cfg.volume_step,
+            new_cfg.volume_step_large,
+            new_cfg.overlay_duration_ms,
+            new_cfg.modifier
+        );
+        self.config = new_cfg;
+        if modifier_changed {
+            self.hotkeys.set_modifier(self.config.modifier);
+            #[cfg(target_os = "windows")]
+            crate::wheel_win32::set_modifier(self.config.modifier);
+            self.hotkey_status = self.hotkeys.status();
+            self.sink.hotkeys(&self.hotkey_status);
+        }
+        self.publish_confirmed_state();
+        self.sink
+            .overlay(None, self.last_state, self.config.clone());
+        true
+    }
+
+    /// Force a reload from disk (tray "Reload config" command).
+    pub fn force_reload_config(&mut self) {
+        self.last_config_mtime = None;
+        self.reload_config_if_changed();
     }
 
     fn adopt_saved_config(&mut self, saved: Config) {
@@ -825,3 +914,28 @@ fn beep_limit(cfg: &Config) {
 
 #[cfg(not(target_os = "windows"))]
 fn beep_limit(_cfg: &Config) {}
+
+/// Last-modified time of the config file (None if it doesn't exist yet).
+pub fn config_mtime() -> Option<std::time::SystemTime> {
+    std::fs::metadata(crate::config::config_path())
+        .and_then(|m| m.modified())
+        .ok()
+}
+
+/// Map a tray menu command to the shared action contract (no blacklist gate,
+/// matching the pre-Tauri host). Windows-only: the tray exists only there.
+#[cfg(target_os = "windows")]
+pub fn tray_command_to_action(cmd: crate::tray::TrayCommand) -> AppAction {
+    use crate::tray::TrayCommand as C;
+    use SurfaceId as S;
+    match cmd {
+        C::ToggleMute => AppAction::ToggleMute,
+        C::Reset50 => AppAction::ResetVolume,
+        C::OpenMixer => AppAction::ToggleSurface(S::Mixer),
+        C::Help => AppAction::ShowSurface(S::Help),
+        C::Settings => AppAction::ToggleSurface(S::Settings),
+        C::EditConfig => AppAction::OpenConfigLocation,
+        C::ReloadConfig => AppAction::ReloadConfig,
+        C::Exit => AppAction::Exit,
+    }
+}

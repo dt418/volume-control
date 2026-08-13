@@ -4394,6 +4394,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "volumectl",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
