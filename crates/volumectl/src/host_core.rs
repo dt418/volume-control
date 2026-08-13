@@ -588,15 +588,17 @@ fn get_window_pid_x11() -> Option<u32> {
     let screen = &conn.setup().roots[screen_num];
     let root = screen.root;
 
+    // EWMH atoms (`_NET_*`) are not in `AtomEnum` (core atoms only); they must
+    // be interned at runtime.
+    let active_win_atom = conn
+        .intern_atom(false, b"_NET_ACTIVE_WINDOW")
+        .ok()?
+        .reply()
+        .ok()?
+        .atom;
+
     let active_win_prop = conn
-        .get_property(
-            false,
-            root,
-            AtomEnum::_NET_ACTIVE_WINDOW,
-            AtomEnum::WINDOW,
-            0,
-            1,
-        )
+        .get_property(false, root, active_win_atom, AtomEnum::WINDOW, 0, 1)
         .ok()?
         .reply()
         .ok()?;
@@ -616,15 +618,15 @@ fn get_window_pid_x11() -> Option<u32> {
         return None;
     }
 
+    let pid_atom = conn
+        .intern_atom(false, b"_NET_WM_PID")
+        .ok()?
+        .reply()
+        .ok()?
+        .atom;
+
     let pid_prop = conn
-        .get_property(
-            false,
-            active_window,
-            AtomEnum::_NET_WM_PID,
-            AtomEnum::CARDINAL,
-            0,
-            1,
-        )
+        .get_property(false, active_window, pid_atom, AtomEnum::CARDINAL, 0, 1)
         .ok()?
         .reply()
         .ok()?;
