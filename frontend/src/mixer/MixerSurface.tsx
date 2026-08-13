@@ -64,7 +64,7 @@ export function MixerSurface() {
   );
 
   return (
-    <main className="flex h-screen flex-col gap-3 p-4">
+    <main className="glass-surface flex h-screen flex-col gap-3 p-4">
       <header className="flex items-center justify-between">
         <h1 className="text-sm font-semibold">Volume Mixer</h1>
         <div className="text-xs text-foreground/60">

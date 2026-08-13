@@ -63,6 +63,8 @@ CRITICAL fix (Task 8 manual smoke): Windows webview open panicked RPC_E_CHANGED_
 
 Theme/color fix (user visual finding): root cause was the missing Tailwind v4 @theme inline mapping in styles.css (shadcn utilities no-op'd to default colors) plus the Rust appearance tokens never being applied. Fixed: full light/dark token set + @theme inline map, shared frontend/src/lib/appearance.ts (applyAppearance: data-theme + dark class + reduced-motion + localStorage sync + native setTheme with core:app:allow-set-theme capability), wired into mixer/settings/help bootstrap, bg-background on surface roots, 6 new vitest tests incl. WCAG contrast >= 4.5 (24 total green).
 
+Webview cross-platform compatibility (live-verified research): engine floors Windows WebView2 (evergreen) / macOS 13+ (12 patched min) / Linux WebKitGTK 2.40+ (2.44/2.50 on supported distros); added .glass-surface CSS utility (dual-declaration backdrop-filter + translucent fallback for WebKitGTK software rendering) applied to the transparent mixer root; docs/webview-compat.md with the full matrix; 3 new frontend tests (27 total).
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0

@@ -155,4 +155,9 @@ describe("MixerSurface", () => {
     ).toBe(false);
     errorSpy.mockRestore();
   });
+
+  it("renders the glass-surface class on the root for transparent-window readability", async () => {
+    await renderSurface();
+    expect(screen.getByRole("main").className).toContain("glass-surface");
+  });
 });

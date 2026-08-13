@@ -92,3 +92,21 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* ── Glass surfaces (backdrop blur, progressive enhancement) ───────────────
+   WebKit < Safari 18 / WebKitGTK < 2.46 need the `-webkit-` prefix; WebKitGTK
+   software rendering (WEBKIT_DISABLE_COMPOSITING_MODE=1) may no-op the blur,
+   so every glass surface keeps a readable translucent background fallback.
+   See docs/webview-compat.md for the full matrix and rationale. */
+@layer utilities {
+  .glass-surface {
+    background-color: color-mix(in oklab, var(--background) 85%, transparent);
+  }
+  @supports ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
+    .glass-surface {
+      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(12px);
+      background-color: color-mix(in oklab, var(--background) 60%, transparent);
+    }
+  }
+}
