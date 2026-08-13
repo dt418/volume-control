@@ -1,5 +1,14 @@
 # Progress Log
 
+## Session 040 (2026-08-13) - Hybrid Tauri UI (Mixer/Settings/Help → webview)
+
+### Task 1: Scaffold (frontend shell + src-tauri shell + WindowManager) - complete
+
+- `frontend/`: Vite + React 19 + TypeScript + Tailwind v4 multi-entry app (root, src/{mixer,settings,help}/index.html) with FOUC inline theme script (spec 9.5), typed IPC wrappers (src/lib/ipc.ts), shadcn Slider + test-setup.
+- `src-tauri/`: tauri v2 host crate (package volumecontrol-tauri, bin VolumeControl), tauri.conf.json (zero startup windows, CSP allowing the inline theme script), capabilities/default.json (spec 9.4), WindowManager (SurfaceId{label,entry,from_label}, lazy open/close, Focused(false) auto-close for mixer per spec 9.3; 3 unit tests).
+- Verified: cargo check/clippy/tests green (3 new WindowManager tests; 241+16 pre-existing stay green); npm build emits dist/src/{mixer,settings,help}/index.html matching SurfaceId::entry(); npm test 1/1; npx tauri build --no-bundle → target/release/VolumeControl.exe; idle WS 16MB with ZERO msedgewebview2 children (spec 9.2 verified: WebView2 env is lazy); idle CPU 0.000%.
+- Notable fixes during the task: removed unused tauri-plugin-opener; dropped invalid tauri.conf field mainBinaryName (replaced with [[bin]] name = "VolumeControl"); before*Command paths are relative to the repo root where tauri-cli runs them.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
