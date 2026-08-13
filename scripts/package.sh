@@ -5,7 +5,7 @@
 #
 # Produces, in dist/:
 #   volumecontrol-<version>-<platform>.<zip|tar.gz>
-#   Windows: volumectl.exe + README
+#   Windows: VolumeControl.exe + README
 #   macOS:   VolumeControl.app (ad-hoc signed bundle) + README
 #   Ubuntu:  volumectl + README
 #   SHA256SUMS.txt                                     (checksums)

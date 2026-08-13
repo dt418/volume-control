@@ -70,6 +70,13 @@ invokes scripts/ship.sh 'test-format-lint[.]sh' \
     'ship.sh: runs the format-lint smoke test'
 invokes scripts/ship.sh 'check-records[.]sh.*--staged' \
     'ship.sh: re-checks the records rule on the staged set after staging'
+# --- phase 5 must build the frontend and the tauri release binary ---------------
+invokes scripts/ship.sh 'npm run build --prefix' \
+    'ship.sh: phase 5 builds the frontend explicitly before the tauri build'
+invokes scripts/ship.sh 'node_modules/[.]bin/tauri' \
+    'ship.sh: phase 5 resolves the local tauri CLI (never npx tauri)'
+invokes scripts/ship.sh 'build --no-bundle' \
+    'ship.sh: phase 5 runs tauri build --no-bundle'
 
 # --- no bypass flags may exist --------------------------------------------------
 # "NEVER bypass by default": there is no --skip-* / --bypass flag anywhere in

@@ -158,7 +158,7 @@ if "$GIT_BIN" rev-parse --verify --quiet origin/master >/dev/null 2>&1; then
     fi
 else
     echo "      no origin/master to diff against - branch check skipped;"
-    echo "      the staged check (step 5) and the pre-commit hook still enforce the rule"
+    echo "      the staged check (step 6) and the pre-commit hook still enforce the rule"
 fi
 
 # ---- Phase 2: full format-lint gate (tests included) -----------------------
@@ -195,12 +195,8 @@ fi
 # ---- Phase 5: frontend + release binary build -------------------------------
 # The pre-ship flow verifies the actual shippable artifact: the frontend
 # bundle (embedded into the binary by tauri-build) and the release binary
-# (the `tauri build --no-bundle` path CI uses; the frontend is built
-# explicitly first so asset-embedding failures surface here).
-#
-# tauri-cli is a frontend devDependency (frontend/node_modules/.bin/tauri);
-# run it from the repo root — tauri-cli resolves src-tauri/tauri.conf.json
-# and runs beforeBuildCommand with cwd = the repo root.
+# (the `tauri build --no-bundle` path CI uses). The frontend is built
+# explicitly first so asset-embedding failures surface here.
 if [ -x "$repo_root/frontend/node_modules/.bin/tauri" ]; then
     TAURI_BIN="$repo_root/frontend/node_modules/.bin/tauri"
 elif command -v tauri >/dev/null 2>&1; then
@@ -209,7 +205,14 @@ else
     fail "frontend build requires the tauri-cli devDependency (run: npm ci in frontend/)"
 fi
 echo "[5/6] frontend + release binary build"
-if ! "$TAURI_BIN" build --no-bundle; then
+if ! npm run build --prefix "$repo_root/frontend"; then
+    fail "frontend build failed (npm run build --prefix frontend)"
+fi
+# tauri-cli resolves src-tauri/tauri.conf.json and runs beforeBuildCommand with
+# cwd = the repo root; use the local CLI binary, never `npx tauri` (npx cannot
+# resolve the frontend devDependency from the repo root and falls back to
+# fetching the wrong npm package).
+if ! (cd "$repo_root" && "$TAURI_BIN" build --no-bundle); then
     fail "tauri build --no-bundle failed (frontend assets or release binary)"
 fi
 
