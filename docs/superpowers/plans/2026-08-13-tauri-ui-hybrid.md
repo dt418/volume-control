@@ -13,7 +13,7 @@
 - **Spec:** `docs/superpowers/specs/2026-08-13-tauri-ui-hybrid-design.md` (read it first; the plan implements §3–§9 of it).
 - **Hybrid boundary (D1):** Overlay HUD, tray, wheel hook, global-hotkey and audio core stay native. Only Mixer/Settings/Help become webview.
 - **Window model (D2):** 3 separate webview windows, lazy-create on demand, destroy on close. Labels `window-mixer` (420×580, frameless transparent), `window-settings` (680×520, decorated resizable), `window-help` (520×420, dialog fixed). No windows created in the Tauri builder.
-- **Frontend stack (D3):** React 19 + TypeScript + Vite + Tailwind v4 + shadcn/ui + lucide-react + framer-motion. One Vite app, three HTML entry points (`mixer.html`, `settings.html`, `help.html`).
+- **Frontend stack (D3):** React 19 + TypeScript + Vite + Tailwind v4 + shadcn/ui + lucide-react + framer-motion. One Vite app, three HTML entry points (`src/mixer/index.html`, `src/settings/index.html`, `src/help/index.html`).
 - **Recorder (D4):** Restricted — only the configurable modifier (CtrlAlt/Alt/Ctrl/CapsLock→Ctrl+Alt fallback with warning); fixed keys (↑ ↓ Shift+↑ Shift+↓ M Shift+M R V) are read-only key cards. No config-schema change.
 - **Packaging (D5):** `tauri build --no-bundle`; single portable binary; ship.sh keeps the full enforcement battery.
 - **Appearances (D6):** Existing `theme/material/motion/accent` + adaptive resolution preserved; pushed to webviews as tokens (CSS variables + `data-theme`).
