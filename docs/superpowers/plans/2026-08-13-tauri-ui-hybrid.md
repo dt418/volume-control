@@ -15,7 +15,7 @@
 - **Window model (D2):** 3 separate webview windows, lazy-create on demand, destroy on close. Labels `window-mixer` (420×580, frameless transparent), `window-settings` (680×520, decorated resizable), `window-help` (520×420, dialog fixed). No windows created in the Tauri builder.
 - **Frontend stack (D3):** React 19 + TypeScript + Vite + Tailwind v4 + shadcn/ui + lucide-react + framer-motion. One Vite app, three HTML entry points (`src/mixer/index.html`, `src/settings/index.html`, `src/help/index.html`).
 - **Recorder (D4):** Restricted — only the configurable modifier (CtrlAlt/Alt/Ctrl/CapsLock→Ctrl+Alt fallback with warning); fixed keys (↑ ↓ Shift+↑ Shift+↓ M Shift+M R V) are read-only key cards. No config-schema change.
-- **Packaging (D5):** `tauri build --no-bundle`; single portable binary; ship.sh keeps the full enforcement battery.
+- **Packaging (D5):** `tauri build --no-bundle`; single portable binary; ship.sh keeps the full enforcement battery. Identifier is `dev.volumecontrol` (plan value `dev.volumecontrol.app` changed by user decision B on 2026-08-13 to avoid the Tauri config warning about identifiers ending in `.app`).
 - **Appearances (D6):** Existing `theme/material/motion/accent` + adaptive resolution preserved; pushed to webviews as tokens (CSS variables + `data-theme`).
 - **Hotkeys (D7):** Keep `hotkeys_global` + `global-hotkey` 0.8. Registration stays resilient (skip + warn); conflicts surface via `HotkeyRegStatus`.
 - **Edge cases (§9):** slider echo-jitter (optimistic state + `isDragging` ref); WebView2 idle-RAM reaping (destroy + HashMap cleanup + `Destroyed` listener + empirical measurement); Wayland focus-loss (`WindowEvent::Focused(false)` + Esc fallback; Wayland transparency best-effort); capability file + CSP allowing the inline theme script; FOUC prevention (inline `<head>` script + localStorage cache); stale-session fail-soft (`Result<(), String>` + re-emit `state://sessions`).
@@ -234,7 +234,7 @@ volumectl = { path = "../crates/volumectl" }
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "VolumeControl",
   "version": "0.1.0",
-  "identifier": "dev.volumecontrol.app",
+  "identifier": "dev.volumecontrol",
   "build": {
     "beforeDevCommand": "npm run dev --prefix ../frontend",
     "devUrl": "http://localhost:1420",
