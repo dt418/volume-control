@@ -96,6 +96,32 @@
   (global-hotkey registers combos only, not mouse events).
   Commit: `fix: harden hotkey Drop against blocking X11 unregister`
 
+## Pre-push review (three domains) - enforcement stack
+
+Adversarial three-domain pre-push review (guardrail mandatory phase) dispatched
+in parallel reviewers: Domain A (guard core), Domain B (gate chain), Domain C
+(wiring/records). Findings triaged:
+
+- [Important -> fixed] `.githooks/pre-commit` committed as mode 100644
+  (non-executable); git on POSIX silently skips non-executable hooks, so the
+  local records guard could be skipped. Fixed by `git update-index --chmod=+x`
+  (index now 100755, verified via `git ls-files -s`).
+- [Minor -> fixed] stale format-lint self-test baseline "38 on Linux/macOS":
+  actual inventory is 40 on Windows / 39 on Linux and macOS with PowerShell
+  (26 without). Corrected in pre-push-review SKILL.md (both mirrors),
+  session-handoff.md, feature_list.json vol-017.
+- [Minor -> deferred, fail-closed] check-records.sh heredoc `EOF` delimiter
+  collision and core.quotePath C-quoting of non-ASCII paths (both cause
+  spurious failures only, never silent passes).
+- [Minor -> deferred, defense-in-depth] gate-chain nits: PS version check
+  accepts JSON float "3.0", unknown manifest step ids not validated,
+  `--fix` smoke run mutates a fmt-dirty tree (CI-safe), `--diff-filter=ACMRD`
+  omits type changes (caught by ci-diff-check.sh). Pre-existing, not
+  introduced by this change set.
+
+Review evidence: full battery re-run green after fixes (records 33,
+format-lint 40 on Windows, ship 22, cargo test 241+16), mirrors byte-identical.
+
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
 - Goal: three-domain pre-push review of the third-party-skills commit

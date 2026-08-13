@@ -101,9 +101,9 @@ Hunt for:
 - **Skill mirrors byte-identical** (`.agents` <-> `.claude`) for every skill.
 - **feature_list.json honesty**: entries carry verification + evidence that
   match reality — check counts must equal the self-tests' ACTUAL current
-  output (current baseline: records 33, format-lint 40 on Windows / 38 on
-  Linux/macOS, ship 22; if any self-test has grown, the count is stale and so
-  is the evidence);
+  output (current baseline: records 33, format-lint 40 on Windows / 39 on
+  Linux and macOS with PowerShell (26 without), ship 22; if any self-test
+  has grown, the count is stale and so is the evidence);
   statuses and `last_updated` reflect the actual landings; rules extended
   only deliberately.
 - **claude-progress.md**: a session entry exists for every landing; follow-ups

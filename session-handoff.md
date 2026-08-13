@@ -17,7 +17,7 @@ Windows.
   contract behind the shared `NativeRenderer` bridge.
 - **Enforcement stack hardened** (Sessions 011-033):
   - Format-lint gate toolchain (v3 manifest, both parsers, 40 checks on
-    Windows / 38 on Linux/macOS).
+    Windows / 39 on Linux/macOS with PowerShell; 26 without).
   - Mandatory ship flow (`scripts/ship.sh` + `scripts/ship.ps1`, 22 checks).
   - Three-domain pre-push review skill (guard core / gate chain / wiring).
   - Gate parser hardening (vol-017): numeric-only manifest version,
@@ -63,7 +63,7 @@ Windows.
 | Self-test | Checks | Notes |
 |---|---|---|
 | `test-check-records.sh` | 33 | Windows; Linux/macOS same |
-| `test-format-lint.sh` | 40 Windows / 38 Linux-macOS | WSL-shim check is Windows-gated |
+| `test-format-lint.sh` | 40 Windows / 39 Linux-macOS | WSL-shim check is Windows-gated |
 | `test-ship.sh` | 22 | |
 
 ## Verification commands (Windows host)
