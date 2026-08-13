@@ -312,6 +312,17 @@ pub struct GlobalHotkeys {
     rx: Receiver<HotkeyAction>,
 }
 
+// SAFETY: the inner `GlobalHotKeyManager` holds a process-wide native handle
+// (a hidden HWND on Windows, a Carbon event handler on macOS, an X11
+// connection on Linux) but exposes only `&self`-style calls that are
+// internally synchronized, and its `Drop` performs the native cleanup from
+// whichever thread drops it. All other fields are already `Send + Sync`
+// (`Arc`/`Mutex`/`RwLock`). This mirrors the pattern already used by
+// `WindowsAudio` for its COM pointers, and lets the host own the whole
+// `AppCore` behind a `Mutex` polled from a background thread.
+unsafe impl Send for GlobalHotkeys {}
+unsafe impl Sync for GlobalHotkeys {}
+
 impl GlobalHotkeys {
     pub fn new(initial_modifier: HotkeyModifier) -> Result<Self, String> {
         if initial_modifier == HotkeyModifier::CapsLock {

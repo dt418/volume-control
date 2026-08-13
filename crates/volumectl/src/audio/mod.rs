@@ -71,7 +71,10 @@ impl fmt::Display for AudioError {
 impl std::error::Error for AudioError {}
 
 /// Controls the system volume / mute state.
-pub trait AudioBackend {
+///
+/// `Send + Sync` so the core can own it behind a `Mutex` and poll it from a
+/// background thread in the Tauri host.
+pub trait AudioBackend: Send + Sync {
     /// Read the current default output state.
     fn get_state(&self) -> Result<VolumeState, AudioError>;
     /// Set absolute volume in 0.0–=1.0 range (impl should clamp + unmute).

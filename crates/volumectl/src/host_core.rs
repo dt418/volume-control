@@ -1,0 +1,676 @@
+//! Cross-platform application core — the single source of truth (SSOT).
+//!
+//! [`AppCore`] owns the config, the audio backend, the global hotkey
+//! listener, and the last confirmed volume state, and applies every
+//! [`AppAction`] emitted by any surface. It is deliberately free of native
+//! surface plumbing (overlay/tray/webview windows): the host routes surface
+//! open/close through the [`EventSink`], and every confirmed volume change is
+//! pushed to the host as a `state://volume` event. The Tauri host wires the
+//! sink in `src-tauri`, and the native HUD overlay/tray return in the host
+//! integration task.
+
+use std::sync::Arc;
+
+use serde::Serialize;
+
+use crate::audio::{AudioBackend, VolumeState};
+use crate::config::{Config, HotkeyModifier};
+use crate::hotkeys::{HotkeyAction, HotkeyRegResult};
+use crate::hotkeys_global::GlobalHotkeys;
+use crate::ui::{AccentMode, AppAction, MaterialMode, MotionMode, SurfaceId, ThemeMode};
+
+/// One application audio session in the per-app mixer. Interface-only in the
+/// IPC task; the Windows WASAPI source (session enumeration) lands in a later
+/// task, so every platform currently reports an empty list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AudioSessionInfo {
+    pub id: String,
+    pub name: String,
+    pub pct: u8,
+    pub muted: bool,
+    pub active: bool,
+}
+
+/// Resolved appearance tokens pushed to every webview surface. Values match
+/// the config's serialized strings so the frontend can treat them uniformly.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AppearancePayload {
+    /// `"dark"` | `"light"` after resolving the configured theme against the
+    /// platform system theme.
+    pub theme_resolved: String,
+    pub material: String,
+    pub motion: String,
+    pub accent: String,
+}
+
+/// One-shot payload returned by `get_bootstrap` on webview mount.
+#[derive(Serialize)]
+pub struct BootstrapPayload {
+    pub config: Config,
+    pub volume_pct: u8,
+    pub muted: bool,
+    pub hotkey_status: Vec<HotkeyRegResult>,
+    pub appearance: AppearancePayload,
+    pub sessions: Vec<AudioSessionInfo>,
+    pub sessions_supported: bool,
+}
+
+/// Host-facing notifications emitted by [`AppCore`]. The Tauri host
+/// implements this with `app.emit("state://*", ...)` and routes surface
+/// open/close to its lazy [`WindowManager`](crate window manager).
+pub trait EventSink: Send + Sync {
+    /// A confirmed volume/mute change (hotkey, wheel, tray or slider).
+    fn volume(&self, pct: u8, muted: bool);
+    /// The per-action registration status changed (registration or a
+    /// modifier change).
+    fn hotkeys(&self, status: &[HotkeyRegResult]);
+    /// The audio-session list changed.
+    fn sessions(&self, sessions: &[AudioSessionInfo]);
+    /// The host should open the surface with `label` (e.g. `"window-mixer"`).
+    fn open_surface(&self, _label: &str) {}
+    /// The host should close/destroy the surface with `label`.
+    fn close_surface(&self, _label: &str) {}
+}
+
+/// Cross-platform application state. One instance per app, owned by the host
+/// (managed as `Mutex<AppCore>` so commands can mutate it).
+pub struct AppCore {
+    audio: Box<dyn AudioBackend>,
+    hotkeys: GlobalHotkeys,
+    config: Config,
+    last_state: VolumeState,
+    hotkey_status: Vec<HotkeyRegResult>,
+    sink: Arc<dyn EventSink>,
+}
+
+impl AppCore {
+    /// Create the core: register the global hotkeys for `modifier` and take
+    /// the first confirmed audio snapshot.
+    pub fn new(
+        audio: Box<dyn AudioBackend>,
+        config: Config,
+        modifier: HotkeyModifier,
+        sink: Arc<dyn EventSink>,
+    ) -> Result<Self, String> {
+        let hotkeys = GlobalHotkeys::new(modifier)?;
+        let last_state = audio.get_state().unwrap_or(VolumeState {
+            volume: 0.5,
+            muted: false,
+        });
+        let hotkey_status = hotkeys.status();
+        Ok(Self {
+            audio,
+            hotkeys,
+            config,
+            last_state,
+            hotkey_status,
+            sink,
+        })
+    }
+
+    /// Snapshot for a webview mount: current config, confirmed state,
+    /// hotkey status, resolved appearance and the session list.
+    pub fn bootstrap(&mut self) -> BootstrapPayload {
+        if let Ok(st) = self.audio.get_state() {
+            self.last_state = st;
+        }
+        BootstrapPayload {
+            config: self.config.clone(),
+            volume_pct: self.last_state.percent(),
+            muted: self.last_state.muted,
+            hotkey_status: self.hotkey_status.clone(),
+            appearance: self.appearance_payload(),
+            sessions: self.sessions(),
+            sessions_supported: false,
+        }
+    }
+
+    /// Drain the global-hotkey channel, applying every queued action, and
+    /// return the last one for logging. Never blocks.
+    pub fn poll_hotkeys(&mut self) -> Option<HotkeyAction> {
+        let mut last = None;
+        while let Some(action) = self.hotkeys.try_recv() {
+            self.apply_hotkey(action);
+            last = Some(action);
+        }
+        last
+    }
+
+    /// Apply a hotkey (or wheel) action: blacklist gate, limit beep and the
+    /// step-size mapping — matching the pre-Tauri host behaviour.
+    pub fn apply_hotkey(&mut self, action: HotkeyAction) {
+        use HotkeyAction as H;
+        if matches!(action, H::OpenMenu | H::OpenMixer) {
+            let step = self.config.volume_step as i16;
+            let step_large = self.config.volume_step_large as i16;
+            self.handle_action(hotkey_to_action(action, step, step_large));
+            return;
+        }
+        // Blacklist gate: suppress hotkeys while a blacklisted app is focused.
+        if let Some(proc) = foreground_process() {
+            if crate::config::is_blacklisted(&self.config.blacklist, &proc) {
+                log::debug!("hotkey blocked by blacklist ({proc})");
+                beep_blocked(&self.config);
+                return;
+            }
+        }
+        log::debug!(
+            "hotkey: {action:?} (current {}%)",
+            self.last_state.percent()
+        );
+        let step = self.config.volume_step as i16;
+        let step_large = self.config.volume_step_large as i16;
+        self.handle_action(hotkey_to_action(action, step, step_large));
+    }
+
+    /// Central handler for every [`AppAction`] — the SSOT mutation point.
+    /// Audio/config mutations are applied here and confirmed to the host via
+    /// the sink; surface show/hide/toggle are routed to the host's window
+    /// manager; native-only intents (settings window internals, tray menu,
+    /// overlay text) are logged stubs until the host integration task.
+    pub fn handle_action(&mut self, action: AppAction) {
+        use AppAction as A;
+        use SurfaceId as S;
+
+        match action {
+            A::SetVolumePercent { percent } => {
+                let pct = (percent.min(100) as f32) / 100.0;
+                if let Err(e) = self.audio.set_volume(pct) {
+                    log::warn!("{e}");
+                }
+                self.publish_confirmed_state();
+            }
+            A::AdjustVolume { delta_percent } => {
+                // Step actions use the cached audio-truth as the base so the
+                // limit beep compares against the same reference as before
+                // the mutation.
+                let old = self.last_state;
+                let target = crate::core::step_volume(old.volume, delta_percent as f32);
+                log::debug!(
+                    "action: adjust {delta_percent}% ({}% -> {:.0}%)",
+                    old.percent(),
+                    target * 100.0
+                );
+                if let Err(e) = self.audio.set_volume(target) {
+                    log::warn!("{e}");
+                }
+                if target == old.volume && (old.volume == 0.0 || old.volume == 1.0) {
+                    beep_limit(&self.config);
+                }
+                self.publish_confirmed_state();
+            }
+            A::ToggleMute => {
+                if let Err(e) = self.audio.toggle_mute() {
+                    log::warn!("{e}");
+                }
+                self.publish_confirmed_state();
+            }
+            A::SetMute { muted } => {
+                if let Err(e) = self.audio.set_mute(muted) {
+                    log::warn!("{e}");
+                }
+                self.publish_confirmed_state();
+            }
+            A::ResetVolume => {
+                if let Err(e) = self.audio.set_volume(0.5) {
+                    log::warn!("{e}");
+                }
+                self.publish_confirmed_state();
+            }
+            // ── Surfaces: routed to the host window manager. ─────────────
+            A::ShowSurface(S::Mixer) | A::ToggleSurface(S::Mixer) => {
+                self.sink.open_surface("window-mixer");
+            }
+            A::HideSurface(S::Mixer) => {
+                self.sink.close_surface("window-mixer");
+            }
+            A::ShowSurface(S::Settings) | A::ToggleSurface(S::Settings) => {
+                self.sink.open_surface("window-settings");
+            }
+            A::HideSurface(S::Settings) => {
+                self.sink.close_surface("window-settings");
+            }
+            A::ShowSurface(S::Help) | A::ToggleSurface(S::Help) => {
+                self.sink.open_surface("window-help");
+            }
+            A::HideSurface(S::Help) => {
+                self.sink.close_surface("window-help");
+            }
+            A::ShowSurface(S::Overlay)
+            | A::HideSurface(S::Overlay)
+            | A::ToggleSurface(S::Overlay) => {
+                log::debug!("overlay surface not wired in AppCore (host integration task)");
+            }
+            A::OpenTrayMenu
+            | A::ShowSurface(S::Tray)
+            | A::HideSurface(S::Tray)
+            | A::ToggleSurface(S::Tray) => {
+                log::debug!("tray menu not wired in AppCore (host integration task)");
+            }
+            // ── Appearance: persist + adopt (keeps modifier re-registration
+            //    and the confirmed-state publish in one place). ──────────
+            A::SetTheme(theme) => {
+                self.config.appearance.theme = theme;
+                self.save_and_adopt();
+            }
+            A::SetMaterial(material) => {
+                self.config.appearance.material = material;
+                self.save_and_adopt();
+            }
+            A::SetMotion(motion) => {
+                self.config.appearance.motion = motion;
+                self.save_and_adopt();
+            }
+            // ── Not wired yet (host integration / webview surfaces). ─────
+            A::ApplyConfig | A::CancelConfig | A::ResetConfig => {
+                log::debug!(
+                    "settings-window intents are driven by the webview surface (later task)"
+                );
+            }
+            A::OpenConfigLocation => {
+                crate::config::open_in_editor();
+            }
+            A::ReloadConfig => {
+                log::debug!("config reload not wired in AppCore (host integration task)");
+            }
+            A::AddBlacklistEntry(_)
+            | A::RemoveBlacklistEntry(_)
+            | A::ClearBlacklist
+            | A::ApplyRecommendedBlacklist => {
+                log::debug!("blacklist edits are wired via the Settings webview (later task)");
+            }
+            A::Exit => {
+                log::info!("Exit requested (host teardown lands in the host integration task)");
+            }
+        }
+    }
+
+    /// Persist the current config and adopt the normalized result (re-register
+    /// hotkeys when the modifier changed, refresh status, publish state).
+    pub fn save_config(&mut self) -> Result<(), String> {
+        let saved = crate::config::save_validated(&self.config).map_err(|e| e.to_string())?;
+        self.adopt_saved_config(saved);
+        Ok(())
+    }
+
+    /// Change the hotkey modifier: re-register every combo, persist the
+    /// config, push the fresh status and confirmed state to the host.
+    pub fn set_modifier(&mut self, modifier: HotkeyModifier) -> Result<(), String> {
+        self.config.modifier = modifier;
+        self.hotkeys.set_modifier(modifier);
+        self.hotkey_status = self.hotkeys.status();
+        self.sink.hotkeys(&self.hotkey_status);
+        crate::config::save_validated(&self.config).map_err(|e| e.to_string())?;
+        self.publish_confirmed_state();
+        Ok(())
+    }
+
+    /// The per-app session list. Interface-only in the IPC task (empty on
+    /// every platform); the Windows WASAPI source lands in a later task.
+    pub fn sessions(&mut self) -> Vec<AudioSessionInfo> {
+        let _ = &self.audio;
+        vec![]
+    }
+
+    /// Set one session's volume. No-op (interface contract) until the Windows
+    /// session source lands; a stale id must then return `Err` per spec §9.6.
+    pub fn set_session_volume(&mut self, _id: &str, _pct: u8) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Mute/unmute one session. No-op (interface contract) until the Windows
+    /// session source lands.
+    pub fn mute_session(&mut self, _id: &str) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Re-read the audio state and push the confirmed volume/mute to the
+    /// host. The native overlay/tray renderers are host concerns (later task)
+    /// and are deliberately not touched here.
+    pub fn publish_confirmed_state(&mut self) {
+        let Ok(st) = self.audio.get_state() else {
+            return;
+        };
+        self.last_state = st;
+        log::debug!("publish: state={}%% muted={}", st.percent(), st.muted);
+        self.sink.volume(st.percent(), st.muted);
+    }
+
+    fn adopt_saved_config(&mut self, saved: Config) {
+        let modifier_changed = saved.modifier != self.config.modifier;
+        self.config = saved;
+        if modifier_changed {
+            log::info!("config: modifier changed — updating global listener");
+            self.hotkeys.set_modifier(self.config.modifier);
+            self.hotkey_status = self.hotkeys.status();
+            self.sink.hotkeys(&self.hotkey_status);
+        }
+        self.publish_confirmed_state();
+    }
+
+    fn save_and_adopt(&mut self) {
+        match crate::config::save_validated(&self.config) {
+            Ok(saved) => self.adopt_saved_config(saved),
+            Err(e) => log::warn!("config persist failed: {e}"),
+        }
+    }
+
+    fn appearance_payload(&self) -> AppearancePayload {
+        let theme_resolved = match self.config.appearance.theme {
+            ThemeMode::Dark => "dark",
+            ThemeMode::Light => "light",
+            ThemeMode::System => {
+                // Matches the native renderer's contract: unknown system
+                // theme falls back to the light palette.
+                if system_is_dark().unwrap_or(false) {
+                    "dark"
+                } else {
+                    "light"
+                }
+            }
+        };
+        AppearancePayload {
+            theme_resolved: theme_resolved.to_string(),
+            material: material_str(self.config.appearance.material).to_string(),
+            motion: motion_str(self.config.appearance.motion).to_string(),
+            accent: accent_str(self.config.appearance.accent).to_string(),
+        }
+    }
+}
+
+fn material_str(m: MaterialMode) -> &'static str {
+    match m {
+        MaterialMode::Auto => "Auto",
+        MaterialMode::Translucent => "Translucent",
+        MaterialMode::Opaque => "Opaque",
+    }
+}
+
+fn motion_str(m: MotionMode) -> &'static str {
+    match m {
+        MotionMode::Full => "Full",
+        MotionMode::Reduced => "Reduced",
+        MotionMode::Disabled => "Disabled",
+    }
+}
+
+fn accent_str(a: AccentMode) -> &'static str {
+    match a {
+        AccentMode::System => "System",
+        AccentMode::Blue => "Blue",
+        AccentMode::Green => "Green",
+        AccentMode::Purple => "Purple",
+        AccentMode::Orange => "Orange",
+    }
+}
+
+/// Resolve the platform system theme (true = dark). Windows reads the
+/// Personalize registry value; other platforms return `None` until the host
+/// integration task probes them.
+#[cfg(target_os = "windows")]
+fn system_is_dark() -> Option<bool> {
+    crate::ui::primitives::system_theme()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn system_is_dark() -> Option<bool> {
+    None
+}
+
+/// Map a hotkey action to the shared action contract, resolving the
+/// configured step sizes. Deliberately pure: the blacklist gate is a host
+/// concern applied only to hotkey/wheel origin.
+pub(crate) fn hotkey_to_action(action: HotkeyAction, step: i16, step_large: i16) -> AppAction {
+    use HotkeyAction as H;
+    match action {
+        H::VolumeUp => AppAction::AdjustVolume {
+            delta_percent: step,
+        },
+        H::VolumeDown => AppAction::AdjustVolume {
+            delta_percent: -step,
+        },
+        H::VolumeUpLarge => AppAction::AdjustVolume {
+            delta_percent: step_large,
+        },
+        H::VolumeDownLarge => AppAction::AdjustVolume {
+            delta_percent: -step_large,
+        },
+        H::ToggleMute => AppAction::ToggleMute,
+        H::Reset50 => AppAction::ResetVolume,
+        H::OpenMixer => AppAction::ToggleSurface(SurfaceId::Mixer),
+        H::OpenMenu => AppAction::OpenTrayMenu,
+    }
+}
+
+/// Lowercase base name (e.g. `code.exe`) of the foreground window's process.
+#[cfg(target_os = "windows")]
+fn foreground_process() -> Option<String> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId,
+    };
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd == 0 {
+            return None;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == 0 {
+            return None;
+        }
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle == 0 {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut len);
+        CloseHandle(handle);
+        if ok == 0 {
+            return None;
+        }
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        let base = path.rsplit('\\').next().unwrap_or(&path);
+        Some(base.to_lowercase())
+    }
+}
+
+/// Lowercase base name of the foreground window's process on macOS.
+#[cfg(target_os = "macos")]
+fn foreground_process() -> Option<String> {
+    use std::process::Command;
+    // Use AppleScript to get the frontmost application
+    let output = Command::new("osascript")
+        .args([
+            "-e",
+            "tell application \"System Events\" to get name of first application process whose frontmost is true",
+        ])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if name.is_empty() {
+            None
+        } else {
+            // Normalize: lowercase and ensure .app suffix for consistency with blacklist
+            Some(crate::config::normalize_blacklist_entry(
+                &name.to_lowercase(),
+            ))
+        }
+    } else {
+        None
+    }
+}
+
+/// Lowercase base name of the foreground window's process on Linux.
+#[cfg(target_os = "linux")]
+fn foreground_process() -> Option<String> {
+    use std::process::Command;
+
+    // Method 1: Try xdotool first (most reliable if available)
+    if let Ok(output) = Command::new("xdotool")
+        .args(["getactivewindow", "--pid"])
+        .output()
+    {
+        if output.status.success() {
+            let pid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+                    let name = comm.trim().to_lowercase();
+                    log::debug!("foreground_process: xdotool found PID {} -> {}", pid, name);
+                    return Some(crate::config::normalize_blacklist_entry(&name));
+                }
+            }
+        }
+    }
+
+    // Method 2: Fallback to xprop + wmctrl
+    let output = Command::new("xprop")
+        .args(["-root", "_NET_ACTIVE_WINDOW"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        log::debug!("foreground_process: xprop failed");
+        return None;
+    }
+
+    let window_id = String::from_utf8_lossy(&output.stdout);
+    let window_id = window_id.split('#').nth(1)?.trim();
+
+    let wmctrl_output = Command::new("wmctrl").arg("-lp").output().ok()?;
+
+    if wmctrl_output.status.success() {
+        let lines = String::from_utf8_lossy(&wmctrl_output.stdout);
+        for line in lines.lines() {
+            if line.contains(window_id) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 4 {
+                    if let Ok(pid) = parts[1].parse::<u32>() {
+                        if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+                            let name = comm.trim().to_lowercase();
+                            log::debug!("foreground_process: wmctrl found PID {} -> {}", pid, name);
+                            return Some(crate::config::normalize_blacklist_entry(&name));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Method 3: Direct X11 query via x11rb (no CLI dependencies needed)
+    if let Some(pid) = get_window_pid_x11() {
+        if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+            let name = comm.trim().to_lowercase();
+            log::debug!("foreground_process: x11rb found PID {} -> {}", pid, name);
+            return Some(crate::config::normalize_blacklist_entry(&name));
+        }
+    }
+
+    // All methods failed - return None (better than wrong answer)
+    log::warn!("foreground_process: could not determine foreground process on Linux");
+    None
+}
+
+/// Direct X11 `_NET_ACTIVE_WINDOW` → `_NET_WM_PID` lookup via x11rb.
+#[cfg(target_os = "linux")]
+fn get_window_pid_x11() -> Option<u32> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+
+    let (conn, screen_num) = x11rb::connect(None).ok()?;
+    let screen = &conn.setup().roots[screen_num];
+    let root = screen.root;
+
+    let active_win_prop = conn
+        .get_property(
+            false,
+            root,
+            AtomEnum::_NET_ACTIVE_WINDOW,
+            AtomEnum::WINDOW,
+            0,
+            1,
+        )
+        .ok()?
+        .reply()
+        .ok()?;
+
+    if active_win_prop.value.len() < 4 {
+        return None;
+    }
+
+    let active_window = u32::from_ne_bytes([
+        active_win_prop.value[0],
+        active_win_prop.value[1],
+        active_win_prop.value[2],
+        active_win_prop.value[3],
+    ]);
+
+    if active_window == 0 {
+        return None;
+    }
+
+    let pid_prop = conn
+        .get_property(
+            false,
+            active_window,
+            AtomEnum::_NET_WM_PID,
+            AtomEnum::CARDINAL,
+            0,
+            1,
+        )
+        .ok()?
+        .reply()
+        .ok()?;
+
+    if pid_prop.value.len() < 4 {
+        return None;
+    }
+
+    let pid = u32::from_ne_bytes([
+        pid_prop.value[0],
+        pid_prop.value[1],
+        pid_prop.value[2],
+        pid_prop.value[3],
+    ]);
+
+    Some(pid)
+}
+
+/// Audible feedback for a blacklist-blocked hotkey (Win32 `Beep`).
+#[cfg(target_os = "windows")]
+fn beep_blocked(cfg: &Config) {
+    if cfg.beep.enabled {
+        unsafe {
+            windows_sys::Win32::System::Diagnostics::Debug::Beep(
+                cfg.beep.blocked_freq,
+                cfg.beep.blocked_duration_ms,
+            );
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn beep_blocked(_cfg: &Config) {}
+
+/// Audible feedback when a volume step cannot move further (limit reached).
+#[cfg(target_os = "windows")]
+fn beep_limit(cfg: &Config) {
+    if cfg.beep.enabled {
+        unsafe {
+            windows_sys::Win32::System::Diagnostics::Debug::Beep(
+                cfg.beep.limit_freq,
+                cfg.beep.limit_duration_ms,
+            );
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn beep_limit(_cfg: &Config) {}

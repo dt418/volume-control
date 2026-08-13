@@ -11,6 +11,7 @@ pub mod audio_linux;
 pub mod audio_macos;
 pub mod config;
 pub mod core;
+pub mod host_core;
 pub mod hotkeys;
 pub mod hotkeys_global;
 #[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
