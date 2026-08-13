@@ -110,3 +110,20 @@ body {
     }
   }
 }
+
+/* ── Signal Rail fill bands (VolumePro palette, mirrors core::volume_color_rgb) ──
+   Muted/0% -> gray, <= green_up_to -> green, <= blue_up_to -> blue, else
+   orange-red. The band class on `.rail-fill` drives the fill color; the rail
+   track, thumb and muted diamond live in SignalRail.tsx. */
+.rail-fill.band-gray {
+  background-color: #888888;
+}
+.rail-fill.band-green {
+  background-color: #27ae60;
+}
+.rail-fill.band-blue {
+  background-color: #0078d4;
+}
+.rail-fill.band-orange {
+  background-color: #e05c00;
+}

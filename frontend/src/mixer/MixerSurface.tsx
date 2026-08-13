@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 
 import { invoke, listen } from "../lib/ipc";
 import { SessionRow } from "./SessionRow";
+import { SystemOutputRow } from "./SystemOutputRow";
 import { useSessions } from "./sessionStore";
 
 /**
@@ -16,6 +17,7 @@ export function MixerSurface() {
     sessions,
     volumePct,
     muted,
+    thresholds,
     sessionsSupported,
     notice,
     setNotice,
@@ -107,6 +109,7 @@ export function MixerSurface() {
       )}
 
       <div className="flex-1 space-y-2 overflow-y-auto">
+        <SystemOutputRow value={volumePct} muted={muted} thresholds={thresholds} />
         {!sessionsSupported ? (
           <p className="py-8 text-center text-xs text-foreground/50">
             Per-app mixing is Windows-only

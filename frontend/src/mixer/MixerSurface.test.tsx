@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import * as ipc from "../lib/ipc";
 import { MixerSurface } from "./MixerSurface";
@@ -71,8 +71,10 @@ describe("MixerSurface", () => {
 
   it("toggles mute for a session", async () => {
     await renderSurface();
-    const mute = screen.getAllByRole("button", { name: /mute/i })[2];
-    fireEvent.click(mute);
+    const rows = screen.getAllByTestId("session-row");
+    const mutedRow = rows.find((r) => r.textContent?.includes("MutedApp"));
+    expect(mutedRow).toBeDefined();
+    fireEvent.click(within(mutedRow!).getByRole("button", { name: /mute/i }));
     expect(ipc.invoke).toHaveBeenCalledWith("mute_session", { id: "c" });
   });
 
@@ -101,7 +103,8 @@ describe("MixerSurface", () => {
       return {};
     });
     await renderSurface();
-    const slider = screen.getAllByRole("slider")[0]; // Spotify row
+    const rows = screen.getAllByTestId("session-row");
+    const slider = within(rows[0]).getByRole("slider"); // Spotify row (system slider is a separate control)
     fireEvent.keyDown(slider, { key: "ArrowRight" }); // Radix slider step
     await waitFor(() => {
       expect(screen.getAllByTestId("session-row")).toHaveLength(2);
@@ -174,6 +177,12 @@ describe("MixerSurface", () => {
       `unexpected React key warnings: ${JSON.stringify(consoleErrors)}`,
     ).toBe(false);
     errorSpy.mockRestore();
+  });
+
+  it("renders the system output row with the bootstrap volume", async () => {
+    await renderSurface();
+    expect(screen.getByTestId("system-output-row")).toHaveTextContent("System output");
+    expect(screen.getByTestId("system-output-value")).toHaveTextContent("55%");
   });
 
   it("renders the glass-surface class on the root for transparent-window readability", async () => {

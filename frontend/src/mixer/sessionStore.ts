@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
+import { DEFAULT_THRESHOLDS, type ColorThresholds } from "./SignalRail";
 
 export interface AudioSession {
   id: string;
@@ -11,7 +12,8 @@ export interface AudioSession {
 }
 
 export interface BootstrapPayload {
-  config: unknown;
+  /** Serialized `Config`; only `color_thresholds` is consumed by the mixer. */
+  config?: { color_thresholds?: ColorThresholds };
   volume_pct: number;
   muted: boolean;
   hotkey_status: unknown[];
@@ -43,6 +45,7 @@ export function useSessions() {
   const [sessions, setSessions] = useState<AudioSession[]>([]);
   const [volumePct, setVolumePct] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [thresholds, setThresholds] = useState<ColorThresholds>(DEFAULT_THRESHOLDS);
   const [sessionsSupported, setSessionsSupported] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -55,6 +58,7 @@ export function useSessions() {
         setSessions(b.sessions ?? []);
         setVolumePct(b.volume_pct);
         setMuted(b.muted);
+        setThresholds(b.config?.color_thresholds ?? DEFAULT_THRESHOLDS);
         setSessionsSupported(b.sessions_supported);
       })
       .catch(() => {
@@ -88,6 +92,7 @@ export function useSessions() {
     sessions: sortSessions(sessions),
     volumePct,
     muted,
+    thresholds,
     sessionsSupported,
     notice,
     setNotice,
