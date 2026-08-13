@@ -1,8 +1,8 @@
 # Session Handoff
 
-Handoff after Session 039 (2026-08-13, global-hotkey migration:
+Handoff after Session 040 (2026-08-13, global-hotkey migration + Hybrid Tauri UI:
 `rdev` → `global-hotkey` 0.8.0 + 1% default step, commits `f5542d6`..`HEAD`
-on branch `refactor/hotkey-and-ci-fix`). All 29 features are passing on
+on branch `feature/tauri-ui-hybrid`). All 30 features are passing on
 Windows.
 
 ## Where we are

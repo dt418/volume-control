@@ -65,6 +65,8 @@ Theme/color fix (user visual finding): root cause was the missing Tailwind v4 @t
 
 Webview cross-platform compatibility (live-verified research): engine floors Windows WebView2 (evergreen) / macOS 13+ (12 patched min) / Linux WebKitGTK 2.40+ (2.44/2.50 on supported distros); added .glass-surface CSS utility (dual-declaration backdrop-filter + translucent fallback for WebKitGTK software rendering) applied to the transparent mixer root; docs/webview-compat.md with the full matrix; 3 new frontend tests (27 total).
 
+Task 8 final gate: full battery green (fmt/clippy -D warnings/281 cargo tests/27 vitest/build/cross-target linux-gnu); tauri build --no-bundle -> target/release/VolumeControl.exe; manual smoke: 8/8 hotkeys, Ctrl+Alt+V opens mixer webview (COM STA fix ef89327 — RPC_E_CHANGED_MODE panic resolved; com_guard STA + S_FALSE-aware), single-instance guard, idle WS 15.7MB/0 webview children; theme readability fixed (d63ad5a: @theme inline tokens + applyAppearance + setTheme native API + WCAG contrast tests); webview compat hardening (c84a5f7: .glass-surface backdrop fallback pattern, mixer root readability, docs/webview-compat.md with live-verified engine matrix — Linux floor webkit2gtk 2.40, macOS 13+ recommended, WebView2 evergreen). vol-030 marked passing.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
