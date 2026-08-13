@@ -1,7 +1,7 @@
 # Session Handoff
 
 Handoff after Session 040 (2026-08-13, global-hotkey migration + Hybrid Tauri UI:
-`rdev` → `global-hotkey` 0.8.0 + 1% default step, commits `f5542d6`..`HEAD`
+`rdev` → `global-hotkey` 0.8.0 + 1% default step, commits `190d02b`..`HEAD`
 on branch `feature/tauri-ui-hybrid`). All 30 features are passing on
 Windows.
 
@@ -18,7 +18,7 @@ Windows.
 - **Enforcement stack hardened** (Sessions 011-033):
   - Format-lint gate toolchain (v3 manifest, both parsers, 40 checks on
     Windows / 39 on Linux/macOS with PowerShell; 26 without).
-  - Mandatory ship flow (`scripts/ship.sh` + `scripts/ship.ps1`, 22 checks).
+  - Mandatory ship flow (`scripts/ship.sh` + `scripts/ship.ps1`, 25 checks).
   - Three-domain pre-push review skill (guard core / gate chain / wiring).
   - Gate parser hardening (vol-017): numeric-only manifest version,
     case-sensitive forbidden paths, substantive `.claude/skills/*` JSON,
@@ -36,7 +36,7 @@ Windows.
   added in Session 022.
 - **vol-018** is **`passing`** — verify script tooling with PrintWindow
   screenshot capture.
-- Unit suite: **257 passed / 0 failed** (241 volumectl + 16 host-core).
+- Unit suite: **285 passed / 0 failed** (249 volumectl + 12 host_core + 16 linux_host_core + 4 window_manager + 4 commands).
   `cargo fmt --all --check` passes. Clippy `-D warnings` clean.
   Windows build clean (0 warnings). Cross-checks clean for macOS and Linux
   (GTK4/libadwaita) with the pkg-config stub env.
@@ -64,7 +64,7 @@ Windows.
 |---|---|---|
 | `test-check-records.sh` | 33 | Windows; Linux/macOS same |
 | `test-format-lint.sh` | 40 Windows / 39 Linux-macOS | WSL-shim check is Windows-gated |
-| `test-ship.sh` | 22 | |
+| `test-ship.sh` | 25 | |
 
 ## Verification commands (Windows host)
 

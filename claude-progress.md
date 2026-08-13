@@ -17,7 +17,6 @@
 - Task 2 fix round (reviewer I1, cross-platform compile): LinuxAudio unsafe impl Send+Sync with SAFETY comment (volumecontrol AudioDevice is Rc<RefCell<PulseConnection>>, serialized via Mutex<AppCore>; mirrors WindowsAudio precedent); EWMH atoms interned via x11rb intern_atom in get_window_pid_x11 (AtomEnum has no _NET_* variants); cargo check -p volumectl --no-default-features --target x86_64-unknown-linux-gnu / x86_64-apple-darwin both clean; full Windows gate green (241+16+4+3+1).
 - Task 1 review fix round: root `.gitignore` had an unanchored `lib/` pattern (Python template block) that silently ignored `frontend/src/lib/` — anchored to `/lib/`; `frontend/src/lib/ipc.ts` + `utils.ts` now committed (clean checkout `npm run build` passes, tsc TS2307 resolved). WindowManager now registers a `WindowEvent::Destroyed` handler that removes the surface from the `active` set so OS-close of decorated settings/help windows doesn't wedge `open()` into a permanent no-op. Gate re-run: fmt/clippy/cargo tests + npm build + npm test all green.
 
-### Task 2: AppCore (SSOT) + IPC commands + state events - complete
 
 - `crates/volumectl/src/host_core.rs`: cross-platform AppCore (config + Box<dyn AudioBackend> + GlobalHotkeys + last_state + hotkey_status + Arc<dyn EventSink>); methods: new/bootstrap/poll_hotkeys/apply_hotkey/handle_action/publish_confirmed_state/set_modifier/save_config/sessions/set_session_volume/mute_session; blacklist gate + per-platform foreground_process (win32/osascript/xdotool+x11rb) and beep (Beep freq/duration) moved from app.rs; hotkey_to_action moved; appearance_payload resolves theme_resolved/material/motion/accent strings. EventSink = volume/hotkeys/sessions + defaulted open_surface/close_surface routing seam. AudioSessionInfo/AppearancePayload/BootstrapPayload Serialize.
 - `src-tauri/`: events_sink.rs (TauriSink -> app.emit state://*; surface routing -> WindowManager via try_state); commands.rs (12 commands on State<Mutex<AppCore>>, Result<T,String>; surface-name unit test); lib.rs setup creates the platform audio backend, manages WindowManager + Mutex<AppCore>, spawns the 20ms hotkey poll thread; init_logging() added (host logs nothing without it).
@@ -68,6 +67,10 @@ Webview cross-platform compatibility (live-verified research): engine floors Win
 Task 8 final gate: full battery green (fmt/clippy -D warnings/281 cargo tests/27 vitest/build/cross-target linux-gnu); tauri build --no-bundle -> target/release/VolumeControl.exe; manual smoke: 8/8 hotkeys, Ctrl+Alt+V opens mixer webview (COM STA fix ef89327 — RPC_E_CHANGED_MODE panic resolved; com_guard STA + S_FALSE-aware), single-instance guard, idle WS 15.7MB/0 webview children; theme readability fixed (d63ad5a: @theme inline tokens + applyAppearance + setTheme native API + WCAG contrast tests); webview compat hardening (c84a5f7: .glass-surface backdrop fallback pattern, mixer root readability, docs/webview-compat.md with live-verified engine matrix — Linux floor webkit2gtk 2.40, macOS 13+ recommended, WebView2 evergreen). vol-030 marked passing.
 
 Pre-push fix: host_core mtime tests were flaky (env-var race on VOLUMECTL_CONFIG_DIR, reproduced 5/8 runs; assertion panic "set_modifier must resync the config mtime (no spurious reload)"). Root cause: two tests set/restore the process-global env concurrently, changing config_path() mid-test; production save path is flush-safe (save_at_path sync_all + atomic rename), so serialization via a static CONFIG_DIR_LOCK is the complete fix (10/10 loop green). Correct test total at HEAD: 285.
+
+Task 3 fix round (mixer keys): session rows keyed `id-name-index` so duplicate process ids with identical names cannot collide React keys (regression test asserts no duplicate-key warning).
+
+Task 4: Settings webview surface (restricted recorder, key cards, conflict badges, step/appearance controls). Plan-gap discovery: the plan's save_config(partial) contract does not exist in the backend; added update_settings(SettingsPatch) command + AppCore::update_settings (mutation-only, persistence via save_config by the command layer) with 2 host_core tests; 6 settings vitest tests; full gate green (271 tests, clippy, fmt, frontend build).
 
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
@@ -196,10 +199,6 @@ CI catch and fix: the macOS job failed on macos_app::tests::hotkeys_use_configur
 Outcome: PR #19 merged to master (0b5a481) after CI went fully green on the fix (all four jobs: checks, Windows, macOS, Ubuntu GTK). vol-029 marked passing with CI run evidence.
 
 Manual smoke test (Windows, release build, clean config): 8/8 combos registered, 1% step per action, 50ms hold-repeat, M/R/V actions fire, idle CPU 0.17% over 10s. User config pins volume_step=2 (config wins over the new 1% default - expected). Shift variants could not be injection-verified: keybd_event/SendInput from a background console never propagates the Shift modifier to the system hotkey state (proven with a raw RegisterHotKey harness: plain variant fired with async shift=up); needs a physical keyboard check.
-
-Task 3 fix round (mixer keys): session rows keyed `id-name-index` so duplicate process ids with identical names cannot collide React keys (regression test asserts no duplicate-key warning).
-
-Task 4: Settings webview surface (restricted recorder, key cards, conflict badges, step/appearance controls). Plan-gap discovery: the plan's save_config(partial) contract does not exist in the backend; added update_settings(SettingsPatch) command + AppCore::update_settings (mutation-only, persistence via save_config by the command layer) with 2 host_core tests; 6 settings vitest tests; full gate green (271 tests, clippy, fmt, frontend build).
 
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
