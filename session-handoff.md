@@ -118,3 +118,11 @@ cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests
   Linux canvas gtk-rs 0.19 fixes and enforcement-stack hardening.
 - Do not rewrite `claude-progress.md` with PowerShell `Set-Content -Encoding
   UTF8` — it double-encodes em-dashes and adds a BOM. Prefer the edit tool.
+
+## Model dispatch policy (Session 040)
+
+- **Deep reasoning / investigation / review**: `openai-codex/gpt-5.6-luna` (xhigh) → escalate `gpt-5.6-terra` (high) → `gpt-5.6-sol` (medium) if the previous cannot solve it. ALWAYS `context: 'fresh'` for codex models (their context window overflows with a forked long session).
+- **Implementation / mechanical fixes**: `opencode-go/deepseek-v4-flash` (fast/cheap).
+- **Workflow**: investigate + plan with the capable model first, implement with flash.
+- **Web research**: `pi-web-access` extension (web_search/fetch_content/get_search_content) + `@upstash/context7-pi` (resolve-library-id/query-docs) — enable via `extensions: ['npm:pi-web-access']` + `tools: [...]` on the subagent launch.
+- Extensions installed this session: `npm:pi-web-access`, `npm:@upstash/context7-pi`.
