@@ -156,6 +156,12 @@ impl AppCore {
         sink: Arc<dyn EventSink>,
     ) -> Result<Self, String> {
         let hotkeys = GlobalHotkeys::new(modifier)?;
+        // Keep the wheel-bridge modifier in sync with the initial config on
+        // Windows (legacy app.rs initialized it at startup; the modifier
+        // change paths below re-sync on every change). Idempotent atomic
+        // store — safe regardless of when install_wheel_hook runs.
+        #[cfg(target_os = "windows")]
+        crate::wheel_win32::set_modifier(modifier);
         let last_state = audio.get_state().unwrap_or(VolumeState {
             volume: 0.5,
             muted: false,

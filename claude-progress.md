@@ -57,6 +57,8 @@ Task 7 fix round 1 (ship pipeline): ship.sh phase 5 builds the frontend explicit
 
 Task 6 residuals fix (user request): AppCore::new syncs the wheel modifier from the initial config (legacy app.rs:423 parity); set_modifier saves-then-adopts and resyncs last_config_mtime (fixes spurious reload + HUD flash after modifier picks, and the save-order divergence); config_path gains a VOLUMECTL_CONFIG_DIR override so config tests are hermetic on every platform (the old APPDATA trick only worked on Windows); host_core unit tests for the moved helpers (hotkey_to_action incl. custom steps + Shift variants, tray_command_to_action, config_mtime fresh/stable/changed) + a set_modifier-mtime integration test; dead AppCore::overlay_appearance removed and native_win32 resolves appearance through one helper; verify-vol011.ps1 now targets VolumeControl.exe; TauriSink::exit uninstalls the wheel hook and destroys the bridge window before app.exit(0) (legacy uninstall_wheel_hook parity); OverlayData cross-thread happens-before documented in the unsafe Send+Sync SAFETY comment.
 
+Fix round 2 (Task 6 residual item 1, re-review NOT-ADDRESSED): AppCore::new now calls wheel_win32::set_modifier(modifier) on Windows at startup (parity with legacy app.rs:423; the previous residual-fix report had claimed this without implementing it). Added 3 wheel_win32 unit tests covering the modifier encoding round-trip, stable distinct encodings, and set_modifier updating the active state. 284 cargo + 18 vitest green; linux-gnu cross check clean.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
