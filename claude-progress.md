@@ -26,6 +26,12 @@
 - Verified: 265 tests pass (241 volumectl + 16 linux_host + 4 host_core + 3 window_manager + 1 commands), clippy -D warnings clean, fmt + diff-check clean; npx tauri build --no-bundle -> target/release/VolumeControl.exe; runtime smoke: 8/8 combos registered, no panic, idle WS 12.9MB; e2e keybd_event Ctrl+Alt+Down -> 'hotkey: VolumeDown' -> 'action: adjust -2% (100% -> 98%)' -> 'publish: state=98%' (2% because the user config pins volume_step=2 - config wins by design). before*Command paths corrected to run from the frontend dir (tauri-cli runs them with cwd=frontend, not repo root - supersedes the Task 1 note).
 - Deferred: get_audio_sessions returns [] (Task 2b); native overlay/tray re-home (Task 6); settings-window intents (ApplyConfig etc.) log stubs until the Settings webview (Task 4); config mtime reload (Task 6).
 
+### Task 2b: Windows WASAPI audio session source - complete
+
+- `audio_sessions_win32.rs`: WASAPI session enumeration/control for the per-app mixer (IMMDeviceEnumerator -> default render -> IAudioClient -> IAudioSessionManager2 -> GetSessionEnumerator -> IAudioSessionControl2/ISimpleAudioVolume), hand-rolled vtable layouts per the audio_windows.rs pattern; session id = process id string; display-name fallback chain (OS name -> process base -> 'Process <pid>'); active flag from AudioSessionState; never panics on device/COM failure (empty list).
+- `host_core.rs`: SessionsSource trait (supported/list/set_volume/mute) + NoopSessions seam; AppCore delegates sessions()/set_session_volume/mute_session; bootstrap reports sessions_supported=true on Windows. Stale session ids -> Err and src-tauri commands.rs re-emits state://sessions so the frontend drops the dead row (spec 9.6).
+- Tests: 4 pure-helper tests (resolved_session_name fallbacks, session_id round-trip); host_core tests updated to the platform contract (Windows: stale id is Err; others: no-op Ok). Verified: 269 tests, clippy/fmt clean, cross-target linux-gnu + apple-darwin compile clean.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0

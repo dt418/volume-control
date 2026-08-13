@@ -87,22 +87,29 @@ fn handle_action_adjust_volume_emits_volume_event() {
 }
 
 #[test]
-fn session_commands_are_noop_on_unsupported_platform() {
+fn session_commands_follow_the_platform_contract() {
     let sink = Arc::new(RecordingSink::default());
     let mut core = core_with(sink.clone());
-    // Task 2 interface contract: no-op until the Windows WASAPI source (2b).
-    assert_eq!(core.sessions(), vec![]);
-    assert!(core.set_session_volume("stale-id", 40).is_ok());
-    assert!(core.mute_session("stale-id").is_ok());
+    if cfg!(target_os = "windows") {
+        // Task 2b: the WASAPI source is live on Windows; a stale id must be
+        // rejected (the command layer then re-emits state://sessions).
+        assert!(core.set_session_volume("stale-id", 40).is_err());
+        assert!(core.mute_session("stale-id").is_err());
+    } else {
+        // No per-app sessions on other platforms: no-op Ok contract.
+        assert_eq!(core.sessions(), vec![]);
+        assert!(core.set_session_volume("stale-id", 40).is_ok());
+        assert!(core.mute_session("stale-id").is_ok());
+    }
 }
 
 #[test]
-fn bootstrap_reports_default_step_and_empty_sessions() {
+fn bootstrap_reports_default_step_and_session_support() {
     let sink = Arc::new(RecordingSink::default());
     let mut core = core_with(sink.clone());
     let payload = core.bootstrap();
     assert_eq!(payload.config.volume_step, 1);
-    assert!(!payload.sessions_supported);
-    assert!(payload.sessions.is_empty());
+    // Windows wires the WASAPI source; other platforms report unsupported.
+    assert_eq!(payload.sessions_supported, cfg!(target_os = "windows"));
     assert_eq!(payload.hotkey_status.len(), 8);
 }

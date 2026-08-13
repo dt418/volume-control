@@ -23,6 +23,8 @@ pub mod ui;
 
 #[cfg(target_os = "windows")]
 pub mod app;
+#[cfg(target_os = "windows")]
+pub mod audio_sessions_win32;
 /// Windows-only backends.
 #[cfg(target_os = "windows")]
 pub mod audio_windows;

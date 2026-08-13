@@ -3,7 +3,7 @@
 
 use std::sync::Mutex;
 
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 use volumectl_lib::config::HotkeyModifier;
 use volumectl_lib::host_core::{AppCore, AudioSessionInfo, BootstrapPayload};
@@ -74,18 +74,35 @@ pub fn get_audio_sessions(
 
 #[tauri::command]
 pub fn set_session_volume(
+    app: AppHandle,
     core: State<'_, Mutex<AppCore>>,
     id: String,
     pct: u8,
 ) -> Result<(), String> {
-    core.lock()
-        .map_err(|e| e.to_string())?
-        .set_session_volume(&id, pct)
+    let mut core = core.lock().map_err(|e| e.to_string())?;
+    let result = core.set_session_volume(&id, pct);
+    if result.is_err() {
+        // Spec §9.6: the session went stale mid-flight — push the fresh list
+        // so the frontend drops the dead row instead of erroring the view.
+        let sessions = core.sessions();
+        let _ = app.emit("state://sessions", sessions);
+    }
+    result
 }
 
 #[tauri::command]
-pub fn mute_session(core: State<'_, Mutex<AppCore>>, id: String) -> Result<(), String> {
-    core.lock().map_err(|e| e.to_string())?.mute_session(&id)
+pub fn mute_session(
+    app: AppHandle,
+    core: State<'_, Mutex<AppCore>>,
+    id: String,
+) -> Result<(), String> {
+    let mut core = core.lock().map_err(|e| e.to_string())?;
+    let result = core.mute_session(&id);
+    if result.is_err() {
+        let sessions = core.sessions();
+        let _ = app.emit("state://sessions", sessions);
+    }
+    result
 }
 
 #[tauri::command]

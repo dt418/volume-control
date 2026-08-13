@@ -19,9 +19,8 @@ use crate::hotkeys::{HotkeyAction, HotkeyRegResult};
 use crate::hotkeys_global::GlobalHotkeys;
 use crate::ui::{AccentMode, AppAction, MaterialMode, MotionMode, SurfaceId, ThemeMode};
 
-/// One application audio session in the per-app mixer. Interface-only in the
-/// IPC task; the Windows WASAPI source (session enumeration) lands in a later
-/// task, so every platform currently reports an empty list.
+/// One application audio session in the per-app mixer. The Windows WASAPI
+/// source (Task 2b) enumerates these; other platforms report an empty list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AudioSessionInfo {
     pub id: String,
@@ -29,6 +28,39 @@ pub struct AudioSessionInfo {
     pub pct: u8,
     pub muted: bool,
     pub active: bool,
+}
+
+/// Per-app audio session source behind [`AppCore`]'s session commands.
+/// Windows provides a WASAPI implementation; every other platform uses
+/// [`NoopSessions`] (no per-app mixing).
+pub trait SessionsSource: Send + Sync {
+    /// Whether the platform exposes per-app sessions (drives
+    /// `BootstrapPayload::sessions_supported`).
+    fn supported(&self) -> bool {
+        false
+    }
+    /// The current session list (empty when unsupported or unavailable).
+    fn list(&self) -> Vec<AudioSessionInfo>;
+    /// Set one session's volume (0–100). A stale/missing id returns `Err` so
+    /// the caller can re-emit the fresh list (spec §9.6).
+    fn set_volume(&self, id: &str, pct: u8) -> Result<(), String>;
+    /// Toggle one session's mute. Same stale-id contract as [`Self::set_volume`].
+    fn mute(&self, id: &str) -> Result<(), String>;
+}
+
+/// Platform-independent fallback: no per-app sessions.
+pub struct NoopSessions;
+
+impl SessionsSource for NoopSessions {
+    fn list(&self) -> Vec<AudioSessionInfo> {
+        Vec::new()
+    }
+    fn set_volume(&self, _id: &str, _pct: u8) -> Result<(), String> {
+        Ok(())
+    }
+    fn mute(&self, _id: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// Resolved appearance tokens pushed to every webview surface. Values match
@@ -81,6 +113,7 @@ pub struct AppCore {
     last_state: VolumeState,
     hotkey_status: Vec<HotkeyRegResult>,
     sink: Arc<dyn EventSink>,
+    sessions_source: Box<dyn SessionsSource>,
 }
 
 impl AppCore {
@@ -98,6 +131,11 @@ impl AppCore {
             muted: false,
         });
         let hotkey_status = hotkeys.status();
+        #[cfg(target_os = "windows")]
+        let sessions_source: Box<dyn SessionsSource> =
+            Box::new(crate::audio_sessions_win32::WindowsSessions);
+        #[cfg(not(target_os = "windows"))]
+        let sessions_source: Box<dyn SessionsSource> = Box::new(NoopSessions);
         Ok(Self {
             audio,
             hotkeys,
@@ -105,6 +143,7 @@ impl AppCore {
             last_state,
             hotkey_status,
             sink,
+            sessions_source,
         })
     }
 
@@ -121,7 +160,7 @@ impl AppCore {
             hotkey_status: self.hotkey_status.clone(),
             appearance: self.appearance_payload(),
             sessions: self.sessions(),
-            sessions_supported: false,
+            sessions_supported: self.sessions_source.supported(),
         }
     }
 
@@ -305,23 +344,23 @@ impl AppCore {
         Ok(())
     }
 
-    /// The per-app session list. Interface-only in the IPC task (empty on
-    /// every platform); the Windows WASAPI source lands in a later task.
+    /// The per-app session list. Windows enumerates WASAPI sessions of the
+    /// default render device; other platforms return an empty list.
     pub fn sessions(&mut self) -> Vec<AudioSessionInfo> {
-        let _ = &self.audio;
-        vec![]
+        self.sessions_source.list()
     }
 
-    /// Set one session's volume. No-op (interface contract) until the Windows
-    /// session source lands; a stale id must then return `Err` per spec §9.6.
-    pub fn set_session_volume(&mut self, _id: &str, _pct: u8) -> Result<(), String> {
-        Ok(())
+    /// Set one session's volume. A stale/missing session id returns `Err` and
+    /// the fresh session list is re-emitted so the frontend drops the dead row
+    /// (spec §9.6). Unsupported platforms keep the no-op `Ok` contract.
+    pub fn set_session_volume(&mut self, id: &str, pct: u8) -> Result<(), String> {
+        self.sessions_source.set_volume(id, pct)
     }
 
-    /// Mute/unmute one session. No-op (interface contract) until the Windows
-    /// session source lands.
-    pub fn mute_session(&mut self, _id: &str) -> Result<(), String> {
-        Ok(())
+    /// Toggle one session's mute. Same stale-id contract as
+    /// [`Self::set_session_volume`].
+    pub fn mute_session(&mut self, id: &str) -> Result<(), String> {
+        self.sessions_source.mute(id)
     }
 
     /// Re-read the audio state and push the confirmed volume/mute to the
