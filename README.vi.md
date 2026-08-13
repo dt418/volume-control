@@ -11,7 +11,7 @@ ngoài hệ điều hành.
 ## Tính năng
 
 - **Phím tắt toàn cục** (mặc định `Ctrl+Alt`):
-  - `Ctrl+Alt+↑ / ↓` — tăng/giảm âm lượng ±2%
+  - `Ctrl+Alt+↑ / ↓` — tăng/giảm âm lượng ±1%
   - `Ctrl+Alt+Shift+↑ / ↓` — tăng/giảm ±10%
   - `Ctrl+Alt+M` — bật/tắt tiếng
   - `Ctrl+Alt+R` — đặt lại 50%

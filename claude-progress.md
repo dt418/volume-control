@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
+
+- Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0
+  preserving all hotkey behavior (8 actions, hold-to-repeat, Shift variants,
+  macOS ⌘/⌃ dual modifier, per-action status), and set the default volume
+  step to 1%.
+- Task 1: default volume step 2 → 1.
+  - `crates/volumectl/src/config.rs`: `volume_step` default 2 → 1 (doc
+    comments updated); `volume_step_large` stays 10. New test
+    `default_volume_step_is_one_percent` (TDD: RED `left: 2, right: 1` → GREEN).
+  - `README.md` / `README.vi.md`: `volume ±2%` → `±1%`.
+  - `feature_list.json`: vol-029 added (`in_progress`), `last_updated` bumped.
+- Verification: `cargo test -p volumectl config::tests::default_volume_step_is_one_percent`
+  RED then GREEN; `cargo test -p volumectl --no-default-features` — 252/252 pass on host.
+
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
 - Goal: three-domain pre-push review of the third-party-skills commit

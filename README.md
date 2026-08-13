@@ -10,7 +10,7 @@ application: no webview, no Electron, no runtime dependencies beyond the OS.
 ## Features
 
 - **Global hotkeys** (default `Ctrl+Alt`):
-  - `Ctrl+Alt+↑ / ↓` — volume ±2%
+  - `Ctrl+Alt+↑ / ↓` — volume ±1%
   - `Ctrl+Alt+Shift+↑ / ↓` — volume ±10%
   - `Ctrl+Alt+M` — mute toggle
   - `Ctrl+Alt+R` — reset to 50%
