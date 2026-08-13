@@ -39,6 +39,30 @@
   `cargo test -p volumectl --no-default-features` — 263/263 pass;
   `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
   clean; `cargo fmt --all --check` + `git diff --check` clean.
+- Task 3: wire the global-hotkey backend, remove rdev.
+  - `Cargo.toml` (workspace) + `crates/volumectl/Cargo.toml`: `rdev` removed;
+    `Cargo.lock` regenerated. `crates/volumectl/src/lib.rs`: removed
+    `pub mod hotkeys_rdev;`. Deleted `crates/volumectl/src/hotkeys_rdev.rs`.
+  - Hosts rewired to `crate::hotkeys_global::GlobalHotkeys`:
+    `app.rs` (import, `AppContext.hotkeys` type, construction, drain doc),
+    `linux_host_core.rs` (`impl HotkeySource for GlobalHotkeys`, trait doc),
+    `linux_app.rs` + `macos_app.rs` (imports + construction),
+    `main.rs` (`hotkeys_global::run_headless()`).
+  - Comments updated: `hotkeys/mod.rs` (status doc), `wheel_win32.rs`,
+    `macos_app.rs`, `hotkeys_global.rs` module docs, `app.rs` drain doc.
+  - `CLAUDE.md` architecture notes: rdev → global-hotkey (host lines,
+    headless host name, X11 requirement note, module reference).
+  - `README.md`: hotkey backend table (no macOS Accessibility claim),
+    backend name + module tree reference → global-hotkey.
+  - `feature_list.json`: vol-029 verification extended (cross-target + rg
+    clean), notes updated, `last_updated` bumped.
+- Verification: `cargo build` + `cargo test --workspace --no-default-features`
+  (257/257 pass) + clippy `-D warnings` clean + `cargo fmt --all --check` +
+  `git diff --check` clean; `rg "rdev|RdevHotkeys"` clean outside historical
+  docs/records/verify-vol011.ps1; cross-target `cargo check
+  --target x86_64-unknown-linux-gnu -p volumectl --tests --no-default-features
+  --features gtk-renderer` and `--target x86_64-apple-darwin -p volumectl
+  --tests --no-default-features` both compile clean via the pkg-config stub.
 
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 

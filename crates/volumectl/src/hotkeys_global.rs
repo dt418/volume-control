@@ -299,7 +299,7 @@ fn register_combos(
 ///
 /// One instance owns the native manager, the registered combos, the
 /// id→action table, the listener thread and the repeat worker. Hosts drain
-/// [`GlobalHotkeys::try_recv`] exactly as they drained the rdev backend.
+/// [`GlobalHotkeys::try_recv`] exactly as hosts drained the previous backend.
 pub struct GlobalHotkeys {
     manager: GlobalHotKeyManager,
     registered: Mutex<Vec<HotKey>>,

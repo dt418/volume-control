@@ -57,7 +57,7 @@ pub struct HotkeyRegResult {
 /// Availability of one global hotkey action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HotkeyRegStatus {
-    /// The action is handled by the global `rdev` listener.
+    /// The action is handled by the global hotkey listener.
     Registered,
     /// Kept for compatibility with older persisted/help models.
     Conflicted(HotkeyRegError),

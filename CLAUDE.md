@@ -8,7 +8,7 @@ VolumeControl is a Rust 2021 Cargo workspace (`rust-version = 1.82`) containing 
 `crates/volumectl` library and `volumectl` binary. It is a native volume controller
 with global hotkeys, native audio backends, host-owned confirmed state, and platform
 renderers. Windows has the complete Win32 tray/overlay host. macOS has CoreAudio,
-rdev, and an AppKit host/renderer. Linux has PulseAudio, rdev, a platform-neutral
+global-hotkey, and an AppKit host/renderer. Linux has PulseAudio, global-hotkey, a platform-neutral
 host reducer, and an optional GTK4/libadwaita host/renderer. Non-Windows tray/menu,
 full surface interaction, settings persistence actions, and blacklist actions remain
 follow-on work.
@@ -72,7 +72,7 @@ cargo test
 ```
 
 Ubuntu/Debian GTK development needs the packages used by CI, including the X11
-libraries required by rdev:
+libraries required by the global hotkey and X11 backends:
 
 ```bash
 sudo apt-get install libgtk-4-dev libadwaita-1-dev libpulse-dev \
@@ -109,9 +109,9 @@ require root/input-group privileges for Wayland hotkeys.
   `mute` arguments use `cli`.
 - Linux with `gtk-renderer` and no arguments starts `linux_app`; explicit CLI
   arguments still use `cli`.
-- Linux without GTK and no arguments starts the headless `hotkeys_rdev` host;
+- Linux without GTK and no arguments starts the headless `hotkeys_global` host;
   explicit CLI arguments still use `cli`.
-- Linux rdev global hotkeys currently require X11. Wayland keeps GTK/audio/renderer
+- Linux global hotkeys currently require X11. Wayland keeps GTK/audio/renderer
   operation available while recording degraded hotkey capability.
 
 ## Architecture
@@ -125,14 +125,14 @@ surface contracts live beside these interfaces.
 Audio uses `crate::audio::AudioBackend` with target adapters in `audio_windows.rs`
 (WASAPI), `audio_macos.rs` (CoreAudio), and `audio_linux.rs` (PulseAudio). Hotkey
 actions live in `crate::hotkeys`; the cross-platform listener and hold-repeat logic
-are in `hotkeys_rdev.rs`. Windows native `RegisterHotKey` wiring is owned by
+are in `hotkeys_global.rs`. Windows native `RegisterHotKey` wiring is owned by
 `app.rs`.
 
 Platform hosts own event loops, backend state, configuration reload, and confirmed
 state publication:
 
 - `app.rs` owns the Windows message loop, tray, overlay, mixer, settings, and help.
-- `macos_app.rs` owns the AppKit-main-thread loop, CoreAudio, rdev actions, mtime
+- `macos_app.rs` owns the AppKit-main-thread loop, CoreAudio, global-hotkey actions, mtime
   config reload, `MacosRenderer`, and explicit renderer teardown. Retina geometry
   converts physical pixels to AppKit points exactly once using the backing scale.
 - `linux_host_core.rs` is the display-free reducer and test seam for audio, hotkeys,

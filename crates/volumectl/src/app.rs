@@ -33,7 +33,7 @@ use crate::audio_windows::WindowsAudio;
 use crate::config::Config;
 use crate::help::{Help, HelpAppearance, WM_APP_HELP_OPEN_CONFIG, WM_APP_HELP_SETTINGS};
 use crate::hotkeys::{hotkey_from_id, HotkeyAction, HotkeyRegResult};
-use crate::hotkeys_rdev::RdevHotkeys;
+use crate::hotkeys_global::GlobalHotkeys;
 use crate::mixer::{
     Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET,
 };
@@ -97,7 +97,7 @@ fn reload_config_if_changed(ctx: &mut AppContext) -> bool {
 /// Heap-allocated state that lives in the window's GWLP_USERDATA.
 struct AppContext {
     audio: WindowsAudio,
-    hotkeys: RdevHotkeys,
+    hotkeys: GlobalHotkeys,
     config: Config,
     last_state: VolumeState,
     last_config_mtime: Option<std::time::SystemTime>,
@@ -416,10 +416,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     log::debug!("host hwnd=0x{:x}", hwnd);
 
-    // Cross-platform rdev keyboard listener + the Windows-only wheel bridge.
+    // Cross-platform global-hotkey listener + the Windows-only wheel bridge.
     // The listener emits into a channel; audio mutations remain on this host
     // message-loop thread.
-    let hotkeys = RdevHotkeys::new(config.modifier)?;
+    let hotkeys = GlobalHotkeys::new(config.modifier)?;
     set_wheel_modifier(config.modifier);
     // The global listener owns every action, so the Help card can show the
     // same active status for all configured shortcuts.
@@ -609,7 +609,7 @@ unsafe extern "system" fn host_wndproc(
     }
 }
 
-/// Drain rdev actions on a fast timer independent from the slower config and
+/// Drain hotkey actions on a fast timer independent from the slower config and
 /// audio synchronization poll. This keeps the first key press responsive.
 fn drain_hotkeys(ctx: &mut AppContext) {
     while let Some(action) = ctx.hotkeys.try_recv() {

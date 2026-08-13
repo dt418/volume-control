@@ -30,9 +30,6 @@ windows-sys = { version = "0.52", features = [
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dwm",
 ] }
-# Cross-platform global keyboard/mouse event listener. Keyboard Hold-to-Repeat
-# is implemented in our code rather than relying on native key-repeat.
-rdev = "0.5.3"
 # Cross-platform global hotkey registration through native OS APIs (Windows
 # RegisterHotKey, macOS Carbon, Linux X11 via x11rb). No low-level hooks and
 # no macOS Accessibility permission required.

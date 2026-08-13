@@ -17,7 +17,7 @@ mod gtk_host {
 
     use crate::audio::{default_backend, AudioBackend, AudioError, VolumeState};
     use crate::config;
-    use crate::hotkeys_rdev::RdevHotkeys;
+    use crate::hotkeys_global::GlobalHotkeys;
     use crate::linux_host_core::{HostCore, HotkeySource};
     use crate::ui::platform::linux::renderer::LinuxRenderer;
     use crate::ui::{tokens_for, AppAction, HostHandle, NativeRenderer, UiCapabilities, WorkArea};
@@ -295,7 +295,7 @@ mod gtk_host {
         };
 
         let (hotkeys, hotkey_error) = if is_x11() {
-            match RdevHotkeys::new(config.modifier) {
+            match GlobalHotkeys::new(config.modifier) {
                 Ok(hotkeys) => (Some(Box::new(hotkeys) as Box<dyn HotkeySource>), None),
                 Err(error) => (None, Some(format!("global hotkeys unavailable: {error}"))),
             }
