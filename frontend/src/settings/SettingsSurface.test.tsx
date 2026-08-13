@@ -112,4 +112,20 @@ describe("SettingsSurface", () => {
     ]);
     expect(await screen.findByText(/conflict/i)).toBeInTheDocument();
   });
+
+  it("surfaces a rejected step-size edit as a visible error", async () => {
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") return bootstrap;
+      if (cmd === "update_settings") {
+        throw new Error("volume_step_large must be greater than volume_step");
+      }
+      return {};
+    });
+    await renderSurface();
+    const large = screen.getByLabelText(/^Large volume step$/i) as HTMLInputElement;
+    fireEvent.change(large, { target: { value: "1" } });
+    fireEvent.blur(large);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("volume_step_large must be greater than volume_step");
+  });
 });

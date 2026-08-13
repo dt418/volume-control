@@ -41,6 +41,7 @@ const SELECT_CLASS =
 export function SettingsSurface() {
   const [config, setConfig] = useState<SettingsConfig | null>(null);
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyRegResult[]>([]);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -83,11 +84,15 @@ export function SettingsSurface() {
 
   const setModifier = (id: string) => {
     setConfig((prev) => (prev ? { ...prev, modifier: id } : prev));
-    void invoke("set_modifier", { modifier: id });
+    void invoke("set_modifier", { modifier: id })
+      .then(() => setFormError(null))
+      .catch((error) => setFormError(String(error)));
   };
 
   const patchConfig = (patch: Record<string, unknown>) => {
-    void invoke("update_settings", { patch });
+    void invoke("update_settings", { patch })
+      .then(() => setFormError(null))
+      .catch((error) => setFormError(String(error)));
   };
 
   const commitStep = (field: "volume_step" | "volume_step_large", raw: string) => {
@@ -110,6 +115,11 @@ export function SettingsSurface() {
 
   return (
     <main className="flex flex-col gap-4 p-4">
+      {formError && (
+        <p role="alert" className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-500">
+          {formError}
+        </p>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Hotkey modifier</CardTitle>
@@ -130,7 +140,7 @@ export function SettingsSurface() {
             <Input
               type="number"
               min={1}
-              max={100}
+              max={50}
               aria-label="Volume step"
               className="w-20"
               defaultValue={config.volume_step}
@@ -144,7 +154,7 @@ export function SettingsSurface() {
             <Input
               type="number"
               min={1}
-              max={100}
+              max={50}
               aria-label="Large volume step"
               className="w-20"
               defaultValue={config.volume_step_large}

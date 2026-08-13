@@ -120,7 +120,7 @@ fn update_settings_mutates_steps_and_appearance_without_writing_disk() {
     let mut core = core_with(sink.clone());
     let patch = volumectl_lib::host_core::SettingsPatch {
         volume_step: Some(5),
-        volume_step_large: Some(999), // clamped to the 1..=100 range
+        volume_step_large: Some(20), // within the 1..=50 range, > volume_step
         theme: Some("Dark".into()),
         material: Some("Opaque".into()),
         motion: Some("Reduced".into()),
@@ -129,7 +129,7 @@ fn update_settings_mutates_steps_and_appearance_without_writing_disk() {
     core.update_settings(patch).unwrap();
     let payload = core.bootstrap();
     assert_eq!(payload.config.volume_step, 5);
-    assert_eq!(payload.config.volume_step_large, 100);
+    assert_eq!(payload.config.volume_step_large, 20);
     assert_eq!(
         payload.config.appearance.theme,
         volumectl_lib::ui::ThemeMode::Dark
@@ -165,4 +165,66 @@ fn update_settings_rejects_unknown_enum_strings() {
     assert!(err.contains("theme"), "unexpected error: {err}");
     // No partial application on error: the step stays at the default.
     assert_eq!(core.bootstrap().config.volume_step, 1);
+}
+
+#[test]
+fn update_settings_rejects_out_of_range_or_unordered_steps() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+
+    // Small step above the config.rs ceiling (1..=50).
+    let err = core
+        .update_settings(volumectl_lib::host_core::SettingsPatch {
+            volume_step: Some(51),
+            volume_step_large: None,
+            theme: None,
+            material: None,
+            motion: None,
+            accent: None,
+        })
+        .unwrap_err();
+    assert!(err.contains("volume_step"), "unexpected error: {err}");
+
+    // Large step not greater than the small step.
+    let err = core
+        .update_settings(volumectl_lib::host_core::SettingsPatch {
+            volume_step: Some(10),
+            volume_step_large: Some(10),
+            theme: None,
+            material: None,
+            motion: None,
+            accent: None,
+        })
+        .unwrap_err();
+    assert!(
+        err.contains("greater than volume_step"),
+        "unexpected error: {err}"
+    );
+
+    // No partial application on any rejection: defaults are untouched.
+    let payload = core.bootstrap();
+    assert_eq!(payload.config.volume_step, 1);
+    assert_eq!(payload.config.volume_step_large, 10);
+}
+
+#[test]
+fn update_settings_validates_large_against_patched_small() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink.clone());
+
+    // Patching only the large step below the current small step must reject.
+    let err = core
+        .update_settings(volumectl_lib::host_core::SettingsPatch {
+            volume_step: None,
+            volume_step_large: Some(1),
+            theme: None,
+            material: None,
+            motion: None,
+            accent: None,
+        })
+        .unwrap_err();
+    assert!(
+        err.contains("greater than volume_step"),
+        "unexpected error: {err}"
+    );
 }

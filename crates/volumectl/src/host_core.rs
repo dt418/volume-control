@@ -351,28 +351,47 @@ impl AppCore {
     }
 
     /// Apply a partial settings patch to the in-memory config. Step sizes are
-    /// clamped to the 1..=100 range; appearance strings must be exact enum
-    /// variant names. Persistence is deliberately NOT part of this method so
-    /// tests can exercise the mutation without touching the user's config
-    /// file — the command layer calls [`AppCore::save_config`] afterwards.
+    /// validated against the config.rs rules (1..=50, large > small) BEFORE
+    /// mutating, so a rejected patch never leaves the in-memory config
+    /// diverging from what `save_validated` accepts; appearance strings must
+    /// be exact enum variant names. Persistence is deliberately NOT part of
+    /// this method so tests can exercise the mutation without touching the
+    /// user's config file — the command layer calls [`AppCore::save_config`]
+    /// afterwards.
     pub fn update_settings(&mut self, patch: SettingsPatch) -> Result<(), String> {
+        // Parse appearance fields first so a bad enum string fails before any
+        // step mutation (same fail-early behavior as before).
+        let theme = patch.theme.as_deref().map(parse_theme).transpose()?;
+        let material = patch.material.as_deref().map(parse_material).transpose()?;
+        let motion = patch.motion.as_deref().map(parse_motion).transpose()?;
+        let accent = patch.accent.as_deref().map(parse_accent).transpose()?;
+
+        // Step sizes: validate the prospective values (patch values fall back
+        // to the current config) against the same rules `save_validated`
+        // enforces — identical error strings via config::validate_steps.
+        let step = patch.volume_step.unwrap_or(self.config.volume_step);
+        let large = patch
+            .volume_step_large
+            .unwrap_or(self.config.volume_step_large);
+        crate::config::validate_steps(step, large).map_err(|e| e.to_string())?;
+
         if let Some(step) = patch.volume_step {
-            self.config.volume_step = step.clamp(1, 100);
+            self.config.volume_step = step;
         }
         if let Some(large) = patch.volume_step_large {
-            self.config.volume_step_large = large.clamp(1, 100);
+            self.config.volume_step_large = large;
         }
-        if let Some(theme) = patch.theme {
-            self.config.appearance.theme = parse_theme(&theme)?;
+        if let Some(theme) = theme {
+            self.config.appearance.theme = theme;
         }
-        if let Some(material) = patch.material {
-            self.config.appearance.material = parse_material(&material)?;
+        if let Some(material) = material {
+            self.config.appearance.material = material;
         }
-        if let Some(motion) = patch.motion {
-            self.config.appearance.motion = parse_motion(&motion)?;
+        if let Some(motion) = motion {
+            self.config.appearance.motion = motion;
         }
-        if let Some(accent) = patch.accent {
-            self.config.appearance.accent = parse_accent(&accent)?;
+        if let Some(accent) = accent {
+            self.config.appearance.accent = accent;
         }
         Ok(())
     }

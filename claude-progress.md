@@ -41,6 +41,8 @@
 
 Skills install (npx skills CLI): antfu/skills full collection (vitest/vite/vue/vitepress/web-design-guidelines and more — all mirrored byte-identical into .claude/skills), vercel-labs vercel-react-best-practices + vercel-composition-patterns (for the React 19 + shadcn frontend), affaan-m/ecc windows-desktop-e2e, tovimx maestro-mobile-testing. skills-lock.json provenance updated (+157 lines, 23 new entries). No enforcement-battery impact (test-format-lint mirrors still byte-identical).
 
+Task 4 fix round: update_settings validates steps via shared config::validate_steps (1..=50 + large>small) on prospective values before mutating (no silent divergence); SettingsSurface inputs clamped 1..=50 + form-level IPC error alert; 273 cargo + 15 vitest green.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0

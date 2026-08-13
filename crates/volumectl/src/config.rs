@@ -365,30 +365,42 @@ pub fn load_existing() -> Result<Config, ConfigError> {
     Ok(cfg)
 }
 
+/// Validate the two step-size values against the shared rules (range + large>
+/// small ordering). Single source of truth for both [`validate`] and the
+/// settings-patch path, so the in-memory config can never diverge from what
+/// `save_validated` accepts.
+pub(crate) fn validate_steps(
+    volume_step: u32,
+    volume_step_large: u32,
+) -> Result<(), ConfigValidationError> {
+    if !(MIN_VOLUME_STEP..=MAX_VOLUME_STEP).contains(&volume_step) {
+        return Err(validation(
+            "volume_step",
+            format!("must be between {MIN_VOLUME_STEP} and {MAX_VOLUME_STEP}"),
+        ));
+    }
+    if !(MIN_VOLUME_STEP..=MAX_VOLUME_STEP).contains(&volume_step_large) {
+        return Err(validation(
+            "volume_step_large",
+            format!("must be between {MIN_VOLUME_STEP} and {MAX_VOLUME_STEP}"),
+        ));
+    }
+    if volume_step_large <= volume_step {
+        return Err(validation(
+            "volume_step_large",
+            "must be greater than volume_step",
+        ));
+    }
+    Ok(())
+}
+
 /// Validate raw configuration values without changing them.
 ///
 /// This is intentionally strict for callers such as Settings Apply. The live
 /// loader uses [`normalize`] instead so an older or hand-edited file still has
 /// the historical fallback behavior.
 pub fn validate(cfg: &Config) -> Result<(), ConfigValidationError> {
-    if !(MIN_VOLUME_STEP..=MAX_VOLUME_STEP).contains(&cfg.volume_step) {
-        return Err(validation(
-            "volume_step",
-            format!("must be between {MIN_VOLUME_STEP} and {MAX_VOLUME_STEP}"),
-        ));
-    }
-    if !(MIN_VOLUME_STEP..=MAX_VOLUME_STEP).contains(&cfg.volume_step_large) {
-        return Err(validation(
-            "volume_step_large",
-            format!("must be between {MIN_VOLUME_STEP} and {MAX_VOLUME_STEP}"),
-        ));
-    }
-    if cfg.volume_step_large <= cfg.volume_step {
-        return Err(validation(
-            "volume_step_large",
-            "must be greater than volume_step",
-        ));
-    }
+    validate_steps(cfg.volume_step, cfg.volume_step_large)?;
     if !(MIN_OVERLAY_DURATION_MS..=MAX_OVERLAY_DURATION_MS).contains(&cfg.overlay_duration_ms) {
         return Err(validation(
             "overlay_duration_ms",
