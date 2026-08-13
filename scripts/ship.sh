@@ -21,7 +21,8 @@
 #      must be intact
 #   4. scripts/test-format-lint.sh              the gate chain itself must
 #      be intact
-#   5. check-records.sh --staged                the exact commit set,
+#   5. tauri build --no-bundle                 frontend assets + release binary
+#   6. check-records.sh --staged                the exact commit set,
 #      re-checked AFTER staging
 #
 # Soft preconditions - relaxed ONLY with --force, never by default:
@@ -150,7 +151,7 @@ do_push() {
     fi
 }
 
-echo "[1/5] records guard (branch change set vs origin/master)"
+echo "[1/6] records guard (branch change set vs origin/master)"
 if "$GIT_BIN" rev-parse --verify --quiet origin/master >/dev/null 2>&1; then
     if ! "$SH_BIN" "$repo_root/scripts/check-records.sh" --branch origin/master; then
         fail "the change set misses feature_list.json and/or claude-progress.md (see templates above)"
@@ -161,13 +162,13 @@ else
 fi
 
 # ---- Phase 2: full format-lint gate (tests included) -----------------------
-echo "[2/5] format-lint gate (full, tests included)"
+echo "[2/6] format-lint gate (full, tests included)"
 if ! bash "$repo_root/scripts/format-lint.sh"; then
     fail "the format-lint gate reported failures above"
 fi
 
 # ---- Phase 3: records-guard self-test ---------------------------------------
-echo "[3/5] records-guard self-test"
+echo "[3/6] records-guard self-test"
 if ! bash "$repo_root/scripts/test-check-records.sh"; then
     fail "the records-guard self-test reported failures above"
 fi
@@ -179,7 +180,7 @@ if ! "$GIT_BIN" diff --cached --quiet; then
     echo "note: the index already has staged changes; test-format-lint.sh requires" >&2
     echo "      a clean index. If it fails below, run 'git reset' first, then re-run ship." >&2
 fi
-echo "[4/5] format-lint smoke test"
+echo "[4/6] format-lint smoke test"
 if ! bash "$repo_root/scripts/test-format-lint.sh"; then
     fail "the format-lint smoke test reported failures above"
 fi
@@ -191,8 +192,29 @@ if [ "$dry_run" = true ]; then
     exit 0
 fi
 
-# ---- Phase 5: stage everything, re-check the exact commit set ----------------
-echo "[5/5] staging the working tree"
+# ---- Phase 5: frontend + release binary build -------------------------------
+# The pre-ship flow verifies the actual shippable artifact: the frontend
+# bundle (embedded into the binary by tauri-build) and the release binary
+# (the `tauri build --no-bundle` path CI uses; the frontend is built
+# explicitly first so asset-embedding failures surface here).
+#
+# tauri-cli is a frontend devDependency (frontend/node_modules/.bin/tauri);
+# run it from the repo root — tauri-cli resolves src-tauri/tauri.conf.json
+# and runs beforeBuildCommand with cwd = the repo root.
+if [ -x "$repo_root/frontend/node_modules/.bin/tauri" ]; then
+    TAURI_BIN="$repo_root/frontend/node_modules/.bin/tauri"
+elif command -v tauri >/dev/null 2>&1; then
+    TAURI_BIN="$(command -v tauri)"
+else
+    fail "frontend build requires the tauri-cli devDependency (run: npm ci in frontend/)"
+fi
+echo "[5/6] frontend + release binary build"
+if ! "$TAURI_BIN" build --no-bundle; then
+    fail "tauri build --no-bundle failed (frontend assets or release binary)"
+fi
+
+# ---- Phase 6: stage everything, re-check the exact commit set ----------------
+echo "[6/6] staging the working tree"
 if ! "$GIT_BIN" add -A; then
     fail "git add -A failed (see the output above); the staged set may be incomplete"
 fi

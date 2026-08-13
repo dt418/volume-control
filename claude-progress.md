@@ -49,6 +49,8 @@ Task 5 (Help webview surface): shortcuts.ts (fixed set keyed by modifier, reusin
 
 Task 6 (host integration): volumectl lib-only ([[bin]] removed — src-tauri is the sole binary; CLI via args on non-Windows); native_win32.rs (overlay + tray + wheel-bridge hidden hwnd -> mpsc channel -> apply_hotkey); native_headless.rs (Linux/macOS doc module); EventSink extended (overlay/show_tray_menu/exit, state+config passed to avoid re-entrant core locks); AppCore config live-reload (mtime) + force_reload + tray_command_to_action; 150ms host poll (reload + tray + external sync); unsafe Send+Sync for NativeWin32 (documented). Gate: 273+4 tests, clippy/fmt clean, linux-gnu workspace check clean, darwin workspace blocked on objc2-exception-helper cross-build (CI covers). Runtime smoke: 8/8 hotkeys, -2% step pipeline, wheel installed, 0 errors, 0 webview children idle, host WS 22.6MB.
 
+Task 7 (CI + ship wiring): ci.yml — setup-node + frontend build (npm ci + npm run build + npm test) on all 4 jobs; webkit2gtk-4.1 etc. packages on the ubuntu jobs; artifact names volumectl -> VolumeControl(.exe); package.sh binary refs updated. ship.sh — new phase [5/6] 'frontend + release binary build' via tauri build --no-bundle (tauri-cli resolved from frontend devDeps); phases renumbered 1/6..6/6; header hard-check list updated. Enforcement battery (test-check-records / test-format-lint / test-ship) stays green. docs/global-hotkeys.md gains a Webview surfaces section.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0

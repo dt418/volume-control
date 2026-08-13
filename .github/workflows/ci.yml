@@ -29,8 +29,25 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install PulseAudio dev headers (volumecontrol probe)
-        run: sudo apt-get update && sudo apt-get install -y libpulse-dev libx11-dev libxi-dev libxtst-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install Linux & Tauri dependencies (webview surfaces)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev pkg-config libx11-dev libasound2-dev \
+            libpulse-dev libxi-dev libxtst-dev
+      - name: Frontend build + tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npm test
       - name: Format
         run: cargo fmt --all --check
       - name: Lint (clippy, no GTK features)
@@ -57,6 +74,16 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
       - name: Build
         run: cargo build
       - name: Test
@@ -71,9 +98,9 @@ jobs:
         shell: bash
         run: |
           cargo build --release
-          test -s target/release/volumectl.exe && echo "volumectl.exe present and non-empty"
-          ls -la target/release/volumectl.exe
-          file target/release/volumectl.exe || true
+          test -s target/release/VolumeControl.exe && echo "VolumeControl.exe present and non-empty"
+          ls -la target/release/VolumeControl.exe
+          file target/release/VolumeControl.exe || true
 
   macos:
     name: macOS (build + tests + renderer smoke)
@@ -82,6 +109,16 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
       - name: Build
         run: cargo build
       - name: Test (includes AppKit renderer smoke tests)
@@ -90,9 +127,9 @@ jobs:
         shell: bash
         run: |
           cargo build --release
-          test -s target/release/volumectl && echo "volumectl present and non-empty"
-          ls -la target/release/volumectl
-          file target/release/volumectl
+          test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
+          ls -la target/release/VolumeControl
+          file target/release/VolumeControl
       - name: Package macOS app bundle (validation)
         shell: bash
         env:
@@ -118,10 +155,17 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install GTK4/libadwaita/Xvfb
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install GTK4/libadwaita/Xvfb + Tauri deps
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev libx11-dev libxi-dev libxtst-dev xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config libasound2-dev
           # GTK4 layer-shell is optional. Ubuntu 24.04 may not provide the
           # development package yet, so probe before installing and use the
           # X11 fallback without raising a CI warning when it is unavailable.
@@ -130,6 +174,11 @@ jobs:
           else
             echo "GTK4 layer-shell development package unavailable; using the X11 fallback."
           fi
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
       - name: Build (no features — CLI fallback)
         run: cargo build
       - name: Test (no features — pure planning)
@@ -148,6 +197,6 @@ jobs:
       - name: Build release and validate artifact (gtk-renderer)
         run: |
           cargo build --release --features gtk-renderer
-          test -s target/release/volumectl && echo "volumectl present and non-empty"
-          ls -la target/release/volumectl
-          file target/release/volumectl
+          test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
+          ls -la target/release/VolumeControl
+          file target/release/VolumeControl

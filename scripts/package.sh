@@ -16,9 +16,9 @@ tag="${RELEASE_TAG:?set RELEASE_TAG (e.g. v0.1.0)}"
 version="${tag#v}"
 
 case "$platform" in
-  windows) bin="target/release/volumectl.exe" ; ext="zip" ;;
-  macos)   bin="target/release/volumectl"     ; ext="zip" ;;
-  ubuntu)  bin="target/release/volumectl"     ; ext="tar.gz" ;;
+  windows) bin="target/release/VolumeControl.exe" ; ext="zip" ;;
+  macos)   bin="target/release/VolumeControl"     ; ext="zip" ;;
+  ubuntu)  bin="target/release/VolumeControl"     ; ext="tar.gz" ;;
   *) echo "unknown platform: $platform" >&2 ; exit 1 ;;
 esac
 
