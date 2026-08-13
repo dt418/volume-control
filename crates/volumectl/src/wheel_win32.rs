@@ -1,9 +1,9 @@
 //! Windows-only mouse-wheel bridge for the configured volume shortcuts.
 //!
-//! Keyboard shortcuts are handled by the cross-platform `global-hotkey` backend. The
-//! wheel gesture remains a small native Windows hook because `global-hotkey` is a
-//! keyboard/mouse event listener rather than a message bridge to the existing
-//! Windows host window.
+//! Keyboard hotkey combos are registered through the cross-platform
+//! `global-hotkey` backend, which registers key combos only — it does not
+//! observe mouse input. The wheel gesture therefore stays a small native
+//! Windows hook that feeds the same action pipeline as the hotkeys.
 
 use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 

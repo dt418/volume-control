@@ -370,6 +370,11 @@ impl GlobalHotkeys {
         {
             let registered = self.registered.lock().expect("hotkey list poisoned");
             for hotkey in registered.iter() {
+                // Accepted limitation: on Linux the crate's `unregister`
+                // blocks on its internal channel waiting for the X11 event
+                // thread. A config reload after the X server died is an
+                // extreme edge case (the app is already unusable at that
+                // point), so no workaround is attempted here.
                 let _ = self.manager.unregister(*hotkey);
             }
         }
@@ -411,10 +416,15 @@ impl Drop for GlobalHotkeys {
         if let Some(listener) = self.listener.take() {
             let _ = listener.join();
         }
-        let registered = self.registered.lock().expect("hotkey list poisoned");
-        for hotkey in registered.iter() {
-            let _ = self.manager.unregister(*hotkey);
-        }
+        // Native registration cleanup is delegated to the crate's own
+        // `GlobalHotKeyManager::drop`: macOS unregisters every combo and
+        // removes its Carbon event handler, Windows destroys the hidden
+        // window (releasing the RegisterHotKey registrations with it), and
+        // X11 tears the backend thread down and releases the key grabs when
+        // the connection closes. We deliberately do NOT call
+        // `manager.unregister` here: on Linux that call blocks on the crate's
+        // internal channel waiting for its X11 event thread, so it would hang
+        // forever if that thread died (for example the X server was killed).
     }
 }
 

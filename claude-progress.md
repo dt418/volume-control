@@ -88,6 +88,13 @@
   XRecord; also reworded the Help-surface conflict description ("In use"
   badge + "Shortcut conflict" callout) and reordered the combo table to
   match `ALL_HOTKEY_ACTIONS`. Commit: `docs: correct Linux backend mechanism (XGrabKey)`
+- Final-review fixes (whole-branch review): `GlobalHotkeys::drop` hardened
+  against the crate's blocking X11 unregister — the explicit unregister
+  loop was removed (native cleanup is delegated to the crate manager's
+  `Drop`, which covers macOS/Windows/X11); `set_modifier` documents the
+  accepted X11-death edge; `wheel_win32.rs` header comment corrected
+  (global-hotkey registers combos only, not mouse events).
+  Commit: `fix: harden hotkey Drop against blocking X11 unregister`
 
 ## Session 038 (2026-08-12) - pre-push review: PS gate fail-open on --form flags fixed
 
