@@ -8,7 +8,7 @@ Windows. **Wave 1 + Wave 2 of the ui-restoration-plan landed at `03cc22f`
 config surface — six-section shell, draft lifecycle, blacklist/feedback/
 thresholds/storage + legacy window geometry parity: mixer 400×224 bottom-right
 above the overlay, settings 760×620 centered, help 520×500 bottom-right).**
-Next: Wave 4 (verification + records: full battery + smoke — system row visible, settings all sections, blacklist add/remove end-to-end, help badges).
+Next: Wave 4 (verification + records: full battery + smoke — system row visible, settings all sections, blacklist add/remove end-to-end, help badges). **All four waves of the ui-restoration-plan are now complete (Wave 1 mixer SignalRail at `03cc22f`, Wave 2 settings full config + legacy geometry at `392348a`, Wave 3 help parity at `6777e91`, Wave 4 verification at `8e9a986`).** Outstanding follow-on items: tray-driven live open of Settings/Help on a real interactive desktop (this session had no Shell_TrayWnd); Linux/macOS host runtime verification on real machines (pre-existing); push the feature branch when ready.
 on branch `feature/tauri-ui-hybrid`). All 30 features are passing on
 Windows.
 
