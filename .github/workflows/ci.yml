@@ -84,6 +84,19 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Install isolated Tauri E2E dependencies
+        working-directory: e2e/tauri
+        run: npm ci
+      - name: Run Windows Tauri WebDriver E2E (release gate)
+        shell: pwsh
+        run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/ci-windows
+      - name: Upload Windows Tauri E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-e2e-windows
+          path: output/tauri-e2e/ci-windows
+          if-no-files-found: warn
       - name: Build
         run: cargo build
       - name: Test
@@ -119,6 +132,19 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Install isolated Tauri E2E dependencies
+        working-directory: e2e/tauri
+        run: npm ci
+      - name: Run macOS Tauri WebDriver E2E
+        shell: bash
+        run: bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-macos
+      - name: Upload macOS Tauri E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-e2e-macos
+          path: output/tauri-e2e/ci-macos
+          if-no-files-found: warn
       - name: Build
         run: cargo build
       - name: Test (includes AppKit renderer smoke tests)
@@ -179,6 +205,18 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Install isolated Tauri E2E dependencies
+        working-directory: e2e/tauri
+        run: npm ci
+      - name: Run Linux Tauri WebDriver E2E under Xvfb
+        run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-linux
+      - name: Upload Linux Tauri E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-e2e-linux
+          path: output/tauri-e2e/ci-linux
+          if-no-files-found: warn
       - name: Build (no features — CLI fallback)
         run: cargo build
       - name: Test (no features — pure planning)

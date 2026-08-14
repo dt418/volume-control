@@ -1,5 +1,14 @@
 # Session Handoff
 
+## Session 048 (2026-08-15)
+
+The Tauri WebDriver/Pilot integration now has Windows-first live evidence and
+cross-platform CI/ship wiring. CI runs the WDIO matrix on Windows, Ubuntu under
+Xvfb, and macOS; `scripts/ship.sh` runs the same fail-closed WDIO wrapper after
+the frontend build and before the release Tauri build. Pilot remains local
+diagnostic tooling only. Current local commits include `faea6e2` (Pilot), with
+the CI/ship slice pending its next checkpoint commit.
+
 Handoff after Session 040 (2026-08-13, global-hotkey migration + Hybrid Tauri UI:
 `rdev` → `global-hotkey` 0.8.0 + 1% default step, commits `190d02b`..`HEAD`
 on branch `feature/tauri-ui-hybrid`). All 30 features are passing on

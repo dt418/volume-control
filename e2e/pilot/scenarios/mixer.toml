@@ -32,7 +32,7 @@ target = "[aria-label=\"Reset volume to 50%\"]"
 [[step]]
 name = "capture mixer screenshot"
 action = "screenshot"
-path = "output/tauri-pilot/mixer.png"
+path = "mixer.png"
 
 [[step]]
 name = "check browser errors"

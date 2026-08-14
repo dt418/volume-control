@@ -33,7 +33,7 @@ target = "[data-testid=\"surface-footer\"] button:first-of-type"
 [[step]]
 name = "capture settings screenshot"
 action = "screenshot"
-path = "output/tauri-pilot/settings.png"
+path = "settings.png"
 
 [[step]]
 name = "check browser errors"

@@ -662,6 +662,9 @@
                                               "cargo install tauri-pilot-cli --locked installs tauri-pilot 0.7.2; cargo check -p volumecontrol-tauri --no-default-features --features e2e-pilot remains clean on Rust 1.97.",
                                               "npm run test:pilot --prefix e2e/tauri -- scenario=mixer (7/7), settings (7/7), help (6/6), and recovery (4/4) live Windows scenarios pass with JUnit/screenshots/console-error artifacts under output/tauri-pilot/.",
                                               "Pilot runner syntax and cleanup checks pass; it uses temporary pilot:default capability/global Tauri state, one isolated debug app per surface, unique config/output, and stale registry cleanup.",
+                                              "CI workflow now runs the isolated WDIO matrix on Windows, Ubuntu/Xvfb, and macOS with artifact upload steps; PyYAML validates .github/workflows/ci.yml.",
+                                              "scripts/test-ship.sh passes all 25 checks after ship.sh adds the fail-closed WDIO gate between frontend build and tauri release build.",
+                                              "Root .gitignore ignores output/ so E2E screenshots, JUnit, logs, and timing artifacts cannot be staged by ship.sh.",
                                               "npm run test:production-exclusion and capability --check-only contracts (pass).",
                                               "npm run typecheck --prefix e2e/tauri (clean).",
                                                "npm run test:support --prefix e2e/tauri (8/8 pass, including waits, IPC bridge, cleanup, selectors, and timing/artifact helpers).",
@@ -679,9 +682,10 @@
                                            "Session 042 (2026-08-14): isolated e2e/tauri package, fixture, selectors, artifact/timing helpers, and Node contract/helper tests added; no Rust or production frontend files changed.",
                                             "Session 045 (2026-08-14): debug-only plugin wiring, temporary global Tauri bridge, Vite preview lifecycle, and release-gated WebDriver surface specs verified on Windows.",
                                            "Session 046 (2026-08-14): recovery fault injection, owned-window enumeration, timing budget helper, and cross-shell E2E wrappers verified on Windows.",
-                                           "Session 047 (2026-08-15): Pilot CLI 0.7.2 installed; Mixer/Settings/Help/recovery live scenarios pass on Windows with debug-only per-surface startup and cleanup."
+                                           "Session 047 (2026-08-15): Pilot CLI 0.7.2 installed; Mixer/Settings/Help/recovery live scenarios pass on Windows with debug-only per-surface startup and cleanup.",
+                                           "Session 048 (2026-08-15): CI Windows/Linux/macOS WDIO matrix, fail-closed ship gate, output ignore, and 25-check ship self-test verified."
                                       ],
-                         "notes":  "WDIO foundation, Windows-first surface coverage, recovery, owned-window timing checks, and live Windows Pilot scenarios are green. Remaining slices add CI matrix wiring and fail-closed ship integration. Production remains excluded by Cargo features, capabilities, frontend dependency boundaries, debug fault marker, and withGlobalTauri contract."
+                         "notes":  "WDIO foundation, Windows-first surface coverage, recovery, owned-window timing checks, live Windows Pilot scenarios, CI matrix wiring, and fail-closed ship gate are implemented. Hosted cross-platform CI and final release review remain before marking vol-031 complete. Production remains excluded by Cargo features, capabilities, frontend dependency boundaries, debug fault marker, and withGlobalTauri contract."
                      }
                  ]
 }

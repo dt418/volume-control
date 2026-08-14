@@ -1,5 +1,19 @@
 # Progress Log
 
+## Session 048 (2026-08-15) - CI matrix and fail-closed ship gate
+
+- Added Windows, Linux/Xvfb, and macOS CI steps that install the isolated
+  `e2e/tauri` package, run the complete WDIO surface matrix through the
+  cross-shell wrapper, and retain E2E artifacts on every job.
+- Hardened `scripts/ship.sh`: after the frontend build it now runs the
+  fail-closed Tauri WebDriver gate before `tauri build --no-bundle`; Pilot is
+  intentionally diagnostic-only and never changes the release exit code.
+- Updated the ship-flow self-test to require the E2E gate, added `output/` to
+  `.gitignore` so screenshots/logs cannot be staged, and validated CI YAML with
+  PyYAML. `bash scripts/test-ship.sh` passes all 25 checks.
+- Remaining: run the new CI jobs on hosted Linux/macOS/Windows runners and
+  perform the final release review before marking vol-031 complete.
+
 ## Session 047 (2026-08-15) - Debug-only Tauri Pilot scenarios
 
 - Verified the official `tauri-pilot` CLI contract from the upstream project:
@@ -19,8 +33,8 @@
 - Live Pilot runs pass on Windows: Mixer 7/7, Settings 7/7, Help 6/6, and
   recovery 4/4. Each writes JUnit, screenshot, and console-error artifacts
   beneath `output/tauri-pilot/<run-id>/`; no root-level failure artifact remains.
-- Remaining: wire the CI matrix and fail-closed ship integration before
-  marking vol-031 complete.
+- Remaining: run the new CI matrix and complete the final release review
+  before marking vol-031 complete.
 
 ## Session 045 (2026-08-14) - Windows-first WebDriver surface E2E
 

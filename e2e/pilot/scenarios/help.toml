@@ -28,7 +28,7 @@ value = "volume"
 [[step]]
 name = "capture help screenshot"
 action = "screenshot"
-path = "output/tauri-pilot/help.png"
+path = "help.png"
 
 [[step]]
 name = "check browser errors"

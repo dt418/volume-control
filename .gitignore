@@ -18,6 +18,7 @@ config.json
 # Build and distribution artifacts
 dist/
 build/
+output/
 develop-eggs/
 downloads/
 eggs/

@@ -21,8 +21,9 @@
 #      must be intact
 #   4. scripts/test-format-lint.sh              the gate chain itself must
 #      be intact
-#   5. tauri build --no-bundle                 frontend assets + release binary
-#   6. check-records.sh --staged                the exact commit set,
+#   5. verify-tauri-e2e                        debug WDIO desktop gate
+#   6. tauri build --no-bundle                 frontend assets + release binary
+#   7. check-records.sh --staged                the exact commit set,
 #      re-checked AFTER staging
 #
 # Soft preconditions - relaxed ONLY with --force, never by default:
@@ -192,7 +193,7 @@ if [ "$dry_run" = true ]; then
     exit 0
 fi
 
-# ---- Phase 5: frontend + release binary build -------------------------------
+# ---- Phase 5: frontend build -------------------------------------------------
 # The pre-ship flow verifies the actual shippable artifact: the frontend
 # bundle (embedded into the binary by tauri-build) and the release binary
 # (the `tauri build --no-bundle` path CI uses). The frontend is built
@@ -204,10 +205,43 @@ elif command -v tauri >/dev/null 2>&1; then
 else
     fail "frontend build requires the tauri-cli devDependency (run: npm ci in frontend/)"
 fi
-echo "[5/6] frontend + release binary build"
+echo "[5/7] frontend build"
 if ! npm run build --prefix "$repo_root/frontend"; then
     fail "frontend build failed (npm run build --prefix frontend)"
 fi
+
+# ---- Phase 6: release-gated debug WebDriver E2E -----------------------------
+# WDIO is the deterministic pass/fail desktop gate. Pilot remains a local
+# diagnostic workflow and is never required by the release path. The wrapper
+# fails closed when dependencies, the debug binary, or cleanup evidence is
+# missing; output is ignored by Git and retained for triage.
+echo "[6/7] Tauri WebDriver E2E gate"
+is_windows=false
+case "${OS:-}:${OSTYPE:-}" in
+    *Windows*:*|*:msys*|*:cygwin*) is_windows=true ;;
+esac
+if [ "$is_windows" = true ] && command -v pwsh >/dev/null 2>&1; then
+    ps_script="$repo_root/scripts/verify-tauri-e2e.ps1"
+    ps_output="$repo_root/output/tauri-e2e/ship"
+    if command -v cygpath >/dev/null 2>&1; then
+        ps_script="$(cygpath -w "$ps_script")"
+        ps_output="$(cygpath -w "$ps_output")"
+    fi
+    if ! pwsh -NoProfile -File "$ps_script" -Surface all -OutputRoot "$ps_output"; then
+        fail "Windows Tauri WebDriver E2E gate failed"
+    fi
+elif [ "$is_windows" = true ]; then
+    if ! bash "$repo_root/scripts/verify-tauri-e2e.sh" --binary "$repo_root/target/debug/VolumeControl.exe" --surface all --output-root "$repo_root/output/tauri-e2e/ship"; then
+        fail "Windows Tauri WebDriver E2E gate failed (PowerShell unavailable; Bash wrapper used)"
+    fi
+else
+    if ! bash "$repo_root/scripts/verify-tauri-e2e.sh" --binary "$repo_root/target/debug/VolumeControl" --surface all --output-root "$repo_root/output/tauri-e2e/ship"; then
+        fail "Tauri WebDriver E2E gate failed"
+    fi
+fi
+
+# ---- Phase 7: release binary build + staging -------------------------------
+echo "[7/7] release binary build and staging"
 # tauri-cli resolves src-tauri/tauri.conf.json and runs beforeBuildCommand with
 # cwd = the repo root; use the local CLI binary, never `npx tauri` (npx cannot
 # resolve the frontend devDependency from the repo root and falls back to
@@ -217,7 +251,7 @@ if ! (cd "$repo_root" && "$TAURI_BIN" build --no-bundle); then
 fi
 
 # ---- Phase 6: stage everything, re-check the exact commit set ----------------
-echo "[6/6] staging the working tree"
+echo "[7/7] staging the working tree"
 if ! "$GIT_BIN" add -A; then
     fail "git add -A failed (see the output above); the staged set may be incomplete"
 fi

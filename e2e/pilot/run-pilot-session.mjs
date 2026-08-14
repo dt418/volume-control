@@ -155,7 +155,7 @@ try {
   await waitForSurface(`[data-surface="${startupSurface}"]`);
   const junit = resolve(outputRoot, `${scenario}.junit.xml`);
   const result = spawnSync("tauri-pilot", ["--window", startupWindow, "run", scenarioPath, "--junit", junit], {
-    cwd: repositoryRoot,
+    cwd: outputRoot,
     env: { ...process.env, TAURI_PILOT_WINDOW: startupWindow },
     stdio: "inherit",
     shell: false,
@@ -163,7 +163,7 @@ try {
   });
   exitCode = result.status ?? 1;
   const logs = spawnSync("tauri-pilot", ["--window", startupWindow, "logs", "--level", "error"], {
-    cwd: repositoryRoot,
+    cwd: outputRoot,
     env: { ...process.env, TAURI_PILOT_WINDOW: startupWindow },
     encoding: "utf8",
     shell: false,

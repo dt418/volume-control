@@ -17,7 +17,7 @@ expected = "Mixer unavailable: E2E bootstrap failure"
 [[step]]
 name = "capture recovery screenshot"
 action = "screenshot"
-path = "output/tauri-pilot/recovery.png"
+path = "recovery.png"
 
 [[step]]
 name = "check browser errors"
