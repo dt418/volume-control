@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "e2e-pilot",
+  "description": "Debug-only Tauri Pilot permissions; never ship this capability.",
+  "windows": ["window-mixer", "window-settings", "window-help"],
+  "permissions": ["pilot:default"]
+}

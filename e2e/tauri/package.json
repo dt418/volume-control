@@ -6,6 +6,7 @@
   "scripts": {
     "test:contract": "node --test test/package-contract.mjs",
     "test:support": "node --import tsx --test support/*.test.ts",
+    "test:production-exclusion": "node test-production-exclusion.mjs",
     "test:e2e": "wdio run wdio.conf.ts"
   },
   "devDependencies": {

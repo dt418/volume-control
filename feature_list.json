@@ -654,7 +654,11 @@
                                               "npm run test:support --prefix e2e/tauri (5/5 pass).",
                                               "npm exec -- tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck --types node ... (clean).",
                                               "npm audit --omit=dev --audit-level=high (0 production vulnerabilities).",
-                                              "Production frontend package has no WebdriverIO/Tauri service dependency; e2e/tauri/node_modules is ignored while package-lock.json remains tracked."
+                                              "Production frontend package has no WebdriverIO/Tauri service dependency; e2e/tauri/node_modules is ignored while package-lock.json remains tracked.",
+                                              "cargo check -p volumecontrol-tauri --no-default-features (clean).",
+                                              "cargo check -p volumecontrol-tauri --no-default-features --features e2e-wdio (clean).",
+                                              "cargo check -p volumecontrol-tauri --no-default-features --features e2e-pilot (clean on Rust 1.97; Pilot requires Rust 1.95+).",
+                                              "npm run test:production-exclusion and capability --check-only contracts (pass)."
                                           ],
                          "evidence":  [
                                           "Context7 Tauri docs confirm @wdio/tauri-service with embedded provider; npm registry pins @wdio/tauri-service 1.3.0 and WebdriverIO runner/reporter packages 9.30.1.",

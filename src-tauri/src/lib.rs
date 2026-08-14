@@ -24,7 +24,7 @@ mod events_sink;
 mod window_manager;
 
 pub fn builder() -> tauri::Builder<tauri::Wry> {
-    tauri::Builder::default().invoke_handler(tauri::generate_handler![
+    register_debug_plugins(tauri::Builder::default()).invoke_handler(tauri::generate_handler![
         get_bootstrap,
         adjust_volume,
         set_volume,
@@ -43,6 +43,34 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         close_surface,
         surface_ready,
     ])
+}
+
+/// Enable test-only automation plugins only for an explicitly marked debug run.
+///
+/// The feature gates keep the optional crates out of the normal production
+/// dependency graph. The environment marker is a second runtime boundary so a
+/// developer cannot accidentally expose a WebDriver/Pilot endpoint by setting a
+/// Cargo feature alone. Release builds always ignore the marker.
+fn register_debug_plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    if !cfg!(debug_assertions) || std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() != Ok("1") {
+        return builder;
+    }
+
+    #[cfg(any(feature = "e2e-wdio", feature = "e2e-pilot"))]
+    let mut builder = builder;
+
+    #[cfg(feature = "e2e-wdio")]
+    {
+        builder = builder.plugin(tauri_plugin_wdio::init());
+        builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
+    }
+
+    #[cfg(feature = "e2e-pilot")]
+    {
+        builder = builder.plugin(tauri_plugin_pilot::init());
+    }
+
+    builder
 }
 
 /// The hotkey channel poll cadence (keeps the first key press responsive).
@@ -64,7 +92,7 @@ fn parse_verify_surface(value: &str) -> Result<Option<SurfaceId>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> tauri::Result<()> {
     volumectl_lib::init_logging();
-    tauri::Builder::default()
+    register_debug_plugins(tauri::Builder::default())
         .setup(|app| {
             // Prevent two instances (mirrors the legacy host's named-mutex
             // guard: a second instance would double-apply hotkeys/wheel and

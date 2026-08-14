@@ -20,6 +20,25 @@
 - Next: inspect official plugin permissions, add feature-gated debug wiring, and
   prove the production dependency/capability exclusion before writing UI specs.
 
+## Session 043 (2026-08-14) - Debug-only Tauri WebDriver/Pilot wiring
+
+- Added optional `e2e-wdio` and `e2e-pilot` Cargo features to `src-tauri`, with
+  `tauri-plugin-wdio`/`tauri-plugin-wdio-webdriver` 1.3.0 and
+  `tauri-plugin-pilot` 0.7.2 (`default-features = false`).
+- Added `register_debug_plugins` to both `builder()` and `run()` paths. Plugins
+  require the matching feature, `debug_assertions`, and
+  `VOLUMECTL_E2E_DEBUG=1`; normal release startup ignores the marker.
+- Added temporary source capabilities for `wdio:default` +
+  `wdio-webdriver:default`, and `pilot:default`. The capability preparation
+  script refuses to overwrite an existing target and removes its temporary file
+  in `finally` after an optional command.
+- Added a production exclusion contract that checks default capability/dependency
+  boundaries and prevents test capability files from landing under
+  `src-tauri/capabilities`.
+- Verification: default/e2e-wdio/e2e-pilot cargo checks all pass; production
+  exclusion and capability check-only contracts pass. Rust 1.97 is active here;
+  Pilot's documented Rust 1.95+ requirement is satisfied for debug builds.
+
 ## Session 041 (2026-08-14) - Tauri surface recovery and Windows-first quality design
 
 - Completed the Tauri rendering-recovery continuation: Mixer, Settings, and Help
