@@ -1,8 +1,13 @@
 /**
- * Help surface data (spec §5.3): the fixed global shortcut set grouped by
- * Volume / Commands, rendered for the SELECTED modifier. Combos reuse the
- * restricted-recorder key set from Settings (modifierOptions.ts); CapsLock
- * shows the Ctrl+Alt fallback combos with a note.
+ * Help surface data (spec §5.3): the fixed global shortcut set rendered for
+ * the SELECTED modifier. Combos reuse the restricted-recorder key set from
+ * Settings (modifierOptions.ts); CapsLock shows the Ctrl+Alt fallback combos
+ * with a note.
+ *
+ * Legacy parity (help.rs): the five BASE actions form the primary rows with
+ * per-row registration status pills; the shift variants are a separate
+ * extended section (the legacy card deliberately documented only base
+ * combos, with shift variants sharing the base action's status).
  */
 
 import { modifierById } from "../settings/modifierOptions";
@@ -19,8 +24,17 @@ export interface HelpGroup {
   items: HelpShortcut[];
 }
 
-const VOLUME_ACTIONS = ["VolumeUp", "VolumeDown", "VolumeUpLarge", "VolumeDownLarge"];
-const COMMAND_ACTIONS = ["ToggleMute", "OpenMenu", "Reset50", "OpenMixer"];
+/** The five legacy base actions (help.rs ACTION_ROWS labels, spec §8.2). */
+const BASE_ACTIONS = [
+  "VolumeUp",
+  "VolumeDown",
+  "ToggleMute",
+  "OpenMixer",
+  "Reset50",
+] as const;
+
+/** Extended webview additions: the shift variants + the menu action. */
+const EXTENDED_ACTIONS = ["VolumeUpLarge", "VolumeDownLarge", "OpenMenu"] as const;
 
 /** Grouped shortcuts for the configured modifier (CapsLock → Ctrl+Alt fallback). */
 export function helpGroups(modifier: string): HelpGroup[] {
@@ -36,9 +50,25 @@ export function helpGroups(modifier: string): HelpGroup[] {
     return { action, label: combo.label, combo: combo.combo };
   };
   return [
-    { id: "volume", title: "Volume", items: VOLUME_ACTIONS.map(pick) },
-    { id: "commands", title: "Commands", items: COMMAND_ACTIONS.map(pick) },
+    { id: "volume", title: "Volume", items: BASE_ACTIONS.slice(0, 2).map(pick) },
+    {
+      id: "commands",
+      title: "Commands",
+      items: BASE_ACTIONS.slice(2).map(pick),
+    },
+    {
+      id: "extended",
+      title: "Extended",
+      items: EXTENDED_ACTIONS.map(pick),
+    },
   ];
+}
+
+/** The five base actions (used for status badges + the conflict callout). */
+export function baseActions(modifier: string): HelpShortcut[] {
+  return helpGroups(modifier)
+    .filter((g) => g.id !== "extended")
+    .flatMap((g) => g.items);
 }
 
 /** Shown under the title when the configured modifier falls back to Ctrl+Alt. */
