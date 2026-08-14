@@ -1,5 +1,25 @@
 # Progress Log
 
+## Session 042 (2026-08-14) - Isolated Tauri WebDriver test foundation
+
+- Continued the approved Tauri WebDriver/Pilot plan with the lowest-risk slice:
+  created `e2e/tauri` as an isolated npm package, leaving `frontend/package.json`
+  and production Rust unchanged.
+- Pinned `@wdio/tauri-service@1.3.0`, WebdriverIO runner/reporter packages at
+  `9.30.1`, TypeScript 7.0.2, and tsx 4.23.12. Context7 confirms the official
+  embedded Tauri service configuration.
+- Added one-worker `wdio.conf.ts`, isolated app fixture with idempotent cleanup,
+  stable surface selectors, artifact/timing helpers, and Node contract/helper tests.
+- Verification: `npm install --prefix e2e/tauri` exit 0; package contract 1/1;
+  support tests 5/5; TypeScript check clean; `npm audit --omit=dev` reports zero
+  production vulnerabilities. npm still reports 15 dev-tool audit findings
+  (1 moderate, 14 high); these remain tracked for dependency review before
+  CI/release wiring and do not enter the production frontend graph.
+- Added `e2e/tauri/node_modules` to `.gitignore`; the lockfile remains versioned
+  and generated dependencies are not staged or committed.
+- Next: inspect official plugin permissions, add feature-gated debug wiring, and
+  prove the production dependency/capability exclusion before writing UI specs.
+
 ## Session 041 (2026-08-14) - Tauri surface recovery and Windows-first quality design
 
 - Completed the Tauri rendering-recovery continuation: Mixer, Settings, and Help

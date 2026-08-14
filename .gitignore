@@ -89,6 +89,7 @@ ehthumbs.db
 # Tauri host
 frontend/node_modules
 frontend/dist
+e2e/tauri/node_modules
 src-tauri/target
 src-tauri/gen
 
