@@ -662,16 +662,21 @@
                                               "npm run typecheck --prefix e2e/tauri (clean).",
                                                "npm run test:support --prefix e2e/tauri (8/8 pass, including waits, IPC bridge, cleanup, selectors, and timing/artifact helpers).",
                                                "Debug frontend/capability lifecycle checks pass; temporary bridge, capabilities, and withGlobalTauri config are restored after each command.",
-                                               "npm run test:e2e:debug --prefix e2e/tauri -- --surface all (4 isolated sessions, 8 tests: Mixer 2/2, Runtime bridge 1/1, Settings 3/3, Help 2/2).",
-                                               "E2E artifacts capture screenshots, accessibility snapshots, browser state, and timing evidence under output/tauri-e2e/; Vite preview and WebDriver processes terminate after each session.",
-                                               "Root .gitignore now ignores node_modules/ globally; git ls-files contains no tracked node_modules paths."
+                                              "npm run test:e2e:debug --prefix e2e/tauri -- --surface all (6 isolated sessions, 10 tests: Mixer 2/2, Runtime bridge 1/1, owned windows 1/1, recovery 1/1, Settings 3/3, Help 2/2).",
+                                              "E2E artifacts capture screenshots, accessibility snapshots, browser state, and timing evidence under output/tauri-e2e/; Vite preview and WebDriver processes terminate after each session.",
+                                              "npm run test:e2e:debug --prefix e2e/tauri -- --surface windows (owned-window enumeration + bootstrap-to-ready timing) passes.",
+                                              "npm run test:e2e:debug --prefix e2e/tauri -- --surface recovery (debug-only VOLUMECTL_E2E_BOOTSTRAP_FAILURE=1) passes with a readable Mixer alert and mounted shell.",
+                                              "scripts/verify-tauri-e2e.ps1 and scripts/verify-tauri-e2e.sh fail closed on missing dependencies/binary and assert temporary bridge/capability cleanup.",
+                                              "PowerShell wrapper real run passes windows surface; deliberate missing-binary fixture exits 1 without creating a capability or bridge residue.",
+                                              "Root .gitignore now ignores node_modules/ globally; git ls-files contains no tracked node_modules paths."
                                           ],
                          "evidence":  [
                                           "Context7 Tauri docs confirm @wdio/tauri-service with embedded provider; npm registry pins @wdio/tauri-service 1.3.0 and WebdriverIO runner/reporter packages 9.30.1.",
                                            "Session 042 (2026-08-14): isolated e2e/tauri package, fixture, selectors, artifact/timing helpers, and Node contract/helper tests added; no Rust or production frontend files changed.",
-                                           "Session 045 (2026-08-14): debug-only plugin wiring, temporary global Tauri bridge, Vite preview lifecycle, and release-gated WebDriver surface specs verified on Windows."
+                                            "Session 045 (2026-08-14): debug-only plugin wiring, temporary global Tauri bridge, Vite preview lifecycle, and release-gated WebDriver surface specs verified on Windows.",
+                                           "Session 046 (2026-08-14): recovery fault injection, owned-window enumeration, timing budget helper, and cross-shell E2E wrappers verified on Windows."
                                       ],
-                         "notes":  "WDIO foundation and Windows-first surface coverage are green. Remaining slices add Pilot scenarios, CI matrix wiring, performance/recovery probes, and fail-closed ship integration; production remains excluded by Cargo features, capabilities, frontend dependency boundaries, and withGlobalTauri contract."
+                         "notes":  "WDIO foundation, Windows-first surface coverage, recovery, and owned-window timing checks are green. Remaining slices add Pilot scenarios, CI matrix wiring, and fail-closed ship integration; production remains excluded by Cargo features, capabilities, frontend dependency boundaries, debug fault marker, and withGlobalTauri contract."
                      }
                  ]
 }

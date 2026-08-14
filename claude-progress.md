@@ -21,8 +21,24 @@
 - Root `.gitignore` now has a generic `node_modules/` rule; `git ls-files`
   confirms no tracked `node_modules` paths, while `e2e/tauri/package-lock.json`
   remains versioned.
-- Remaining: add Pilot scenarios, CI matrix/ship fail-closed wiring, and
-  performance/recovery probes before marking vol-031 complete.
+- Remaining: add Pilot scenarios, CI matrix/ship fail-closed wiring before
+  marking vol-031 complete.
+
+## Session 046 (2026-08-15) - Recovery, owned windows, and cross-shell wrappers
+
+- Added deterministic recovery injection: debug `get_bootstrap` returns a
+  readable error only when `debug_assertions` and
+  `VOLUMECTL_E2E_BOOTSTRAP_FAILURE=1` are both present; release builds ignore
+  the marker. The recovery spec verifies the mounted shell and `role=alert`.
+- Added owned-window enumeration and bootstrap-to-ready timing evidence, plus
+  a p95 budget assertion helper for future deterministic performance limits.
+- Added `scripts/verify-tauri-e2e.ps1` and `.sh`; both reject missing binary or
+  dependencies, run the isolated WDIO orchestrator, and assert temporary
+  capabilities/guest bridge are removed. PowerShell real Windows run passes;
+  missing-binary fixture exits 1 without residue.
+- Verification: WDIO all matrix now passes 6 isolated sessions / 10 tests
+  (Mixer 2, Runtime 1, Windows 1, Recovery 1, Settings 3, Help 2). Frontend
+  Vitest 80/80 (single worker) and Vite build remain clean.
 
 ## Session 042 (2026-08-14) - Isolated Tauri WebDriver test foundation
 

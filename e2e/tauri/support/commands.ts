@@ -11,9 +11,13 @@ export interface SurfaceElement {
 export interface E2eBrowser {
   $: (selector: string) => Promise<SurfaceElement>;
   execute?: (script: unknown, ...args: unknown[]) => Promise<unknown>;
+  refresh?: () => Promise<void>;
   tauri?: {
     execute: (script: unknown, ...args: unknown[]) => Promise<unknown>;
     switchWindow?: (label: string) => Promise<void>;
+    listWindows?: () => Promise<string[]>;
+    mock?: (command: string) => Promise<{ mockRejectedValue: (error: unknown) => Promise<unknown> }>;
+    restoreAllMocks?: (commandPrefix?: string) => Promise<unknown>;
   };
 }
 
@@ -61,6 +65,21 @@ export async function invokeForTest(
       tauri.core.invoke(payload.command, payload.args),
     { command, args },
   );
+}
+
+export async function mockBootstrapFailure(browser: E2eBrowser): Promise<() => Promise<void>> {
+  const mock = await browser.tauri?.mock?.("get_bootstrap");
+  if (!mock) throw new Error("Tauri WDIO mock API is unavailable; run with e2e-wdio");
+  await mock.mockRejectedValue(new Error("E2E bootstrap failure"));
+  return async () => {
+    await browser.tauri?.restoreAllMocks?.("get_bootstrap");
+  };
+}
+
+export async function listOwnedWindows(browser: E2eBrowser): Promise<string[]> {
+  const labels = await browser.tauri?.listWindows?.();
+  if (!labels) throw new Error("Tauri WDIO window API is unavailable; run with e2e-wdio");
+  return labels.filter((label) => /^window-(mixer|settings|help)$/.test(label));
 }
 
 export async function openSurface(browser: E2eBrowser, surface: SurfaceName): Promise<SurfaceElement> {

@@ -20,6 +20,8 @@ const specsBySurface = {
   settings: ["settings.e2e.ts"],
   help: ["help.e2e.ts"],
   runtime: ["runtime.e2e.ts"],
+  recovery: ["recovery.e2e.ts"],
+  windows: ["windows.e2e.ts"],
 };
 
 if (!(requestedSurface === "all" || requestedSurface in specsBySurface)) {
@@ -28,7 +30,8 @@ if (!(requestedSurface === "all" || requestedSurface in specsBySurface)) {
 }
 
 function runSurface(surface, spec) {
-  const label = `window-${surface === "runtime" ? "mixer" : surface}`;
+  const startupSurface = surface === "settings" || surface === "help" ? surface : "mixer";
+  const label = `window-${startupSurface}`;
   const specPath = resolve(packageRoot, "specs", spec);
   const child = spawn(
     process.execPath,
@@ -52,7 +55,11 @@ function runSurface(surface, spec) {
     ],
     {
       cwd: repositoryRoot,
-      env: { ...process.env, VOLUMECTL_VERIFY_SURFACE: label },
+      env: {
+        ...process.env,
+        VOLUMECTL_VERIFY_SURFACE: label,
+        ...(surface === "recovery" ? { VOLUMECTL_E2E_BOOTSTRAP_FAILURE: "1" } : {}),
+      },
       stdio: "inherit",
       windowsHide: true,
     },
@@ -63,7 +70,7 @@ function runSurface(surface, spec) {
   });
 }
 
-const surfaces = requestedSurface === "all" ? ["mixer", "runtime", "settings", "help"] : [requestedSurface];
+const surfaces = requestedSurface === "all" ? ["mixer", "runtime", "windows", "recovery", "settings", "help"] : [requestedSurface];
 let exitCode = 0;
 for (const surface of surfaces) {
   const spec = requestedSpec ?? specsBySurface[surface][0];

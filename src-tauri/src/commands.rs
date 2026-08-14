@@ -13,6 +13,11 @@ use crate::window_manager::{SurfaceId, WindowManager};
 
 #[tauri::command]
 pub fn get_bootstrap(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<BootstrapPayload, String> {
+    if cfg!(debug_assertions)
+        && std::env::var("VOLUMECTL_E2E_BOOTSTRAP_FAILURE").as_deref() == Ok("1")
+    {
+        return Err("E2E bootstrap failure".to_string());
+    }
     core.lock()
         .map_err(|e| e.to_string())
         .map(|mut core| core.bootstrap())

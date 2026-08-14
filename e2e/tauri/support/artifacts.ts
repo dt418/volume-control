@@ -41,6 +41,17 @@ export function timingReport(): Record<string, { count: number; p50: number; p95
   );
 }
 
+export function assertTimingBudget(name: string, p95LimitMilliseconds: number): void {
+  if (!Number.isFinite(p95LimitMilliseconds) || p95LimitMilliseconds < 0) {
+    throw new Error(`Invalid p95 budget for ${name}: ${p95LimitMilliseconds}`);
+  }
+  const report = timingReport()[name];
+  if (!report) throw new Error(`No timing samples recorded for ${name}`);
+  if (report.p95 > p95LimitMilliseconds) {
+    throw new Error(`Timing budget exceeded for ${name}: p95=${report.p95}ms > ${p95LimitMilliseconds}ms`);
+  }
+}
+
 async function callOptional(browser: BrowserLike, method: string, ...args: unknown[]): Promise<unknown> {
   const candidate = browser[method];
   if (typeof candidate !== "function") return undefined;

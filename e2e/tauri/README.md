@@ -51,3 +51,15 @@ The script restores every HTML file and removes the copied bridge in `finally`.
 The normal frontend package and production build never import the bridge. Each
 surface is started in its own isolated WebDriver session so opening a second
 Tauri WebView cannot block the originating WebView event loop.
+
+Cross-shell fail-closed wrappers are available from the repository root:
+
+```text
+pwsh -NoProfile -File scripts/verify-tauri-e2e.ps1 -Surface all
+bash scripts/verify-tauri-e2e.sh --surface all
+```
+
+Both wrappers reject a missing binary/dependency and verify that temporary
+capabilities and the guest bridge are gone after the run. The recovery surface
+uses the debug-only `VOLUMECTL_E2E_BOOTSTRAP_FAILURE=1` fault marker; release
+builds ignore it.
