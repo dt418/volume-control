@@ -1,5 +1,29 @@
 # Progress Log
 
+## Session 041 (2026-08-14) - Tauri surface recovery and Windows-first quality design
+
+- Completed the Tauri rendering-recovery continuation: Mixer, Settings, and Help
+  now use bounded header/content/footer shells; bootstrap failures render a
+  readable alert and still signal `surface_ready`; the WindowManager places
+  hidden windows before showing them and clamps the Mixer on short work areas.
+- Fixed a release-only runtime defect found by the real verifier: Tauri managed
+  `Arc<Mutex<AppCore>>` while commands requested `Mutex<AppCore>`, so all
+  bootstrap commands failed with `state not managed`. Commands now use the
+  managed Arc state type; rebuilt release surfaces bootstrap successfully.
+- Added `scripts/verify-tauri-surfaces.ps1` evidence capture. Release verifier
+  passed all three surfaces with live processes, expected client geometry, and
+  non-blank PNGs under `output/tauri-surface-evidence/after/`.
+- Verification: focused frontend 40/40; full frontend 80/80; frontend build
+  clean; focused Tauri tests 12 passed; `hotkeys_global` 11 passed; host_core
+  hotkey routing 6 passed; Tauri release build produced
+  `target/release/VolumeControl.exe`.
+- Approved design recorded at
+  `docs/superpowers/specs/2026-08-14-windows-first-quality-autostart-ini-design.md`:
+  Windows-first test pyramid and fail-closed release gate, diagnostic hotkey
+  latency probe, HKCU auto-start toggle, and safe JSON→INI migration with
+  Settings as the primary editing workflow. Implementation plan follows in a
+  separate change.
+
 ## Session 040 (2026-08-13) - Hybrid Tauri UI (Mixer/Settings/Help → webview)
 
 ### Task 1: Scaffold (frontend shell + src-tauri shell + WindowManager) - complete

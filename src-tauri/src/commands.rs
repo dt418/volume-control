@@ -1,9 +1,9 @@
 //! Tauri commands: the webview ↔ AppCore bridge. Every command returns
 //! `Result<T, String>` so IPC failures surface as inline toasts in the UI.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use volumectl_lib::config::HotkeyModifier;
 use volumectl_lib::host_core::{AppCore, AudioSessionInfo, BootstrapPayload, SettingsPatch};
@@ -12,21 +12,24 @@ use volumectl_lib::ui::AppAction;
 use crate::window_manager::{SurfaceId, WindowManager};
 
 #[tauri::command]
-pub fn get_bootstrap(core: State<'_, Mutex<AppCore>>) -> Result<BootstrapPayload, String> {
+pub fn get_bootstrap(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<BootstrapPayload, String> {
     core.lock()
         .map_err(|e| e.to_string())
         .map(|mut core| core.bootstrap())
 }
 
 #[tauri::command]
-pub fn adjust_volume(core: State<'_, Mutex<AppCore>>, delta_percent: i16) -> Result<(), String> {
+pub fn adjust_volume(
+    core: State<'_, Arc<Mutex<AppCore>>>,
+    delta_percent: i16,
+) -> Result<(), String> {
     core.lock()
         .map_err(|e| e.to_string())
         .map(|mut core| core.handle_action(AppAction::AdjustVolume { delta_percent }))
 }
 
 #[tauri::command]
-pub fn set_volume(core: State<'_, Mutex<AppCore>>, percent: u8) -> Result<(), String> {
+pub fn set_volume(core: State<'_, Arc<Mutex<AppCore>>>, percent: u8) -> Result<(), String> {
     core.lock().map_err(|e| e.to_string()).map(|mut core| {
         core.handle_action(AppAction::SetVolumePercent {
             percent: percent as u16,
@@ -35,14 +38,14 @@ pub fn set_volume(core: State<'_, Mutex<AppCore>>, percent: u8) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn toggle_mute(core: State<'_, Mutex<AppCore>>) -> Result<(), String> {
+pub fn toggle_mute(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<(), String> {
     core.lock()
         .map_err(|e| e.to_string())
         .map(|mut core| core.handle_action(AppAction::ToggleMute))
 }
 
 #[tauri::command]
-pub fn reset_volume(core: State<'_, Mutex<AppCore>>) -> Result<(), String> {
+pub fn reset_volume(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<(), String> {
     core.lock()
         .map_err(|e| e.to_string())
         .map(|mut core| core.handle_action(AppAction::ResetVolume))
@@ -50,7 +53,7 @@ pub fn reset_volume(core: State<'_, Mutex<AppCore>>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn set_modifier(
-    core: State<'_, Mutex<AppCore>>,
+    core: State<'_, Arc<Mutex<AppCore>>>,
     modifier: HotkeyModifier,
 ) -> Result<(), String> {
     core.lock()
@@ -63,7 +66,7 @@ pub fn set_modifier(
 /// the config (publishes state, refreshes appearance) on success.
 #[tauri::command]
 pub fn update_settings(
-    core: State<'_, Mutex<AppCore>>,
+    core: State<'_, Arc<Mutex<AppCore>>>,
     patch: SettingsPatch,
 ) -> Result<(), String> {
     let mut core = core.lock().map_err(|e| e.to_string())?;
@@ -74,7 +77,7 @@ pub fn update_settings(
 /// Read-only: the recommended blacklist presets for the current modifier
 /// (feeds the Blacklist editor's "Apply Recommended" draft merge).
 #[tauri::command]
-pub fn recommended_blacklist(core: State<'_, Mutex<AppCore>>) -> Result<Vec<String>, String> {
+pub fn recommended_blacklist(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<Vec<String>, String> {
     core.lock()
         .map_err(|e| e.to_string())
         .map(|core| core.recommended_blacklist())
@@ -91,20 +94,20 @@ pub fn config_path() -> Result<String, String> {
 /// Open the config file in the default editor (the host shows the
 /// "Editing config — changes reload automatically" overlay).
 #[tauri::command]
-pub fn open_config_location(core: State<'_, Mutex<AppCore>>) -> Result<(), String> {
+pub fn open_config_location(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<(), String> {
     core.lock()
         .map_err(|e| e.to_string())
         .map(|mut core| core.handle_action(AppAction::OpenConfigLocation))
 }
 
 #[tauri::command]
-pub fn save_config(core: State<'_, Mutex<AppCore>>) -> Result<(), String> {
+pub fn save_config(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<(), String> {
     core.lock().map_err(|e| e.to_string())?.save_config()
 }
 
 #[tauri::command]
 pub fn get_audio_sessions(
-    core: State<'_, Mutex<AppCore>>,
+    core: State<'_, Arc<Mutex<AppCore>>>,
 ) -> Result<Vec<AudioSessionInfo>, String> {
     core.lock()
         .map_err(|e| e.to_string())
@@ -114,7 +117,7 @@ pub fn get_audio_sessions(
 #[tauri::command]
 pub fn set_session_volume(
     app: AppHandle,
-    core: State<'_, Mutex<AppCore>>,
+    core: State<'_, Arc<Mutex<AppCore>>>,
     id: String,
     pct: u8,
 ) -> Result<(), String> {
@@ -160,6 +163,15 @@ pub fn close_surface(
 ) -> Result<(), String> {
     let surface = SurfaceId::from_label(&surface).ok_or("unknown surface")?;
     window_manager.close(surface)
+}
+
+#[tauri::command]
+pub fn surface_ready(
+    window: WebviewWindow,
+    window_manager: State<'_, WindowManager>,
+) -> Result<(), String> {
+    let surface = SurfaceId::from_label(window.label()).ok_or("unknown surface")?;
+    window_manager.surface_ready(surface)
 }
 
 #[cfg(test)]

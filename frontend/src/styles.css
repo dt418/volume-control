@@ -99,6 +99,33 @@ body {
    so every glass surface keeps a readable translucent background fallback.
    See docs/webview-compat.md for the full matrix and rationale. */
 @layer utilities {
+  .surface-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    background-color: color-mix(in oklab, var(--background) 94%, transparent);
+    color: var(--foreground);
+  }
+
+  .surface-scroll {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  /* The legacy mixer is intentionally only 400x224. Keep its fixed system
+     rail and footer readable without allowing the compact shell to overflow. */
+  .mixer-surface [data-testid="system-output-row"] {
+    padding: 0.5rem;
+  }
+  .mixer-surface [data-testid="system-output-row"] .mt-2 {
+    margin-top: 0.25rem;
+  }
+  .mixer-surface [data-testid="system-output-row"] button {
+    padding-top: 0.125rem;
+    padding-bottom: 0.125rem;
+  }
+
   .glass-surface {
     background-color: color-mix(in oklab, var(--background) 85%, transparent);
   }

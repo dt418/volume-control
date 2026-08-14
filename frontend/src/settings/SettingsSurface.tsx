@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
+import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
 import type { HotkeyRegResult } from "./KeyCard";
 import { AppearanceSection } from "./AppearanceSection";
 import { BlacklistEditor } from "./BlacklistEditor";
@@ -74,19 +75,28 @@ export function SettingsSurface() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
     void invoke<BootstrapPayload>("get_bootstrap")
       .then((payload) => {
         if (disposed) return;
+        setError(null);
         applyAppearance(payload.appearance);
         setConfig(payload.config);
         setDraft(payload.config);
         setHotkeyStatus(payload.hotkey_status);
       })
-      .catch(() => {
-        if (!disposed) setConfig(null);
+      .catch((reason) => {
+        if (!disposed) {
+          setConfig(null);
+          setDraft(null);
+          setError(surfaceErrorMessage(reason));
+        }
+      })
+      .finally(() => {
+        if (!disposed) void markSurfaceReady();
       });
 
     // Live conflict updates: registration status changes after set_modifier
@@ -112,12 +122,7 @@ export function SettingsSurface() {
     };
   }, []);
 
-  if (!config || !draft) {
-    return <main className="p-4 text-sm text-foreground/80">Loading…</main>;
-  }
-
-  const dirty =
-    JSON.stringify(config) !== JSON.stringify(draft);
+  const dirty = Boolean(config && draft && JSON.stringify(config) !== JSON.stringify(draft));
 
   const updateDraft = (update: (d: SettingsConfig) => SettingsConfig) => {
     setDraft((prev) => (prev ? update(prev) : prev));
@@ -125,6 +130,7 @@ export function SettingsSurface() {
   };
 
   const save = async () => {
+    if (!config || !draft) return;
     setSaving(true);
     setFieldErrors({});
     setStatus(null);
@@ -151,6 +157,7 @@ export function SettingsSurface() {
   };
 
   const reset = () => {
+    if (!config) return;
     setDraft(config);
     setFieldErrors({});
     setStatus(null);
@@ -161,29 +168,68 @@ export function SettingsSurface() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col gap-4 bg-background p-4">
-      <SectionNav active={activeSection} onSelect={setActiveSection} />
+    <main
+      data-surface="settings"
+      className="surface-shell h-dvh min-h-0 overflow-hidden flex flex-col gap-3 bg-background p-3"
+    >
+      <header
+        data-testid="surface-header"
+        className="flex flex-shrink-0 items-start justify-between border-b border-foreground/10 pb-2"
+      >
+        <div>
+          <h1 className="text-base font-semibold">VolumeControl Settings</h1>
+          <p className="text-xs text-foreground/60">Configure volume, hotkeys, appearance, and feedback</p>
+        </div>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={cancel}
+          className="rounded-md px-2 py-1 text-lg leading-none text-foreground/60 hover:bg-foreground/5 hover:text-foreground"
+        >
+          ×
+        </button>
+      </header>
 
-      <div className="flex flex-1 flex-col gap-4">
-        {activeSection === "General" && (
-          <GeneralSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
+      <div
+        data-testid="surface-content"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden min-[760px]:flex-row"
+      >
+        {error ? (
+          <div className="surface-scroll min-h-0 flex-1 overflow-y-auto">
+            <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              Settings unavailable: {error}
+            </div>
+          </div>
+        ) : !config || !draft ? (
+          <div className="surface-scroll min-h-0 flex-1 overflow-y-auto">
+            <p className="p-2 text-sm text-foreground/70">Loading…</p>
+          </div>
+        ) : (
+          <>
+            <SectionNav active={activeSection} onSelect={setActiveSection} />
+            <div className="surface-scroll min-h-0 flex-1 overflow-y-auto pr-1">
+              {activeSection === "General" && (
+                <GeneralSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
+              )}
+              {activeSection === "Hotkeys" && (
+                <HotkeysSection draft={draft} setDraft={updateDraft} hotkeyStatus={hotkeyStatus} />
+              )}
+              {activeSection === "Appearance" && (
+                <AppearanceSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
+              )}
+              {activeSection === "Blacklist" && (
+                <BlacklistEditor draft={draft} setDraft={updateDraft} />
+              )}
+              {activeSection === "Feedback" && (
+                <FeedbackSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
+              )}
+              {activeSection === "Storage" && <StorageSection />}
+            </div>
+          </>
         )}
-        {activeSection === "Hotkeys" && (
-          <HotkeysSection draft={draft} setDraft={updateDraft} hotkeyStatus={hotkeyStatus} />
-        )}
-        {activeSection === "Appearance" && (
-          <AppearanceSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
-        )}
-        {activeSection === "Blacklist" && (
-          <BlacklistEditor draft={draft} setDraft={updateDraft} />
-        )}
-        {activeSection === "Feedback" && (
-          <FeedbackSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
-        )}
-        {activeSection === "Storage" && <StorageSection />}
       </div>
 
-      <footer className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-foreground/10 bg-background/90 py-2">
+      <footer data-testid="surface-footer" className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-foreground/10 pt-2">
         <p
           role="status"
           className="text-sm text-foreground/70"
@@ -195,7 +241,7 @@ export function SettingsSurface() {
           <button
             type="button"
             onClick={reset}
-            disabled={!dirty}
+            disabled={!dirty || !draft}
             className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm disabled:opacity-40"
           >
             Reset
@@ -210,7 +256,7 @@ export function SettingsSurface() {
           <button
             type="button"
             onClick={() => void save()}
-            disabled={!dirty || saving}
+            disabled={!dirty || saving || !draft}
             className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-40"
           >
             Save changes

@@ -22,6 +22,14 @@ impl SurfaceId {
         }
     }
 
+    pub fn title(&self) -> &'static str {
+        match self {
+            Self::Mixer => "Volume Mixer",
+            Self::Settings => "VolumeControl Settings",
+            Self::Help => "VolumeControl Help",
+        }
+    }
+
     /// Vite preserves the input path under `dist/`: `frontend/src/mixer/index.html`
     /// builds to `frontend/dist/src/mixer/index.html`.
     pub fn entry(&self) -> &'static str {
@@ -83,7 +91,7 @@ pub fn place_surface(
             let right = wa_x + wa_w - OVERLAY_MARGIN_X;
             let overlay_top = wa_y + wa_h - OVERLAY_MARGIN_Y - overlay_h;
             let bottom = overlay_top - MIXER_OVERLAY_GAP;
-            (right - w, bottom - h, w, h)
+            (right - w, (bottom - h).max(wa_y), w, h)
         }
         SurfaceId::Settings => {
             let w = SETTINGS_SIZE.0 * scale;
@@ -130,6 +138,15 @@ impl WindowManager {
 
     pub fn open(&self, surface: SurfaceId) -> Result<(), String> {
         if self.is_open(surface) {
+            if let Some(window) = self.app.get_webview_window(surface.label()) {
+                if let Ok(Some(monitor)) = window.current_monitor() {
+                    apply_placement(&window, surface, &monitor);
+                } else if let Ok(Some(monitor)) = window.primary_monitor() {
+                    apply_placement(&window, surface, &monitor);
+                }
+                window.show().map_err(|e| e.to_string())?;
+                let _ = window.set_focus();
+            }
             return Ok(());
         }
         let mut builder = WebviewWindowBuilder::new(
@@ -142,7 +159,10 @@ impl WindowManager {
             SurfaceId::Settings => SETTINGS_SIZE,
             SurfaceId::Help => HELP_SIZE,
         };
-        builder = builder.inner_size(w, h);
+        builder = builder
+            .title(surface.title())
+            .inner_size(w, h)
+            .visible(false);
         match surface {
             SurfaceId::Mixer => {
                 builder = builder
@@ -173,11 +193,6 @@ impl WindowManager {
             apply_placement(&window, surface, &monitor);
         }
 
-        // Take focus so the webview receives keyboard input (Esc close).
-        // Fail-soft: some Wayland compositors may deny focus requests.
-        if surface == SurfaceId::Mixer {
-            let _ = window.set_focus();
-        }
         let app_handle = self.app.clone();
         window.on_window_event(move |event| {
             // Mixer auto-closes on losing focus. Rust-level focus events are
@@ -198,6 +213,25 @@ impl WindowManager {
             }
         });
         self.active.lock().unwrap().insert(surface);
+        Ok(())
+    }
+
+    /// Reveal a surface after its frontend has applied the bootstrap
+    /// appearance. Geometry is applied once more immediately before showing
+    /// so the user never sees the OS default position or size.
+    pub fn surface_ready(&self, surface: SurfaceId) -> Result<(), String> {
+        let window = self
+            .app
+            .get_webview_window(surface.label())
+            .ok_or_else(|| format!("surface {} is not open", surface.label()))?;
+
+        if let Ok(Some(monitor)) = window.current_monitor() {
+            apply_placement(&window, surface, &monitor);
+        } else if let Ok(Some(monitor)) = window.primary_monitor() {
+            apply_placement(&window, surface, &monitor);
+        }
+        window.show().map_err(|e| e.to_string())?;
+        let _ = window.set_focus();
         Ok(())
     }
 
@@ -232,8 +266,8 @@ impl WindowManager {
 
 fn apply_placement(window: &tauri::WebviewWindow, surface: SurfaceId, monitor: &Monitor) {
     let rect = place_surface(surface, *monitor.work_area(), monitor.scale_factor());
-    let _ = window.set_position(Position::Physical(rect.position));
     let _ = window.set_size(Size::Physical(rect.size));
+    let _ = window.set_position(Position::Physical(rect.position));
 }
 
 #[cfg(test)]
@@ -300,6 +334,13 @@ mod tests {
         // Overlay right = 3840 - 20 = 3820; overlay top = 2100 - 40 - 132 = 1928;
         // mixer bottom = 1928 - 16 = 1912; top = 1912 - 336 = 1576.
         assert_eq!(rect.position, PhysicalPosition::new(3220, 1576));
+    }
+
+    #[test]
+    fn mixer_clamps_to_work_area_when_stack_is_taller_than_work_area() {
+        let rect = place_surface(SurfaceId::Mixer, wa(0, 0, 800, 200), 1.0);
+        assert_eq!(rect.position.y, 0);
+        assert_eq!(rect.size, PhysicalSize::new(400, 224));
     }
 
     /// Settings: centered in the work area, clamped when larger than it.

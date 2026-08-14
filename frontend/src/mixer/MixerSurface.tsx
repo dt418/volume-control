@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Search } from "lucide-react";
 
 import { invoke, listen } from "../lib/ipc";
+import { surfaceErrorMessage } from "../lib/surface";
 import { SessionRow } from "./SessionRow";
 import { SystemOutputRow } from "./SystemOutputRow";
 import { useSessions } from "./sessionStore";
@@ -20,6 +21,7 @@ export function MixerSurface() {
     thresholds,
     sessionsSupported,
     notice,
+    error,
     setNotice,
     removeSession,
     updateSession,
@@ -80,13 +82,12 @@ export function MixerSurface() {
   );
 
   return (
-    <main className="glass-surface flex h-screen flex-col gap-3 p-4">
-      <header className="flex items-center justify-between">
+    <main data-surface="mixer" className="mixer-surface surface-shell h-dvh min-h-0 overflow-hidden glass-surface flex flex-col gap-1 p-2">
+      <header data-testid="surface-header" className="flex flex-shrink-0 flex-col gap-2">
         <h1 className="text-sm font-semibold">Volume Mixer</h1>
         <div className="text-xs text-foreground/60">
           {muted ? <span className="font-medium">Muted</span> : `Volume ${volumePct}%`}
         </div>
-      </header>
 
       <div className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40" />
@@ -99,6 +100,9 @@ export function MixerSurface() {
         />
       </div>
 
+      <SystemOutputRow value={volumePct} muted={muted} thresholds={thresholds} />
+      </header>
+
       {notice && (
         <div
           role="status"
@@ -108,9 +112,12 @@ export function MixerSurface() {
         </div>
       )}
 
-      <div className="flex-1 space-y-2 overflow-y-auto">
-        <SystemOutputRow value={volumePct} muted={muted} thresholds={thresholds} />
-        {!sessionsSupported ? (
+      <div data-testid="surface-content" className="surface-content surface-scroll min-h-0 flex-1 space-y-2 overflow-y-auto">
+        {error ? (
+          <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+            Mixer unavailable: {surfaceErrorMessage(error)}
+          </div>
+        ) : !sessionsSupported ? (
           <p className="py-8 text-center text-xs text-foreground/50">
             Per-app mixing is Windows-only
           </p>
@@ -134,6 +141,11 @@ export function MixerSurface() {
           ))
         )}
       </div>
+
+      <footer data-testid="surface-footer" className="flex flex-shrink-0 items-center justify-between border-t border-foreground/10 pt-1 text-[11px] text-foreground/55">
+        <span>{sessionsSupported ? `${filtered.length} app sessions` : "System output"}</span>
+        {error ? <span className="text-destructive">Backend unavailable</span> : <span>Esc to close</span>}
+      </footer>
     </main>
   );
 }

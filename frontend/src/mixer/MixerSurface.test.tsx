@@ -189,4 +189,17 @@ describe("MixerSurface", () => {
     await renderSurface();
     expect(screen.getByRole("main").className).toContain("glass-surface");
   });
+
+  it("keeps the system row outside the bounded session scroll region", async () => {
+    await renderSurface();
+    const main = screen.getByRole("main");
+    expect(main).toHaveAttribute("data-surface", "mixer");
+    expect(screen.getByTestId("surface-header")).toBeInTheDocument();
+    expect(screen.getByTestId("surface-content")).toBeInTheDocument();
+    expect(screen.getByTestId("surface-footer")).toBeInTheDocument();
+    const header = screen.getByTestId("surface-header");
+    const content = screen.getByTestId("surface-content");
+    expect(header).toContainElement(screen.getByTestId("system-output-row"));
+    expect(content).not.toContainElement(screen.getByTestId("system-output-row"));
+  });
 });

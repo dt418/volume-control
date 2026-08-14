@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
+import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
 import { DEFAULT_THRESHOLDS, type ColorThresholds } from "./SignalRail";
 
 export interface AudioSession {
@@ -48,12 +49,14 @@ export function useSessions() {
   const [thresholds, setThresholds] = useState<ColorThresholds>(DEFAULT_THRESHOLDS);
   const [sessionsSupported, setSessionsSupported] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
     invoke<BootstrapPayload>("get_bootstrap")
       .then((b) => {
         if (disposed) return;
+        setError(null);
         applyAppearance(b.appearance);
         setSessions(b.sessions ?? []);
         setVolumePct(b.volume_pct);
@@ -61,8 +64,11 @@ export function useSessions() {
         setThresholds(b.config?.color_thresholds ?? DEFAULT_THRESHOLDS);
         setSessionsSupported(b.sessions_supported);
       })
-      .catch(() => {
-        // Fail-soft: the surface renders its empty states.
+      .catch((error) => {
+        if (!disposed) setError(surfaceErrorMessage(error));
+      })
+      .finally(() => {
+        void markSurfaceReady();
       });
 
     const unlisteners: Array<() => void> = [];
@@ -95,6 +101,7 @@ export function useSessions() {
     thresholds,
     sessionsSupported,
     notice,
+    error,
     setNotice,
     removeSession,
     updateSession,

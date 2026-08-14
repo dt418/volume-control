@@ -62,6 +62,25 @@ async function renderSurface() {
 }
 
 describe("SettingsSurface", () => {
+  it("shows a readable shell with header, content, and footer", async () => {
+    await renderSurface();
+    expect(screen.getByRole("main")).toHaveAttribute("data-surface", "settings");
+    expect(screen.getByTestId("surface-header")).toBeInTheDocument();
+    expect(screen.getByTestId("surface-content")).toBeInTheDocument();
+    expect(screen.getByTestId("surface-footer")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  it("renders bootstrap failure instead of an eternal loading screen", async () => {
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") throw new Error("backend unavailable");
+      return {};
+    });
+    render(<SettingsSurface />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/backend unavailable/i);
+    expect(ipc.invoke).toHaveBeenCalledWith("surface_ready");
+  });
+
   it("renders the six legacy sections in the nav", async () => {
     await renderSurface();
     for (const section of [

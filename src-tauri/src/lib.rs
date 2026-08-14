@@ -9,10 +9,10 @@ use volumectl_lib::host_core::AppCore;
 use commands::{
     adjust_volume, close_surface, config_path, get_audio_sessions, get_bootstrap, mute_session,
     open_config_location, open_surface, recommended_blacklist, reset_volume, save_config,
-    set_modifier, set_session_volume, set_volume, toggle_mute, update_settings,
+    set_modifier, set_session_volume, set_volume, surface_ready, toggle_mute, update_settings,
 };
 use events_sink::TauriSink;
-use window_manager::WindowManager;
+use window_manager::{SurfaceId, WindowManager};
 
 #[cfg(not(target_os = "windows"))]
 pub mod native_headless;
@@ -41,6 +41,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         mute_session,
         open_surface,
         close_surface,
+        surface_ready,
     ])
 }
 
@@ -49,6 +50,16 @@ const FAST_POLL_MS: u64 = 20;
 /// The config-reload / tray / external-sync poll cadence (mirrors the old
 /// host's 150 ms `WM_TIMER`).
 const SLOW_POLL_MS: u64 = 150;
+
+fn parse_verify_surface(value: &str) -> Result<Option<SurfaceId>, String> {
+    if value.is_empty() {
+        Ok(None)
+    } else {
+        SurfaceId::from_label(value)
+            .map(Some)
+            .ok_or_else(|| "unknown surface".to_string())
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> tauri::Result<()> {
@@ -88,6 +99,15 @@ pub fn run() -> tauri::Result<()> {
             // the poll threads can drain hotkeys/wheel/config concurrently.
             let shared = Arc::new(Mutex::new(core));
             app.manage(shared.clone());
+
+            // Diagnostic verification opens through the same WindowManager
+            // path as production, but only after every command dependency is
+            // managed so bootstrap can render a real surface.
+            if let Ok(raw_surface) = std::env::var("VOLUMECTL_VERIFY_SURFACE") {
+                if let Some(surface) = parse_verify_surface(&raw_surface)? {
+                    app.state::<WindowManager>().open(surface)?;
+                }
+            }
 
             // Fast poll (20 ms): drain the global-hotkey channel and the
             // wheel-bridge channel into AppCore.apply_hotkey.
@@ -145,6 +165,7 @@ pub fn run() -> tauri::Result<()> {
             mute_session,
             open_surface,
             close_surface,
+            surface_ready,
         ])
         .run(tauri::generate_context!())
 }
@@ -169,4 +190,30 @@ fn create_audio_backend() -> Result<Box<dyn AudioBackend>, String> {
     volumectl_lib::audio_macos::MacAudio::new()
         .map(|a| Box::new(a) as Box<dyn AudioBackend>)
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::window_manager::SurfaceId;
+
+    #[test]
+    fn verify_surface_parser_accepts_only_webview_labels() {
+        assert_eq!(
+            super::parse_verify_surface("window-mixer").unwrap(),
+            Some(SurfaceId::Mixer)
+        );
+        assert_eq!(
+            super::parse_verify_surface("window-settings").unwrap(),
+            Some(SurfaceId::Settings)
+        );
+        assert_eq!(
+            super::parse_verify_surface("window-help").unwrap(),
+            Some(SurfaceId::Help)
+        );
+        assert_eq!(
+            super::parse_verify_surface("window-overlay"),
+            Err("unknown surface".to_string())
+        );
+        assert_eq!(super::parse_verify_surface(""), Ok(None));
+    }
 }

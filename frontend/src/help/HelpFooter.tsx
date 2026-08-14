@@ -11,7 +11,7 @@ export function HelpFooter({
   onClose: () => void;
 }) {
   return (
-    <footer className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-foreground/10 bg-background/90 py-2">
+    <footer data-testid="surface-footer" className="flex flex-shrink-0 items-center justify-end gap-2 border-t border-foreground/10 bg-background/90 px-4 py-2">
       <button
         type="button"
         onClick={onEditConfig}

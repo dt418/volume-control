@@ -4,6 +4,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Kbd } from "../components/ui/kbd";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
+import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
 import type { HotkeyRegResult } from "../settings/KeyCard";
 import { ConflictCallout, conflictSentence, type ConflictCalloutData } from "./ConflictCallout";
 import { HelpFooter } from "./HelpFooter";
@@ -65,19 +66,24 @@ export function HelpSurface() {
   const [modifier, setModifier] = useState("CtrlAlt");
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyRegResult[]>([]);
   const [query, setQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     invoke<BootstrapPayload>("get_bootstrap")
       .then((bootstrap) => {
         if (alive) {
+          setError(null);
           applyAppearance(bootstrap.appearance as AppearancePayload);
           setModifier(bootstrap.config?.modifier ?? "CtrlAlt");
           setHotkeyStatus(bootstrap.hotkey_status ?? []);
         }
       })
-      .catch(() => {
-        // Fail-soft: keep the defaults so the grid still renders.
+      .catch((reason) => {
+        if (alive) setError(surfaceErrorMessage(reason));
+      })
+      .finally(() => {
+        if (alive) void markSurfaceReady();
       });
 
     // Live registration status: a modifier change in Settings or an external
@@ -138,9 +144,12 @@ export function HelpSurface() {
   }, [onKeyDown]);
 
   return (
-    <main className="min-h-screen bg-background">
+    <main
+      data-surface="help"
+      className="surface-shell h-dvh min-h-0 overflow-hidden flex flex-col bg-background"
+    >
       {/* Header band (legacy parity): 3px accent bar, title, subtitle, close × */}
-      <header className="relative border-b border-foreground/10">
+      <header data-testid="surface-header" className="relative flex-shrink-0 border-b border-foreground/10">
         <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-accent" />
         <div className="flex items-start justify-between px-4 pb-2 pt-6">
           <div>
@@ -158,29 +167,39 @@ export function HelpSurface() {
         </div>
       </header>
 
-      <div className="flex flex-col gap-4 p-4">
-        {note && <p className="text-sm text-foreground/60">{note}</p>}
-        <SearchBox value={query} onChange={setQuery} />
-
-        {callout && <ConflictCallout data={callout} onOpenSettings={openSettings} />}
-
-        {filtered.map((group) => (
-          <section key={group.id} className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium text-foreground/70">{group.title}</h2>
-            <div className="grid grid-cols-1 gap-2">
-              {group.items.map((item) => (
-                <ShortcutCard
-                  key={item.action}
-                  item={item}
-                  status={statusForAction(hotkeyStatus, item.action)}
-                />
-              ))}
+      <div data-testid="surface-content" className="surface-scroll min-h-0 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-4 p-4">
+          {error ? (
+            <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              Help unavailable: {error}
             </div>
-          </section>
-        ))}
-        {filtered.length === 0 && (
-          <p className="text-sm text-foreground/50">No shortcuts match “{query}”.</p>
-        )}
+          ) : (
+            <>
+              {note && <p className="text-sm text-foreground/60">{note}</p>}
+              <SearchBox value={query} onChange={setQuery} />
+
+              {callout && <ConflictCallout data={callout} onOpenSettings={openSettings} />}
+
+              {filtered.map((group) => (
+                <section key={group.id} className="flex flex-col gap-2">
+                  <h2 className="text-sm font-medium text-foreground/70">{group.title}</h2>
+                  <div className="grid grid-cols-1 gap-2">
+                    {group.items.map((item) => (
+                      <ShortcutCard
+                        key={item.action}
+                        item={item}
+                        status={statusForAction(hotkeyStatus, item.action)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+              {filtered.length === 0 && (
+                <p className="text-sm text-foreground/50">No shortcuts match “{query}”.</p>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <HelpFooter

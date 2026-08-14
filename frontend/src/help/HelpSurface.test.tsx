@@ -39,6 +39,14 @@ async function renderSurface() {
 }
 
 describe("HelpSurface", () => {
+  it("keeps header, shortcut content, and footer inside a bounded shell", async () => {
+    await renderSurface();
+    expect(screen.getByRole("main")).toHaveAttribute("data-surface", "help");
+    expect(screen.getByTestId("surface-header")).toBeInTheDocument();
+    expect(screen.getByTestId("surface-content")).toBeInTheDocument();
+    expect(screen.getByTestId("surface-footer")).toBeInTheDocument();
+  });
+
   it("renders the legacy header band with the close affordance", async () => {
     await renderSurface();
     expect(screen.getByText("VolumeControl")).toBeInTheDocument();
