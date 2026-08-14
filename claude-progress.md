@@ -1,5 +1,27 @@
 # Progress Log
 
+## Session 047 (2026-08-15) - Debug-only Tauri Pilot scenarios
+
+- Verified the official `tauri-pilot` CLI contract from the upstream project:
+  Rust 1.95+, `tauri-pilot run <scenario>.toml --junit`, `--window`, and MCP
+  over stdio. Pilot's scenario runner does not support synthetic global-hotkey
+  evidence, so the checked-in scenarios use DOM/IPC-safe actions only.
+- Added four checked-in TOML scenarios for Mixer, Settings, Help, and recovery,
+  a scenario contract test, and a cross-platform debug runner. The runner
+  checks the CLI and Rust version before preparing temporary `pilot:default`
+  capability/global-Tauri files, starts Vite + one debug app process, captures
+  JUnit/screenshots, collects `logs --level error`, and cleans config/processes.
+- Installed `tauri-pilot-cli` 0.7.2 with `cargo install tauri-pilot-cli
+  --locked`; Rust 1.97 satisfies the plugin requirement. The first live run
+  exposed and fixed stale singleton/registry cleanup, lazy-WebView readiness,
+  and per-surface isolation (opening another WebView from eval can block the
+  originating event loop).
+- Live Pilot runs pass on Windows: Mixer 7/7, Settings 7/7, Help 6/6, and
+  recovery 4/4. Each writes JUnit, screenshot, and console-error artifacts
+  beneath `output/tauri-pilot/<run-id>/`; no root-level failure artifact remains.
+- Remaining: wire the CI matrix and fail-closed ship integration before
+  marking vol-031 complete.
+
 ## Session 045 (2026-08-14) - Windows-first WebDriver surface E2E
 
 - Completed the debug-only embedded WebDriver path against the real Tauri
@@ -21,8 +43,8 @@
 - Root `.gitignore` now has a generic `node_modules/` rule; `git ls-files`
   confirms no tracked `node_modules` paths, while `e2e/tauri/package-lock.json`
   remains versioned.
-- Remaining: add Pilot scenarios, CI matrix/ship fail-closed wiring before
-  marking vol-031 complete.
+- Remaining: install Pilot CLI for a live local replay, then add CI
+  matrix/ship fail-closed wiring before marking vol-031 complete.
 
 ## Session 046 (2026-08-15) - Recovery, owned windows, and cross-shell wrappers
 

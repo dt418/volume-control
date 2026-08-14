@@ -1,0 +1,36 @@
+[scenario]
+name = "help search and close"
+fail_fast = true
+global_timeout_ms = 30000
+
+[[step]]
+name = "check help title"
+action = "eval"
+script = "document.title"
+
+[[step]]
+name = "wait for help surface"
+action = "wait"
+selector = "[data-surface=\"help\"]"
+timeout_ms = 10000
+
+[[step]]
+name = "assert help visible"
+action = "assert-visible"
+target = "[data-surface=\"help\"]"
+
+[[step]]
+name = "filter shortcut list"
+action = "fill"
+target = "[data-surface=\"help\"] input[aria-label=\"Search shortcuts\"]"
+value = "volume"
+
+[[step]]
+name = "capture help screenshot"
+action = "screenshot"
+path = "output/tauri-pilot/help.png"
+
+[[step]]
+name = "check browser errors"
+action = "eval"
+script = "window.__tauriPilotConsoleErrors__ ?? []"

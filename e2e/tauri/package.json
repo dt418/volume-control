@@ -11,6 +11,8 @@
     "prepare:debug-frontend": "node prepare-debug-frontend.mjs",
     "run:debug-preview": "node run-with-vite-preview.mjs",
     "test:e2e:debug": "node run-debug-e2e.mjs",
+    "test:pilot-contract": "node ../pilot/test-scenarios.mjs",
+    "test:pilot": "node ../pilot/run-pilot.mjs",
     "test:e2e": "wdio run wdio.conf.ts"
   },
   "devDependencies": {

@@ -121,7 +121,11 @@ pub fn run() -> tauri::Result<()> {
             // create a second tray icon). The check runs before any native
             // surface or managed state is created.
             #[cfg(target_os = "windows")]
-            if !native_win32::ensure_single_instance() {
+            let pilot_debug_instance = cfg!(feature = "e2e-pilot")
+                && cfg!(debug_assertions)
+                && std::env::var("VOLUMECTL_E2E_PILOT").as_deref() == Ok("1");
+            #[cfg(target_os = "windows")]
+            if !pilot_debug_instance && !native_win32::ensure_single_instance() {
                 log::warn!("another VolumeControl instance is already running");
                 std::process::exit(0);
             }
@@ -155,7 +159,15 @@ pub fn run() -> tauri::Result<()> {
             // managed so bootstrap can render a real surface.
             if let Ok(raw_surface) = std::env::var("VOLUMECTL_VERIFY_SURFACE") {
                 if let Some(surface) = parse_verify_surface(&raw_surface)? {
-                    app.state::<WindowManager>().open(surface)?;
+                    log::info!("E2E verify marker opening {}", surface.label());
+                    if let Err(error) = app.state::<WindowManager>().open(surface) {
+                        log::error!(
+                            "E2E verify marker could not open {}: {error}",
+                            surface.label()
+                        );
+                        return Err(error.into());
+                    }
+                    log::info!("E2E verify marker opened {}", surface.label());
                 }
             }
 
