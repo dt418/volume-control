@@ -39,6 +39,21 @@
   exclusion and capability check-only contracts pass. Rust 1.97 is active here;
   Pilot's documented Rust 1.95+ requirement is satisfied for debug builds.
 
+## Session 044 (2026-08-14) - WDIO command and artifact helpers
+
+- Added `support/commands.ts` for condition-based surface waits, explicit WDIO
+  session checks, deterministic `browser.tauri.execute()` IPC setup, and isolated
+  fixture/binary validation.
+- Corrected selectors against the real frontend contract (`data-surface`,
+  `data-testid="surface-*"`, accessible labels/placeholders); no generated class
+  names are used.
+- Hardened artifact capture so screenshot, accessibility-tree snapshot, browser
+  state/logs, and p50/p95 timing evidence continue to be written even when one
+  browser capability is unavailable.
+- Added `tsconfig.json` and a package `typecheck` script. Verification: typecheck
+  clean and support suite 8/8 pass. No desktop E2E binary was claimed yet; that
+  remains the next provider/startup checkpoint.
+
 ## Session 041 (2026-08-14) - Tauri surface recovery and Windows-first quality design
 
 - Completed the Tauri rendering-recovery continuation: Mixer, Settings, and Help

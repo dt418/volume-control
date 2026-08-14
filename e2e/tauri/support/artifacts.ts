@@ -43,7 +43,12 @@ export function timingReport(): Record<string, { count: number; p50: number; p95
 
 async function callOptional(browser: BrowserLike, method: string, ...args: unknown[]): Promise<unknown> {
   const candidate = browser[method];
-  return typeof candidate === "function" ? await (candidate as (...values: unknown[]) => unknown)(...args) : undefined;
+  if (typeof candidate !== "function") return undefined;
+  try {
+    return await (candidate as (...values: unknown[]) => unknown)(...args);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export async function saveE2eArtifacts(browser: BrowserLike, outputDir: string, name: string): Promise<void> {
@@ -51,7 +56,14 @@ export async function saveE2eArtifacts(browser: BrowserLike, outputDir: string, 
   await mkdir(artifactDir, { recursive: true });
 
   await callOptional(browser, "saveScreenshot", join(artifactDir, "screenshot.png"));
-  const snapshot = await callOptional(browser, "execute", () => document.documentElement.outerHTML);
+  const snapshot = await callOptional(browser, "execute", () => {
+    const visit = (element: Element): Record<string, unknown> => ({
+      role: element.getAttribute("role") ?? element.tagName.toLowerCase(),
+      name: element.getAttribute("aria-label") ?? element.textContent?.trim().slice(0, 160) ?? "",
+      children: [...element.children].map(visit),
+    });
+    return visit(document.body);
+  });
   const logs = await callOptional(browser, "getLogs", "browser");
   const url = await callOptional(browser, "getUrl");
   const title = await callOptional(browser, "getTitle");
