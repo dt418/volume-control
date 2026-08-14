@@ -9,18 +9,18 @@ export const selectors = {
   mixer: {
     search: '[data-surface="mixer"] input[placeholder="Search apps…"]',
     systemVolume: '[aria-label="System output volume"]',
-    mute: '[aria-label="Mute"]',
-    reset: '[aria-label="Reset volume to 50 percent"]',
+    mute: '[aria-label="Mute system output"]',
+    reset: '[aria-label="Reset volume to 50%"]',
   },
   settings: {
-    save: '[data-surface="settings"] button*=Save changes',
-    reset: '[data-surface="settings"] button*=Reset',
-    cancel: '[data-surface="settings"] button*=Cancel',
+    save: '//main[@data-surface="settings"]//button[normalize-space()="Save changes"]',
+    reset: '//main[@data-surface="settings"]//button[normalize-space()="Reset"]',
+    cancel: '//main[@data-surface="settings"]//button[normalize-space()="Cancel"]',
     status: '[aria-live="polite"]',
   },
   help: {
     search: '[data-surface="help"] input[aria-label="Search shortcuts"]',
-    settings: '[data-surface="help"] button*=Settings',
+    settings: '//main[@data-surface="help"]//button[normalize-space()="Settings"]',
     close: '[data-surface="help"] button[aria-label="Close"]',
   },
 } as const;

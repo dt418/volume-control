@@ -154,6 +154,10 @@ impl WindowManager {
             surface.label(),
             WebviewUrl::App(surface.entry().into()),
         );
+        #[cfg(feature = "e2e-wdio")]
+        if let Some(script) = crate::debug_guest_bridge_script() {
+            builder = builder.initialization_script(script);
+        }
         let (w, h) = match surface {
             SurfaceId::Mixer => MIXER_SIZE,
             SurfaceId::Settings => SETTINGS_SIZE,
@@ -182,6 +186,17 @@ impl WindowManager {
             }
         }
         let window = builder.build().map_err(|e| e.to_string())?;
+        #[cfg(feature = "e2e-wdio")]
+        if cfg!(debug_assertions) && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1") {
+            log::info!(
+                "E2E surface {} created with URL {}",
+                surface.label(),
+                window
+                    .url()
+                    .map(|url| url.to_string())
+                    .unwrap_or_else(|error| format!("<url error: {error}>"))
+            );
+        }
 
         // Legacy placement parity: the monitor work area hosting the window
         // determines the surface position (mixer bottom-right above the

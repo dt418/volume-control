@@ -1,5 +1,29 @@
 # Progress Log
 
+## Session 045 (2026-08-14) - Windows-first WebDriver surface E2E
+
+- Completed the debug-only embedded WebDriver path against the real Tauri
+  WebView: `withGlobalTauri` is enabled only in a temporary debug config, the
+  official `@wdio/tauri-plugin` bundle is injected into the Vite preview, and a
+  small Tauri initialization bridge snapshots the original core before tests.
+  Capabilities, config, HTML, and bridge files are restored in `finally`.
+- Added Vite preview lifecycle/orchestration scripts. Each Mixer, Runtime,
+  Settings, and Help surface runs in an isolated one-worker session so opening
+  a second WebView cannot block the originating WebView event loop. Windows
+  process-tree cleanup uses a PID-scoped `taskkill` fallback.
+- Corrected selectors from accessibility evidence (system mute/reset labels,
+  settings XPath controls, Help Settings button) and made empty mixer state
+  assertions deterministic when no per-app sessions are available.
+- Verification: `npm run test:e2e:debug --prefix e2e/tauri -- --surface all` passed
+  4 isolated sessions / 8 tests (Mixer 2/2, Runtime bridge 1/1, Settings 3/3,
+  Help 2/2); E2E artifacts include screenshots, accessibility snapshots,
+  browser state, and timings under `output/tauri-e2e/`.
+- Root `.gitignore` now has a generic `node_modules/` rule; `git ls-files`
+  confirms no tracked `node_modules` paths, while `e2e/tauri/package-lock.json`
+  remains versioned.
+- Remaining: add Pilot scenarios, CI matrix/ship fail-closed wiring, and
+  performance/recovery probes before marking vol-031 complete.
+
 ## Session 042 (2026-08-14) - Isolated Tauri WebDriver test foundation
 
 - Continued the approved Tauri WebDriver/Pilot plan with the lowest-risk slice:

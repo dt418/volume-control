@@ -87,6 +87,7 @@ ehthumbs.db
 .plans/
 
 # Tauri host
+node_modules/
 frontend/node_modules
 frontend/dist
 e2e/tauri/node_modules

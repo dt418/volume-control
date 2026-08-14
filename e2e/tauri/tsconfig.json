@@ -5,9 +5,9 @@
     "moduleResolution": "NodeNext",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["node"],
+    "types": ["node", "mocha"],
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["wdio.conf.ts", "support/**/*.ts"]
+  "include": ["wdio.conf.ts", "support/**/*.ts", "specs/**/*.ts"]
 }

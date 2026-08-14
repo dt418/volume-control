@@ -30,3 +30,24 @@ contract is checked with:
 npm run test:production-exclusion
 node prepare-debug-capabilities.mjs --provider wdio --check-only
 ```
+
+Build the debug binary with the same temporary capability/config wrapper before
+running the browser suite:
+
+```text
+node prepare-debug-frontend.mjs -- node prepare-debug-capabilities.mjs --provider wdio -- cargo build -p volumecontrol-tauri --no-default-features --features e2e-wdio
+```
+
+The guest bridge is injected only into `frontend/dist` for a debug command.
+Debug E2E also starts the Vite preview server on `127.0.0.1:1420`, matching
+Tauri's `devUrl`; the server is terminated automatically after the run:
+
+```text
+node prepare-debug-frontend.mjs --check-only
+npm run test:e2e:debug -- --surface all
+```
+
+The script restores every HTML file and removes the copied bridge in `finally`.
+The normal frontend package and production build never import the bridge. Each
+surface is started in its own isolated WebDriver session so opening a second
+Tauri WebView cannot block the originating WebView event loop.

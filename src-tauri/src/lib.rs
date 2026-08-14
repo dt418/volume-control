@@ -73,6 +73,28 @@ fn register_debug_plugins(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder
     builder
 }
 
+/// Install the tiny native-side compatibility bridge required by the
+/// embedded WebDriver service. The official `@wdio/tauri-plugin` is still
+/// injected into the debug frontend, but the initialization script makes the
+/// original Tauri core discoverable before a page/module can run. This is
+/// compiled only for the explicit E2E feature and runtime marker.
+#[cfg(feature = "e2e-wdio")]
+pub(crate) fn debug_guest_bridge_script() -> Option<&'static str> {
+    if !cfg!(debug_assertions) || std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() != Ok("1") {
+        return None;
+    }
+
+    Some(
+        r#"(() => {
+  const tauri = globalThis.__TAURI__;
+  if (tauri?.core?.invoke) {
+    globalThis.__wdio_original_tauri__ ??= tauri;
+    globalThis.__wdio_original_core__ ??= tauri.core;
+  }
+})();"#,
+    )
+}
+
 /// The hotkey channel poll cadence (keeps the first key press responsive).
 const FAST_POLL_MS: u64 = 20;
 /// The config-reload / tray / external-sync poll cadence (mirrors the old

@@ -10,8 +10,10 @@ export interface SurfaceElement {
 
 export interface E2eBrowser {
   $: (selector: string) => Promise<SurfaceElement>;
+  execute?: (script: unknown, ...args: unknown[]) => Promise<unknown>;
   tauri?: {
     execute: (script: unknown, ...args: unknown[]) => Promise<unknown>;
+    switchWindow?: (label: string) => Promise<void>;
   };
 }
 
@@ -59,6 +61,31 @@ export async function invokeForTest(
       tauri.core.invoke(payload.command, payload.args),
     { command, args },
   );
+}
+
+export async function openSurface(browser: E2eBrowser, surface: SurfaceName): Promise<SurfaceElement> {
+  const label = `window-${surface}`;
+  if (process.env.VOLUMECTL_VERIFY_SURFACE === label) {
+    // Surface-specific runs start with the target WebView already created by
+    // the debug verification hook; avoid reopening it through WebDriver.
+  } else if (surface !== "mixer" && browser.execute) {
+    // Opening a second WebView from an embedded WebDriver direct-eval callback
+    // can block the originating WebView's event loop. Use the same frontend
+    // IPC path as a real click for Settings/Help, then switch native context.
+    await browser.execute(
+      (target: string) => {
+        const internals = (window as Window & {
+          __TAURI_INTERNALS__?: { invoke?: (command: string, args: Record<string, unknown>) => Promise<unknown> };
+        }).__TAURI_INTERNALS__;
+        return internals?.invoke?.("open_surface", { surface: target });
+      },
+      label,
+    );
+  } else {
+    await invokeForTest(browser, "open_surface", { surface: label });
+  }
+  await browser.tauri?.switchWindow?.(`window-${surface}`);
+  return waitForSurface(browser, surface);
 }
 
 export async function createIsolatedFixture(options?: Parameters<typeof createAppFixture>[0]): Promise<AppFixture> {

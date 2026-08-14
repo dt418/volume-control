@@ -1,10 +1,11 @@
-import { access, copyFile, mkdir, readFile, rm, stat } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { spawn } from "node:child_process";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const sourceRoot = resolve(import.meta.dirname, "capabilities");
 const targetRoot = resolve(repositoryRoot, "src-tauri", "capabilities");
+const tauriConfigPath = resolve(repositoryRoot, "src-tauri", "tauri.conf.json");
 
 function usage(message) {
   if (message) console.error(`ERROR: ${message}`);
@@ -53,6 +54,12 @@ async function runCommand() {
   });
 }
 
+async function enableDebugGlobalTauri(originalConfig) {
+  const config = JSON.parse(originalConfig);
+  config.app = { ...(config.app ?? {}), withGlobalTauri: true };
+  await writeFile(tauriConfigPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+}
+
 await assertSource();
 if (checkOnly) {
   try {
@@ -66,6 +73,7 @@ if (checkOnly) {
 }
 
 await mkdir(dirname(targetPath), { recursive: true });
+const originalTauriConfig = await readFile(tauriConfigPath, "utf8");
 try {
   await stat(targetPath);
   throw new Error(`Refusing to overwrite pre-existing capability ${targetPath}`);
@@ -75,7 +83,9 @@ try {
 
 try {
   await copyFile(sourcePath, targetPath);
+  await enableDebugGlobalTauri(originalTauriConfig);
   await runCommand();
 } finally {
+  await writeFile(tauriConfigPath, originalTauriConfig, "utf8");
   await rm(targetPath, { force: true });
 }
