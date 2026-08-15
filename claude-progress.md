@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 053 (2026-08-15) - Reproducible Codex coordinator contract
+
+- Added `scripts/test-codex-config.py`, a Python 3.11+ contract that validates
+  the coordinator pipeline's relative profiles, `max_threads = 4`,
+  `max_depth = 2`, and the documented coordinator handoff. The contract accepts
+  an optional repository-root argument so it can validate clean archives.
+- Raised the nested-agent depth cap to 2, synchronized `.codex/AGENTS.md` and
+  `.codex/ORCHESTRATOR.md`, and kept the restarted-runtime model identifiers
+  commented until the model catalog is confirmed.
+- Added Python setup plus the contract invocation to the shared Ubuntu checks
+  job; Windows and macOS jobs remain independent of this configuration check.
+- Verification: local contract passes; the same command passes after
+  extracting `git archive HEAD` into a temporary clean checkout. The Rust
+  quality gate and staged record guard remain required before handoff.
+
 ## Session 052 (2026-08-15) - Ubuntu release WebKitGTK dependency fix
 
 - Diagnosed the Ubuntu release failure: `gdk-sys v0.18.2` is required by the

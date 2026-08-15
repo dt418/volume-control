@@ -15,9 +15,17 @@ The generated baseline enables GitHub, Context7, Exa, Memory, Playwright, and Se
 
 ## Multi-Agent Support
 
+- Coordinator: delivery decomposition, ownership, handoffs, and evidence enforcement
+- Planner: read-only discovery and executable delivery plans
+- Implementer: approved workspace changes, tests, and record synchronization
+- Release reviewer: read-only correctness, security, UI/UX, performance, and cross-platform gate review
 - Explorer: read-only evidence gathering
 - Reviewer: correctness, security, and regression review
 - Docs researcher: API and release-note verification
+
+The coordinator pipeline profiles are configured in `.codex/config.toml` and must
+remain relative files under `.codex/agents/`. Validate the complete contract with
+`python scripts/test-codex-config.py` before handing work to the shared checks job.
 
 ## Workflow Files
 

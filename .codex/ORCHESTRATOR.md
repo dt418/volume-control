@@ -39,7 +39,7 @@ activate if the runtime does not select them automatically.
   always use the full feature path and the complete quality gate.
 - The coordinator may skip a stage only when it records the reason and the risk is
   demonstrably low. It must never skip release review for a release-bound change.
-- `max_threads = 4` and `max_depth = 1` cap concurrent/nested work so a mistaken
+- `max_threads = 4` and `max_depth = 2` cap concurrent/nested work so a mistaken
   delegation cannot multiply model usage. Shared-file changes remain serialized.
 
 ## Handoff contract
