@@ -1,9 +1,10 @@
 //! Persistent configuration.
 //!
-//! The app auto-generates a `config.json` on first run in the user's config
-//! directory, mirrors the setting surface of VolumePro (`VolumePro.ini`) but
-//! in a format the native backends can share. Overlay duration, step sizes,
-//! hotkey modifier and blacklist are the user-tunable knobs.
+//! The app auto-generates a human-readable `config.ini` on first run in the
+//! user's config directory. The legacy `config.json` remains as a migration
+//! backup so existing installations can move to the typed INI store safely.
+//! Overlay duration, step sizes, hotkey modifier and blacklist are the
+//! user-tunable knobs.
 //!
 //! The app silently watches the file (mtime) and reloads it while running,
 //! so tweaking config in a text editor takes effect without restart.
@@ -12,12 +13,13 @@ use crate::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
-    fs::{self, OpenOptions},
-    io::{self, Write},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[cfg(test)]
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 const MIN_VOLUME_STEP: u32 = 1;
@@ -70,6 +72,20 @@ impl From<serde_json::Error> for ConfigError {
     fn from(error: serde_json::Error) -> Self {
         Self::Serialization(error)
     }
+}
+
+/// Non-fatal information about how the current configuration was loaded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigLoadNotice {
+    /// The legacy JSON file was converted to the canonical INI file.
+    MigratedFromJson,
+    /// A malformed INI file was repaired from a valid JSON backup.
+    RecoveredFromJson,
+    /// The configured files were unusable and validated defaults were used.
+    DefaultsAfterError,
+    /// An external INI edit was malformed; the last valid in-memory config remains active.
+    InvalidExternalEdit,
 }
 
 fn validation(field: &'static str, message: impl Into<String>) -> ConfigValidationError {
@@ -198,6 +214,13 @@ pub struct Config {
     /// Appearance preferences shared by all UI surfaces.
     #[serde(default)]
     pub appearance: AppearanceConfig,
+    /// Whether the app should start with the current user's session.
+    ///
+    /// The Windows Run entry is managed by [`crate::autostart`]. This field is
+    /// persisted as the user's preference and defaults to disabled for older
+    /// config files and fresh installations.
+    #[serde(default)]
+    pub autostart: bool,
 }
 
 /// Beep feedback settings (mirrors VolumePro's `[Beep]` section).
@@ -253,6 +276,7 @@ impl Default for Config {
             },
             beep: BeepConfig::default(),
             appearance: AppearanceConfig::default(),
+            autostart: false,
         }
     }
 }
@@ -379,14 +403,14 @@ pub fn apply_recommended_blacklist(cfg: &mut Config) -> usize {
     added
 }
 
-/// Compute the config file path (user config dir + `volume-control/config.json`).
+/// Compute the canonical config file path (user config dir + `config.ini`).
 ///
 /// The `VOLUMECTL_CONFIG_DIR` environment variable overrides the base on
 /// every platform (used by tests to point at a temp dir; also handy for
 /// portable deployments).
 pub fn config_path() -> PathBuf {
     if let Some(dir) = std::env::var_os("VOLUMECTL_CONFIG_DIR") {
-        return PathBuf::from(dir).join("config.json");
+        return PathBuf::from(dir).join("config.ini");
     }
     #[cfg(target_os = "windows")]
     let base = std::env::var("APPDATA").unwrap_or_else(|_| ".".into());
@@ -404,23 +428,40 @@ pub fn config_path() -> PathBuf {
 
     PathBuf::from(base)
         .join("volume-control")
-        .join("config.json")
+        .join("config.ini")
+}
+
+fn legacy_config_path() -> PathBuf {
+    if let Some(dir) = std::env::var_os("VOLUMECTL_CONFIG_DIR") {
+        return PathBuf::from(dir).join("config.json");
+    }
+    config_path().with_file_name("config.json")
 }
 
 /// Load the config; on absence/parse/validation failure write default and re-save.
 ///
-/// Only writes the file back when normalisation actually changed values, so
-/// the app's live-reload watcher (mtime based) doesn't loop on its own writes.
+/// Valid files are loaded without a write; fallback defaults and JSON
+/// migrations are persisted through the atomic INI writer.
 pub fn load() -> Config {
-    match load_existing() {
-        Ok(cfg) => cfg,
+    load_with_notice().0
+}
+
+/// Load the config and return a non-fatal migration/recovery notice when one
+/// occurred. The legacy [`load`] API intentionally discards the notice.
+pub fn load_with_notice() -> (Config, Option<ConfigLoadNotice>) {
+    match load_existing_with_notice() {
+        Ok((cfg, notice)) => (cfg, notice),
         Err(error) => {
             let path = config_path();
+            let had_unusable_file = path.exists() || legacy_config_path().exists();
             log::warn!("config load failed ({error}); using defaults");
             let cfg = normalize(Config::default());
             let _ = save(&cfg);
             log::debug!("default config path: {}", path.display());
-            cfg
+            (
+                cfg,
+                had_unusable_file.then_some(ConfigLoadNotice::DefaultsAfterError),
+            )
         }
     }
 }
@@ -430,11 +471,55 @@ pub fn load() -> Config {
 /// Hosts use this for live reload so a transient partial write or malformed
 /// edit cannot replace a valid in-memory configuration with defaults.
 pub fn load_existing() -> Result<Config, ConfigError> {
-    let path = config_path();
-    let raw = std::fs::read_to_string(&path)?;
-    let orig = serde_json::from_str::<Config>(&raw)?;
-    let cfg = normalize(orig.clone());
-    Ok(cfg)
+    load_existing_with_notice().map(|(config, _)| config)
+}
+
+/// Load an existing config and report whether migration or recovery was used.
+pub fn load_existing_with_notice() -> Result<(Config, Option<ConfigLoadNotice>), ConfigError> {
+    let ini_path = config_path();
+    let legacy_path = legacy_config_path();
+
+    if ini_path.exists() {
+        match crate::config_ini::load_ini(&ini_path) {
+            Ok(config) => return Ok((config, None)),
+            Err(ini_error) => {
+                log::warn!(
+                    "config INI is invalid ({}); attempting legacy JSON recovery",
+                    ini_error
+                );
+                match load_json_backup(&legacy_path) {
+                    Ok(config) => {
+                        if let Err(error) = crate::config_ini::save_ini_atomic(&config, &ini_path) {
+                            log::warn!("could not repair config INI from JSON backup: {error}");
+                        }
+                        return Ok((config, Some(ConfigLoadNotice::RecoveredFromJson)));
+                    }
+                    Err(backup_error) => {
+                        log::warn!("legacy JSON recovery failed: {backup_error}");
+                        return Err(ini_error);
+                    }
+                }
+            }
+        }
+    }
+
+    match crate::config_ini::migrate_json_to_ini(&legacy_path, &ini_path)? {
+        crate::config_ini::MigrationOutcome::Migrated => crate::config_ini::load_ini(&ini_path)
+            .map(|config| (config, Some(ConfigLoadNotice::MigratedFromJson))),
+        crate::config_ini::MigrationOutcome::AlreadyPresent => {
+            crate::config_ini::load_ini(&ini_path).map(|config| (config, None))
+        }
+        crate::config_ini::MigrationOutcome::NoLegacyFile => Err(ConfigError::Io(
+            std::io::Error::new(std::io::ErrorKind::NotFound, "config INI does not exist"),
+        )),
+    }
+}
+
+fn load_json_backup(path: &Path) -> Result<Config, ConfigError> {
+    let raw = std::fs::read_to_string(path)?;
+    let config = serde_json::from_str::<Config>(&raw)?;
+    validate(&config).map_err(ConfigError::Validation)?;
+    Ok(normalize(config))
 }
 
 /// Validate the two step-size values against the shared rules (range + large>
@@ -655,98 +740,18 @@ pub fn normalize(mut cfg: Config) -> Config {
 pub fn save_validated(cfg: &Config) -> Result<Config, ConfigError> {
     validate(cfg).map_err(ConfigError::Validation)?;
     let normalized = normalize(cfg.clone());
-    save_at_path(&normalized, &config_path())?;
+    crate::config_ini::save_ini_atomic(&normalized, &config_path())?;
     Ok(normalized)
-}
-
-fn save_at_path(cfg: &Config, path: &Path) -> Result<(), ConfigError> {
-    let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(dir)?;
-    let text = serde_json::to_string_pretty(cfg)?;
-    let temp_path = temporary_path(path);
-
-    let write_result = (|| -> io::Result<()> {
-        let mut temp = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)?;
-        temp.write_all(text.as_bytes())?;
-        temp.flush()?;
-        temp.sync_all()?;
-        drop(temp);
-        replace_file(&temp_path, path)
-    })();
-
-    if write_result.is_err() {
-        let _ = fs::remove_file(&temp_path);
-    }
-    write_result.map_err(ConfigError::Io)
-}
-
-fn temporary_path(path: &Path) -> PathBuf {
-    let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("config");
-    path.with_file_name(format!(".{file_name}.tmp-{}-{counter}", std::process::id()))
-}
-
-#[cfg(not(target_os = "windows"))]
-fn replace_file(temp_path: &Path, path: &Path) -> io::Result<()> {
-    fs::rename(temp_path, path)
-}
-
-#[cfg(target_os = "windows")]
-fn replace_file(temp_path: &Path, path: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::GetLastError;
-    use windows_sys::Win32::Storage::FileSystem::{
-        MoveFileExW, ReplaceFileW, MOVEFILE_REPLACE_EXISTING,
-    };
-
-    let temp: Vec<u16> = temp_path.as_os_str().encode_wide().chain(Some(0)).collect();
-    let destination: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    let replaced = unsafe {
-        ReplaceFileW(
-            destination.as_ptr(),
-            temp.as_ptr(),
-            std::ptr::null(),
-            0,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        )
-    };
-    if replaced != 0 {
-        return Ok(());
-    }
-
-    // ReplaceFileW requires an existing destination. MoveFileExW preserves the
-    // same-directory atomic replacement behavior for a newly created config.
-    let moved = unsafe {
-        MoveFileExW(
-            temp.as_ptr(),
-            destination.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING,
-        )
-    };
-    if moved != 0 {
-        Ok(())
-    } else {
-        Err(io::Error::from_raw_os_error(
-            unsafe { GetLastError() } as i32
-        ))
-    }
 }
 
 #[cfg(test)]
 fn save_at_path_for_test(cfg: &Config, path: &Path) -> Result<(), ConfigError> {
-    save_at_path(cfg, path)
+    crate::config_ini::save_ini_atomic(cfg, path)
 }
 
 /// Backwards-compatible persistence entry point.
 pub fn save(cfg: &Config) -> std::io::Result<()> {
-    save_at_path(cfg, &config_path()).map_err(|error| match error {
+    crate::config_ini::save_ini_atomic(cfg, &config_path()).map_err(|error| match error {
         ConfigError::Io(error) => error,
         ConfigError::Serialization(error) => {
             std::io::Error::new(std::io::ErrorKind::InvalidData, error)
@@ -816,6 +821,103 @@ pub fn open_in_editor() {
 mod tests {
     use super::*;
     use crate::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
+    use std::sync::Mutex;
+
+    static CONFIG_DIR_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_config_dir(name: &str) -> (std::path::PathBuf, Option<std::ffi::OsString>) {
+        let dir = std::env::temp_dir().join(format!(
+            "volumectl-config-integration-{}-{name}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temporary config directory");
+        let old = std::env::var_os("VOLUMECTL_CONFIG_DIR");
+        std::env::set_var("VOLUMECTL_CONFIG_DIR", &dir);
+        (dir, old)
+    }
+
+    fn restore_config_dir(dir: std::path::PathBuf, old: Option<std::ffi::OsString>) {
+        match old {
+            Some(value) => std::env::set_var("VOLUMECTL_CONFIG_DIR", value),
+            None => std::env::remove_var("VOLUMECTL_CONFIG_DIR"),
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn config_path_uses_ini_filename_with_directory_override() {
+        let _guard = CONFIG_DIR_LOCK.lock().expect("config directory lock");
+        let (dir, old) = with_config_dir("path");
+
+        assert_eq!(config_path(), dir.join("config.ini"));
+
+        restore_config_dir(dir, old);
+    }
+
+    #[test]
+    fn load_without_legacy_files_does_not_report_recovery_warning() {
+        let _guard = CONFIG_DIR_LOCK.lock().expect("config directory lock");
+        let (dir, old) = with_config_dir("fresh");
+
+        let (loaded, notice) = load_with_notice();
+
+        assert_eq!(loaded, Config::default());
+        assert_eq!(notice, None);
+        assert!(dir.join("config.ini").is_file());
+        restore_config_dir(dir, old);
+    }
+
+    #[test]
+    fn load_existing_migrates_json_and_keeps_backup() {
+        let _guard = CONFIG_DIR_LOCK.lock().expect("config directory lock");
+        let (dir, old) = with_config_dir("migration");
+        let expected = Config {
+            autostart: true,
+            volume_step: 3,
+            volume_step_large: 10,
+            ..Config::default()
+        };
+        let json = serde_json::to_string_pretty(&expected).expect("serialize JSON backup");
+        std::fs::write(dir.join("config.json"), &json).expect("write JSON backup");
+
+        let (loaded, notice) = load_with_notice();
+
+        assert_eq!(loaded, expected);
+        assert_eq!(notice, Some(ConfigLoadNotice::MigratedFromJson));
+        assert_eq!(
+            std::fs::read_to_string(dir.join("config.json")).unwrap(),
+            json
+        );
+        assert!(dir.join("config.ini").is_file());
+        restore_config_dir(dir, old);
+    }
+
+    #[test]
+    fn load_existing_recovers_valid_json_when_ini_is_malformed() {
+        let _guard = CONFIG_DIR_LOCK.lock().expect("config directory lock");
+        let (dir, old) = with_config_dir("recovery");
+        let expected = Config {
+            autostart: true,
+            volume_step: 4,
+            volume_step_large: 12,
+            ..Config::default()
+        };
+        let json = serde_json::to_string_pretty(&expected).expect("serialize JSON backup");
+        std::fs::write(dir.join("config.json"), json).expect("write JSON backup");
+        std::fs::write(dir.join("config.ini"), "[general]\nvolume_step=broken\n")
+            .expect("write malformed INI");
+
+        let (loaded, notice) = load_with_notice();
+
+        assert_eq!(loaded, expected);
+        assert_eq!(notice, Some(ConfigLoadNotice::RecoveredFromJson));
+        assert_eq!(
+            crate::config_ini::load_ini(&dir.join("config.ini")).unwrap(),
+            expected
+        );
+        restore_config_dir(dir, old);
+    }
 
     #[test]
     fn old_json_without_appearance_uses_appearance_defaults() {
@@ -1108,6 +1210,35 @@ mod tests {
         let cfg = Config::default();
         assert_eq!(cfg.volume_step, 1, "small step must default to 1%");
         assert_eq!(cfg.volume_step_large, 10, "large step stays 10%");
+        assert!(!cfg.autostart, "auto-start is opt-in");
+    }
+
+    #[test]
+    fn old_json_without_autostart_uses_disabled_default() {
+        let cfg: Config = serde_json::from_str(
+            r#"{
+                "volume_step": 1,
+                "volume_step_large": 10,
+                "overlay_duration_ms": 1800,
+                "modifier": "CtrlAlt",
+                "blacklist": [],
+                "color_thresholds": {
+                    "green_up_to": 40,
+                    "blue_up_to": 75,
+                    "orange_up_to": 100
+                },
+                "beep": {
+                    "enabled": true,
+                    "blocked_freq": 400,
+                    "blocked_duration_ms": 80,
+                    "limit_freq": 600,
+                    "limit_duration_ms": 60
+                }
+            }"#,
+        )
+        .expect("legacy config remains readable");
+
+        assert!(!cfg.autostart);
     }
 
     #[test]

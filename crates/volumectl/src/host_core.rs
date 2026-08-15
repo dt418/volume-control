@@ -47,6 +47,10 @@ pub struct SettingsPatch {
     /// Full-list replace for the blacklist (draft commits the whole list
     /// atomically; entries are normalized per-platform).
     pub blacklist: Option<Vec<String>>,
+    /// Persisted auto-start preference. The registry side effect is handled by
+    /// [`crate::autostart`]; this field keeps the typed config in sync for
+    /// bootstrap and migration compatibility.
+    pub autostart: Option<bool>,
 }
 
 /// Optional beep feedback patch (mirrors [`crate::config::BeepConfig`]).
@@ -128,6 +132,8 @@ pub struct AppearancePayload {
 #[derive(Serialize)]
 pub struct BootstrapPayload {
     pub config: Config,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_notice: Option<crate::config::ConfigLoadNotice>,
     pub volume_pct: u8,
     pub muted: bool,
     pub hotkey_status: Vec<HotkeyRegResult>,
@@ -180,6 +186,7 @@ pub struct AppCore {
     sink: Arc<dyn EventSink>,
     sessions_source: Box<dyn SessionsSource>,
     last_config_mtime: Option<std::time::SystemTime>,
+    config_notice: Option<crate::config::ConfigLoadNotice>,
 }
 
 impl AppCore {
@@ -190,6 +197,17 @@ impl AppCore {
         config: Config,
         _modifier: HotkeyModifier,
         sink: Arc<dyn EventSink>,
+    ) -> Result<Self, String> {
+        Self::new_with_notice(audio, config, _modifier, sink, None)
+    }
+
+    /// Create the core with an optional startup config migration/recovery notice.
+    pub fn new_with_notice(
+        audio: Box<dyn AudioBackend>,
+        config: Config,
+        _modifier: HotkeyModifier,
+        sink: Arc<dyn EventSink>,
+        config_notice: Option<crate::config::ConfigLoadNotice>,
     ) -> Result<Self, String> {
         let bindings = config_hotkeys(&config);
         let hotkeys = GlobalHotkeys::new_with_bindings(&bindings)?;
@@ -218,6 +236,7 @@ impl AppCore {
             sink,
             sessions_source,
             last_config_mtime: config_mtime(),
+            config_notice,
         })
     }
 
@@ -229,6 +248,7 @@ impl AppCore {
         }
         BootstrapPayload {
             config: self.config.clone(),
+            config_notice: self.config_notice,
             volume_pct: self.last_state.percent(),
             muted: self.last_state.muted,
             hotkey_status: self.hotkey_status.clone(),
@@ -574,6 +594,9 @@ impl AppCore {
                 .map(|s| crate::config::normalize_blacklist_entry(s))
                 .collect();
         }
+        if let Some(autostart) = patch.autostart {
+            self.config.autostart = autostart;
+        }
         Ok(())
     }
 
@@ -687,8 +710,21 @@ impl AppCore {
         if mtime == self.last_config_mtime {
             return false;
         }
+        let (new_cfg, config_notice) = match crate::config::load_existing_with_notice() {
+            Ok(result) => result,
+            Err(error) => {
+                // Keep the last known-good in-memory config when an editor
+                // briefly exposes a partial or malformed INI. Recording the
+                // observed mtime prevents a tight retry loop; a later edit
+                // produces a new mtime and is tried normally.
+                self.last_config_mtime = mtime;
+                self.config_notice = Some(crate::config::ConfigLoadNotice::InvalidExternalEdit);
+                log::warn!("config reload ignored invalid INI: {error}");
+                return false;
+            }
+        };
         self.last_config_mtime = mtime;
-        let new_cfg = crate::config::load();
+        self.config_notice = config_notice;
         let modifier_changed = new_cfg.modifier != self.config.modifier;
         let bindings_changed = new_cfg.hotkeys != self.config.hotkeys;
         log::info!(

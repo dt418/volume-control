@@ -102,7 +102,66 @@ describe("SettingsSurface", () => {
     expect(screen.getByText("No blocked applications")).toBeInTheDocument();
     expect(screen.queryByLabelText(/^Volume step$/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Storage" }));
-    expect(screen.getByRole("button", { name: "Open config file" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Open config\.ini \(advanced\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a config recovery notice in Storage from bootstrap", async () => {
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") {
+        return { ...bootstrap, config_notice: "recovered_from_json" };
+      }
+      if (cmd === "config_path") return "C:\\config.ini";
+      return {};
+    });
+    await renderSurface();
+    fireEvent.click(screen.getByRole("button", { name: "Storage" }));
+    expect(
+      await screen.findByText(/recovered.*legacy JSON backup/i),
+    ).toBeInTheDocument();
+  });
+
+  it("loads the current auto-start state and updates it through the typed command", async () => {
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") return bootstrap;
+      if (cmd === "get_autostart") {
+        return { enabled: true, command: '"C:\\Program Files\\VolumeControl.exe"' };
+      }
+      if (cmd === "set_autostart") return { enabled: false, command: null };
+      return {};
+    });
+    await renderSurface();
+
+    const toggle = await screen.findByRole("switch", { name: /start with windows/i });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(ipc.invoke).toHaveBeenCalledWith("set_autostart", { enabled: false }),
+    );
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("keeps auto-start disabled and offers retry after a rejected write", async () => {
+    let attempts = 0;
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") return bootstrap;
+      if (cmd === "get_autostart") return { enabled: false, command: null };
+      if (cmd === "set_autostart") {
+        attempts += 1;
+        throw new Error("registry access denied");
+      }
+      return {};
+    });
+    await renderSurface();
+
+    const toggle = await screen.findByRole("switch", { name: /start with windows/i });
+    fireEvent.click(toggle);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/registry access denied/i);
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await waitFor(() => expect(attempts).toBe(2));
   });
 
   it("keeps edits in the draft — nothing is committed until Save changes", async () => {

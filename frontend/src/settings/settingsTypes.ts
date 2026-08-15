@@ -15,6 +15,8 @@ export interface SettingsConfig {
   volume_step: number;
   volume_step_large: number;
   overlay_duration_ms: number;
+  /** Persisted preference; the live registry state is loaded separately. */
+  autostart?: boolean;
   modifier: string;
   /** Older bootstrap fixtures/configs may omit this; the surface hydrates it. */
   hotkeys?: HotkeyBindings;

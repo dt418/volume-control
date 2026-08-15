@@ -9,9 +9,11 @@ pub mod audio;
 pub mod audio_linux;
 #[cfg(target_os = "macos")]
 pub mod audio_macos;
+pub mod autostart;
 #[cfg(target_os = "windows")]
 pub mod com_guard;
 pub mod config;
+pub mod config_ini;
 pub mod core;
 pub mod host_core;
 pub mod hotkeys;

@@ -11,13 +11,19 @@ import { GeneralSection } from "./GeneralSection";
 import { HotkeysSection } from "./HotkeysSection";
 import { bindingsForModifier } from "./modifierOptions";
 import { SectionNav, type SettingsSection } from "./SectionNav";
-import { StorageSection } from "./StorageSection";
+import { StorageSection, type ConfigLoadNotice } from "./StorageSection";
 import type { FieldErrors, SettingsConfig } from "./settingsTypes";
 
 interface BootstrapPayload {
   config: SettingsConfig;
+  config_notice?: ConfigLoadNotice;
   hotkey_status: HotkeyRegResult[];
   appearance: AppearancePayload;
+}
+
+interface AutostartStatus {
+  enabled: boolean;
+  command: string | null;
 }
 
 /** Backend error field name → the section that owns it (legacy: a failed
@@ -85,6 +91,9 @@ export function SettingsSurface() {
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [autostartDisabled, setAutostartDisabled] = useState(false);
+  const [configNotice, setConfigNotice] = useState<ConfigLoadNotice | null>(null);
 
   useEffect(() => {
     let disposed = false;
@@ -97,6 +106,18 @@ export function SettingsSurface() {
         setConfig(hydrated);
         setDraft(hydrated);
         setHotkeyStatus(payload.hotkey_status);
+        setConfigNotice(payload.config_notice ?? null);
+        setAutostartEnabled(Boolean(hydrated.autostart));
+        void invoke<AutostartStatus>("get_autostart")
+          .then((autostart) => {
+            if (!disposed) {
+              setAutostartEnabled(autostart.enabled);
+              setAutostartDisabled(false);
+            }
+          })
+          .catch(() => {
+            if (!disposed) setAutostartDisabled(true);
+          });
       })
       .catch((reason) => {
         if (!disposed) {
@@ -177,6 +198,14 @@ export function SettingsSurface() {
     void invoke("close_surface", { surface: "window-settings" });
   };
 
+  const changeAutostart = async (enabled: boolean) => {
+    const result = await invoke<AutostartStatus>("set_autostart", { enabled });
+    if (result.enabled !== enabled) {
+      throw new Error("auto-start state could not be confirmed");
+    }
+    setAutostartEnabled(result.enabled);
+  };
+
   return (
     <main
       data-surface="settings"
@@ -219,7 +248,14 @@ export function SettingsSurface() {
             <SectionNav active={activeSection} onSelect={setActiveSection} />
             <div className="surface-scroll min-h-0 flex-1 overflow-y-auto pr-1">
               {activeSection === "General" && (
-                <GeneralSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
+                <GeneralSection
+                  draft={draft}
+                  setDraft={updateDraft}
+                  errors={fieldErrors}
+                  autoStartEnabled={autostartEnabled}
+                  autoStartDisabled={autostartDisabled}
+                  onAutoStartChange={changeAutostart}
+                />
               )}
               {activeSection === "Hotkeys" && (
                 <HotkeysSection
@@ -238,7 +274,7 @@ export function SettingsSurface() {
               {activeSection === "Feedback" && (
                 <FeedbackSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
               )}
-              {activeSection === "Storage" && <StorageSection />}
+              {activeSection === "Storage" && <StorageSection notice={configNotice} />}
             </div>
           </>
         )}

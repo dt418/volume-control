@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-15T00:00",
+    "last_updated":  "2026-08-15T14:05",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,28 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-034",
+                         "priority":  34,
+                         "area":  "settings-autostart",
+                         "title":  "Windows auto-start and canonical INI settings",
+                         "user_visible_behavior":  "Settings exposes a verified Windows sign-in auto-start switch, while configuration is stored in a typed human-readable config.ini with safe JSON migration, backup recovery, atomic writes, and visible recovery notices.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "cargo fmt --all --check and git diff --check pass.",
+                                               "cargo clippy --workspace --all-targets --no-default-features -- -D warnings passes.",
+                                               "cargo test --workspace --no-default-features passes all workspace, host-core, INI, and auto-start contract tests.",
+                                               "npm test --prefix frontend passes 15 files / 89 tests and npm run build --prefix frontend passes.",
+                                               "Windows hosted/manual verification must exercise HKCU Run enable/read-back/disable/restore with scripts/verify-autostart.ps1 before marking passing.",
+                                               "Linux/macOS builds must retain typed INI parity and return the explicit unsupported auto-start result until native adapters are approved."
+                                           ],
+                         "evidence":  [
+                                              "Session 063 (2026-08-15): Tauri auto-start commands and accessible General Settings switch added; Windows adapter uses the current-user Run key with read-back confirmation and no elevation.",
+                                              "Session 063 (2026-08-15): config.ini codec covers strict typed parsing, canonical atomic persistence, JSON backup migration/recovery, malformed-edit preservation, Storage notices, and lossless per-action shortcut round-tripping; Rust and frontend local gates pass.",
+                                              "Session 063 (2026-08-15): Windows verifier passed enable/read-back, disable cleanup, restoration, and unrelated Run-value fingerprint checks without launching the binary; hosted Linux/macOS release evidence remains required before status can change to passing."
+                                       ],
+                         "notes":  "Auto-start is an immediate registry side effect separate from the typed Save/Reset draft. Linux/macOS return a documented unsupported error in this wave."
+                     },
                      {
                          "id":  "vol-033",
                          "priority":  33,

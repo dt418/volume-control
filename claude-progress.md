@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session 063 (2026-08-15) - Auto-start and canonical INI integration
+
+- Investigated all local/remote topic branches after merging the latest
+  `origin/master` into `feature/tauri-ui-hybrid`; release/CI branches are
+  patch-equivalent or stale architecture and were not merged wholesale.
+- Added the current Tauri-path auto-start implementation: Windows HKCU Run
+  adapter with command quoting, read-back confirmation, cleanup, explicit
+  Linux/macOS unsupported behavior, Tauri commands, and an accessible
+  immediate Settings switch with retry/error handling.
+- Switched the canonical AppCore store to typed `config.ini`: strict schema
+  parsing/serialization, atomic writes, legacy JSON migration that preserves
+  the backup, malformed-INI recovery, live-reload preservation, visible
+  Settings recovery notices, and round-tripping of recorded per-action
+  shortcuts in `[hotkeys]`. Direct Settings editing remains the primary typed
+  workflow; raw file opening is explicitly advanced.
+- Verification on Windows: Rust workspace tests pass (280 library tests plus
+  Tauri/host suites), `cargo fmt --all --check`, `git diff --check`, and
+  clippy with `-D warnings` pass; frontend Vitest passes 15 files / 89 tests
+  and the TypeScript/Vite production build passes. Cross-target checks are
+  environment-blocked locally by missing Linux pkg-config sysroot and macOS
+  compiler; hosted CI remains the authoritative cross-platform gate.
+- Windows verifier evidence was exercised on the current host: enable/read-back,
+  disable cleanup, restoration, and unrelated Run-value fingerprints all pass;
+  the binary was not launched. Hosted Linux/macOS release matrix evidence is
+  still required before marking the feature passing.
+
 ## Session 062 (2026-08-15) - Final local gate and adversarial review
 
 - Full local gate is green on Windows: Rust fmt/diff/clippy/workspace tests

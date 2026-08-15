@@ -1,5 +1,25 @@
 # Session Handoff
 
+## Session 063 (2026-08-15) — Auto-start and canonical INI integration
+
+The active feature branch now contains the current Tauri-path auto-start and
+INI work on top of merge commit `b740a28c`:
+
+- Windows HKCU Run adapter plus `get_autostart`/`set_autostart` commands and
+  an accessible immediate Settings switch with read-back and retry behavior.
+- Typed canonical `config.ini` persistence with strict parsing, atomic writes,
+  legacy JSON backup migration/recovery, malformed-edit preservation, and
+  visible Storage notices; Settings remains the primary typed editor.
+- `scripts/verify-autostart.ps1` has a native Windows run recorded: enable,
+  read-back, disable cleanup, restoration, and unrelated Run-value checks
+  pass without launching the binary. Linux/macOS target checks remain hosted-CI
+  work because this Windows host lacks their native system dependencies.
+
+Local Windows verification: Rust fmt/diff/clippy/workspace tests pass;
+frontend Vitest 15 files / 89 tests and the production build pass. Before
+publishing, run the Windows registry restoration verifier and hosted
+Windows/Linux/macOS release matrix, then inspect SHA-bound artifacts.
+
 ## Session 061 (2026-08-15) — Cross-platform testing and release-safety plan
 
 Plan `docs/superpowers/plans/2026-08-15-cross-platform-testing-release-safety.md`
