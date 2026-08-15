@@ -6,6 +6,11 @@ binary="${TAURI_E2E_BINARY:-$repo/target/debug/VolumeControl}"
 output_root="${TAURI_E2E_OUTPUT:-$repo/output/tauri-e2e}"
 surface="all"
 skip_build=0
+provider_set_by_wrapper=0
+if [[ -z "${E2E_DRIVER_PROVIDER:-}" ]]; then
+  export E2E_DRIVER_PROVIDER=embedded
+  provider_set_by_wrapper=1
+fi
 
 while (($#)); do
   case "$1" in
@@ -54,6 +59,7 @@ else
   evidence_code=0
 fi
 unset TAURI_E2E_BINARY TAURI_E2E_OUTPUT TAURI_E2E_RUN_ID
+if [[ "$provider_set_by_wrapper" -eq 1 ]]; then unset E2E_DRIVER_PROVIDER; fi
 
 [[ ! -e "$repo/src-tauri/capabilities/e2e-wdio.json" ]] || { echo "temporary WDIO capability was not restored" >&2; evidence_code=1; }
 [[ ! -e "$repo/frontend/dist/tauri-plugin.wdio.js" ]] || { echo "temporary guest bridge was not restored" >&2; evidence_code=1; }

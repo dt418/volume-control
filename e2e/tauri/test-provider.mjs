@@ -11,6 +11,8 @@ import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { delimiter, join } from "node:path";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
 const providers = new Set(["embedded", "tauri-driver"]);
 const platforms = new Set(["windows", "linux", "macos"]);
@@ -86,4 +88,8 @@ async function main() {
   return 0;
 }
 
-process.exitCode = await main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  process.exitCode = await main();
+}
+
+export { main };

@@ -10,6 +10,12 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $e2e = Join-Path $repo "e2e\tauri"
+$providerWasSet = [Environment]::GetEnvironmentVariable("E2E_DRIVER_PROVIDER", "Process")
+$providerSetByWrapper = $false
+if ([string]::IsNullOrWhiteSpace($providerWasSet)) {
+  $env:E2E_DRIVER_PROVIDER = "embedded"
+  $providerSetByWrapper = $true
+}
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "node is required" }
 if (-not (Test-Path (Join-Path $e2e "node_modules\@wdio\cli\bin\wdio.js"))) {
@@ -45,6 +51,7 @@ try {
   Remove-Item Env:TAURI_E2E_BINARY -ErrorAction SilentlyContinue
   Remove-Item Env:TAURI_E2E_OUTPUT -ErrorAction SilentlyContinue
   Remove-Item Env:TAURI_E2E_RUN_ID -ErrorAction SilentlyContinue
+  if ($providerSetByWrapper) { Remove-Item Env:E2E_DRIVER_PROVIDER -ErrorAction SilentlyContinue }
 }
 
 if (Test-Path (Join-Path $repo "src-tauri\capabilities\e2e-wdio.json")) {
