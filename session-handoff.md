@@ -1,5 +1,40 @@
 # Session Handoff
 
+## Session 072 (2026-08-15) - Volume and mute regression coverage
+
+`crates/volumectl/tests/host_core.rs` now covers the complete system action
+matrix: +/-1%, +/-10% large steps, boundary clamping, reset 50%, and two-way
+mute transitions. The fake backend was corrected to toggle its mute bit so the
+test exercises the same contract as Windows WASAPI/PulseAudio/CoreAudio.
+
+The Tauri `toggle_mute` command now calls a fallible `AppCore::toggle_mute`
+method, publishes the backend-returned state directly, and returns endpoint
+errors to the frontend instead of silently swallowing them.
+
+Windows WASAPI operations now initialize COM on the thread that performs each
+read/write; the backend no longer stores a startup-thread guard that could be
+moved and dropped on a different thread.
+
+AppCore now enforces mute as an audible-zero operation (native mute flag plus
+scalar volume 0) and restores the saved scalar on unmute. Direct positive
+volume and reset actions explicitly clear the mute fallback.
+
+The focused mixer E2E asserts the scalar slider sequence `50 -> 0 -> 50`, not
+just the frontend “Muted” label.
+
+The frontend now registers volume/session listeners before bootstrap and uses
+an event revision to prevent an older bootstrap response from overwriting a
+newer mute result. `MixerSurface.test.tsx` covers this race explicitly.
+
+Settings E2E now waits for the actual General inputs before editing, avoiding
+the separate shell-ready/form-ready timing race observed in the full matrix.
+
+`e2e/tauri/specs/mixer.e2e.ts` now waits for the actual `state://volume` result
+and asserts Mute -> Unmute -> Mute accessibility state. The full Windows ship
+gate passed before this assertion was added; a focused rerun later hit an
+environmental WebDriver startup refusal on port 4445 and did not reach the
+application, so hosted CI must provide the final E2E evidence.
+
 ## Session 071 (2026-08-15) — Project-scoped Claude safe-flow hook
 
 `.claude/settings.json` now wires `.claude/hooks/agent-safe-flow.sh` as a Bash

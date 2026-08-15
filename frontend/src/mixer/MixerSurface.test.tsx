@@ -209,6 +209,26 @@ describe("MixerSurface", () => {
     expect(screen.getByTestId("system-output-value")).toHaveTextContent("55%");
   });
 
+  it("does not let a stale bootstrap overwrite a mute event", async () => {
+    let resolveBootstrap!: (value: typeof bootstrap) => void;
+    const pendingBootstrap = new Promise<typeof bootstrap>((resolve) => {
+      resolveBootstrap = resolve;
+    });
+    vi.mocked(ipc.invoke).mockImplementation((cmd: string) => {
+      if (cmd === "get_bootstrap") return pendingBootstrap;
+      return Promise.resolve({});
+    });
+
+    render(<MixerSurface />);
+    await waitFor(() => expect(listeners["state://volume"]).toBeDefined());
+    listeners["state://volume"]({ pct: 55, muted: true });
+    resolveBootstrap(bootstrap);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("system-output-value")).toHaveTextContent("Muted");
+    });
+  });
+
   it("renders the glass-surface class on the root for transparent-window readability", async () => {
     await renderSurface();
     expect(screen.getByRole("main").className).toContain("glass-surface");

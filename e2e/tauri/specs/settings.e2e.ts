@@ -29,6 +29,7 @@ describe("Settings surface", () => {
 
   it("keeps edits draft-only until Save and supports Reset", async () => {
     const volumeStep = $("[data-surface=settings] input[aria-label='Volume step']");
+    await volumeStep.waitForDisplayed({ timeout: 60_000 });
     await volumeStep.setValue("2");
     await expect($(selectors.settings.save)).toBeEnabled();
     await $(selectors.settings.reset).click();
@@ -36,7 +37,9 @@ describe("Settings surface", () => {
   });
 
   it("surfaces validation feedback for an invalid draft", async () => {
-    await $("[data-surface=settings] input[aria-label='Overlay duration']").setValue("100");
+    const overlayDuration = $("[data-surface=settings] input[aria-label='Overlay duration']");
+    await overlayDuration.waitForDisplayed({ timeout: 60_000 });
+    await overlayDuration.setValue("100");
     await $(selectors.settings.save).click();
     await expect($("[data-surface=settings] [role=alert]")).toBeDisplayed();
   });

@@ -39,7 +39,9 @@ impl AudioBackend for StubAudio {
         Ok(())
     }
     fn toggle_mute(&self) -> Result<VolumeState, AudioError> {
-        Ok(*self.state.lock().unwrap())
+        let mut state = self.state.lock().unwrap();
+        state.muted = !state.muted;
+        Ok(*state)
     }
     fn set_mute(&self, muted: bool) -> Result<(), AudioError> {
         self.state.lock().unwrap().muted = muted;
@@ -140,6 +142,43 @@ fn handle_action_adjust_volume_emits_volume_event() {
         .unwrap()
         .iter()
         .any(|e| e.starts_with("volume:51:")));
+}
+
+#[test]
+fn volume_actions_cover_small_large_reset_clamping_and_mute() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink);
+
+    core.handle_action(AppAction::AdjustVolume { delta_percent: 1 });
+    assert_eq!(core.bootstrap().volume_pct, 51);
+
+    core.handle_action(AppAction::AdjustVolume { delta_percent: -1 });
+    assert_eq!(core.bootstrap().volume_pct, 50);
+
+    core.handle_action(AppAction::AdjustVolume { delta_percent: 10 });
+    assert_eq!(core.bootstrap().volume_pct, 60);
+
+    core.handle_action(AppAction::AdjustVolume { delta_percent: -10 });
+    assert_eq!(core.bootstrap().volume_pct, 50);
+
+    core.handle_action(AppAction::SetVolumePercent { percent: 125 });
+    assert_eq!(core.bootstrap().volume_pct, 100);
+    core.handle_action(AppAction::AdjustVolume { delta_percent: 10 });
+    assert_eq!(core.bootstrap().volume_pct, 100);
+
+    core.handle_action(AppAction::SetVolumePercent { percent: 0 });
+    core.handle_action(AppAction::AdjustVolume { delta_percent: -10 });
+    assert_eq!(core.bootstrap().volume_pct, 0);
+
+    core.handle_action(AppAction::ResetVolume);
+    assert_eq!(core.bootstrap().volume_pct, 50);
+
+    core.handle_action(AppAction::ToggleMute);
+    assert!(core.bootstrap().muted);
+    assert_eq!(core.bootstrap().volume_pct, 0);
+    core.handle_action(AppAction::ToggleMute);
+    assert!(!core.bootstrap().muted);
+    assert_eq!(core.bootstrap().volume_pct, 50);
 }
 
 #[test]

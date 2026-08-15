@@ -1,5 +1,38 @@
 # Progress Log
 
+## Session 072 (2026-08-15) - Volume and mute regression coverage
+
+- Added host-core regression coverage for small +/-1% steps, configured large
+  +/-10% steps, 0/100% clamping, reset-to-50%, and mute/unmute transitions.
+  The integration-test audio fake now toggles mute exactly like the real
+  backend instead of returning a stale state.
+- The Tauri mute command now uses a fallible `AppCore::toggle_mute` seam,
+  publishes the exact state returned by the audio backend, and propagates
+  endpoint errors to the IPC caller instead of silently retaining a stale UI
+  label.
+- Hardened the Windows WASAPI backend's COM lifecycle: the endpoint is no
+  longer tied to a guard created on the startup thread; every audio operation
+  initializes an STA guard on its actual caller thread, avoiding stale/no-op
+  mutations from Tauri IPC and the host poll loop.
+- Changed the Tauri host mute contract to enforce an audible zero: it sets the
+  native mute flag, writes scalar volume 0, and restores the prior scalar on
+  unmute. Positive volume/reset actions clear the saved mute level and resume
+  output, so a stale mute bit cannot leave the UI and device out of sync.
+- Mixer E2E now verifies the backend-visible scalar sequence `50 -> 0 -> 50`
+  around Mute/Unmute, in addition to the accessibility label transition.
+- Fixed the frontend race that made a successful mute appear ineffective:
+  `useSessions` now installs `state://volume`/`state://sessions` listeners
+  before requesting bootstrap and ignores a stale bootstrap volume snapshot
+  after a newer event. The race has a focused React test.
+- Hardened Settings E2E against asynchronous bootstrap timing by waiting for
+  the concrete General controls before editing; this removes a false failure
+  where the surface shell was ready but its form was not yet mounted.
+- Extended the Windows mixer E2E contract to assert the real system-output
+  label and aria action switch after mute and unmute state events. A manual
+  Windows probe also confirmed the Ctrl+Alt+M path publishes `muted=true` and
+  `muted=false`; a standalone driver startup failure is recorded separately
+  from application behavior.
+
 ## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
 
 - Added `.claude/hooks/agent-safe-flow.sh` and wired it through the project

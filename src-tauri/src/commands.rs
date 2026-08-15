@@ -50,7 +50,7 @@ pub fn set_volume(core: State<'_, Arc<Mutex<AppCore>>>, percent: u8) -> Result<(
 pub fn toggle_mute(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<(), String> {
     core.lock()
         .map_err(|e| e.to_string())
-        .map(|mut core| core.handle_action(AppAction::ToggleMute))
+        .and_then(|mut core| core.toggle_mute())
 }
 
 #[tauri::command]

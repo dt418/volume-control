@@ -44,4 +44,32 @@ describe("Mixer surface", () => {
     await $(selectors.mixer.reset).click();
     await expect($(selectors.mixer.systemVolume)).toBeDisplayed();
   });
+
+  it("round-trips system mute state through the backend event", async () => {
+    const mute = $(selectors.mixer.mute);
+    const unmute = $('[aria-label="Unmute system output"]');
+    const volume = $(selectors.mixer.systemVolume);
+
+    // Establish a deterministic non-zero restore point for the backend
+    // scalar-volume assertion below.
+    await $(selectors.mixer.reset).click();
+    await expect(volume).toHaveAttribute("aria-valuenow", "50");
+
+    // Normalize the starting state in case a previous diagnostic run left the
+    // default endpoint muted.
+    if (await unmute.isExisting()) {
+      await unmute.click();
+      await expect(mute).toBeDisplayed();
+    }
+
+    await mute.click();
+    await expect(unmute).toBeDisplayed();
+    await expect($("[data-testid=system-output-value]")).toHaveText("Muted");
+    await expect(volume).toHaveAttribute("aria-valuenow", "0");
+
+    await unmute.click();
+    await expect(mute).toBeDisplayed();
+    await expect($("[data-testid=system-output-value]")).not.toHaveText("Muted");
+    await expect(volume).toHaveAttribute("aria-valuenow", "50");
+  });
 });

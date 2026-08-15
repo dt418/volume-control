@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
@@ -51,18 +51,47 @@ export function useSessions() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const volumeEventRevision = useRef(0);
 
   useEffect(() => {
     let disposed = false;
+    const bootstrapVolumeRevision = volumeEventRevision.current;
+    const unlisteners: Array<() => void> = [];
     setError(null);
-    invoke<BootstrapPayload>("get_bootstrap")
+
+    const listenersReady = Promise.all([
+      listen<AudioSession[]>("state://sessions", (payload) => {
+        if (!disposed) setSessions(payload ?? []);
+      }),
+      listen<VolumeEvent>("state://volume", (payload) => {
+        if (!disposed) {
+          volumeEventRevision.current += 1;
+          setVolumePct(payload.pct);
+          setMuted(payload.muted);
+        }
+      }),
+    ]);
+
+    void listenersReady
+      .then((registered) => {
+        if (disposed) {
+          registered.forEach((unlisten) => unlisten());
+          return undefined;
+        }
+        unlisteners.push(...registered);
+        return invoke<BootstrapPayload>("get_bootstrap");
+      })
       .then((b) => {
-        if (disposed) return;
+        if (!b || disposed) return;
         setError(null);
         applyAppearance(b.appearance);
         setSessions(b.sessions ?? []);
-        setVolumePct(b.volume_pct);
-        setMuted(b.muted);
+        // A command can complete while bootstrap is in flight. In that case
+        // the backend event is newer than the bootstrap snapshot and must win.
+        if (volumeEventRevision.current === bootstrapVolumeRevision) {
+          setVolumePct(b.volume_pct);
+          setMuted(b.muted);
+        }
         setThresholds(b.config?.color_thresholds ?? DEFAULT_THRESHOLDS);
         setSessionsSupported(b.sessions_supported);
       })
@@ -75,27 +104,9 @@ export function useSessions() {
 
     return () => {
       disposed = true;
-    };
-  }, [bootstrapAttempt]);
-
-  useEffect(() => {
-    let disposed = false;
-    const unlisteners: Array<() => void> = [];
-    void listen<AudioSession[]>("state://sessions", (payload) => {
-      if (!disposed) setSessions(payload ?? []);
-    }).then((unlisten) => unlisteners.push(unlisten));
-    void listen<VolumeEvent>("state://volume", (payload) => {
-      if (!disposed) {
-        setVolumePct(payload.pct);
-        setMuted(payload.muted);
-      }
-    }).then((unlisten) => unlisteners.push(unlisten));
-
-    return () => {
-      disposed = true;
       unlisteners.forEach((unlisten) => unlisten());
     };
-  }, []);
+  }, [bootstrapAttempt]);
 
   const removeSession = useCallback((id: string) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));
