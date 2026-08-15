@@ -1,5 +1,14 @@
 # Progress Log
 
+## Session 067 (2026-08-15) - Add reusable workflow warning auditor skill
+
+- Created project skill `.agents/skills/workflow-warning-auditor` with a
+  deterministic PyYAML audit for GitHub Actions Node-runtime deprecations,
+  mutable action refs, missing permissions, obsolete branch triggers, and
+  dangerous `pull_request_target` usage.
+- Added UI metadata, runtime-baseline reference, strict JSON/text output, and
+  validation with `quick_validate.py` plus a live audit of all workflows.
+
 ## Session 066 (2026-08-15) - Fix cross-platform E2E evidence path
 
 - CI on `main` exposed a real Linux/macOS regression after the isolated `tsx`
