@@ -78,7 +78,12 @@ impl EventSink for RecordingSink {
 }
 
 fn core_with(sink: Arc<RecordingSink>) -> AppCore {
-    AppCore::new(
+    // Host-core tests never create the OS-level hotkey manager: parallel
+    // Carbon registration from test threads (and headless CI sessions) can
+    // abort the test process natively. The degraded no-manager state covers
+    // the same AppCore logic; native registration is exercised by the real
+    // host and the E2E matrix instead.
+    AppCore::new_without_native_hotkeys(
         Box::new(StubAudio {
             state: Mutex::new(VolumeState {
                 volume: 0.5,
@@ -88,6 +93,7 @@ fn core_with(sink: Arc<RecordingSink>) -> AppCore {
         Config::default(),
         HotkeyModifier::CtrlAlt,
         sink,
+        None,
     )
     .unwrap()
 }
@@ -95,7 +101,7 @@ fn core_with(sink: Arc<RecordingSink>) -> AppCore {
 #[test]
 fn bootstrap_exposes_config_load_notice_without_changing_config_shape() {
     let sink = Arc::new(RecordingSink::default());
-    let core = AppCore::new_with_notice(
+    let core = AppCore::new_without_native_hotkeys(
         Box::new(StubAudio {
             state: Mutex::new(VolumeState {
                 volume: 0.5,

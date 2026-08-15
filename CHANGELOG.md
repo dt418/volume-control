@@ -4,6 +4,8 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-16
+
 ### Added
 
 - Tauri v2 Mixer, Settings, and Help webview surfaces with lazy window

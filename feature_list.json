@@ -16,6 +16,44 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-074",
+                         "priority":  74,
+                         "area":  "testing",
+                         "title":  "Host-core tests independent of the native hotkey manager",
+                         "user_visible_behavior":  "Developer-facing: the host-core integration suite no longer creates OS-level hotkey managers, so CI test runs cannot be aborted by concurrent Carbon registration on macOS runners.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "cargo test -p volumectl --test host_core --no-default-features passes 23/23 locally (0.27s) with the no-native-manager seam.",
+                                               "cargo test --workspace --no-default-features passes locally; full format-lint gate passes.",
+                                               "macOS CI job re-run on PR #30 expected green; status updated after the hosted run completes."
+                                           ],
+                         "evidence":  [
+                                              "Session 074 (2026-08-16): PR #30 CI run 31903072628 aborted the macOS host_core binary with SIGABRT 27ms after 'running 23 tests' and before any test result line, with no Rust panic - a native Carbon abort from parallel GlobalHotKeyManager create/drop in test threads (green runs of the identical code 6h earlier passed 23/23).",
+                                              "Session 074 (2026-08-16): AppCore gains a #[doc(hidden)] new_without_native_hotkeys seam and GlobalHotkeys::unavailable (no manager, no listener/repeat threads); production new/new_with_notice paths are unchanged."
+                                       ],
+                         "notes":  "Native hotkey registration remains covered by hotkeys_global unit tests, the real Tauri host, and the desktop E2E matrix."
+                     },
+                     {
+                         "id":  "vol-073",
+                         "priority":  73,
+                         "area":  "release",
+                         "title":  "Release v0.1.2 preparation and tag binding",
+                         "user_visible_behavior":  "Users get a v0.1.2 desktop release whose packaged app version matches the release tag, and manual-dispatch releases fail with an actionable message when the requested tag does not exist on the remote.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "Version bumped to 0.1.2 consistently across Cargo workspace (workspace.package, volumectl, volumecontrol-tauri), Cargo.lock, tauri.conf.json, frontend package.json and package-lock.json; lockfile remains consistent after cargo check.",
+                                               "CHANGELOG.md promoted the accumulated Unreleased work into the [0.1.2] section with a fresh Unreleased heading.",
+                                               "release.yml preflight now prints the exact git tag + push command when the tag is missing, so the earlier `Unable to resolve release tag v0.1.2` 404 failure becomes actionable.",
+                                               "Full format-lint gate passes (fmt, whitespace, clippy -D warnings, workspace tests) and the pre-commit hook passes before the release commit.",
+                                               "Tag v0.1.2 created and pushed at the release commit; the Release workflow run triggered by the tag push completed successfully and published artifacts."
+                                           ],
+                         "evidence":  [
+                                              "Session 073 (2026-08-16): the failed run 31901602099 (workflow_dispatch, tag input v0.1.2) was traced to `gh api repos/dt418/volume-control/git/ref/tags/v0.1.2` returning 404 because the tag was never pushed; local and remote tag listings showed only v0.1.0/v0.1.1.",
+                                              "Session 073 (2026-08-16): version files previously stayed at 0.1.0 even for the v0.1.1 release (v0.1.1:Cargo.toml shows 0.1.0); this release aligns every version file with the tag."
+                                       ],
+                         "notes":  "Release prep is committed directly to main (no PR) because the release tag must point at the exact validated commit; the Release workflow remains SHA-bound to the tag commit."
+                     },
+                     {
                          "id":  "vol-039",
                          "priority":  39,
                          "area":  "agent-safety",

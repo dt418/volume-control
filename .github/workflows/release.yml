@@ -39,7 +39,7 @@ jobs:
             release_tag="$INPUT_TAG"
           fi
           if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Release tag must match vMAJOR.MINOR.PATCH, for example v0.1.0" >&2
+            echo "Release tag '$release_tag' must match vMAJOR.MINOR.PATCH, for example v0.1.0" >&2
             exit 1
           fi
 
@@ -50,7 +50,9 @@ jobs:
           tag_sha=""
           tag_ref="repos/$REPOSITORY/git/ref/tags/$release_tag"
           if ! tag_type_and_sha="$(gh api "$tag_ref" --jq '.object.type + " " + .object.sha')"; then
-            echo "Unable to resolve release tag $release_tag through the GitHub API" >&2
+            echo "Release tag $release_tag does not exist on the remote." >&2
+            echo "Create it at the exact commit to release, push it, and the workflow triggers automatically:" >&2
+            echo "  git tag -a $release_tag -m \"Release $release_tag\" && git push origin $release_tag" >&2
             exit 1
           fi
           read -r tag_type tag_sha <<< "$tag_type_and_sha"

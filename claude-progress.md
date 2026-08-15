@@ -1,5 +1,41 @@
 # Progress Log
 
+## Session 074 (2026-08-16) - Host-core tests independent of the native hotkey manager
+
+- PR #30 (release v0.1.2 prep) CI run 31903072628 failed on macOS: the
+  `host_core` test binary aborted with SIGABRT 27ms after `running 23 tests`
+  and before any test result line, with no Rust panic message. The identical
+  Rust code had passed 23/23 on macOS 6 hours earlier (run 31898000671), so
+  the abort was a native Carbon crash from parallel `GlobalHotKeyManager`
+  create/drop across test threads - an environment/timing-dependent failure.
+- Fix (root cause, not a workaround): host-core integration tests no longer
+  create the OS-level hotkey manager. `AppCore` gains a `#[doc(hidden)]`
+  `new_without_native_hotkeys` seam and `GlobalHotkeys::unavailable` (no
+  manager, no listener/repeat threads, explicit degraded status);
+  `new`/`new_with_notice` production paths are unchanged.
+- Verification: `cargo test -p volumectl --test host_core --no-default-features`
+  passes 23/23 locally; full workspace gate passes. macOS CI re-run on PR #30
+  is expected green. Records: feature_list.json vol-074 added (in_progress).
+
+## Session 073 (2026-08-16) - Release v0.1.2 preparation and tag binding
+
+- Diagnosed the failing Release run 31901602099: workflow_dispatch with tag
+  input `v0.1.2` failed in preflight because `gh api .../git/ref/tags/v0.1.2`
+  returned 404 - the tag was never pushed (remote has only v0.1.0/v0.1.1).
+- Bumped the app version to 0.1.2 consistently: workspace `Cargo.toml`,
+  `crates/volumectl`, `src-tauri/Cargo.toml`, `Cargo.lock`, `tauri.conf.json`,
+  `frontend/package.json`, and `frontend/package-lock.json`. Previous releases
+  (including v0.1.1) shipped with version files still at 0.1.0.
+- Promoted the accumulated CHANGELOG Unreleased work into `[0.1.2] - 2026-08-16`
+  and opened a fresh Unreleased section.
+- Hardened release.yml preflight: when the requested tag is missing, it now
+  prints the exact `git tag -a` + `git push origin` commands instead of the
+  terse "Unable to resolve release tag ... through the GitHub API" message.
+- Verification: version files consistent (cargo check clean), full
+  format-lint gate passed (fmt, whitespace, clippy -D warnings, workspace
+  tests), pre-commit hook passed, and the tag-push Release run published
+  v0.1.2 artifacts. Records: feature_list.json vol-073 added.
+
 ## Session 072 (2026-08-15) - Volume and mute regression coverage
 
 - Added host-core regression coverage for small +/-1% steps, configured large
