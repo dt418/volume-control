@@ -51,7 +51,9 @@ All notable changes to VolumeControl are documented here.
   with exact Windows, Ubuntu/Xvfb, WSLg, macOS inspection, and release review
   commands. Hosted headless checks are explicitly bounded to deterministic
   surface/build evidence and do not claim native hotkeys, tray, hardware audio,
-  Wayland, TCC/Accessibility, or multi-monitor behavior.
+  Wayland, TCC/Accessibility, or multi-monitor behavior. E2E JUnit, manifest,
+  and platform logs remain validation evidence reviewed separately from the
+  publish-time metadata/checksum/package verifier.
 - The current macOS package remains ad-hoc signed for validation. Public
   distribution is deferred to a protected Developer ID/notarization workflow;
   no signing secrets are stored in the repository.

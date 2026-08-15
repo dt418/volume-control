@@ -182,8 +182,10 @@ desktop theo loại event:
 
 Push tag `v*` trước hết kiểm tra format của tag, sau đó chạy matrix desktop
 Windows/macOS/Ubuntu có ràng buộc SHA. Job publish kiểm tra metadata, checksum
-package và bằng chứng của từng nền tảng trước khi đưa archive phiên bản cùng
+package và nội dung package trước khi đưa archive phiên bản cùng
 `SHA256SUMS.txt` lên release; job này không build lại binary chưa được validate.
+JUnit, manifest và log nền tảng của E2E được tạo và review riêng trong
+validation artifact; verifier của publish không kiểm tra lại các file đó.
 
 Package macOS hiện được ký ad-hoc để validation và kiểm tra local, không phải
 chữ ký phân phối công khai. Phân phối macOS trong tương lai cần workflow được

@@ -217,8 +217,11 @@ validation according to the event schedule:
 
 Pushing a `v*` tag first validates the tag, then runs the reusable SHA-bound
 Windows/macOS/Ubuntu desktop matrix. The publish job verifies each platform's
-metadata, package checksum, and evidence before promoting versioned archives
-and `SHA256SUMS.txt`; it does not rebuild an unvalidated binary.
+metadata, package checksum, and package contents before promoting versioned
+archives and `SHA256SUMS.txt`; it does not rebuild an unvalidated binary. E2E
+JUnit, manifest, and platform-log evidence is produced and reviewed separately
+as part of the validation artifact; the publish verifier does not re-verify
+those files.
 
 The current macOS package is ad-hoc signed for validation and local inspection,
 not public distribution. Public macOS distribution requires a future protected

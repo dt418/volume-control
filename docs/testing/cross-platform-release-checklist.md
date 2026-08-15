@@ -197,26 +197,51 @@ Windows global-shortcut delivery.
 ## 5. Hosted macOS and local macOS inspection
 
 The hosted macOS job is useful for AppKit/core compilation, renderer smoke
-tests, webview/IPC evidence, and package structure. Run the deterministic
-checks and wrapper from section 1, then record the runner architecture:
+tests, webview/IPC evidence, and package structure. The WDIO wrapper from
+section 1 is debug-only: it prepares a debug/plugin binary for surface tests
+and never substitutes for production package inspection.
+
+Obtain or build the production package before inspecting `target/release` or
+the app bundle. For a local package:
 
 ```bash
+npm ci --prefix frontend
+npm run build --prefix frontend
+frontend/node_modules/.bin/tauri build --no-bundle --ci
+
 sw_vers
 uname -m
 file target/release/VolumeControl
+RELEASE_PLATFORM=macos RELEASE_TAG=v0.0.0-manual bash scripts/package.sh
 ```
 
-Inspect the current ad-hoc package after unzipping it:
+For a hosted package, download the completed validation artifact instead of
+running a local build:
+
+```bash
+gh run download <RUN_ID> --name "validated-macos-<COMMIT_SHA>" \
+  --dir output/release/macos
+```
+
+Then inspect the downloaded or locally generated package after unzipping it:
 
 ```bash
 mkdir -p output/manual/macos-package
-unzip -q volumecontrol-<version>-macos.zip -d output/manual/macos-package
+unzip -q output/release/macos/volumecontrol-<version>-macos.zip \
+  -d output/manual/macos-package
+# For a local package, use:
+# unzip -q dist/volumecontrol-0.0.0-manual-macos.zip \
+#   -d output/manual/macos-package
 codesign --verify --strict --verbose=2 \
   output/manual/macos-package/VolumeControl.app
 plutil -lint \
   output/manual/macos-package/VolumeControl.app/Contents/Info.plist
 file output/manual/macos-package/VolumeControl.app/Contents/MacOS/volumectl
 ```
+
+When only a hosted package was downloaded, inspect its executable with `file`
+after extraction; `target/release/VolumeControl` is a local-build path and may
+not exist on the inspection machine.
 
 `codesign --verify` and `plutil --lint` prove package structure and the current
 signature state. Hosted macOS does **not** prove TCC/Accessibility approval,
@@ -254,7 +279,11 @@ bash scripts/verify-release-metadata.sh \
 
 The verifier requires `build-metadata.json`, the package, `SHA256SUMS.txt`, a
 matching `artifact_sha256`, the expected commit SHA, and the expected platform.
-Inspect package contents without executing them:
+This publish-time verifier does not re-verify E2E JUnit, manifest, or platform
+logs. Review those validation files separately before approving the release:
+confirm each downloaded validation artifact contains its JUnit, manifest, and
+platform-log paths before inspecting the package contents without executing
+them:
 
 ```bash
 tar tzf output/release/ubuntu/volumecontrol-<version>-ubuntu.tar.gz
@@ -262,9 +291,12 @@ unzip -l output/release/macos/volumecontrol-<version>-macos.zip
 unzip -l output/release/windows/volumecontrol-<version>-windows.zip
 ```
 
-Reject the release when a platform artifact, metadata field, checksum, E2E
-manifest, JUnit report, or platform log is missing. Record the final
-`SHA256SUMS.txt` path only after the publish job completes successfully.
+Reject validation when a platform artifact, metadata field, or checksum is
+missing. Also reject the release decision when the validation artifact lacks
+its required E2E manifest, JUnit report, or platform log; that is a separate
+evidence-review gate, not an additional claim about the publish verifier.
+Record the final `SHA256SUMS.txt` path only after the publish job completes
+successfully.
 
 ## Claims boundary
 
