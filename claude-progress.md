@@ -1,5 +1,13 @@
 # Progress Log
 
+## Session 070 (2026-08-15) - Enforce the release gate on main
+
+- Configured GitHub branch protection for `main` with strict required status
+  check `Release gate (required)`, admin enforcement, and force-push/deletion
+  protection. This turns the fail-closed workflow policy into a merge rule,
+  while still allowing docs/tooling-only pull requests to use their bounded
+  Linux/macOS path.
+
 ## Session 069 (2026-08-15) - Cost-balanced CI with release fail-closed gate
 
 - Merged PR #23 so `.agents/skills/workflow-warning-auditor` is available on
