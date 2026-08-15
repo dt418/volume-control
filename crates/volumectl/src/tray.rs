@@ -3,9 +3,9 @@
 //! Built on the Tauri ecosystem's `tray-icon` + `muda` crates. Menu (spec §9):
 //! live volume label, then volume actions (mute check item, reset, open
 //! mixer), surface actions (settings, help), configuration actions (reload,
-//! open config file), and Exit — each group separated. Menu events are
-//! drained from the crate's global receiver with `try_recv` inside the app's
-//! 150 ms poll — no extra thread or event loop needed.
+//! open config file), and Exit — each group separated. Menu events are routed
+//! through the Tauri runtime's global menu handler (see the host crate),
+//! because Tauri owns the `muda` event channel on desktop.
 
 use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 
@@ -26,6 +26,28 @@ pub enum TrayCommand {
     EditConfig,
     ReloadConfig,
     Exit,
+}
+
+impl TrayCommand {
+    /// Decode the stable ids assigned to the native tray menu items.
+    ///
+    /// Tauri installs a process-wide `muda` menu event handler, so tray events
+    /// are delivered through `Builder::on_menu_event` rather than the
+    /// `muda::MenuEvent::receiver` channel. Keeping the id mapping here gives
+    /// both the Tauri callback and tests a single source of truth.
+    pub fn from_menu_id(id: &str) -> Option<Self> {
+        match id {
+            "mute" => Some(Self::ToggleMute),
+            "reset" => Some(Self::Reset50),
+            "mixer" => Some(Self::OpenMixer),
+            "help" => Some(Self::Help),
+            "settings" => Some(Self::Settings),
+            "edit" => Some(Self::EditConfig),
+            "reload" => Some(Self::ReloadConfig),
+            "exit" => Some(Self::Exit),
+            _ => None,
+        }
+    }
 }
 
 pub struct Tray {
@@ -71,37 +93,30 @@ impl Tray {
         })
     }
 
-    /// Poll for a menu command (non-blocking). Call from the 150 ms timer.
-    pub fn poll(&self) -> Option<TrayCommand> {
-        let rx = MenuEvent::receiver();
-        loop {
-            match rx.try_recv() {
-                Ok(ev) => {
-                    let cmd = match ev.id.as_ref() {
-                        "mute" => Some(TrayCommand::ToggleMute),
-                        "reset" => Some(TrayCommand::Reset50),
-                        "mixer" => Some(TrayCommand::OpenMixer),
-                        "help" => Some(TrayCommand::Help),
-                        "settings" => Some(TrayCommand::Settings),
-                        "edit" => Some(TrayCommand::EditConfig),
-                        "reload" => Some(TrayCommand::ReloadConfig),
-                        "exit" => Some(TrayCommand::Exit),
-                        _ => None,
-                    };
-                    if cmd.is_some() {
-                        return cmd;
-                    }
-                }
-                Err(_) => return None, // Empty or Disconnected
-            }
-        }
-    }
-
     /// Refresh the volume label and mute check state.
     pub fn set_volume(&self, state: &VolumeState) {
         self.vol_label
             .set_text(format!("VolumeControl — {}%", state.percent()));
         self.mute_item.set_checked(state.muted);
+    }
+
+    /// Poll for a menu command for the legacy native host.
+    ///
+    /// The Tauri host must use its `on_menu_event` callback instead because
+    /// Tauri takes ownership of the global `muda` event handler. The legacy
+    /// host has no Tauri runtime and can continue consuming this channel.
+    pub fn poll(&self) -> Option<TrayCommand> {
+        let rx = MenuEvent::receiver();
+        loop {
+            match rx.try_recv() {
+                Ok(event) => {
+                    if let Some(command) = TrayCommand::from_menu_id(event.id.as_ref()) {
+                        return Some(command);
+                    }
+                }
+                Err(_) => return None,
+            }
+        }
     }
 
     /// Pop the context menu at the current cursor position.
@@ -151,4 +166,29 @@ fn tray_icon_rgba() -> Vec<u8> {
         }
     }
     px
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TrayCommand;
+
+    #[test]
+    fn every_native_menu_id_decodes_to_a_command() {
+        let cases = [
+            ("mute", TrayCommand::ToggleMute),
+            ("reset", TrayCommand::Reset50),
+            ("mixer", TrayCommand::OpenMixer),
+            ("settings", TrayCommand::Settings),
+            ("help", TrayCommand::Help),
+            ("reload", TrayCommand::ReloadConfig),
+            ("edit", TrayCommand::EditConfig),
+            ("exit", TrayCommand::Exit),
+        ];
+
+        for (id, expected) in cases {
+            assert_eq!(TrayCommand::from_menu_id(id), Some(expected));
+        }
+        assert_eq!(TrayCommand::from_menu_id("volume"), None);
+        assert_eq!(TrayCommand::from_menu_id("unknown"), None);
+    }
 }

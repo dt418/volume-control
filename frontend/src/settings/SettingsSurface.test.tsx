@@ -46,6 +46,7 @@ const bootstrap = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(ipc.invoke).mockResolvedValue({});
   vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
     if (cmd === "get_bootstrap") return bootstrap;
@@ -122,46 +123,55 @@ describe("SettingsSurface", () => {
     ).toBeInTheDocument();
   });
 
-  it("loads the current auto-start state and updates it through the typed command", async () => {
-    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_bootstrap") return bootstrap;
-      if (cmd === "get_autostart") {
-        return { enabled: true, command: '"C:\\Program Files\\VolumeControl.exe"' };
-      }
-      if (cmd === "set_autostart") return { enabled: false, command: null };
-      return {};
-    });
+  it("auto-start toggle only edits the draft; Save commits it via set_autostart", async () => {
     await renderSurface();
 
     const toggle = await screen.findByRole("switch", { name: /start with windows/i });
-    expect(toggle).toHaveAttribute("aria-checked", "true");
-    fireEvent.click(toggle);
-    await waitFor(() =>
-      expect(ipc.invoke).toHaveBeenCalledWith("set_autostart", { enabled: false }),
-    );
     expect(toggle).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(toggle);
+
+    // Draft-only: no registry write until Save, but Save becomes enabled.
+    expect(ipc.invoke).not.toHaveBeenCalledWith("set_autostart", expect.anything());
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(ipc.invoke).toHaveBeenCalledWith("set_autostart", { enabled: true }),
+    );
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
-  it("keeps auto-start disabled and offers retry after a rejected write", async () => {
-    let attempts = 0;
+  it("a rejected set_autostart during Save retains the draft and shows the error", async () => {
     vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_bootstrap") return bootstrap;
-      if (cmd === "get_autostart") return { enabled: false, command: null };
-      if (cmd === "set_autostart") {
-        attempts += 1;
-        throw new Error("registry access denied");
-      }
+      if (cmd === "set_autostart") throw new Error("registry access denied");
       return {};
     });
     await renderSurface();
 
     const toggle = await screen.findByRole("switch", { name: /start with windows/i });
     fireEvent.click(toggle);
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent(/registry access denied/i);
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(/registry access denied/i);
+    // The draft is retained, so the switch still shows the desired state and
+    // Save stays enabled for a retry.
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled();
+  });
+
+  it("Reset restores the committed auto-start state", async () => {
+    await renderSurface();
+
+    const toggle = await screen.findByRole("switch", { name: /start with windows/i });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     expect(toggle).toHaveAttribute("aria-checked", "false");
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
-    await waitFor(() => expect(attempts).toBe(2));
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
 
   it("keeps edits in the draft — nothing is committed until Save changes", async () => {

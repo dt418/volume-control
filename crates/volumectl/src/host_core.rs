@@ -232,7 +232,7 @@ impl AppCore {
             Box::new(crate::audio_sessions_win32::WindowsSessions);
         #[cfg(not(target_os = "windows"))]
         let sessions_source: Box<dyn SessionsSource> = Box::new(NoopSessions);
-        Ok(Self {
+        let core = Self {
             audio,
             hotkeys,
             config,
@@ -243,7 +243,15 @@ impl AppCore {
             mute_restore_volume: None,
             last_config_mtime: config_mtime(),
             config_notice,
-        })
+        };
+
+        // Publish the first confirmed (or safe fallback) state immediately.
+        // The Tauri host creates the tray before AppCore, so without this
+        // startup notification the native menu remains stuck at
+        // `VolumeControl — --` until the first volume mutation.
+        core.sink
+            .volume(core.last_state.percent(), core.last_state.muted);
+        Ok(core)
     }
 
     /// Snapshot for a webview mount: current config, confirmed state,

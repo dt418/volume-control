@@ -62,6 +62,36 @@ and reset rejections render an accessible status notice while retaining the
 last confirmed backend state. The new React regression test proves that a
 failed mute does not fabricate a Muted label.
 
+## Session 075 (2026-08-15) - WDIO debug single-instance guard
+
+The ship gate also exposed a separate Windows harness failure: the Tauri app
+exited with code 0 before the embedded WebDriver endpoint was ready because
+the production single-instance mutex rejected a debug WDIO process. The guard
+now bypasses that mutex only when `debug_assertions` and
+`VOLUMECTL_E2E_DEBUG=1` are both true. Release builds and ordinary launches
+retain the original single-instance protection.
+
+## Session 076 (2026-08-15) - Tray menu commands + tray-host lifecycle
+
+Two independent bugs made every tray menu item appear dead:
+
+1. Event routing: Tauri's runtime installs its own global `muda` menu-event
+   handler, which by design stops sending events to
+   `MenuEvent::receiver()`. The old 150 ms poll drained an empty channel.
+   The host now registers `Builder::on_menu_event` and dispatches the menu id
+   through `TrayCommand::from_menu_id` into `AppCore::handle_action`.
+2. Lifecycle: Tauri exits when the last webview surface closes. Opening
+   mixer/settings/help and then closing the window killed the whole app, so
+   the tray vanished. `RunEvent::ExitRequested` is now prevented unless the
+   tray Exit command set `EXIT_REQUESTED` first.
+
+Also: `AppCore` publishes its initial confirmed state at construction so the
+tray label shows the real volume immediately, and a unit test covers the
+startup publish. Verified on the Windows release build via UI Automation:
+Mute/Reset update the label, Open mixer/Settings/Help open and the host stays
+alive after each close, Reload keeps the host alive, Open config file opens
+the editor dialog, and Exit terminates the process.
+
 ## Session 071 (2026-08-15) — Project-scoped Claude safe-flow hook
 
 `.claude/settings.json` now wires `.claude/hooks/agent-safe-flow.sh` as a Bash

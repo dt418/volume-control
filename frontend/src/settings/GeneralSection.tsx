@@ -51,7 +51,7 @@ export function GeneralSection({
   errors: FieldErrors;
   autoStartEnabled?: boolean;
   autoStartDisabled?: boolean;
-  onAutoStartChange?: (enabled: boolean) => Promise<void>;
+  onAutoStartChange?: (enabled: boolean) => void;
 }) {
   return (
     <Card>

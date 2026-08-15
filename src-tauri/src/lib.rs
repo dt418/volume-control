@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -6,7 +7,11 @@ use tauri::Manager;
 #[cfg(debug_assertions)]
 use volumectl_lib::audio::E2eAudio;
 use volumectl_lib::audio::{AudioBackend, UnavailableAudio};
+#[cfg(target_os = "windows")]
+use volumectl_lib::host_core::tray_command_to_action;
 use volumectl_lib::host_core::AppCore;
+#[cfg(target_os = "windows")]
+use volumectl_lib::tray::TrayCommand;
 
 use commands::{
     adjust_volume, close_surface, config_path, get_audio_sessions, get_autostart, get_bootstrap,
@@ -27,7 +32,8 @@ mod events_sink;
 mod window_manager;
 
 pub fn builder() -> tauri::Builder<tauri::Wry> {
-    register_debug_plugins(tauri::Builder::default()).invoke_handler(tauri::generate_handler![
+    let builder = register_debug_plugins(tauri::Builder::default());
+    install_menu_event_handler(builder).invoke_handler(tauri::generate_handler![
         get_bootstrap,
         get_autostart,
         adjust_volume,
@@ -48,6 +54,41 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         close_surface,
         surface_ready,
     ])
+}
+
+/// Route native tray commands through Tauri's menu event bridge.
+///
+/// Tauri installs a process-wide `muda::MenuEvent` handler when its runtime
+/// starts. That intentionally disables `muda::MenuEvent::receiver()`, which
+/// made the previous background polling path silently see an empty channel.
+/// Registering here keeps the tray callback on Tauri's supported event path
+/// and dispatches into the same `AppCore` action handler as hotkeys/IPC.
+fn install_menu_event_handler(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    #[cfg(target_os = "windows")]
+    {
+        builder.on_menu_event(|app, event| {
+            let Some(command) = TrayCommand::from_menu_id(event.id().as_ref()) else {
+                return;
+            };
+            let Some(shared) = app.try_state::<Arc<Mutex<AppCore>>>() else {
+                log::warn!(
+                    "tray command {:?} received before AppCore was managed",
+                    command
+                );
+                return;
+            };
+            log::debug!("tray command: {command:?}");
+            let mut core = shared
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            core.handle_action(tray_command_to_action(command));
+        })
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        builder
+    }
 }
 
 /// Enable test-only automation plugins only for an explicitly marked debug run.
@@ -106,6 +147,20 @@ const FAST_POLL_MS: u64 = 20;
 /// host's 150 ms `WM_TIMER`).
 const SLOW_POLL_MS: u64 = 150;
 
+/// True once the user explicitly asked to exit (tray "Exit VolumeControl").
+///
+/// Tauri's desktop runtime exits by default when the last webview surface is
+/// closed. This app is a tray-resident host: closing the mixer/settings/help
+/// surface must leave the tray alive. The flag distinguishes that implicit
+/// teardown from a deliberate exit so `RunEvent::ExitRequested` can be
+/// prevented only for the former.
+static EXIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// Mark that the process exit is intentional (tray exit command).
+pub(crate) fn mark_exit_requested() {
+    EXIT_REQUESTED.store(true, Ordering::SeqCst);
+}
+
 fn parse_verify_surface(value: &str) -> Result<Option<SurfaceId>, String> {
     if value.is_empty() {
         Ok(None)
@@ -119,18 +174,17 @@ fn parse_verify_surface(value: &str) -> Result<Option<SurfaceId>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> tauri::Result<()> {
     volumectl_lib::init_logging();
-    register_debug_plugins(tauri::Builder::default())
+    install_menu_event_handler(register_debug_plugins(tauri::Builder::default()))
         .setup(|app| {
             // Prevent two instances (mirrors the legacy host's named-mutex
             // guard: a second instance would double-apply hotkeys/wheel and
             // create a second tray icon). The check runs before any native
             // surface or managed state is created.
             #[cfg(target_os = "windows")]
-            let pilot_debug_instance = cfg!(feature = "e2e-pilot")
-                && cfg!(debug_assertions)
-                && std::env::var("VOLUMECTL_E2E_PILOT").as_deref() == Ok("1");
+            let debug_e2e_instance = cfg!(debug_assertions)
+                && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
             #[cfg(target_os = "windows")]
-            if !pilot_debug_instance && !native_win32::ensure_single_instance() {
+            if !debug_e2e_instance && !native_win32::ensure_single_instance() {
                 log::warn!("another VolumeControl instance is already running");
                 std::process::exit(0);
             }
@@ -200,12 +254,11 @@ pub fn run() -> tauri::Result<()> {
                 std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
             });
 
-            // Slow poll (150 ms): live config reload (mtime watch), tray
-            // menu commands, and the external audio-state sync (the reload
-            // path re-reads and publishes the confirmed state).
+            // Slow poll (150 ms): live config reload (mtime watch) and the
+            // external audio-state sync (the reload path re-reads and
+            // publishes the confirmed state). Tauri dispatches tray menu
+            // commands through `on_menu_event` on the runtime event loop.
             let slow_shared = shared.clone();
-            #[cfg(target_os = "windows")]
-            let slow_native = native.clone();
             std::thread::spawn(move || loop {
                 let mut core = slow_shared
                     .lock()
@@ -215,10 +268,6 @@ pub fn run() -> tauri::Result<()> {
                 // app (media keys, other apps) — keeps the tray tooltip
                 // and open webviews fresh (legacy 150 ms host timer).
                 core.sync_external_state();
-                #[cfg(target_os = "windows")]
-                while let Some(cmd) = slow_native.poll_tray() {
-                    core.handle_action(volumectl_lib::host_core::tray_command_to_action(cmd));
-                }
                 drop(core);
                 std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
             });
@@ -246,7 +295,19 @@ pub fn run() -> tauri::Result<()> {
             close_surface,
             surface_ready,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())?
+        .run(|_app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                if !EXIT_REQUESTED.load(Ordering::SeqCst) {
+                    // All webview surfaces closed (or the OS asked to close);
+                    // keep the tray host alive. The tray Exit command sets the
+                    // flag first, so a deliberate exit still terminates.
+                    log::debug!("all surfaces closed; keeping the tray host alive");
+                    api.prevent_exit();
+                }
+            }
+        });
+    Ok(())
 }
 
 /// Construct the platform audio backend.

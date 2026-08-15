@@ -119,6 +119,20 @@ fn bootstrap_exposes_config_load_notice_without_changing_config_shape() {
 }
 
 #[test]
+fn constructor_publishes_initial_confirmed_state() {
+    let sink = Arc::new(RecordingSink::default());
+    let _core = core_with(sink.clone());
+    assert!(
+        sink.events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| event == "volume:50:false"),
+        "startup must publish the initial state so native surfaces are not blank"
+    );
+}
+
+#[test]
 fn adjust_volume_emits_volume_event() {
     let sink = Arc::new(RecordingSink::default());
     let mut core = core_with(sink.clone());

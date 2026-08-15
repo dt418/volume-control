@@ -60,6 +60,38 @@
   accessible status notice and leaves the last confirmed state unchanged,
   instead of pretending that mute succeeded.
 
+## Session 075 (2026-08-15) - Debug E2E single-instance isolation
+
+- A ship-gate run reached the WDIO launcher but the debug app exited with code
+  0 before the embedded driver became ready. The Windows single-instance guard
+  treated the WDIO debug process like a second production instance.
+- The guard now bypasses the mutex only for debug builds carrying
+  `VOLUMECTL_E2E_DEBUG=1`; normal debug/manual launches and all release builds
+  still enforce single-instance behavior.
+
+## Session 076 (2026-08-15) - Tray menu commands and tray-host lifecycle
+
+- Root cause of "tray clicks do nothing": Tauri installs a process-wide
+  `muda::MenuEvent` handler at runtime, which disables the
+  `MenuEvent::receiver()` channel the tray poll thread drained — every click
+  landed in Tauri's event loop while the app polled an empty channel.
+- Tray commands now route through `Builder::on_menu_event` into the same
+  `AppCore::handle_action` path as hotkeys/IPC; `TrayCommand::from_menu_id`
+  is the single id→command mapping (unit-tested for all 8 menu ids, label
+  ids excluded).
+- Second crash-class bug: Tauri exits by default when the last webview
+  surface closes, so closing the mixer/settings/help window silently killed
+  the tray host. `RunEvent::ExitRequested` is now prevented unless the tray
+  Exit command set the `EXIT_REQUESTED` flag first (tray `Exit` still
+  terminates the process).
+- AppCore now publishes the initial confirmed state at construction, so the
+  native tray label shows the real volume instead of `VolumeControl — --`
+  until the first mutation.
+- Manual UI-Automation verification on Windows release build: Mute (0%),
+  Reset (50%), Open mixer, Settings, Help, Reload configuration, Open config
+  file, and Exit all work; the process stays alive after every surface
+  close/reopen cycle.
+
 ## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
 
 - Added `.claude/hooks/agent-safe-flow.sh` and wired it through the project

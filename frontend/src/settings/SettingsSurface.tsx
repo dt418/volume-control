@@ -91,7 +91,6 @@ export function SettingsSurface() {
   const [status, setStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [autostartDisabled, setAutostartDisabled] = useState(false);
   const [configNotice, setConfigNotice] = useState<ConfigLoadNotice | null>(null);
 
@@ -107,13 +106,9 @@ export function SettingsSurface() {
         setDraft(hydrated);
         setHotkeyStatus(payload.hotkey_status);
         setConfigNotice(payload.config_notice ?? null);
-        setAutostartEnabled(Boolean(hydrated.autostart));
         void invoke<AutostartStatus>("get_autostart")
           .then((autostart) => {
-            if (!disposed) {
-              setAutostartEnabled(autostart.enabled);
-              setAutostartDisabled(false);
-            }
+            if (!disposed) setAutostartDisabled(false);
           })
           .catch(() => {
             if (!disposed) setAutostartDisabled(true);
@@ -170,6 +165,9 @@ export function SettingsSurface() {
       if (draft.modifier !== config.modifier) {
         await invoke("set_modifier", { modifier: draft.modifier });
       }
+      if (Boolean(draft.autostart) !== Boolean(config.autostart)) {
+        await invoke("set_autostart", { enabled: Boolean(draft.autostart) });
+      }
       setConfig(draft);
       setStatus("Saved");
     } catch (error) {
@@ -198,12 +196,8 @@ export function SettingsSurface() {
     void invoke("close_surface", { surface: "window-settings" });
   };
 
-  const changeAutostart = async (enabled: boolean) => {
-    const result = await invoke<AutostartStatus>("set_autostart", { enabled });
-    if (result.enabled !== enabled) {
-      throw new Error("auto-start state could not be confirmed");
-    }
-    setAutostartEnabled(result.enabled);
+  const changeAutostart = (enabled: boolean) => {
+    updateDraft((d) => ({ ...d, autostart: enabled }));
   };
 
   return (
@@ -252,7 +246,7 @@ export function SettingsSurface() {
                   draft={draft}
                   setDraft={updateDraft}
                   errors={fieldErrors}
-                  autoStartEnabled={autostartEnabled}
+                  autoStartEnabled={Boolean(draft.autostart)}
                   autoStartDisabled={autostartDisabled}
                   onAutoStartChange={changeAutostart}
                 />
