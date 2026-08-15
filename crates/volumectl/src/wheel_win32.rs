@@ -124,3 +124,54 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
     }
     CallNextHookEx(0, code, wparam, lparam)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The modifier → wheel-encoding mapping shared by the startup path
+    /// (AppCore::new) and every modifier-change path must round-trip.
+    #[test]
+    fn modifier_code_round_trips_every_variant() {
+        for modifier in [
+            HotkeyModifier::CtrlAlt,
+            HotkeyModifier::Alt,
+            HotkeyModifier::Ctrl,
+            HotkeyModifier::CapsLock,
+        ] {
+            let code = modifier_code(modifier);
+            assert_eq!(active_modifier_for(code), modifier, "code {code}");
+        }
+    }
+
+    /// Encodings are stable and distinct (changing them would silently break
+    /// the wheel gesture for a persisted config modifier).
+    #[test]
+    fn modifier_encodings_are_stable() {
+        assert_eq!(modifier_code(HotkeyModifier::CtrlAlt), 0);
+        assert_eq!(modifier_code(HotkeyModifier::Alt), 1);
+        assert_eq!(modifier_code(HotkeyModifier::Ctrl), 2);
+        assert_eq!(modifier_code(HotkeyModifier::CapsLock), 3);
+    }
+
+    #[test]
+    fn set_modifier_updates_active_state() {
+        set_modifier(HotkeyModifier::Alt);
+        assert_eq!(active_modifier(), HotkeyModifier::Alt);
+        set_modifier(HotkeyModifier::Ctrl);
+        assert_eq!(active_modifier(), HotkeyModifier::Ctrl);
+        set_modifier(HotkeyModifier::CtrlAlt);
+        assert_eq!(active_modifier(), HotkeyModifier::CtrlAlt);
+    }
+
+    // Test-only helper mirroring `active_modifier()` with the code value
+    // directly, so the round-trip test exercises both directions.
+    fn active_modifier_for(code: u8) -> HotkeyModifier {
+        match code {
+            1 => HotkeyModifier::Alt,
+            2 => HotkeyModifier::Ctrl,
+            3 => HotkeyModifier::CapsLock,
+            _ => HotkeyModifier::CtrlAlt,
+        }
+    }
+}

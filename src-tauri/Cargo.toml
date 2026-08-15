@@ -1,0 +1,34 @@
+[package]
+name = "volumecontrol-tauri"
+version = "0.1.0"
+edition = "2021"
+description = "VolumeControl Tauri host (webview surfaces for Mixer/Settings/Help)"
+
+[lib]
+name = "volumecontrol_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+default = []
+e2e-wdio = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
+e2e-pilot = ["dep:tauri-plugin-pilot"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[[bin]]
+name = "VolumeControl"
+path = "src/main.rs"
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+tauri-plugin-wdio = { version = "1.3.0", optional = true }
+tauri-plugin-wdio-webdriver = { version = "1.3.0", optional = true }
+tauri-plugin-pilot = { version = "0.7.2", default-features = false, optional = true }
+volumectl_lib = { package = "volumectl", path = "../crates/volumectl" }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }

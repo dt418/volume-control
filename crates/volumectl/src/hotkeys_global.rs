@@ -22,7 +22,7 @@ use std::time::Duration;
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 
-use crate::config::HotkeyModifier;
+use crate::config::{HotkeyBindings, HotkeyModifier};
 use crate::hotkeys::{
     hotkey_from_id, hotkey_id, HotkeyAction, HotkeyRegError, HotkeyRegResult, HotkeyRegStatus,
     ALL_HOTKEY_ACTIONS,
@@ -72,6 +72,31 @@ pub fn combos_for(modifier: HotkeyModifier) -> Vec<(HotKey, HotkeyAction)> {
     push(Code::KeyR, Modifiers::empty(), HotkeyAction::Reset50);
     push(Code::KeyV, Modifiers::empty(), HotkeyAction::OpenMixer);
     combos
+}
+
+/// Parse the persisted bindings into the native registration list while
+/// preserving the Help/Settings action order.
+fn combos_from_bindings(bindings: &HotkeyBindings) -> Result<Vec<(HotKey, HotkeyAction)>, String> {
+    let entries = [
+        (&bindings.volume_up, HotkeyAction::VolumeUp),
+        (&bindings.volume_down, HotkeyAction::VolumeDown),
+        (&bindings.volume_up_large, HotkeyAction::VolumeUpLarge),
+        (&bindings.volume_down_large, HotkeyAction::VolumeDownLarge),
+        (&bindings.toggle_mute, HotkeyAction::ToggleMute),
+        (&bindings.reset_50, HotkeyAction::Reset50),
+        (&bindings.open_mixer, HotkeyAction::OpenMixer),
+        (&bindings.open_menu, HotkeyAction::OpenMenu),
+    ];
+    entries
+        .into_iter()
+        .filter(|(value, _)| !value.trim().is_empty())
+        .map(|(value, action)| {
+            value
+                .parse::<HotKey>()
+                .map(|hotkey| (hotkey, action))
+                .map_err(|error| format!("invalid hotkey for {action:?}: {error}"))
+        })
+        .collect()
 }
 
 fn is_volume_action(action: HotkeyAction) -> bool {
@@ -284,6 +309,10 @@ fn register_combos(
 
     // An action is active if at least one of its combos registered.
     for result in &mut reg_results {
+        if !combos.iter().any(|(_, action)| *action == result.action) {
+            result.status = HotkeyRegStatus::Disabled;
+            continue;
+        }
         if combos
             .iter()
             .any(|(hotkey, action)| *action == result.action && ids.contains_key(&hotkey.id()))
@@ -295,13 +324,33 @@ fn register_combos(
     (ids, registered, reg_results)
 }
 
+fn unavailable_results(combos: &[(HotKey, HotkeyAction)], reason: &str) -> Vec<HotkeyRegResult> {
+    ALL_HOTKEY_ACTIONS
+        .iter()
+        .map(|&action| HotkeyRegResult {
+            action,
+            status: if combos
+                .iter()
+                .any(|(_, combo_action)| *combo_action == action)
+            {
+                HotkeyRegStatus::Conflicted(HotkeyRegError {
+                    error_code: 0,
+                    message: reason.to_string(),
+                })
+            } else {
+                HotkeyRegStatus::Disabled
+            },
+        })
+        .collect()
+}
+
 /// Global hotkey backend built on `global-hotkey`.
 ///
 /// One instance owns the native manager, the registered combos, the
 /// id→action table, the listener thread and the repeat worker. Hosts drain
 /// [`GlobalHotkeys::try_recv`] exactly as hosts drained the previous backend.
 pub struct GlobalHotkeys {
-    manager: GlobalHotKeyManager,
+    manager: Option<GlobalHotKeyManager>,
     registered: Mutex<Vec<HotKey>>,
     ids: Arc<RwLock<HashMap<u32, HotkeyAction>>>,
     hold: Arc<HotkeyHold>,
@@ -310,42 +359,75 @@ pub struct GlobalHotkeys {
     listener: Option<JoinHandle<()>>,
     reg_results: Mutex<Vec<HotkeyRegResult>>,
     rx: Receiver<HotkeyAction>,
+    failure: Option<String>,
 }
+
+// SAFETY: the inner `GlobalHotKeyManager` holds a process-wide native handle
+// (a hidden HWND on Windows, a Carbon event handler on macOS, an X11
+// connection on Linux) but exposes only `&self`-style calls that are
+// internally synchronized, and its `Drop` performs the native cleanup from
+// whichever thread drops it. All other fields are already `Send + Sync`
+// (`Arc`/`Mutex`/`RwLock`). This mirrors the pattern already used by
+// `WindowsAudio` for its COM pointers, and lets the host own the whole
+// `AppCore` behind a `Mutex` polled from a background thread.
+unsafe impl Send for GlobalHotkeys {}
+unsafe impl Sync for GlobalHotkeys {}
 
 impl GlobalHotkeys {
     pub fn new(initial_modifier: HotkeyModifier) -> Result<Self, String> {
-        if initial_modifier == HotkeyModifier::CapsLock {
-            log::warn!("CapsLock is not supported by global-hotkey; using Ctrl+Alt combos instead");
-        }
-        let manager = GlobalHotKeyManager::new()
-            .map_err(|error| format!("create global hotkey manager: {error}"))?;
-        let combos = combos_for(initial_modifier);
-        let (ids, registered, reg_results) = register_combos(&manager, &combos);
+        Self::new_with_bindings(&HotkeyBindings::for_modifier(initial_modifier))
+    }
+
+    /// Create the native listener from the user-recorded bindings.
+    pub fn new_with_bindings(bindings: &HotkeyBindings) -> Result<Self, String> {
+        let combos = combos_from_bindings(bindings)?;
+        let (manager, ids, registered, reg_results, failure) = match GlobalHotKeyManager::new() {
+            Ok(manager) => {
+                let (ids, registered, reg_results) = register_combos(&manager, &combos);
+                (Some(manager), ids, registered, reg_results, None)
+            }
+            Err(error) => {
+                // GUI-less runners (and desktop sessions without an
+                // input/display service) cannot create a native manager.
+                // Keep the host alive with explicit per-action status so
+                // Settings/Help can render the degraded state instead of
+                // crashing during Tauri setup or unit tests.
+                let failure = format!("create global hotkey manager: {error}");
+                log::warn!("global hotkeys unavailable: {failure}");
+                let reg_results = unavailable_results(&combos, &failure);
+                (None, HashMap::new(), Vec::new(), reg_results, Some(failure))
+            }
+        };
 
         let (tx, rx) = mpsc::channel();
         let ids = Arc::new(RwLock::new(ids));
         let hold = Arc::new(HotkeyHold::new());
         let stop = Arc::new(AtomicBool::new(false));
 
-        let worker = thread::Builder::new()
-            .name("volumectl-hotkey-repeat".into())
-            .spawn({
-                let hold = Arc::clone(&hold);
-                let tx = tx.clone();
-                let stop = Arc::clone(&stop);
-                move || run_repeat_worker(hold, tx, stop, REPEAT_INTERVAL)
-            })
-            .map_err(|error| format!("start hotkey repeat worker: {error}"))?;
+        let (worker, listener) = if manager.is_some() {
+            let worker = thread::Builder::new()
+                .name("volumectl-hotkey-repeat".into())
+                .spawn({
+                    let hold = Arc::clone(&hold);
+                    let tx = tx.clone();
+                    let stop = Arc::clone(&stop);
+                    move || run_repeat_worker(hold, tx, stop, REPEAT_INTERVAL)
+                })
+                .map_err(|error| format!("start hotkey repeat worker: {error}"))?;
 
-        let listener = thread::Builder::new()
-            .name("volumectl-hotkey-listener".into())
-            .spawn({
-                let ids = Arc::clone(&ids);
-                let hold = Arc::clone(&hold);
-                let stop = Arc::clone(&stop);
-                move || run_listener(ids, hold, tx, stop)
-            })
-            .map_err(|error| format!("start hotkey listener: {error}"))?;
+            let listener = thread::Builder::new()
+                .name("volumectl-hotkey-listener".into())
+                .spawn({
+                    let ids = Arc::clone(&ids);
+                    let hold = Arc::clone(&hold);
+                    let stop = Arc::clone(&stop);
+                    move || run_listener(ids, hold, tx, stop)
+                })
+                .map_err(|error| format!("start hotkey listener: {error}"))?;
+            (Some(worker), Some(listener))
+        } else {
+            (None, None)
+        };
 
         Ok(Self {
             manager,
@@ -353,20 +435,36 @@ impl GlobalHotkeys {
             ids,
             hold,
             stop,
-            worker: Some(worker),
-            listener: Some(listener),
+            worker,
+            listener,
             reg_results: Mutex::new(reg_results),
             rx,
+            failure,
         })
     }
 
     /// Apply a config change: unregister and re-register every combo for the
     /// new modifier without restarting the host.
     pub fn set_modifier(&self, modifier: HotkeyModifier) {
+        self.set_bindings(&HotkeyBindings::for_modifier(modifier));
+    }
+
+    /// Unregister the previous set and atomically replace it with the
+    /// validated user bindings. Registration conflicts remain per-action and
+    /// are exposed through `status`, matching the legacy behavior.
+    pub fn set_bindings(&self, bindings: &HotkeyBindings) {
+        let Some(manager) = self.manager.as_ref() else {
+            log::debug!("global hotkeys remain unavailable; ignoring binding update");
+            return;
+        };
+        let combos = match combos_from_bindings(bindings) {
+            Ok(combos) => combos,
+            Err(error) => {
+                log::error!("{error}; keeping current global shortcuts");
+                return;
+            }
+        };
         self.hold.stop();
-        if modifier == HotkeyModifier::CapsLock {
-            log::warn!("CapsLock is not supported by global-hotkey; using Ctrl+Alt combos instead");
-        }
         {
             let registered = self.registered.lock().expect("hotkey list poisoned");
             for hotkey in registered.iter() {
@@ -375,11 +473,10 @@ impl GlobalHotkeys {
                 // thread. A config reload after the X server died is an
                 // extreme edge case (the app is already unusable at that
                 // point), so no workaround is attempted here.
-                let _ = self.manager.unregister(*hotkey);
+                let _ = manager.unregister(*hotkey);
             }
         }
-        let combos = combos_for(modifier);
-        let (ids, registered, reg_results) = register_combos(&self.manager, &combos);
+        let (ids, registered, reg_results) = register_combos(manager, &combos);
         *self.ids.write().expect("hotkey ids poisoned") = ids;
         *self.registered.lock().expect("hotkey list poisoned") = registered;
         *self.reg_results.lock().expect("hotkey results poisoned") = reg_results;
@@ -391,10 +488,10 @@ impl GlobalHotkeys {
     }
 
     /// With `global-hotkey`, registration failures are per-combo and surface
-    /// through [`GlobalHotkeys::status`]; the event listener cannot fail once
-    /// the manager exists, so this always reports `None`.
+    /// through [`GlobalHotkeys::status`]. A missing native manager is reported
+    /// here as a host-level degraded condition.
     pub fn listener_failure(&self) -> Option<String> {
-        None
+        self.failure.clone()
     }
 
     /// Per-action registration status for the Help surface.
@@ -544,6 +641,19 @@ mod tests {
     #[test]
     fn combos_for_caps_lock_falls_back_to_ctrl_alt() {
         assert_eq!(combos_for(HotkeyModifier::CapsLock), combos());
+    }
+
+    #[test]
+    fn recorded_bindings_skip_cleared_actions() {
+        let bindings = HotkeyBindings {
+            open_menu: String::new(),
+            ..HotkeyBindings::default()
+        };
+        let combos = combos_from_bindings(&bindings).expect("default bindings parse");
+        assert_eq!(combos.len(), 7);
+        assert!(!combos
+            .iter()
+            .any(|(_, action)| *action == HotkeyAction::OpenMenu));
     }
 
     #[test]

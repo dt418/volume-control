@@ -18,10 +18,11 @@ config.json
 # Build and distribution artifacts
 dist/
 build/
+output/
 develop-eggs/
 downloads/
 eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -85,3 +86,57 @@ Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
 .plans/
+
+# Tauri host
+node_modules/
+frontend/node_modules
+frontend/dist
+e2e/tauri/node_modules
+src-tauri/target
+src-tauri/gen
+
+# ── npx-installable third-party skills ────────────────────────────────────────
+# Skills from skills-lock.json (github sources) are reproducible with
+# `npx skills install <repo>` / `npx skills add <repo@skill>` — not versioned.
+# Reinstall after a fresh clone: `npx skills install git@github.com:antfu/skills.git`
+# Project-authored skills are whitelisted below (keep them versioned).
+.agents/skills/*
+.claude/skills/*
+!.agents/skills/brainstorming/
+!.claude/skills/brainstorming/
+!.agents/skills/dispatching-parallel-agents/
+!.claude/skills/dispatching-parallel-agents/
+!.agents/skills/executing-plans/
+!.claude/skills/executing-plans/
+!.agents/skills/finishing-a-development-branch/
+!.claude/skills/finishing-a-development-branch/
+!.agents/skills/format-lint/
+!.claude/skills/format-lint/
+!.agents/skills/guardrail/
+!.claude/skills/guardrail/
+!.agents/skills/pre-push-review/
+!.claude/skills/pre-push-review/
+!.agents/skills/receiving-code-review/
+!.claude/skills/receiving-code-review/
+!.agents/skills/requesting-code-review/
+!.claude/skills/requesting-code-review/
+!.agents/skills/subagent-driven-development/
+!.claude/skills/subagent-driven-development/
+!.agents/skills/systematic-debugging/
+!.claude/skills/systematic-debugging/
+!.agents/skills/test-driven-development/
+!.claude/skills/test-driven-development/
+!.agents/skills/using-git-worktrees/
+!.claude/skills/using-git-worktrees/
+!.agents/skills/using-superpowers/
+!.claude/skills/using-superpowers/
+!.agents/skills/verification-before-completion/
+!.claude/skills/verification-before-completion/
+!.agents/skills/volume-control/
+!.claude/skills/volume-control/
+!.agents/skills/windows-host/
+!.claude/skills/windows-host/
+!.agents/skills/writing-plans/
+!.claude/skills/writing-plans/
+!.agents/skills/writing-skills/
+!.claude/skills/writing-skills/

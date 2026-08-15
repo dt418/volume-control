@@ -10,9 +10,8 @@
 #   packaging task; the artifact is the signed-ready exe + docs).
 # - macOS: ad-hoc signed VolumeControl.app bundle (LSUIElement agent) so
 #   Gatekeeper and the Accessibility permission UI can identify the app.
-# - Ubuntu 24.04: tar.gz of the release binary built with the GTK4/
-#   libadwaita renderer, plus the optional Wayland layer-shell feature when
-#   the system library is installed.
+# - Ubuntu 24.04: tar.gz of the Tauri release host with embedded frontend
+#   assets; the GTK4/libadwaita renderer remains covered by the CI matrix.
 
 name: Release
 
@@ -65,6 +64,11 @@ jobs:
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install GTK4/libadwaita (Ubuntu)
         if: runner.os == 'Linux'
         run: |
@@ -77,17 +81,14 @@ jobs:
           else
             echo "GTK4 layer-shell development package unavailable; release uses the X11 fallback."
           fi
-      - name: Build release binary
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build release Tauri host (frontend + backend)
         shell: bash
         run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            FEATURES="gtk-renderer"
-            if pkg-config --exists gtk4-layer-shell-0; then FEATURES="gtk-renderer,layer-shell"; fi
-            echo "Building with features: $FEATURES"
-            cargo build --release --features "$FEATURES"
-          else
-            cargo build --release
-          fi
+          npm --prefix frontend run build
+          frontend/node_modules/.bin/tauri build --no-bundle --ci
       - name: Package artifacts
         shell: bash
         env:

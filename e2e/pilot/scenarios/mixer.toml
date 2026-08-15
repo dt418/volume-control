@@ -1,0 +1,40 @@
+[scenario]
+name = "mixer surface smoke"
+fail_fast = true
+global_timeout_ms = 30000
+
+[[step]]
+name = "assert mixer title"
+action = "assert-text"
+target = "[data-surface=\"mixer\"] h1"
+expected = "Volume Mixer"
+
+[[step]]
+name = "list owned windows"
+action = "eval"
+script = "document.title"
+
+[[step]]
+name = "snapshot interactive mixer controls"
+action = "eval"
+script = "document.querySelectorAll('[data-surface=\"mixer\"] button, [data-surface=\"mixer\"] input').length"
+
+[[step]]
+name = "assert mixer visible"
+action = "assert-visible"
+target = "[data-surface=\"mixer\"]"
+
+[[step]]
+name = "reset system output"
+action = "click"
+target = "[aria-label=\"Reset volume to 50%\"]"
+
+[[step]]
+name = "capture mixer screenshot"
+action = "screenshot"
+path = "mixer.png"
+
+[[step]]
+name = "check browser errors"
+action = "eval"
+script = "window.__tauriPilotConsoleErrors__ ?? []"

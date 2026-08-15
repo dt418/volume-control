@@ -22,6 +22,17 @@ pub struct LinuxAudio {
     device: AudioDevice,
 }
 
+// SAFETY: `AudioDevice` from the `volumecontrol` crate is built on
+// `Rc<RefCell<PulseConnection>>` and is therefore single-threaded by design
+// (it is `!Send + !Sync`). The host guarantees that no two threads ever touch
+// the backend concurrently: every access goes through `AppCore` behind a
+// `Mutex` (Tauri managed state, commands + the single hotkey poll thread),
+// which serializes all calls. This mirrors the `unsafe impl Send + Sync`
+// precedent for `WindowsAudio` (audio_windows.rs) and `GlobalHotkeys`
+// (hotkeys_global.rs).
+unsafe impl Send for LinuxAudio {}
+unsafe impl Sync for LinuxAudio {}
+
 fn map_err(e: volumecontrol::AudioError) -> AudioError {
     AudioError::Io(e.to_string())
 }
@@ -48,7 +59,6 @@ impl AudioBackend for LinuxAudio {
             muted,
         })
     }
-
     fn set_volume(&self, volume: f32) -> Result<(), AudioError> {
         // The host passes 0.0..=1.0; PulseAudio takes an integer 0..=100.
         let pct = (volume.clamp(0.0, 1.0) * 100.0).round() as u8;

@@ -1,34 +1,47 @@
 # VolumeControl
 
-A lightweight, **native** volume controller with global hotkeys, a system
-tray, and an on-screen volume overlay — written in Rust.
+A lightweight, **native-first** volume controller with global hotkeys, a system
+tray, an on-screen volume overlay, and Tauri v2 Mixer/Settings/Help surfaces —
+written in Rust and React/TypeScript.
 
 Spiritual successor to [VolumePro](https://github.com/dt418/VolumeControl)
 (AutoHotkey) — same interaction model, rebuilt as a cross-platform native
-application: no webview, no Electron, no runtime dependencies beyond the OS.
+application. The always-on host remains native; webviews are created lazily
+only for the Mixer, Settings, and Help panels.
 
 ## Features
 
-- **Global hotkeys** (default `Ctrl+Alt`):
+- **Global hotkeys** (default `Ctrl+Alt`, configurable per action in Settings):
   - `Ctrl+Alt+↑ / ↓` — volume ±1%
   - `Ctrl+Alt+Shift+↑ / ↓` — volume ±10%
   - `Ctrl+Alt+M` — mute toggle
   - `Ctrl+Alt+R` — reset to 50%
-  - `Ctrl+Alt+V` — open mixer *(planned)*
+  - `Ctrl+Alt+V` — show or hide the mixer
   - `Ctrl+Alt+Shift+M` — open tray menu (works even when the tray icon is
     hidden by Windows)
   - On macOS **both ⌘ (Command) and ⌃ (Control)** work as the primary
     modifier, so the `CtrlAlt` config matches `Ctrl+Alt` (⌃+⌥) while the
     macOS-native `⌘+⌥` spelling also works: `⌘/⌃+⌥+↑ / ↓` etc. Hold the
-    combo to repeat the volume step continuously.
+     combo to repeat the volume step continuously.
+- **Shortcut editor**: press `Record` and type a modifier + key combination;
+  `Clear` disables that action, and duplicate/conflicting bindings are reported
+  before Save.
+- **Mixer surface**: system output controls, threshold-aware signal rail,
+  per-app sessions on Windows, search, optimistic controls, and retryable
+  backend recovery.
+- **Settings and Help surfaces**: settings are edited in a draft and committed
+  atomically; Help reflects the recorded shortcuts and registration status.
 - **Media keys** (`Volume Up/Down/Mute`) keep the native Windows flyout — the
   app only stays in sync.
 - **Overlay**: bottom-right popup with threshold-colored bar (grey / green /
   blue / orange-red) and the percentage; auto-hides after ~1.8 s;
   click-through.
 - **System tray**: live volume label, mute toggle, reset, exit.
-- **Live config reload**: edit `config.json` and settings apply within
-  ~150 ms — no restart needed.
+- **Settings-first configuration**: common options, appearance, blacklist,
+  feedback, storage, and shortcuts can be changed directly in Settings. The
+  JSON file remains available for automation and advanced edits.
+- **Live config reload**: edits to `config.json` are detected and applied
+  within ~150 ms — no restart needed.
 - **External sync**: volume changed by media keys, other apps, or Bluetooth
   updates the tray label immediately.
 
@@ -44,14 +57,27 @@ On first run the app writes a default config to:
 
 ```jsonc
 {
-  "volume_step": 2,           // small step, percent (1-50)
+  "volume_step": 1,           // small step, percent (1-50)
   "volume_step_large": 10,    // Shift step, must be > volume_step
   "overlay_duration_ms": 1800, // overlay visibility (200-10000)
   "modifier": "CtrlAlt",      // CtrlAlt | CapsLock | Alt | Ctrl
-  "blacklist": [],            // reserved for future use
-  "color_thresholds": { "green_up_to": 40, "blue_up_to": 75, "orange_up_to": 100 }
+  "blacklist": [],            // executable names excluded from hotkeys
+  "color_thresholds": { "green_up_to": 40, "blue_up_to": 75, "orange_up_to": 100 },
+  "hotkeys": {
+    "volume_up": "Ctrl+Alt+ArrowUp",
+    "volume_down": "Ctrl+Alt+ArrowDown",
+    "volume_up_large": "Ctrl+Alt+Shift+ArrowUp",
+    "volume_down_large": "Ctrl+Alt+Shift+ArrowDown",
+    "toggle_mute": "Ctrl+Alt+KeyM",
+    "reset_50": "Ctrl+Alt+KeyR",
+    "open_mixer": "Ctrl+Alt+KeyV",
+    "open_menu": "Ctrl+Alt+Shift+KeyM"
+  }
 }
 ```
+
+An empty value in `hotkeys` disables only that action. Existing configs without
+the `hotkeys` object migrate to the selected modifier preset automatically.
 
 ## Building
 
@@ -90,10 +116,28 @@ Requirements: Rust (stable) + a C toolchain:
   package (`libgtk4-layer-shell-dev`, when provided by the distribution);
   without it surfaces fall back to X11-compatible borderless windows.
 
+- **Tauri webview surfaces** (all platforms): Node.js 22+ and the frontend
+  dependencies:
+
+  ```bash
+  npm ci --prefix frontend
+  npm --prefix frontend run build
+  npm --prefix frontend test
+  ```
+
+  The isolated desktop E2E package lives in `e2e/tauri`; install it with
+  `npm ci --prefix e2e/tauri`. Run the Windows release-gate matrix with
+  `scripts\verify-tauri-e2e.ps1 -Surface all` or the Linux/macOS shell wrapper.
+  Tauri's configured dev/build hooks use the CLI's object form with
+  `cwd: ../frontend`, so the frontend command is independent of the directory
+  from which the Tauri CLI is invoked and cannot search for a missing root
+  `package.json`.
+
 ## Running on macOS
 
-The macOS release is a proper app bundle (`VolumeControl.app`) that runs a
-global-hotkey host (no Dock icon, no windows yet — hotkeys + volume only):
+The macOS release is a proper app bundle (`VolumeControl.app`) that runs the
+global-hotkey/audio host and can open the Tauri Settings, Help, and Mixer
+surfaces:
 
 1. Unzip the release archive and move `VolumeControl.app` to `/Applications`.
 2. First launch is blocked by Gatekeeper because the app is ad-hoc signed.
@@ -111,7 +155,7 @@ global-hotkey host (no Dock icon, no windows yet — hotkeys + volume only):
 4. Test with the default combo: hold **⌘+⌥+↑ / ↓** (or **⌃+⌥+↑ / ↓**) —
    volume changes immediately and keeps repeating every 50 ms while held.
    `⌘/⌃+⌥+M` mutes, `⌘/⌃+⌥+R` resets to 50%.
-5. To quit: `pkill -x volumectl` (a menu-bar item is a follow-on task).
+5. To quit: `pkill -x VolumeControl` (a menu-bar item is a follow-on task).
 
 Running the raw binary from a terminal shows a startup banner with the config
 path, the resolved modifier, and the permission state — useful for debugging.
@@ -122,18 +166,18 @@ path, the resolved modifier, and the permission state — useful for debugging.
 |------------------------|:-------:|:-----:|:-----:|
 | Volume control         | ✅ WASAPI | ✅ CoreAudio | ✅ PulseAudio |
 | Global hotkeys         | ✅ global-hotkey | ✅ global-hotkey | ✅ global-hotkey (X11) |
-| Overlay                | ✅ | 🔜 | 🔜 |
-| Mixer                  | ✅ | 🔜 | 🔜 |
-| Settings window        | ✅ | 🔜 | 🔜 |
+| Overlay                | ✅ native Win32 | 🔜 host integration | 🔜 host integration |
+| Mixer                  | ✅ Tauri + WASAPI sessions | ✅ Tauri surface / 🔜 per-app audio | ✅ Tauri surface / 🔜 per-app audio |
+| Settings window        | ✅ Tauri | ✅ Tauri | ✅ Tauri |
 | System tray            | ✅ tray-icon | 🔜 | 🔜 |
-| Live config reload     | ✅ | 🔜 | 🔜 |
+| Live config reload     | ✅ | ✅ core | ✅ core |
 | Adaptive UI renderer   | ✅ native Win32 | ✅ AppKit (surfaces + smoke-tested) | ✅ GTK4/libadwaita (surfaces, CI-tested under Xvfb) |
 
-macOS and Linux currently run the cross-platform `global-hotkey` hotkey host (with
-their native audio backends); the full overlay/mixer/settings/tray surfaces
-are Windows-first and land on the other platforms as follow-on work. The
-AppKit and GTK4/libadwaita renderers already implement the same Signal Glass
-surface contract as Windows behind the shared `NativeRenderer` bridge.
+macOS and Linux run the cross-platform `global-hotkey` host with their native
+audio backends. Tauri Settings/Help/Mixer surfaces are cross-platform; per-app
+session enumeration and the native overlay/tray host remain Windows-first.
+The AppKit and GTK4/libadwaita renderers implement the same Signal Glass
+surface contract behind the shared `NativeRenderer` bridge.
 
 ## CI and releases
 
@@ -143,10 +187,14 @@ GitHub Actions (`.github/workflows/`) verifies every push/PR:
 - **macOS** — build and tests including the AppKit renderer smoke tests.
 - **Ubuntu 24.04** — CLI fallback build/test, GTK4/libadwaita build and
   renderer smoke tests under Xvfb, and the Wayland layer-shell build.
+- **Desktop E2E** — isolated WebdriverIO/Tauri surface tests for Mixer,
+  Settings, Help, recovery, owned windows, and the runtime bridge. Debug-only
+  Tauri Pilot scenarios are retained for exploratory replay; WDIO is the
+  release gate.
 
-Pushing a `v*` tag builds release binaries on all three platforms and
-publishes a GitHub release with versioned archives and `SHA256SUMS.txt`
-(`scripts/package.sh`).
+Pushing a `v*` tag installs/builds the frontend and then runs the Tauri release
+build (embedded frontend assets + Rust backend) on all three platforms before
+publishing versioned archives and `SHA256SUMS.txt` (`scripts/package.sh`).
 
 You can also publish from the GitHub UI: open **Actions → Release → Run
 workflow**, select the source branch, enter a version tag such as `v0.1.0`,
@@ -155,6 +203,9 @@ and run the workflow.
 ## Architecture
 
 ```
+frontend/                    React + TypeScript + Vite webview surfaces
+e2e/tauri/                   isolated WebdriverIO/Tauri E2E package
+src-tauri/                   Tauri v2 host, commands, and window manager
 crates/volumectl/
 ├── src/
 │   ├── audio/          AudioBackend trait (cross-platform)

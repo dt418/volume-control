@@ -183,6 +183,8 @@ enum BadgeKind {
     Fallback,
     /// `RegisterHotKey` rejected the combo (in use by another app).
     InUse,
+    /// The user cleared the shortcut in Settings.
+    Disabled,
 }
 
 impl BadgeKind {
@@ -194,6 +196,7 @@ impl BadgeKind {
             BadgeKind::Ready => "Ready",
             BadgeKind::Fallback => "Fallback",
             BadgeKind::InUse => "In use",
+            BadgeKind::Disabled => "Disabled",
         }
     }
 }
@@ -266,6 +269,7 @@ fn badge_for_action(action: &HotkeyAction, status: &[HotkeyRegResult]) -> BadgeK
         .find(|r| r.action == *action)
         .map(|r| match r.status {
             HotkeyRegStatus::Registered => BadgeKind::Ready,
+            HotkeyRegStatus::Disabled => BadgeKind::Disabled,
             HotkeyRegStatus::HookRouted => BadgeKind::Fallback,
             HotkeyRegStatus::Conflicted(_) => BadgeKind::InUse,
         })
@@ -320,6 +324,7 @@ fn badge_colors(tokens: &ThemeTokens, kind: BadgeKind) -> (Rgba, Rgba) {
         BadgeKind::Ready => tokens.volume_threshold.low,
         BadgeKind::Fallback => tokens.accent,
         BadgeKind::InUse => tokens.volume_threshold.high,
+        BadgeKind::Disabled => tokens.text_secondary,
     };
     if tokens.high_contrast {
         (tokens.text_primary, tokens.signal_glass().border_strong)

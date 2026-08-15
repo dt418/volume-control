@@ -1,0 +1,41 @@
+[scenario]
+name = "settings draft and reset"
+fail_fast = true
+global_timeout_ms = 30000
+
+[[step]]
+name = "check settings title"
+action = "eval"
+script = "document.title"
+
+[[step]]
+name = "wait for settings surface"
+action = "wait"
+selector = "[data-surface=\"settings\"]"
+timeout_ms = 10000
+
+[[step]]
+name = "assert settings visible"
+action = "assert-visible"
+target = "[data-surface=\"settings\"]"
+
+[[step]]
+name = "change a settings field"
+action = "fill"
+target = "[data-surface=\"settings\"] input[aria-label=\"Volume step\"]"
+value = "2"
+
+[[step]]
+name = "reset draft"
+action = "click"
+target = "[data-testid=\"surface-footer\"] button:first-of-type"
+
+[[step]]
+name = "capture settings screenshot"
+action = "screenshot"
+path = "settings.png"
+
+[[step]]
+name = "check browser errors"
+action = "eval"
+script = "window.__tauriPilotConsoleErrors__ ?? []"

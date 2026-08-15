@@ -70,6 +70,15 @@ invokes scripts/ship.sh 'test-format-lint[.]sh' \
     'ship.sh: runs the format-lint smoke test'
 invokes scripts/ship.sh 'check-records[.]sh.*--staged' \
     'ship.sh: re-checks the records rule on the staged set after staging'
+# --- ship must build the frontend, run WDIO E2E, and build the release binary -
+invokes scripts/ship.sh 'npm run build --prefix' \
+    'ship.sh: release flow builds the frontend explicitly before the tauri build'
+invokes scripts/ship.sh 'verify-tauri-e2e' \
+    'ship.sh: release flow runs the fail-closed Tauri WebDriver E2E gate'
+invokes scripts/ship.sh 'node_modules/[.]bin/tauri' \
+    'ship.sh: release flow resolves the local tauri CLI (never npx tauri)'
+invokes scripts/ship.sh 'build --no-bundle' \
+    'ship.sh: release flow runs tauri build --no-bundle after E2E'
 
 # --- no bypass flags may exist --------------------------------------------------
 # "NEVER bypass by default": there is no --skip-* / --bypass flag anywhere in

@@ -68,3 +68,15 @@ The listener thread drains `GlobalHotKeyEvent` events into the host action
 channel; hosts poll it with `try_recv` on their existing timers. On shutdown
 the repeat worker and listener thread are joined and every registered combo
 is unregistered.
+
+## Webview surfaces
+
+The interactive surfaces (Mixer, Settings, Help) are Tauri v2 webview windows
+(`window-mixer`, `window-settings`, `window-help`) built with React + Tailwind
++ shadcn/ui — see `docs/superpowers/specs/2026-08-13-tauri-ui-hybrid-design.md`.
+Hotkey actions reach them through the Tauri host: the host drains the
+`GlobalHotKeys` channel (20 ms poll) and the wheel bridge, applies actions in
+`AppCore`, and pushes `state://volume` / `state://hotkeys` /
+`state://sessions` events to open surfaces. The native HUD overlay and the
+tray stay native (Windows); the 150 ms host poll also live-reloads the config
+and drains tray-menu commands.

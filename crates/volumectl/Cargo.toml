@@ -53,10 +53,6 @@ muda = { workspace = true }
 name = "volumectl_lib"
 path = "src/lib.rs"
 
-[[bin]]
-name = "volumectl"
-path = "src/main.rs"
-
 # macOS AppKit smoke test: `harness = false` so its `main()` runs on the
 # process main thread — AppKit requires the main thread, and libtest would
 # run the body on a worker thread. The body is gated to `target_os = "macos"`

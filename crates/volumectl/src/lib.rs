@@ -9,8 +9,11 @@ pub mod audio;
 pub mod audio_linux;
 #[cfg(target_os = "macos")]
 pub mod audio_macos;
+#[cfg(target_os = "windows")]
+pub mod com_guard;
 pub mod config;
 pub mod core;
+pub mod host_core;
 pub mod hotkeys;
 pub mod hotkeys_global;
 #[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
@@ -22,6 +25,8 @@ pub mod ui;
 
 #[cfg(target_os = "windows")]
 pub mod app;
+#[cfg(target_os = "windows")]
+pub mod audio_sessions_win32;
 /// Windows-only backends.
 #[cfg(target_os = "windows")]
 pub mod audio_windows;

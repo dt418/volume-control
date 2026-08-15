@@ -1,11 +1,66 @@
 {
   "version": 1,
   "skills": {
+    "antfu": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/antfu/SKILL.md",
+      "computedHash": "79a663bcf1f0580143905b81dc86bc86a21a6e759bdfa674f70a3d0a94e06ba3"
+    },
+    "antfu-design": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/antfu-design/SKILL.md",
+      "computedHash": "79b14b59749a69b04c0c6f4e6908d36aea0df920eb0d9c44be144cdca388d25d"
+    },
+    "maestro-mobile-testing": {
+      "source": "tovimx/maestro-mobile-testing-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "0da465e616e3c96744ba5d0641054c4468e7bd801cde67ba6a915a89cfe465d3"
+    },
+    "nitro": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/nitro/SKILL.md",
+      "computedHash": "843e56adae395045465339da71943c0706d6e92b76e7f2c3571712d377fd2604"
+    },
+    "nuxt": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/nuxt/SKILL.md",
+      "computedHash": "3f271d53fd31dbb482e6aad3f54992955f1b5cb0afa9972c592b087316005436"
+    },
+    "pinia": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/pinia/SKILL.md",
+      "computedHash": "8e8346fac8cb76d6f186462b712352d5a651c9c049076ea73559f47210c874ef"
+    },
+    "pnpm": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/pnpm/SKILL.md",
+      "computedHash": "20bca721bb934e39c8ff2dc3df2cd1712f9efb5419afe2cb847267f6fe0eacbc"
+    },
     "rust-async-patterns": {
       "source": "wshobson/agents",
       "sourceType": "github",
       "skillPath": "plugins/systems-programming/skills/rust-async-patterns/SKILL.md",
       "computedHash": "9203b9abc8238c578887994730421879778720184b027859fecda3f76d31ab05"
+    },
+    "slidev": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/slidev/SKILL.md",
+      "computedHash": "949d94a83134759f3e9dd7ffc41ade2d1e03eb69706322f0467cda73705e47ce"
     },
     "tauri": {
       "source": "full-stack-skills/tauri-skills",
@@ -318,6 +373,108 @@
       "sourceType": "github",
       "skillPath": "skills/tauri-window/SKILL.md",
       "computedHash": "923b975ffad599aff0bfb354282bd8040bb4fb02b82486b55a9e6a56e3c35471"
+    },
+    "tsdown": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/tsdown/SKILL.md",
+      "computedHash": "9a6610fe135e406e9339fbe9cdce89f97fcae071f64d78f42618420d5a5e2946"
+    },
+    "turborepo": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/turborepo/SKILL.md",
+      "computedHash": "8d79e43351214e623cecd20e0ddf0ef64226fca4930a025249d9072451635fcd"
+    },
+    "unocss": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/unocss/SKILL.md",
+      "computedHash": "1054e69977e1d2d3b7c8479adf16b4db43191bf775f150ce8a06a0b1c191318b"
+    },
+    "vercel-composition-patterns": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/composition-patterns/SKILL.md",
+      "computedHash": "575757e3e25761c8c562d6e395d29f0b76c98b1273c0bd72d88e6ab1bc9c7d42"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+    },
+    "vite": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/vite/SKILL.md",
+      "computedHash": "1cdc4bbecaa89544e6ef92566b015db989994bf90c4472683ac64f7a114dc3af"
+    },
+    "vitepress": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/vitepress/SKILL.md",
+      "computedHash": "a8aa9c4c23b88c5f6ff59159d8dd0678c8c87ae28bab19b4e84fa399022ce5ce"
+    },
+    "vitest": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/vitest/SKILL.md",
+      "computedHash": "3594bf6d97ca50836c611d8b1907322888c03d2c41b2f26761e644b8e67fe106"
+    },
+    "vue": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/vue/SKILL.md",
+      "computedHash": "f72b54618560c53d65740515ded5bb833750c4574dbe961fd21f022bd2b31a74"
+    },
+    "vue-best-practices": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/vue-best-practices/SKILL.md",
+      "computedHash": "6aebf11b392505e1aa40a6805e714c36095830cc3f0a7a41aebffee2854596b8"
+    },
+    "vue-router-best-practices": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/vue-router-best-practices/SKILL.md",
+      "computedHash": "405d377ebeef773b240f31902dfb204095d4bcc945e8a4c2f4b560062c032fbb"
+    },
+    "vue-testing-best-practices": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/vue-testing-best-practices/SKILL.md",
+      "computedHash": "c568e4abe743cd36a0eb15730f72de54b8d84c9bfbaa4395bc448428b9c71c12"
+    },
+    "vueuse-functions": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/vueuse-functions/SKILL.md",
+      "computedHash": "0a762ae555673c6a7705749bd58d74e2ae9b07007a2cde8168f1f6c480b8d8d9"
+    },
+    "web-design-guidelines": {
+      "source": "git@github.com:antfu/skills.git",
+      "sourceUrl": "git@github.com:antfu/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "57cefa41cea390d412000acc24e5526034027ca46d4f7581ba8fa05777a8687f"
+    },
+    "windows-desktop-e2e": {
+      "source": "affaan-m/ecc",
+      "sourceType": "github",
+      "skillPath": "skills/windows-desktop-e2e/SKILL.md",
+      "computedHash": "9a7dad552c7ddcc29e43b65f1c05516a1905f6962fdca56ed6b14f80dad974d9"
     }
   }
 }

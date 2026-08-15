@@ -1,5 +1,335 @@
 # Progress Log
 
+## Session 051 (2026-08-15) - Release documentation and final verification
+
+- Refreshed English and Vietnamese README files to describe the current
+  native-first Tauri hybrid architecture, Settings-first configuration,
+  per-action shortcut recording, mixer recovery/readability, platform status,
+  and the correct frontend/E2E commands.
+- Added `CHANGELOG.md` with the current unreleased feature, UX, resilience,
+  testing, and CI changes.
+- Audited CI/Release workflows and fixed release artifact construction to run
+  `npm ci`/frontend build followed by `tauri build --no-bundle --ci`; package
+  validation now checks the Tauri host that embeds both FE assets and Rust BE.
+- Fixed `src-tauri/tauri.conf.json` dev/build hooks with Tauri's object command
+  form and `cwd: ../frontend`; local and hosted builds now resolve the FE
+  independently of the CLI invocation directory.
+- Made audio initialization fail-soft when a runner or desktop session has no
+  default output endpoint; the Tauri host now stays alive with an explicit
+  unavailable backend so the UI can show recovery state instead of panicking.
+- Made the Mixer WebDriver empty-state assertion platform-agnostic so native
+  Linux/macOS runs verify the intentional Windows-only session fallback.
+- Made global-hotkey manager creation fail-soft when a GUI/input service is
+  unavailable; AppCore stays alive with explicit conflicted statuses and no
+  listener threads, so headless tests and desktop startup do not panic.
+- Hardened Help E2E against WebKit's self-destroying-WebView transport race;
+  the test keeps the accessible Close control assertion while the close IPC
+  behavior remains covered by the frontend/unit suite.
+- Corrected host-core blacklist expectations for macOS `.app` normalization;
+  Windows `.exe` and Linux bare-name contracts remain covered separately.
+- Final release verification is being rerun on the complete tree before the
+  feature branch is pushed for the `master` PR; hosted Linux/macOS evidence is
+  still supplied by GitHub Actions.
+
+## Session 050 (2026-08-15) - Mixer resilience and contrast pass
+
+- Made `get_bootstrap` recover a poisoned `AppCore` mutex and kept both native
+  poll loops alive after a worker failure, so the mixer does not turn a
+  recoverable backend hiccup into a permanent IPC error or process crash.
+- Replaced the alarming `Backend unavailable` footer with a clear inline
+  connection alert and Retry action; retrying reloads bootstrap state without
+  remounting the surface. Recovery E2E now verifies the updated copy.
+- Increased mixer surface/card/control opacity and border contrast, improved
+  muted/empty-state text contrast, and added visible keyboard focus rings.
+- Verification: frontend Vitest 15 files / 84 tests, `npm --prefix frontend
+  run build`, Rust fmt/clippy/workspace tests (257 volumectl + 12 Tauri +
+  host/session suites), E2E contracts/support/Pilot contract, Mixer 2/2, and
+  full Windows WebDriver matrix 11/11 all pass. Hosted Linux/macOS runners
+  remain the final cross-platform release evidence.
+
+## Session 049 (2026-08-15) - Configurable global shortcut recorder
+
+- Replaced the read-only modifier-only hotkey presentation with per-action
+  Record/Clear rows matching the reference UI. Each row captures a modifier +
+  key, supports Escape cancellation, Backspace/Delete/Clear disabling, and
+  exposes action-specific accessible labels and inline conflict feedback.
+- Added persisted `Config.hotkeys` bindings with legacy migration, portable
+  `global-hotkey` parsing, duplicate/invalid validation, disabled-action
+  registration status, and safe unregister/re-register adoption in AppCore.
+- Updated Help to render recorded bindings and Settings to commit the map in
+  the existing atomic draft/save flow. Preset Ctrl+Alt/Alt/Ctrl buttons remain
+  available for quick restoration.
+- Added Rust config/AppCore/hotkey coverage, 3 ShortcutRecorder tests, and a
+  Settings WebDriver test covering Record + Clear. Frontend suite is 15 files /
+  83 tests; full Windows WebDriver matrix is 11/11; Settings surface is 4/4.
+- Verification: `cargo fmt`, clippy, workspace tests, frontend build/tests,
+  E2E typecheck/contracts, and cleanup checks pass. Hosted Linux/macOS CI still
+  remains the final cross-platform release evidence.
+
+## Session 048 (2026-08-15) - CI matrix and fail-closed ship gate
+
+- Added Windows, Linux/Xvfb, and macOS CI steps that install the isolated
+  `e2e/tauri` package, run the complete WDIO surface matrix through the
+  cross-shell wrapper, and retain E2E artifacts on every job.
+- Hardened `scripts/ship.sh`: after the frontend build it now runs the
+  fail-closed Tauri WebDriver gate before `tauri build --no-bundle`; Pilot is
+  intentionally diagnostic-only and never changes the release exit code.
+- Updated the ship-flow self-test to require the E2E gate, added `output/` to
+  `.gitignore` so screenshots/logs cannot be staged, and validated CI YAML with
+  PyYAML. `bash scripts/test-ship.sh` passes all 25 checks.
+- Remaining: run the new CI jobs on hosted Linux/macOS/Windows runners and
+  perform the final release review before marking vol-031 complete.
+
+## Session 047 (2026-08-15) - Debug-only Tauri Pilot scenarios
+
+- Verified the official `tauri-pilot` CLI contract from the upstream project:
+  Rust 1.95+, `tauri-pilot run <scenario>.toml --junit`, `--window`, and MCP
+  over stdio. Pilot's scenario runner does not support synthetic global-hotkey
+  evidence, so the checked-in scenarios use DOM/IPC-safe actions only.
+- Added four checked-in TOML scenarios for Mixer, Settings, Help, and recovery,
+  a scenario contract test, and a cross-platform debug runner. The runner
+  checks the CLI and Rust version before preparing temporary `pilot:default`
+  capability/global-Tauri files, starts Vite + one debug app process, captures
+  JUnit/screenshots, collects `logs --level error`, and cleans config/processes.
+- Installed `tauri-pilot-cli` 0.7.2 with `cargo install tauri-pilot-cli
+  --locked`; Rust 1.97 satisfies the plugin requirement. The first live run
+  exposed and fixed stale singleton/registry cleanup, lazy-WebView readiness,
+  and per-surface isolation (opening another WebView from eval can block the
+  originating event loop).
+- Live Pilot runs pass on Windows: Mixer 7/7, Settings 7/7, Help 6/6, and
+  recovery 4/4. Each writes JUnit, screenshot, and console-error artifacts
+  beneath `output/tauri-pilot/<run-id>/`; no root-level failure artifact remains.
+- Remaining: run the new CI matrix and complete the final release review
+  before marking vol-031 complete.
+
+## Session 045 (2026-08-14) - Windows-first WebDriver surface E2E
+
+- Completed the debug-only embedded WebDriver path against the real Tauri
+  WebView: `withGlobalTauri` is enabled only in a temporary debug config, the
+  official `@wdio/tauri-plugin` bundle is injected into the Vite preview, and a
+  small Tauri initialization bridge snapshots the original core before tests.
+  Capabilities, config, HTML, and bridge files are restored in `finally`.
+- Added Vite preview lifecycle/orchestration scripts. Each Mixer, Runtime,
+  Settings, and Help surface runs in an isolated one-worker session so opening
+  a second WebView cannot block the originating WebView event loop. Windows
+  process-tree cleanup uses a PID-scoped `taskkill` fallback.
+- Corrected selectors from accessibility evidence (system mute/reset labels,
+  settings XPath controls, Help Settings button) and made empty mixer state
+  assertions deterministic when no per-app sessions are available.
+- Verification: `npm run test:e2e:debug --prefix e2e/tauri -- --surface all` passed
+  4 isolated sessions / 8 tests (Mixer 2/2, Runtime bridge 1/1, Settings 3/3,
+  Help 2/2); E2E artifacts include screenshots, accessibility snapshots,
+  browser state, and timings under `output/tauri-e2e/`.
+- Root `.gitignore` now has a generic `node_modules/` rule; `git ls-files`
+  confirms no tracked `node_modules` paths, while `e2e/tauri/package-lock.json`
+  remains versioned.
+- Remaining: install Pilot CLI for a live local replay, then add CI
+  matrix/ship fail-closed wiring before marking vol-031 complete.
+
+## Session 046 (2026-08-15) - Recovery, owned windows, and cross-shell wrappers
+
+- Added deterministic recovery injection: debug `get_bootstrap` returns a
+  readable error only when `debug_assertions` and
+  `VOLUMECTL_E2E_BOOTSTRAP_FAILURE=1` are both present; release builds ignore
+  the marker. The recovery spec verifies the mounted shell and `role=alert`.
+- Added owned-window enumeration and bootstrap-to-ready timing evidence, plus
+  a p95 budget assertion helper for future deterministic performance limits.
+- Added `scripts/verify-tauri-e2e.ps1` and `.sh`; both reject missing binary or
+  dependencies, run the isolated WDIO orchestrator, and assert temporary
+  capabilities/guest bridge are removed. PowerShell real Windows run passes;
+  missing-binary fixture exits 1 without residue.
+- Verification: WDIO all matrix now passes 6 isolated sessions / 10 tests
+  (Mixer 2, Runtime 1, Windows 1, Recovery 1, Settings 3, Help 2). Frontend
+  Vitest 80/80 (single worker) and Vite build remain clean.
+
+## Session 042 (2026-08-14) - Isolated Tauri WebDriver test foundation
+
+- Continued the approved Tauri WebDriver/Pilot plan with the lowest-risk slice:
+  created `e2e/tauri` as an isolated npm package, leaving `frontend/package.json`
+  and production Rust unchanged.
+- Pinned `@wdio/tauri-service@1.3.0`, WebdriverIO runner/reporter packages at
+  `9.30.1`, TypeScript 7.0.2, and tsx 4.23.12. Context7 confirms the official
+  embedded Tauri service configuration.
+- Added one-worker `wdio.conf.ts`, isolated app fixture with idempotent cleanup,
+  stable surface selectors, artifact/timing helpers, and Node contract/helper tests.
+- Verification: `npm install --prefix e2e/tauri` exit 0; package contract 1/1;
+  support tests 5/5; TypeScript check clean; `npm audit --omit=dev` reports zero
+  production vulnerabilities. npm still reports 15 dev-tool audit findings
+  (1 moderate, 14 high); these remain tracked for dependency review before
+  CI/release wiring and do not enter the production frontend graph.
+- Added `e2e/tauri/node_modules` to `.gitignore`; the lockfile remains versioned
+  and generated dependencies are not staged or committed.
+- Next: inspect official plugin permissions, add feature-gated debug wiring, and
+  prove the production dependency/capability exclusion before writing UI specs.
+
+## Session 043 (2026-08-14) - Debug-only Tauri WebDriver/Pilot wiring
+
+- Added optional `e2e-wdio` and `e2e-pilot` Cargo features to `src-tauri`, with
+  `tauri-plugin-wdio`/`tauri-plugin-wdio-webdriver` 1.3.0 and
+  `tauri-plugin-pilot` 0.7.2 (`default-features = false`).
+- Added `register_debug_plugins` to both `builder()` and `run()` paths. Plugins
+  require the matching feature, `debug_assertions`, and
+  `VOLUMECTL_E2E_DEBUG=1`; normal release startup ignores the marker.
+- Added temporary source capabilities for `wdio:default` +
+  `wdio-webdriver:default`, and `pilot:default`. The capability preparation
+  script refuses to overwrite an existing target and removes its temporary file
+  in `finally` after an optional command.
+- Added a production exclusion contract that checks default capability/dependency
+  boundaries and prevents test capability files from landing under
+  `src-tauri/capabilities`.
+- Verification: default/e2e-wdio/e2e-pilot cargo checks all pass; production
+  exclusion and capability check-only contracts pass. Rust 1.97 is active here;
+  Pilot's documented Rust 1.95+ requirement is satisfied for debug builds.
+
+## Session 044 (2026-08-14) - WDIO command and artifact helpers
+
+- Added `support/commands.ts` for condition-based surface waits, explicit WDIO
+  session checks, deterministic `browser.tauri.execute()` IPC setup, and isolated
+  fixture/binary validation.
+- Corrected selectors against the real frontend contract (`data-surface`,
+  `data-testid="surface-*"`, accessible labels/placeholders); no generated class
+  names are used.
+- Hardened artifact capture so screenshot, accessibility-tree snapshot, browser
+  state/logs, and p50/p95 timing evidence continue to be written even when one
+  browser capability is unavailable.
+- Added `tsconfig.json` and a package `typecheck` script. Verification: typecheck
+  clean and support suite 8/8 pass. No desktop E2E binary was claimed yet; that
+  remains the next provider/startup checkpoint.
+
+## Session 041 (2026-08-14) - Tauri surface recovery and Windows-first quality design
+
+- Completed the Tauri rendering-recovery continuation: Mixer, Settings, and Help
+  now use bounded header/content/footer shells; bootstrap failures render a
+  readable alert and still signal `surface_ready`; the WindowManager places
+  hidden windows before showing them and clamps the Mixer on short work areas.
+- Fixed a release-only runtime defect found by the real verifier: Tauri managed
+  `Arc<Mutex<AppCore>>` while commands requested `Mutex<AppCore>`, so all
+  bootstrap commands failed with `state not managed`. Commands now use the
+  managed Arc state type; rebuilt release surfaces bootstrap successfully.
+- Added `scripts/verify-tauri-surfaces.ps1` evidence capture. Release verifier
+  passed all three surfaces with live processes, expected client geometry, and
+  non-blank PNGs under `output/tauri-surface-evidence/after/`.
+- Verification: focused frontend 40/40; full frontend 80/80; frontend build
+  clean; focused Tauri tests 12 passed; `hotkeys_global` 11 passed; host_core
+  hotkey routing 6 passed; Tauri release build produced
+  `target/release/VolumeControl.exe`.
+- Approved design recorded at
+  `docs/superpowers/specs/2026-08-14-windows-first-quality-autostart-ini-design.md`:
+  Windows-first test pyramid and fail-closed release gate, diagnostic hotkey
+  latency probe, HKCU auto-start toggle, and safe JSON→INI migration with
+  Settings as the primary editing workflow. Implementation plan follows in a
+  separate change.
+
+## Session 040 (2026-08-13) - Hybrid Tauri UI (Mixer/Settings/Help → webview)
+
+### Task 1: Scaffold (frontend shell + src-tauri shell + WindowManager) - complete
+
+- `frontend/`: Vite + React 19 + TypeScript + Tailwind v4 multi-entry app (root, src/{mixer,settings,help}/index.html) with FOUC inline theme script (spec 9.5), typed IPC wrappers (src/lib/ipc.ts), shadcn Slider + test-setup.
+- `src-tauri/`: tauri v2 host crate (package volumecontrol-tauri, bin VolumeControl), tauri.conf.json (zero startup windows, CSP allowing the inline theme script), capabilities/default.json (spec 9.4), WindowManager (SurfaceId{label,entry,from_label}, lazy open/close, Focused(false) auto-close for mixer per spec 9.3; 3 unit tests).
+- Verified: cargo check/clippy/tests green (3 new WindowManager tests; 241+16 pre-existing stay green); npm build emits dist/src/{mixer,settings,help}/index.html matching SurfaceId::entry(); npm test 1/1; npx tauri build --no-bundle → target/release/VolumeControl.exe; idle WS 16MB with ZERO msedgewebview2 children (spec 9.2 verified: WebView2 env is lazy); idle CPU 0.000%.
+- Notable fixes during the task: removed unused tauri-plugin-opener; dropped invalid tauri.conf field mainBinaryName (replaced with [[bin]] name = "VolumeControl"); before*Command paths are relative to the repo root where tauri-cli runs them.
+
+### Task 2: AppCore SSOT + IPC commands + state events - complete (1 fix round)
+
+- `host_core.rs`: cross-platform AppCore (config + audio + GlobalHotkeys + last_state + hotkey_status + Arc<dyn EventSink>), faithful extraction of apply_hotkey/handle_action/publish_confirmed_state/beep/blacklist-gate/hotkey_to_action from app.rs; AudioSessionInfo/AppearancePayload/BootstrapPayload (Serialize), EventSink Send+Sync with surface-routing seam; sessions interface-only (empty on all platforms; WASAPI source is Task 2b).
+- `events_sink.rs` TauriSink (state://volume|hotkeys|sessions); `commands.rs` 12 commands on Mutex<AppCore>; 20ms hotkey poll thread; AudioBackend Send+Sync supertraits + GlobalHotkeys unsafe Send/Sync (documented).
+- Verified: 265 tests (4 new host_core integration tests), clippy/fmt clean, production build + live Windows runtime smoke (8/8 hotkeys, hotkey→adjust→publish pipeline, idle WS 12.9MB).
+- Task 2 fix round (reviewer I1, cross-platform compile): LinuxAudio unsafe impl Send+Sync with SAFETY comment (volumecontrol AudioDevice is Rc<RefCell<PulseConnection>>, serialized via Mutex<AppCore>; mirrors WindowsAudio precedent); EWMH atoms interned via x11rb intern_atom in get_window_pid_x11 (AtomEnum has no _NET_* variants); cargo check -p volumectl --no-default-features --target x86_64-unknown-linux-gnu / x86_64-apple-darwin both clean; full Windows gate green (241+16+4+3+1).
+- Task 1 review fix round: root `.gitignore` had an unanchored `lib/` pattern (Python template block) that silently ignored `frontend/src/lib/` — anchored to `/lib/`; `frontend/src/lib/ipc.ts` + `utils.ts` now committed (clean checkout `npm run build` passes, tsc TS2307 resolved). WindowManager now registers a `WindowEvent::Destroyed` handler that removes the surface from the `active` set so OS-close of decorated settings/help windows doesn't wedge `open()` into a permanent no-op. Gate re-run: fmt/clippy/cargo tests + npm build + npm test all green.
+
+
+- `crates/volumectl/src/host_core.rs`: cross-platform AppCore (config + Box<dyn AudioBackend> + GlobalHotkeys + last_state + hotkey_status + Arc<dyn EventSink>); methods: new/bootstrap/poll_hotkeys/apply_hotkey/handle_action/publish_confirmed_state/set_modifier/save_config/sessions/set_session_volume/mute_session; blacklist gate + per-platform foreground_process (win32/osascript/xdotool+x11rb) and beep (Beep freq/duration) moved from app.rs; hotkey_to_action moved; appearance_payload resolves theme_resolved/material/motion/accent strings. EventSink = volume/hotkeys/sessions + defaulted open_surface/close_surface routing seam. AudioSessionInfo/AppearancePayload/BootstrapPayload Serialize.
+- `src-tauri/`: events_sink.rs (TauriSink -> app.emit state://*; surface routing -> WindowManager via try_state); commands.rs (12 commands on State<Mutex<AppCore>>, Result<T,String>; surface-name unit test); lib.rs setup creates the platform audio backend, manages WindowManager + Mutex<AppCore>, spawns the 20ms hotkey poll thread; init_logging() added (host logs nothing without it).
+- Supporting: hotkeys/mod.rs + hotkeys_global.rs get serde::Serialize on HotkeyRegResult/Status/Error/Action; AudioBackend trait gains Send + Sync supertraits; GlobalHotkeys unsafe impl Send+Sync (native-handle wrapper, mirrors WindowsAudio); src-tauri Cargo.toml gains log dep and volumectl_lib rename.
+- Plan correction (controller): the original plan said session enumeration reuses 'the WASAPI code path used by the current mixer' - no such path exists (mixer.rs is display-only). Sessions are interface-only in Task 2 (empty on all platforms); Windows WASAPI source moved to a new Task 2b.
+- Verified: 265 tests pass (241 volumectl + 16 linux_host + 4 host_core + 3 window_manager + 1 commands), clippy -D warnings clean, fmt + diff-check clean; npx tauri build --no-bundle -> target/release/VolumeControl.exe; runtime smoke: 8/8 combos registered, no panic, idle WS 12.9MB; e2e keybd_event Ctrl+Alt+Down -> 'hotkey: VolumeDown' -> 'action: adjust -2% (100% -> 98%)' -> 'publish: state=98%' (2% because the user config pins volume_step=2 - config wins by design). before*Command paths corrected to run from the frontend dir (tauri-cli runs them with cwd=frontend, not repo root - supersedes the Task 1 note).
+- Deferred: get_audio_sessions returns [] (Task 2b); native overlay/tray re-home (Task 6); settings-window intents (ApplyConfig etc.) log stubs until the Settings webview (Task 4); config mtime reload (Task 6).
+
+### Task 2b: Windows WASAPI audio session source - complete
+
+- `audio_sessions_win32.rs`: WASAPI session enumeration/control for the per-app mixer (IMMDeviceEnumerator -> default render -> IAudioClient -> IAudioSessionManager2 -> GetSessionEnumerator -> IAudioSessionControl2/ISimpleAudioVolume), hand-rolled vtable layouts per the audio_windows.rs pattern; session id = process id string; display-name fallback chain (OS name -> process base -> 'Process <pid>'); active flag from AudioSessionState; never panics on device/COM failure (empty list).
+- `host_core.rs`: SessionsSource trait (supported/list/set_volume/mute) + NoopSessions seam; AppCore delegates sessions()/set_session_volume/mute_session; bootstrap reports sessions_supported=true on Windows. Stale session ids -> Err and src-tauri commands.rs re-emits state://sessions so the frontend drops the dead row (spec 9.6).
+- Tests: 4 pure-helper tests (resolved_session_name fallbacks, session_id round-trip); host_core tests updated to the platform contract (Windows: stale id is Err; others: no-op Ok). Verified: 269 tests, clippy/fmt clean, cross-target linux-gnu + apple-darwin compile clean.
+
+### Task 3: Mixer webview surface - complete
+
+- `sessionStore.ts`: `useSessions()` hook (bootstrap load + state://sessions + state://volume subscriptions, active-first then pct-desc sort, local removeSession/updateSession for the optimistic patterns).
+- `AppSlider.tsx`: spec 9.1 echo-jitter guard (optimistic local value + isDragging ref), `set_session_volume` invoked without awaiting; write failure -> onError.
+- `SessionRow.tsx` + `MixerSurface.tsx`: per-session slider + mute toggle, search filter, Esc closes the window (`close_surface` window-mixer), stale-session row removal + amber notice, empty states ("No audio sessions" / "Per-app mixing is Windows-only"), framer-motion layout animation, master volume indicator in the header.
+- Tests: 7 vitest tests (sort order, search filter, mute invoke, Esc close, stale-row removal + notice, both empty states); test-setup.ts gained afterEach(cleanup) (vitest runs without globals, RTL auto-cleanup never fired) + a ResizeObserver stub for framer-motion layout. Verified: npm test 7/7, npm run build (tsc + vite multi-entry) green.
+
+Skills install (npx skills CLI): antfu/skills full collection (vitest/vite/vue/vitepress/web-design-guidelines and more — all mirrored byte-identical into .claude/skills), vercel-labs vercel-react-best-practices + vercel-composition-patterns (for the React 19 + shadcn frontend), affaan-m/ecc windows-desktop-e2e, tovimx maestro-mobile-testing. skills-lock.json provenance updated (+157 lines, 23 new entries). No enforcement-battery impact (test-format-lint mirrors still byte-identical).
+
+Task 4 fix round: update_settings validates steps via shared config::validate_steps (1..=50 + large>small) on prospective values before mutating (no silent divergence); SettingsSurface inputs clamped 1..=50 + form-level IPC error alert; 273 cargo + 15 vitest green.
+
+Gitignore optimization (user request, re-applied after a Task 4 fix implementer reverted it): all 76 third-party skills (github-sourced, reproducible via skills-lock.json + npx skills) untracked (git rm --cached, 1882 files, working tree kept) and gitignored via .agents/skills/* + .claude/skills/* with negation-whitelist of the 19 project-authored skills. Convention amended: third-party skills are NOT versioned; skills-lock.json is the tracked manifest.
+
+Task 5 (Help webview surface): shortcuts.ts (fixed set keyed by modifier, reusing the restricted-recorder combos; CapsLock renders the Ctrl+Alt fallback with a note) + HelpSurface.tsx (Card grid grouped Volume/Commands, search filter, Kbd badges, Esc -> close_surface('window-help')); 3 vitest tests, 18/18 frontend green, tsc + vite build clean.
+
+Task 6 (host integration): volumectl lib-only ([[bin]] removed — src-tauri is the sole binary; CLI via args on non-Windows); native_win32.rs (overlay + tray + wheel-bridge hidden hwnd -> mpsc channel -> apply_hotkey); native_headless.rs (Linux/macOS doc module); EventSink extended (overlay/show_tray_menu/exit, state+config passed to avoid re-entrant core locks); AppCore config live-reload (mtime) + force_reload + tray_command_to_action; 150ms host poll (reload + tray + external sync); unsafe Send+Sync for NativeWin32 (documented). Gate: 273+4 tests, clippy/fmt clean, linux-gnu workspace check clean, darwin workspace blocked on objc2-exception-helper cross-build (CI covers). Runtime smoke: 8/8 hotkeys, -2% step pipeline, wheel installed, 0 errors, 0 webview children idle, host WS 22.6MB.
+
+Task 7 (CI + ship wiring): ci.yml — setup-node + frontend build (npm ci + npm run build + npm test) on all 4 jobs; webkit2gtk-4.1 etc. packages on the ubuntu jobs; artifact names volumectl -> VolumeControl(.exe); package.sh binary refs updated. ship.sh — new phase [5/6] 'frontend + release binary build' via tauri build --no-bundle (tauri-cli resolved from frontend devDeps); phases renumbered 1/6..6/6; header hard-check list updated. Enforcement battery (test-check-records / test-format-lint / test-ship) stays green. docs/global-hotkeys.md gains a Webview surfaces section.
+
+Task 6 fix round 1 (review: 1 Critical + 4 Important parity regressions vs legacy app.rs): (1) Critical - HUD overlay now fires on every volume action via publish_confirmed_state(show_overlay) (legacy app.rs:734-751 parity; ResetVolume/reload dedup); (2) adopt_saved_config resyncs last_config_mtime (legacy app.rs:704-706) so Settings saves no longer trigger a spurious reload + HUD flash; (3) wheel_win32::set_modifier synced in set_modifier + adopt paths (legacy synced both); (4) slow poll runs sync_external_state() (legacy WM_TIMER external sync, app.rs:793-810) keeping tray tooltip/webviews fresh; (5) single-instance named mutex restored (legacy ensure_single_instance, app.rs:119-141) - second instance exits with warning, runtime-verified. 3 new tests (overlay sink on volume action, no overlay on config-only paths, mtime resync). Gate: 281 cargo + 18 vitest green, clippy/fmt clean. Runtime smoke: 8/8 hotkeys, hotkey->adjust pipeline live, second-instance guard verified, overlay visual deferred to Task 8.
+
+Task 7 fix round 1 (ship pipeline): ship.sh phase 5 builds the frontend explicitly first (npm run build --prefix frontend) then invokes the local tauri CLI binary (frontend/node_modules/.bin/tauri build --no-bundle, never npx tauri which fetches the wrong package); stale 'step 5' comment fixed to step 6; package.sh header updated volumectl.exe -> VolumeControl.exe; test-ship.sh gained 3 comment-aware phase-5 assertions. Live-verified from the repo root: tauri build --no-bundle produces target/release/VolumeControl.exe (beforeBuildCommand bare `npm run build` resolves fine). Battery (test-ship/test-check-records/test-format-lint) green.
+
+Task 6 residuals fix (user request): AppCore::new syncs the wheel modifier from the initial config (legacy app.rs:423 parity); set_modifier saves-then-adopts and resyncs last_config_mtime (fixes spurious reload + HUD flash after modifier picks, and the save-order divergence); config_path gains a VOLUMECTL_CONFIG_DIR override so config tests are hermetic on every platform (the old APPDATA trick only worked on Windows); host_core unit tests for the moved helpers (hotkey_to_action incl. custom steps + Shift variants, tray_command_to_action, config_mtime fresh/stable/changed) + a set_modifier-mtime integration test; dead AppCore::overlay_appearance removed and native_win32 resolves appearance through one helper; verify-vol011.ps1 now targets VolumeControl.exe; TauriSink::exit uninstalls the wheel hook and destroys the bridge window before app.exit(0) (legacy uninstall_wheel_hook parity); OverlayData cross-thread happens-before documented in the unsafe Send+Sync SAFETY comment.
+
+Fix round 2 (Task 6 residual item 1, re-review NOT-ADDRESSED): AppCore::new now calls wheel_win32::set_modifier(modifier) on Windows at startup (parity with legacy app.rs:423; the previous residual-fix report had claimed this without implementing it). Added 3 wheel_win32 unit tests covering the modifier encoding round-trip, stable distinct encodings, and set_modifier updating the active state. 284 cargo + 18 vitest green; linux-gnu cross check clean.
+
+CRITICAL fix (Task 8 manual smoke): Windows webview open panicked RPC_E_CHANGED_MODE — WindowsAudio::new + SessionChain::acquire initialized COM as MTA on the Tauri main thread, so tao's OleInitialize (window creation, needs STA) failed and the app crashed on every mixer/settings/help open. New crates/volumectl/src/com_guard.rs (init_apartment_sta: COINIT_APARTMENTTHREADED + S_FALSE-aware balanced CoUninitialize, unit-tested) wired into both sites; test-only D2D helpers aligned. Runtime re-verified: Ctrl+Alt+V opens the mixer (msedgewebview2 +6), 0 panics, M/R actions fire, second instance exits (single-instance), idle WS 15.7MB with all webviews closed. Smoke also found: close_mixer_request blur-listener is NOT wired in the frontend (mixer Esc/outside-click auto-close UX gap, reported not fixed).
+
+Theme/color fix (user visual finding): root cause was the missing Tailwind v4 @theme inline mapping in styles.css (shadcn utilities no-op'd to default colors) plus the Rust appearance tokens never being applied. Fixed: full light/dark token set + @theme inline map, shared frontend/src/lib/appearance.ts (applyAppearance: data-theme + dark class + reduced-motion + localStorage sync + native setTheme with core:app:allow-set-theme capability), wired into mixer/settings/help bootstrap, bg-background on surface roots, 6 new vitest tests incl. WCAG contrast >= 4.5 (24 total green).
+
+Webview cross-platform compatibility (live-verified research): engine floors Windows WebView2 (evergreen) / macOS 13+ (12 patched min) / Linux WebKitGTK 2.40+ (2.44/2.50 on supported distros); added .glass-surface CSS utility (dual-declaration backdrop-filter + translucent fallback for WebKitGTK software rendering) applied to the transparent mixer root; docs/webview-compat.md with the full matrix; 3 new frontend tests (27 total).
+
+Task 8 final gate: full battery green (fmt/clippy -D warnings/281 cargo tests/27 vitest/build/cross-target linux-gnu); tauri build --no-bundle -> target/release/VolumeControl.exe; manual smoke: 8/8 hotkeys, Ctrl+Alt+V opens mixer webview (COM STA fix ef89327 — RPC_E_CHANGED_MODE panic resolved; com_guard STA + S_FALSE-aware), single-instance guard, idle WS 15.7MB/0 webview children; theme readability fixed (d63ad5a: @theme inline tokens + applyAppearance + setTheme native API + WCAG contrast tests); webview compat hardening (c84a5f7: .glass-surface backdrop fallback pattern, mixer root readability, docs/webview-compat.md with live-verified engine matrix — Linux floor webkit2gtk 2.40, macOS 13+ recommended, WebView2 evergreen). vol-030 marked passing.
+
+Pre-push fix: host_core mtime tests were flaky (env-var race on VOLUMECTL_CONFIG_DIR, reproduced 5/8 runs; assertion panic "set_modifier must resync the config mtime (no spurious reload)"). Root cause: two tests set/restore the process-global env concurrently, changing config_path() mid-test; production save path is flush-safe (save_at_path sync_all + atomic rename), so serialization via a static CONFIG_DIR_LOCK is the complete fix (10/10 loop green). Correct test total at HEAD: 285.
+
+Task 3 fix round (mixer keys): session rows keyed `id-name-index` so duplicate process ids with identical names cannot collide React keys (regression test asserts no duplicate-key warning).
+
+Task 4: Settings webview surface (restricted recorder, key cards, conflict badges, step/appearance controls). Plan-gap discovery: the plan's save_config(partial) contract does not exist in the backend; added update_settings(SettingsPatch) command + AppCore::update_settings (mutation-only, persistence via save_config by the command layer) with 2 host_core tests; 6 settings vitest tests; full gate green (271 tests, clippy, fmt, frontend build).
+
+Smoke-test fix (mixer auto-close): the mixer webview did not close on blur or Esc. Root cause 1: the Rust WindowManager emits close_mixer_request on WindowEvent::Focused(false) but no frontend listener existed - wired in MixerSurface (listen close_mixer_request -> invoke close_surface, cleanup on unmount). Root cause 2: the mixer window did not take focus after hotkey-open so keybd_event Escape went elsewhere - WindowManager now calls set_focus() on the mixer open (fail-soft). +1 vitest (28 total); fmt/clippy/build green. Mixer hotkey (Ctrl+Alt+V) now toggles: EventSink toggle_surface seam + WindowManager::toggle + host_core routes ToggleSurface(Mixer) to toggle (ShowSurface stays open) + routing test (13 host_core tests).
+
+### Wave 1 (ui-restoration-plan): Mixer System Output row + threshold SignalRail - complete
+
+- `frontend/src/mixer/SystemOutputRow.tsx` (new): SystemOutputRow header card for legacy parity - `System output` label, live value (N% / Muted) from state://volume + get_bootstrap.volume_pct/muted, threshold-aware SignalRail, system slider (SystemVolumeSlider -> set_volume with the AppSlider isDragging echo-jitter guard), Mute/Unmute button (toggle_mute, icon swaps Volume2/VolumeX), `Reset volume to 50%` button (reset_volume). Per-app session rows untouched (webview addition).
+- `frontend/src/mixer/SignalRail.tsx` (new): threshold-aware rail - track + fill colored by the value's band (bandForValue mirrors core::volume_color_rgb: muted/0% -> gray, <= green_up_to -> green, <= blue_up_to -> blue, else orange), circle thumb normally, outline diamond + visible `Muted` label when muted (shape carries the state, never color alone). Exports ColorThresholds + DEFAULT_THRESHOLDS (40/75/100).
+- `frontend/src/mixer/sessionStore.ts`: BootstrapPayload.config typed (config?: { color_thresholds?: ColorThresholds }); useSessions exposes `thresholds` from bootstrap (defaults until payload arrives). Verified the Rust side already serializes Config incl. color_thresholds into get_bootstrap (host_core BootstrapPayload.config: Config).
+- `frontend/src/mixer/MixerSurface.tsx`: SystemOutputRow rendered above the session list; Esc + close_mixer_request auto-close listeners untouched.
+- `frontend/src/components/ui/slider.tsx`: aria-label now forwarded to the Thumb (role="slider" lives on the Thumb; Root aria-label was ignored, leaving both system and session sliders unnamed).
+- `frontend/src/styles.css`: Signal Rail fill band colors (VolumePro palette #888/#27AE60/#0078D4/#E05C00) on .rail-fill.band-*.
+- Tests: SystemOutputRow.test.tsx (6: value/Muted rendering, mute/unmute -> toggle_mute, reset -> reset_volume, slider drag -> set_volume), SignalRail.test.tsx (5: bandForValue boundaries + fill band classes + diamond/thumb markers), MixerSurface.test.tsx updated (session mute/slider queries scoped to session rows since the system row added buttons/slider earlier in the DOM; +1 integration test asserting the system row renders the bootstrap volume).
+- Verification: `npm test --prefix frontend` 41/41 green (was 28); `npm run build --prefix frontend` green (tsc + vite multi-entry); `cargo fmt --all --check`, `git diff --check`, `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`, `cargo test --workspace --no-default-features` all green (no Rust changes). `sh scripts/check-records.sh --staged` exit 0.
+
+### Wave 2 (ui-restoration-plan): Settings full config surface + legacy geometry parity - complete
+
+- **Section shell** (`SectionNav.tsx` + `SettingsSurface.tsx` rewrite): six legacy sections General / Hotkeys / Appearance / Blacklist / Feedback / Storage, one active content pane, sticky footer with status line + `Reset` / `Cancel` / `Save changes`. Rail → horizontal strip below 760px (`min-[760px]:flex-col`; the settings window is exactly 760 wide so the strip is the default).
+- **Draft lifecycle (legacy parity)**: every edit mutates a local draft only — nothing hits `update_settings` until `Save changes` (replaces the old immediate-patch behavior). Save commits ONE `SettingsPatch` built from the whole draft; success flips `config = draft` + `Saved` status; failure parses the backend `"field: message"` error, shows an inline `FieldError` under the offending field, switches to the owning section (`volume_step|volume_step_large|overlay_duration_ms` → General, `beep.*` → Feedback, `color_thresholds.*` → Appearance, `blacklist` → Blacklist), and retains the edits. `Reset` restores the committed config; `Cancel` discards + `close_surface("window-settings")`. Modifier changes ride the draft and commit via `set_modifier` after a successful save.
+- **Backend** (`host_core.rs` + `config.rs` + `commands.rs` + `lib.rs`): `SettingsPatch` extended with `overlay_duration_ms`, `beep: Option<BeepPatch>` (enabled/blocked_freq/blocked_duration_ms/limit_freq/limit_duration_ms), `color_thresholds: Option<ColorThresholdsPatch>` (green/blue/orange_up_to), `blacklist: Option<Vec<String>>` (full-list replace, entries normalized). `update_settings` validates prospectively BEFORE mutating with the exact `config::validate` strings (overlay 200–10 000, beep freq 37–32 767 / duration 10–2 000) plus new `config::validate_thresholds` (0–100 + monotonic green ≤ blue ≤ orange). The four blacklist `AppAction`s (Add/Remove/Clear/ApplyRecommended) were log stubs — now real mutate+persist. New commands: `recommended_blacklist` (read-only, feeds the draft's Apply Recommended merge), `config_path`, `open_config_location`.
+- **Sections**: GeneralSection (+ `Overlay duration` / `How long the volume overlay stays visible.`), HotkeysSection (draft `ModifierPicker` + `KeyCard`, CapsLock stays disabled with the fallback note), AppearanceSection (+ `AppearancePreview` — draft-driven mini `SignalRail` with the draft thresholds, `preview tracks the draft; only Save applies` — + `VolumeThresholdEditor` 3 inputs), BlacklistEditor (subtitle `Block shortcuts while these apps have focus.`, Add/Remove/Clear/Apply Recommended, empty state `No blocked applications` / `VolumeControl will respond to shortcuts everywhere.`), FeedbackSection (`Enable beep feedback` + `Blocked beep frequency` / `Beep when a shortcut is blocked.` / `Blocked beep duration` / `Limit beep frequency` / `Limit beep duration` with legacy helpers), StorageSection (read-only `config_path` + `Open config file` + `Editing config — changes reload automatically.`).
+- **Legacy geometry parity** (`window_manager.rs`, user request — "kích thước theo app gốc, cả vị trí xuất hiện"): webview windows now match the legacy native sizes and placements. Mixer 400×224 bottom-right of the monitor work area hosting the window, directly above the volume overlay (overlay 336×88 at 20/40 margins, shared right edge, 16px gap — legacy `place_mixer_above_overlay`); Settings 760×620 centered in the work area (legacy `place_centered`, min 620×520, resizable); Help 520×500 bottom-right at 24/48 margins (legacy `place_overlay`). New pure `place_surface(surface, work_area, scale)` computes the physical rect (margins stay physical px like legacy; sizes × scale) and is unit-tested for 100%/150% DPI, negative-origin work areas, and the clamp case. Placement applies fail-soft after build via `current_monitor()` → `primary_monitor()` fallback.
+- **Tests**: 14 new/updated settings vitest (draft lifecycle: no commit until Save, full-patch commit, set_modifier-on-save, rejected save retains edits + inline error + section switch for both General and Feedback fields, Reset restores, Cancel closes, section switching, Storage path/button, Blacklist add/remove/clear/merge-dedupe, Feedback fields, threshold editor inline error, AppearancePreview band classes) — 63/63 frontend green (was 41). Rust: `validate_thresholds` cases, patch validation (valid + exact-error rejects), blacklist AppAction persist round-trips — 299 cargo green (was 285). fmt/clippy -D warnings/diff-check clean; linux-gnu cross-target check clean; `tauri build --no-bundle` → VolumeControl.exe. Live smoke: mixer opens via Ctrl+Alt+V with client rect 400×224 at DPI 96 and bottom-right placement verified against the computed rect (416×233 outer = 400×224 client + Windows 11 invisible resize border, same as legacy).
+
+### Wave 3 (ui-restoration-plan): Help legacy parity - complete
+
+- **HotkeyStatusBadge** (`frontend/src/help/HotkeyStatusBadge.tsx` + `status.ts`): per-row registration status pill mapped from the ACTUAL outcome (`Registered` → Ready / `HookRouted` → Fallback / `Conflicted` → In use — legacy help.rs `badge_for_action` parity; a missing entry reads optimistically as Ready). Ready uses a new `success` Badge variant (green), Fallback the default accent, In use the destructive warning.
+- **ConflictCallout** (`ConflictCallout.tsx`): legacy callout card — warning marker, `Shortcut conflict` title, the conflicted base-action combos as Kbd chips, the singular/plural sentence tail (`is used by another app.` / `are used by another app.`), and the `Change the modifier in Settings.` CTA which opens the Settings surface (`open_surface window-settings`). Pure `conflictSentence` helper reproduces the legacy `explanation_atoms` connector order (`, ` between, ` and ` before the last) with a dedicated unit test.
+- **HelpFooter** (`HelpFooter.tsx`): sticky footer with the three legacy buttons — `Edit config` → `open_config_location`, `Settings` → `open_surface`, `Close` → `close_surface window-help`.
+- **HelpSurface rewrite**: legacy header band restored (3px accent bar, `VolumeControl` title, `Keyboard shortcuts` subtitle, pointer-only close ×); the five legacy base actions now render as the primary rows (labels per help.rs ACTION_ROWS) grouped Volume (2) / Commands (3) with status pills, plus a new **Extended** section (shift variants + Open Menu — webview addition); live `state://hotkeys` subscription updates badges and the callout without a reload; search, Esc-close and the CapsLock fallback note preserved.
+- Frontend-only wave — every backend seam already existed (`open_config_location`, `open_surface`, `close_surface`, `hotkey_status` in bootstrap + `state://hotkeys`).
+- **Tests**: 12 new help tests (header/close, base+extended grouping, Ready badge per row, In use for a conflicted action, callout shown/hidden + CTA opens Settings, search filter, combos, footer actions, Esc close, live badge update, `conflictSentence` connector parity) — 75/75 vitest green (was 63). `npm run build` clean; `cargo fmt/clippy/test` green (299, unchanged); `tauri build --no-bundle` → VolumeControl.exe; records guard `--staged` exit 0. Live tray-driven Help open not automatable in the non-interactive session (no Shell_TrayWnd); the open path is the same `WindowManager::open` infra live-verified for the mixer in Wave 2.
+
+### Wave 4 (ui-restoration-plan): final verification + records - complete
+
+- **Full battery**: `cargo fmt --all --check` + `git diff --check` clean; `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` clean; `cargo test --workspace --no-default-features` 299 passed (volumectl 252 + host_core 17 + linux_host_core 16 + window_manager 10 + commands 4); `npm test --prefix frontend` 75/75; `npm run build --prefix frontend` clean; `cargo check -p volumectl --target x86_64-unknown-linux-gnu` clean; `tauri build --no-bundle` → VolumeControl.exe; `scripts/check-records.sh --staged` exit 0.
+- **Live smoke (Windows release)**: idle start WS 15.6MB with 0 own msedgewebview2 children (lazy WebView2 env re-confirmed); Ctrl+Alt+V opens the mixer → +6 webview children; mixer window live-scanned with client rect exactly 400×224 at (2140,1024) — right edge 2540 = work-area right − 20, above the overlay (legacy `place_mixer_above_overlay` geometry re-verified end-to-end); PrintWindow screenshot shows a rendered dark-theme surface (24 distinct sampled colors, dark bg + light text/controls — not a blank/white window); Ctrl+Alt+Down / Ctrl+Alt+Up / Ctrl+Alt+M ×2 (volume down/up + mute/unmute) all fire with the app stable (WS 27.5MB, webview children held, no crash); a second screenshot differs in 55/1508 sampled pixels confirming the value/rail re-render after the pipeline.
+- **Settings/Help live open**: tray-only paths; not automatable in this non-interactive session (no Shell_TrayWnd). Covered by their vitest suites (29 settings + 15 help tests) and the WindowManager placement unit tests.
+- **Restoration plan complete**: Wave 1 (mixer System Output + SignalRail), Wave 2 (Settings full config + legacy geometry parity), Wave 3 (Help parity), Wave 4 (verification + records). All 30 features remain passing.
+
 ## Session 039 (2026-08-13) - global-hotkey migration (rdev → global-hotkey, 1% step)
 
 - Goal: migrate the global-keyboard backend from `rdev` to `global-hotkey` 0.8.0

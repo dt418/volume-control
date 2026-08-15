@@ -1,0 +1,157 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Theme tokens (shadcn-style HSL values, light + dark) ─────────────────
+   The `@theme inline` block maps Tailwind v4 utilities (bg-background,
+   text-foreground, border-accent, ...) onto these CSS variables. Without it
+   the utilities resolve to nothing and colors silently no-op. */
+:root {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(240 10% 3.9%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(240 10% 3.9%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 3.9%);
+  --primary: hsl(240 5.9% 10%);
+  --primary-foreground: hsl(0 0% 98%);
+  --secondary: hsl(240 4.8% 95.9%);
+  --secondary-foreground: hsl(240 5.9% 10%);
+  --muted: hsl(240 4.8% 95.9%);
+  --muted-foreground: hsl(240 3.8% 46.1%);
+  --accent: hsl(199 100% 50%);
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(240 5.9% 90%);
+  --input: hsl(240 5.9% 90%);
+  --ring: hsl(199 100% 50%);
+}
+
+.dark {
+  --background: hsl(240 10% 3.9%);
+  --foreground: hsl(0 0% 98%);
+  --card: hsl(240 10% 3.9%);
+  --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(240 10% 3.9%);
+  --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(0 0% 98%);
+  --primary-foreground: hsl(240 5.9% 10%);
+  --secondary: hsl(240 3.7% 15.9%);
+  --secondary-foreground: hsl(0 0% 98%);
+  --muted: hsl(240 3.7% 15.9%);
+  --muted-foreground: hsl(240 5% 64.9%);
+  --accent: hsl(199 100% 50%);
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(0 62.8% 30.6%);
+  --destructive-foreground: hsl(0 0% 98%);
+  --border: hsl(240 3.7% 15.9%);
+  --input: hsl(240 3.7% 15.9%);
+  --ring: hsl(199 100% 50%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* Reduced-motion preference (config `motion: Reduced`) — applied by
+   applyAppearance() from the Rust appearance tokens. */
+.reduced-motion *,
+.reduced-motion *::before,
+.reduced-motion *::after {
+  animation-duration: 0.001s !important;
+  transition-duration: 0.001s !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: transparent;
+  color: var(--foreground);
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ── Glass surfaces (backdrop blur, progressive enhancement) ───────────────
+   WebKit < Safari 18 / WebKitGTK < 2.46 need the `-webkit-` prefix; WebKitGTK
+   software rendering (WEBKIT_DISABLE_COMPOSITING_MODE=1) may no-op the blur,
+   so every glass surface keeps a readable translucent background fallback.
+   See docs/webview-compat.md for the full matrix and rationale. */
+@layer utilities {
+  .surface-shell {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    background-color: color-mix(in oklab, var(--background) 94%, transparent);
+    color: var(--foreground);
+  }
+
+  .surface-scroll {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  /* The legacy mixer is intentionally only 400x224. Keep its fixed system
+     rail and footer readable without allowing the compact shell to overflow. */
+  .mixer-surface [data-testid="system-output-row"] {
+    padding: 0.5rem;
+  }
+  .mixer-surface [data-testid="system-output-row"] .mt-2 {
+    margin-top: 0.25rem;
+  }
+  .mixer-surface [data-testid="system-output-row"] button {
+    padding-top: 0.125rem;
+    padding-bottom: 0.125rem;
+  }
+
+  .glass-surface {
+    /* Keep the transparent-window treatment readable on bright wallpapers. */
+    background-color: color-mix(in oklab, var(--background) 94%, transparent);
+  }
+  @supports ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
+    .glass-surface {
+      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(12px);
+      background-color: color-mix(in oklab, var(--background) 88%, transparent);
+    }
+  }
+}
+
+/* ── Signal Rail fill bands (VolumePro palette, mirrors core::volume_color_rgb) ──
+   Muted/0% -> gray, <= green_up_to -> green, <= blue_up_to -> blue, else
+   orange-red. The band class on `.rail-fill` drives the fill color; the rail
+   track, thumb and muted diamond live in SignalRail.tsx. */
+.rail-fill.band-gray {
+  background-color: #888888;
+}
+.rail-fill.band-green {
+  background-color: #27ae60;
+}
+.rail-fill.band-blue {
+  background-color: #0078d4;
+}
+.rail-fill.band-orange {
+  background-color: #e05c00;
+}

@@ -19,7 +19,7 @@ use std::ffi::c_void;
 use windows_sys::core::{GUID, PCWSTR};
 use windows_sys::Win32::{
     Media::Audio::{eConsole, eRender, EDataFlow, ERole},
-    System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL},
+    System::Com::{CoCreateInstance, CLSCTX_ALL},
 };
 
 use crate::audio::{AudioBackend, AudioError, VolumeState};
@@ -113,6 +113,12 @@ pub struct WindowsAudio {
     /// IMMDeviceEnumerator* — released before the endpoint on Drop.
     enumerator: *mut c_void,
     device: *mut c_void,
+    /// COM apartment guard for the thread that created this backend. Must be
+    /// STA (never MTA) so tao's OleInitialize can create webview windows on
+    /// the same (main) thread without RPC_E_CHANGED_MODE.
+    /// RAII-only: never read, uninitializes on drop.
+    #[allow(dead_code)]
+    com: crate::com_guard::ComGuard,
 }
 
 // COM refcounts make these safe to move across threads.
@@ -122,12 +128,12 @@ unsafe impl Sync for WindowsAudio {}
 impl WindowsAudio {
     pub fn new() -> Result<Self, AudioError> {
         unsafe {
-            // COINIT_MULTITHREADED = 0; dwcoinit is u32.
-            let hr = CoInitializeEx(std::ptr::null(), 0);
-            // S_OK(0) or S_FALSE(1) are acceptable; anything else is an error.
-            if hr != 0 && hr != 1 {
-                return Err(AudioError::Init(format!("CoInitializeEx: 0x{hr:x}")));
-            }
+            // The main thread must stay STA: tao/OleInitialize needs it to
+            // create webview windows. COINIT_MULTITHREADED here flipped the
+            // thread to MTA and made every surface open panic with
+            // RPC_E_CHANGED_MODE.
+            let com = crate::com_guard::ComGuard::init_apartment_sta()
+                .map_err(|hr| AudioError::Init(format!("CoInitializeEx(STA): 0x{hr:x}")))?;
 
             let mut enumerator: *mut c_void = std::ptr::null_mut();
             let hr = CoCreateInstance(
@@ -175,6 +181,7 @@ impl WindowsAudio {
                 endpoint,
                 enumerator,
                 device,
+                com,
             })
         }
     }
@@ -257,7 +264,9 @@ impl Drop for WindowsAudio {
             if !self.enumerator.is_null() {
                 (vtbl::<IMMDeviceEnumeratorVtbl>(self.enumerator).release)(self.enumerator);
             }
-            CoUninitialize();
+            // self.com drops after this and uninitializes the apartment iff
+            // this backend owned its init (S_OK); an S_FALSE guard leaves the
+            // pre-existing apartment alone.
         }
     }
 }

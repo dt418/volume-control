@@ -21,7 +21,9 @@
 #      must be intact
 #   4. scripts/test-format-lint.sh              the gate chain itself must
 #      be intact
-#   5. check-records.sh --staged                the exact commit set,
+#   5. verify-tauri-e2e                        debug WDIO desktop gate
+#   6. tauri build --no-bundle                 frontend assets + release binary
+#   7. check-records.sh --staged                the exact commit set,
 #      re-checked AFTER staging
 #
 # Soft preconditions - relaxed ONLY with --force, never by default:
@@ -150,24 +152,24 @@ do_push() {
     fi
 }
 
-echo "[1/5] records guard (branch change set vs origin/master)"
+echo "[1/6] records guard (branch change set vs origin/master)"
 if "$GIT_BIN" rev-parse --verify --quiet origin/master >/dev/null 2>&1; then
     if ! "$SH_BIN" "$repo_root/scripts/check-records.sh" --branch origin/master; then
         fail "the change set misses feature_list.json and/or claude-progress.md (see templates above)"
     fi
 else
     echo "      no origin/master to diff against - branch check skipped;"
-    echo "      the staged check (step 5) and the pre-commit hook still enforce the rule"
+    echo "      the staged check (step 6) and the pre-commit hook still enforce the rule"
 fi
 
 # ---- Phase 2: full format-lint gate (tests included) -----------------------
-echo "[2/5] format-lint gate (full, tests included)"
+echo "[2/6] format-lint gate (full, tests included)"
 if ! bash "$repo_root/scripts/format-lint.sh"; then
     fail "the format-lint gate reported failures above"
 fi
 
 # ---- Phase 3: records-guard self-test ---------------------------------------
-echo "[3/5] records-guard self-test"
+echo "[3/6] records-guard self-test"
 if ! bash "$repo_root/scripts/test-check-records.sh"; then
     fail "the records-guard self-test reported failures above"
 fi
@@ -179,7 +181,7 @@ if ! "$GIT_BIN" diff --cached --quiet; then
     echo "note: the index already has staged changes; test-format-lint.sh requires" >&2
     echo "      a clean index. If it fails below, run 'git reset' first, then re-run ship." >&2
 fi
-echo "[4/5] format-lint smoke test"
+echo "[4/6] format-lint smoke test"
 if ! bash "$repo_root/scripts/test-format-lint.sh"; then
     fail "the format-lint smoke test reported failures above"
 fi
@@ -191,8 +193,65 @@ if [ "$dry_run" = true ]; then
     exit 0
 fi
 
-# ---- Phase 5: stage everything, re-check the exact commit set ----------------
-echo "[5/5] staging the working tree"
+# ---- Phase 5: frontend build -------------------------------------------------
+# The pre-ship flow verifies the actual shippable artifact: the frontend
+# bundle (embedded into the binary by tauri-build) and the release binary
+# (the `tauri build --no-bundle` path CI uses). The frontend is built
+# explicitly first so asset-embedding failures surface here.
+if [ -x "$repo_root/frontend/node_modules/.bin/tauri" ]; then
+    TAURI_BIN="$repo_root/frontend/node_modules/.bin/tauri"
+elif command -v tauri >/dev/null 2>&1; then
+    TAURI_BIN="$(command -v tauri)"
+else
+    fail "frontend build requires the tauri-cli devDependency (run: npm ci in frontend/)"
+fi
+echo "[5/7] frontend build"
+if ! npm run build --prefix "$repo_root/frontend"; then
+    fail "frontend build failed (npm run build --prefix frontend)"
+fi
+
+# ---- Phase 6: release-gated debug WebDriver E2E -----------------------------
+# WDIO is the deterministic pass/fail desktop gate. Pilot remains a local
+# diagnostic workflow and is never required by the release path. The wrapper
+# fails closed when dependencies, the debug binary, or cleanup evidence is
+# missing; output is ignored by Git and retained for triage.
+echo "[6/7] Tauri WebDriver E2E gate"
+is_windows=false
+case "${OS:-}:${OSTYPE:-}" in
+    *Windows*:*|*:msys*|*:cygwin*) is_windows=true ;;
+esac
+if [ "$is_windows" = true ] && command -v pwsh >/dev/null 2>&1; then
+    ps_script="$repo_root/scripts/verify-tauri-e2e.ps1"
+    ps_output="$repo_root/output/tauri-e2e/ship"
+    if command -v cygpath >/dev/null 2>&1; then
+        ps_script="$(cygpath -w "$ps_script")"
+        ps_output="$(cygpath -w "$ps_output")"
+    fi
+    if ! pwsh -NoProfile -File "$ps_script" -Surface all -OutputRoot "$ps_output"; then
+        fail "Windows Tauri WebDriver E2E gate failed"
+    fi
+elif [ "$is_windows" = true ]; then
+    if ! bash "$repo_root/scripts/verify-tauri-e2e.sh" --binary "$repo_root/target/debug/VolumeControl.exe" --surface all --output-root "$repo_root/output/tauri-e2e/ship"; then
+        fail "Windows Tauri WebDriver E2E gate failed (PowerShell unavailable; Bash wrapper used)"
+    fi
+else
+    if ! bash "$repo_root/scripts/verify-tauri-e2e.sh" --binary "$repo_root/target/debug/VolumeControl" --surface all --output-root "$repo_root/output/tauri-e2e/ship"; then
+        fail "Tauri WebDriver E2E gate failed"
+    fi
+fi
+
+# ---- Phase 7: release binary build + staging -------------------------------
+echo "[7/7] release binary build and staging"
+# tauri-cli resolves src-tauri/tauri.conf.json; its object-form
+# beforeBuildCommand pins the frontend hook to ../frontend. Use the local CLI
+# binary, never `npx tauri` (npx cannot resolve the frontend devDependency from
+# the repo root and falls back to fetching the wrong npm package).
+if ! (cd "$repo_root" && "$TAURI_BIN" build --no-bundle); then
+    fail "tauri build --no-bundle failed (frontend assets or release binary)"
+fi
+
+# ---- Phase 6: stage everything, re-check the exact commit set ----------------
+echo "[7/7] staging the working tree"
 if ! "$GIT_BIN" add -A; then
     fail "git add -A failed (see the output above); the staged set may be incomplete"
 fi

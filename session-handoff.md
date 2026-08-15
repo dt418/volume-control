@@ -1,8 +1,54 @@
 # Session Handoff
 
-Handoff after Session 039 (2026-08-13, global-hotkey migration:
-`rdev` → `global-hotkey` 0.8.0 + 1% default step, commits `f5542d6`..`HEAD`
-on branch `refactor/hotkey-and-ci-fix`). All 29 features are passing on
+## Session 051 (2026-08-15)
+
+README.md and README.vi.md now describe the native-first Tauri hybrid UI,
+Settings-first configuration, per-action shortcut recording, platform status,
+and the safe frontend/E2E commands. Added CHANGELOG.md for the unreleased
+feature set. CI/Release workflows now explicitly install/build the frontend
+and use `tauri build --no-bundle --ci` for FE+BE artifacts. The final full local verification is being rerun before pushing
+the branch to a PR targeting the repository default branch `master`; hosted
+Linux/macOS jobs remain the cross-platform release evidence.
+
+## Session 050 (2026-08-15)
+
+Mixer resilience and readability pass completed. `get_bootstrap` and the
+native fast/slow poll loops recover poisoned mutex guards instead of leaving a
+backend error stuck; the webview now shows an actionable connection alert with
+Retry rather than `Backend unavailable`. Mixer glass/card/control alpha,
+borders, labels, and focus rings were strengthened for readable contrast.
+Frontend 15/84, Rust workspace, build, recovery, Mixer, and full Windows E2E
+11/11 evidence pass. Hosted Linux/macOS CI remains outstanding.
+
+## Session 049 (2026-08-15)
+
+Implemented configurable global shortcut recording. Settings now renders one
+Record/Clear row per action, captures portable modifier + key combinations,
+supports disabling a shortcut, and keeps preset layouts for Ctrl+Alt/Alt/Ctrl.
+The backend persists `Config.hotkeys`, validates malformed/duplicate bindings,
+registers native shortcuts safely, and publishes `Disabled`/conflict status to
+Help and Settings. Rust/frontend tests and the Windows WebDriver matrix pass;
+hosted Linux/macOS CI remains the final cross-platform evidence.
+
+## Session 048 (2026-08-15)
+
+The Tauri WebDriver/Pilot integration now has Windows-first live evidence and
+cross-platform CI/ship wiring. CI runs the WDIO matrix on Windows, Ubuntu under
+Xvfb, and macOS; `scripts/ship.sh` runs the same fail-closed WDIO wrapper after
+the frontend build and before the release Tauri build. Pilot remains local
+diagnostic tooling only. Current local commits include `faea6e2` (Pilot), with
+the CI/ship slice pending its next checkpoint commit.
+
+Handoff after Session 040 (2026-08-13, global-hotkey migration + Hybrid Tauri UI:
+`rdev` → `global-hotkey` 0.8.0 + 1% default step, commits `190d02b`..`HEAD`
+on branch `feature/tauri-ui-hybrid`). All 30 features are passing on
+Windows. **Wave 1 + Wave 2 of the ui-restoration-plan landed at `03cc22f`
+(mixer SystemOutputRow + threshold SignalRail) and `392348a` (Settings full
+config surface — six-section shell, draft lifecycle, blacklist/feedback/
+thresholds/storage + legacy window geometry parity: mixer 400×224 bottom-right
+above the overlay, settings 760×620 centered, help 520×500 bottom-right).**
+Next: Wave 4 (verification + records: full battery + smoke — system row visible, settings all sections, blacklist add/remove end-to-end, help badges). **All four waves of the ui-restoration-plan are now complete (Wave 1 mixer SignalRail at `03cc22f`, Wave 2 settings full config + legacy geometry at `392348a`, Wave 3 help parity at `6777e91`, Wave 4 verification at `8e9a986`).** Outstanding follow-on items: tray-driven live open of Settings/Help on a real interactive desktop (this session had no Shell_TrayWnd); Linux/macOS host runtime verification on real machines (pre-existing); push the feature branch when ready.
+on branch `feature/tauri-ui-hybrid`). All 30 features are passing on
 Windows.
 
 ## Where we are
@@ -18,7 +64,7 @@ Windows.
 - **Enforcement stack hardened** (Sessions 011-033):
   - Format-lint gate toolchain (v3 manifest, both parsers, 40 checks on
     Windows / 39 on Linux/macOS with PowerShell; 26 without).
-  - Mandatory ship flow (`scripts/ship.sh` + `scripts/ship.ps1`, 22 checks).
+  - Mandatory ship flow (`scripts/ship.sh` + `scripts/ship.ps1`, 25 checks).
   - Three-domain pre-push review skill (guard core / gate chain / wiring).
   - Gate parser hardening (vol-017): numeric-only manifest version,
     case-sensitive forbidden paths, substantive `.claude/skills/*` JSON,
@@ -36,7 +82,7 @@ Windows.
   added in Session 022.
 - **vol-018** is **`passing`** — verify script tooling with PrintWindow
   screenshot capture.
-- Unit suite: **257 passed / 0 failed** (241 volumectl + 16 host-core).
+- Unit suite: **285 passed / 0 failed** (249 volumectl + 12 host_core + 16 linux_host_core + 4 window_manager + 4 commands).
   `cargo fmt --all --check` passes. Clippy `-D warnings` clean.
   Windows build clean (0 warnings). Cross-checks clean for macOS and Linux
   (GTK4/libadwaita) with the pkg-config stub env.
@@ -64,7 +110,7 @@ Windows.
 |---|---|---|
 | `test-check-records.sh` | 33 | Windows; Linux/macOS same |
 | `test-format-lint.sh` | 40 Windows / 39 Linux-macOS | WSL-shim check is Windows-gated |
-| `test-ship.sh` | 22 | |
+| `test-ship.sh` | 25 | |
 
 ## Verification commands (Windows host)
 
@@ -118,3 +164,11 @@ cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests
   Linux canvas gtk-rs 0.19 fixes and enforcement-stack hardening.
 - Do not rewrite `claude-progress.md` with PowerShell `Set-Content -Encoding
   UTF8` — it double-encodes em-dashes and adds a BOM. Prefer the edit tool.
+
+## Model dispatch policy (Session 040)
+
+- **Deep reasoning / investigation / review**: `openai-codex/gpt-5.6-luna` (xhigh) → escalate `gpt-5.6-terra` (high) → `gpt-5.6-sol` (medium) if the previous cannot solve it. ALWAYS `context: 'fresh'` for codex models (their context window overflows with a forked long session).
+- **Implementation / mechanical fixes**: `opencode-go/deepseek-v4-flash` (fast/cheap).
+- **Workflow**: investigate + plan with the capable model first, implement with flash.
+- **Web research**: `pi-web-access` extension (web_search/fetch_content/get_search_content) + `@upstash/context7-pi` (resolve-library-id/query-docs) — enable via `extensions: ['npm:pi-web-access']` + `tools: [...]` on the subagent launch.
+- Extensions installed this session: `npm:pi-web-access`, `npm:@upstash/context7-pi`.

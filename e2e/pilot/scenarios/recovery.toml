@@ -1,0 +1,25 @@
+[scenario]
+name = "bootstrap recovery surface"
+fail_fast = true
+global_timeout_ms = 30000
+
+[[step]]
+name = "assert mixer shell remains visible"
+action = "assert-visible"
+target = "[data-surface=\"mixer\"]"
+
+[[step]]
+name = "assert readable recovery alert"
+action = "assert-text"
+target = "[data-surface=\"mixer\"] [role=\"alert\"]"
+expected = "Mixer unavailable: E2E bootstrap failure"
+
+[[step]]
+name = "capture recovery screenshot"
+action = "screenshot"
+path = "recovery.png"
+
+[[step]]
+name = "check browser errors"
+action = "eval"
+script = "window.__tauriPilotConsoleErrors__ ?? []"

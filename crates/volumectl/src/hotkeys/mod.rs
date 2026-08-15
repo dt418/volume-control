@@ -1,7 +1,7 @@
 //! Hotkey action and status definitions shared across all platforms.
 
 /// Identifies an action triggered by a hotkey.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum HotkeyAction {
     VolumeUp,
     VolumeDown,
@@ -48,17 +48,19 @@ pub fn hotkey_from_id(id: i32) -> Option<HotkeyAction> {
 }
 
 /// Win32-independent status model consumed by the Help surface.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct HotkeyRegResult {
     pub action: HotkeyAction,
     pub status: HotkeyRegStatus,
 }
 
 /// Availability of one global hotkey action.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub enum HotkeyRegStatus {
     /// The action is handled by the global hotkey listener.
     Registered,
+    /// The user intentionally cleared this action's shortcut.
+    Disabled,
     /// Kept for compatibility with older persisted/help models.
     Conflicted(HotkeyRegError),
     /// Kept for compatibility with older hook-backed configurations.
@@ -66,7 +68,7 @@ pub enum HotkeyRegStatus {
 }
 
 /// Platform-neutral description of a registration failure.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct HotkeyRegError {
     pub error_code: u32,
     pub message: String,

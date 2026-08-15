@@ -10,7 +10,7 @@
     Output goes to $EvidenceDir (default: %TEMP%\vol011-verify).
 
 .PARAMETER Release
-    Use the release build (target\release\volumectl.exe). Default: debug.
+    Use the release build (target\release\VolumeControl.exe). Default: debug.
 
 .PARAMETER AppPath
     Full path to the volumectl executable. Overrides -Release.
@@ -41,9 +41,9 @@ $repoRoot = Split-Path $PSScriptRoot -Parent
 if ($AppPath) {
     $appExe = $AppPath
 } elseif ($Release) {
-    $appExe = Join-Path $repoRoot 'target\release\volumectl.exe'
+    $appExe = Join-Path $repoRoot 'target\release\VolumeControl.exe'
 } else {
-    $appExe = Join-Path $repoRoot 'target\debug\volumectl.exe'
+    $appExe = Join-Path $repoRoot 'target\debug\VolumeControl.exe'
 }
 if (-not (Test-Path -LiteralPath $appExe)) {
     Write-Error "App not found at $appExe - run cargo build first."
