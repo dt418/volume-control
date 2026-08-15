@@ -1,5 +1,23 @@
 # Progress Log
 
+## Session 056 (2026-08-15) - WDIO evidence freshness and backend logs fix round
+
+- WDIO wrappers now allocate a unique `run-...` output directory for every
+  invocation, pass the run ID into WDIO, and validate that `manifest.json`
+  belongs to that exact run before accepting JUnit and timings evidence.
+- Manifest validation now requires exact spec/surface pairs for Mixer,
+  Runtime, Windows, Recovery, Settings, and Help when the full surface gate is
+  requested; timing JSON is also parsed before acceptance. CI artifact globs
+  follow the unique run directory.
+- Runtime diagnostics scan both the configured service log directory and the
+  WDIO output root (including nested log files), retaining explicit backend
+  ERROR/SEVERE/PANIC lines while ignoring WARN text that merely contains
+  "error". The support test covers the real `[Tauri:Backend:0]` log shape.
+- Verification: `npm test --prefix e2e/tauri` (13/13), `npm run typecheck
+  --prefix e2e/tauri`, `npm run test:contract --prefix e2e/tauri`, `npm run
+  test:production-exclusion --prefix e2e/tauri`, and `git diff --check` pass.
+  No desktop WDIO run was started in this Windows-hosted fix round.
+
 ## Session 055 (2026-08-15) - Fail-closed WDIO evidence gate
 
 - Pinned `@wdio/junit-reporter` 9.30.1 in the isolated E2E package and added

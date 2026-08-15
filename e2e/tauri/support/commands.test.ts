@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import {
   assertNoRuntimeErrors,
@@ -65,4 +68,27 @@ test("rejects non-empty frontend runtime errors", async () => {
     assertNoRuntimeErrors(browser),
     /Unexpected frontend runtime errors: uncaught frontend failure/,
   );
+});
+
+test("captures backend errors from the WDIO service log file", async () => {
+  const logDir = await mkdtemp(join(tmpdir(), "volumecontrol-e2e-backend-log-"));
+  const previousLogDir = process.env.TAURI_E2E_LOG_DIR;
+  try {
+    process.env.TAURI_E2E_LOG_DIR = logDir;
+    await mkdir(join(logDir, "service"));
+    await writeFile(join(logDir, "service", "tauri-service.log"), [
+      "[Tauri:Backend:0] WARN audio i/o error is an allowed warning",
+      "[Tauri:Backend:0] ERROR backend failure",
+    ].join("\n"));
+    const { browser } = fakeBrowser();
+    assert.deepEqual(await collectRuntimeErrors(browser), {
+      frontend: [],
+      backend: ["[Tauri:Backend:0] ERROR backend failure"],
+    });
+    await assert.rejects(assertNoRuntimeErrors(browser), /Unexpected backend runtime errors:.*backend failure/);
+  } finally {
+    if (previousLogDir === undefined) delete process.env.TAURI_E2E_LOG_DIR;
+    else process.env.TAURI_E2E_LOG_DIR = previousLogDir;
+    await rm(logDir, { recursive: true, force: true });
+  }
 });

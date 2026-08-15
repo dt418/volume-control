@@ -1,4 +1,5 @@
-import { access } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { createAppFixture, type AppFixture } from "./app-fixture.ts";
 import { selectors, type SurfaceName } from "./selectors.ts";
 
@@ -89,6 +90,50 @@ function isErrorLog(entry: unknown): boolean {
   return record.level === "error" || record.level === "SEVERE" || record.severity === 3 || record.severity === "error";
 }
 
+async function collectBackendLogFileErrors(): Promise<string[]> {
+  const roots = [...new Set([
+    process.env.TAURI_E2E_LOG_DIR,
+    process.env.TAURI_E2E_OUTPUT,
+  ].filter((value): value is string => Boolean(value)).map((value) => resolve(value)))];
+  const logFiles = new Set<string>();
+  const visit = async (directory: string, depth: number): Promise<void> => {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      if (entry.isFile() && /\.(?:log|txt)$/iu.test(entry.name)) {
+        logFiles.add(resolve(path));
+      } else if (entry.isDirectory() && depth < 2) {
+        await visit(path, depth + 1);
+      }
+    }
+  };
+  await Promise.all(roots.map((root) => visit(root, 0)));
+
+  const errors: string[] = [];
+  for (const path of logFiles) {
+    try {
+      const contents = await readFile(path, "utf8");
+      for (const line of contents.split(/\r?\n/u)) {
+        const marker = /\[Tauri:Backend(?::\d+)?\]/iu.exec(line);
+        const backendLine = marker
+          ? line.slice((marker.index ?? 0) + marker[0].length)
+          : "";
+        if (marker && /^\s*(?:error|severe|panic)\b/iu.test(backendLine)) {
+          errors.push(line.trim());
+        }
+      }
+    } catch {
+      // A log file can rotate or close while the service is flushing it.
+    }
+  }
+  return errors;
+}
+
 export async function collectRuntimeErrors(browser: E2eBrowser): Promise<{ frontend: string[]; backend: string[] }> {
   let captured: { frontend?: unknown; backend?: unknown } = {};
   if (browser.execute) {
@@ -129,9 +174,10 @@ export async function collectRuntimeErrors(browser: E2eBrowser): Promise<{ front
       backend = [error instanceof Error ? error.message : String(error)];
     }
   }
+  const backendLogErrors = await collectBackendLogFileErrors();
   return {
     frontend: [...new Set(frontend)],
-    backend: [...new Set(asMessages(backend))],
+    backend: [...new Set([...asMessages(backend), ...backendLogErrors])],
   };
 }
 

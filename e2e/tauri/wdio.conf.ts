@@ -14,6 +14,8 @@ const outputRoot = resolve(
 );
 const driverProvider = process.env.E2E_DRIVER_PROVIDER === "tauri-driver" ? "tauri-driver" : "embedded";
 const verifySurface = process.env.VOLUMECTL_VERIFY_SURFACE ?? "window-mixer";
+const requestedSurface = process.env.VOLUMECTL_E2E_REQUESTED_SURFACE ?? verifySurface.replace(/^window-/, "");
+const runId = process.env.TAURI_E2E_RUN_ID ?? ["wdio", Date.now(), Math.random().toString(36).slice(2, 10)].join("-");
 
 await mkdir(outputRoot, { recursive: true });
 await mkdir(join(outputRoot, "junit"), { recursive: true });
@@ -22,6 +24,8 @@ process.env.VOLUMECTL_E2E_DEBUG = "1";
 process.env.VOLUMECTL_CONFIG_DIR = fixture.configDir;
 process.env.VOLUMECTL_VERIFY_SURFACE = verifySurface;
 process.env.TAURI_E2E_OUTPUT = outputRoot;
+process.env.TAURI_E2E_RUN_ID = runId;
+process.env.TAURI_E2E_LOG_DIR = join(outputRoot, "logs");
 
 export const config: Options.Testrunner & Capabilities.WithRequestedTestrunnerCapabilities = {
   runner: "local",
@@ -64,7 +68,7 @@ export const config: Options.Testrunner & Capabilities.WithRequestedTestrunnerCa
     ui: "bdd",
     timeout: 60_000,
   },
-  outputDir: outputRoot,
+  outputDir: join(outputRoot, "logs"),
   baseUrl: "http://localhost:4445",
   onComplete: async (exitCode) => {
     try {
@@ -72,15 +76,18 @@ export const config: Options.Testrunner & Capabilities.WithRequestedTestrunnerCa
       const spec = specName();
       let existing: E2eManifest = { results: [] };
       try {
-        existing = JSON.parse(await readFile(join(outputRoot, "manifest.json"), "utf8")) as E2eManifest;
+        const candidate = JSON.parse(await readFile(join(outputRoot, "manifest.json"), "utf8")) as E2eManifest;
+        if (candidate.runId === runId) existing = candidate;
       } catch {
         // The first isolated surface session creates the manifest.
       }
-      const surface = verifySurface.replace(/^window-/, "");
-      const result = { spec, surface, status: exitCode === 0 ? "passed" as const : "failed" as const };
+      const result = { spec, surface: requestedSurface, status: exitCode === 0 ? "passed" as const : "failed" as const };
       await writeE2eManifest(outputRoot, {
         ...existing,
-        results: [...(existing.results ?? []).filter((entry) => entry.spec !== spec || entry.surface !== surface), result],
+        runId,
+        platform: process.platform,
+        provider: driverProvider,
+        results: [...(existing.results ?? []).filter((entry) => entry.spec !== spec || entry.surface !== requestedSurface), result],
       });
     } finally {
       await fixture.cleanup();

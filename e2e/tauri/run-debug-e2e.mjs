@@ -25,7 +25,7 @@ const specsBySurface = {
 };
 
 if (!(requestedSurface === "all" || requestedSurface in specsBySurface)) {
-  console.error("Usage: node run-debug-e2e.mjs [--surface mixer|settings|help|runtime|all] [--spec path]");
+  console.error("Usage: node run-debug-e2e.mjs [--surface mixer|runtime|windows|recovery|settings|help|all] [--spec path]");
   process.exit(2);
 }
 
@@ -58,6 +58,7 @@ function runSurface(surface, spec) {
       env: {
         ...process.env,
         VOLUMECTL_VERIFY_SURFACE: label,
+        VOLUMECTL_E2E_REQUESTED_SURFACE: surface,
         ...(surface === "recovery" ? { VOLUMECTL_E2E_BOOTSTRAP_FAILURE: "1" } : {}),
       },
       stdio: "inherit",

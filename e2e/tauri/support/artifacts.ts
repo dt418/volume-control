@@ -146,7 +146,11 @@ async function hasNonEmptyFile(path: string): Promise<boolean> {
   }
 }
 
-export async function assertE2eEvidence(outputRoot: string, expectedSpecs: string[]): Promise<void> {
+export async function assertE2eEvidence(
+  outputRoot: string,
+  expectedSpecs: string[],
+  expectedRunId?: string,
+): Promise<void> {
   const junitRoot = join(outputRoot, "junit");
   let junitFiles: string[] = [];
   try {
@@ -170,30 +174,42 @@ export async function assertE2eEvidence(outputRoot: string, expectedSpecs: strin
   if (!Array.isArray(manifest.results)) {
     throw new Error(`Manifest has no result entries: ${manifestPath}`);
   }
+  if (expectedRunId && manifest.runId !== expectedRunId) {
+    throw new Error(`Manifest run ID is stale: expected ${expectedRunId}, received ${manifest.runId ?? "missing"}`);
+  }
 
-  const resultKeys = new Set(
-    manifest.results.flatMap((result) => [
-      normalizeSpecName(result.spec),
-      result.surface ? normalizeSpecName(result.surface) : "",
-    ]),
-  );
-  for (const expectedSpec of expectedSpecs) {
-    const normalizedExpected = normalizeSpecName(expectedSpec);
-    if (!resultKeys.has(normalizedExpected)) {
+  for (const expected of expectedSpecs) {
+    const normalizedExpected = normalizeSpecName(expected);
+    const expectedSurface = normalizedExpected.replace(/\.e2e\.ts$/iu, "");
+    const expectedSpec = normalizedExpected.endsWith(".e2e.ts");
+    const result = manifest.results.find((entry) =>
+      entry.surface &&
+      normalizeSpecName(entry.surface) === expectedSurface &&
+      (!expectedSpec || normalizeSpecName(entry.spec) === normalizedExpected),
+    );
+    if (!result) {
       throw new Error(`Manifest is missing result for expected spec: ${normalizedExpected}`);
     }
-    const result = manifest.results.find((entry) =>
-      normalizeSpecName(entry.spec) === normalizedExpected ||
-      (entry.surface ? normalizeSpecName(entry.surface) === normalizedExpected : false),
-    );
     if (result?.status !== "passed") {
       throw new Error(`Manifest result is not passing for expected spec: ${normalizedExpected}`);
+    }
+    const junitPath = join(junitRoot, sanitizeArtifactName(normalizeSpecName(result.spec)) + ".xml");
+    if (!(await hasNonEmptyFile(junitPath))) {
+      throw new Error(`Missing required JUnit artifact for expected spec: ${normalizedExpected}`);
     }
   }
 
   const timingsPath = join(outputRoot, "timings.json");
   if (!(await hasNonEmptyFile(timingsPath))) {
     throw new Error(`Missing required timings artifact: ${timingsPath}`);
+  }
+  try {
+    const timingData = JSON.parse(await readFile(timingsPath, "utf8")) as unknown;
+    if (!timingData || typeof timingData !== "object" || Array.isArray(timingData)) {
+      throw new Error("timings must be an object");
+    }
+  } catch {
+    throw new Error(`Invalid required timings artifact: ${timingsPath}`);
   }
 }
 

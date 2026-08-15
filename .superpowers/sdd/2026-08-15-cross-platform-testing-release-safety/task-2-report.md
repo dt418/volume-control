@@ -39,3 +39,25 @@ All commands were run from `D:\Projects\volume-control`:
   checks for the parent release-safety workflow.
 - The repository-wide Rust quality gate is outside this focused Task 2 handoff
   and remains the parent agent's responsibility.
+
+## Review fix round 1
+
+- Fixed stale evidence acceptance: PowerShell and Bash wrappers now create a
+  unique `run-...` output directory per invocation, pass its run ID through
+  WDIO, and require the manifest run ID to match before accepting JUnit and
+  timings artifacts. CI upload paths follow the unique run directory.
+- Fixed backend evidence discovery: runtime diagnostics now scan both the
+  configured service log directory and the WDIO output root (including nested
+  `.log`/`.txt` files), and only explicit backend ERROR/SEVERE/PANIC records
+  are treated as failures. The support test uses the concrete
+  `[Tauri:Backend:0]` service-log format and confirms warning text containing
+  the word "error" is not misclassified.
+- Added an exact full-surface manifest contract covering Mixer, Runtime,
+  Windows, Recovery, Settings, and Help, plus parse validation for timings
+  JSON. The debug-run usage text now lists every supported surface.
+- Fix-round verification: `npm test --prefix e2e/tauri` (13/13), `npm run
+  typecheck --prefix e2e/tauri`, `npm run test:contract --prefix e2e/tauri`,
+  `npm run test:production-exclusion --prefix e2e/tauri`, `bash -n
+  scripts/verify-tauri-e2e.sh`, PowerShell parse validation, `git diff
+  --check`, and `sh scripts/check-records.sh --staged` all pass. No real
+  desktop WDIO run was started in this fix round.

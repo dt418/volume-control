@@ -32,15 +32,17 @@ test("rejects invalid timings", () => {
 async function evidenceFixture(): Promise<string> {
   const outputRoot = await mkdtemp(join(tmpdir(), "volumecontrol-e2e-evidence-"));
   await mkdir(join(outputRoot, "junit"), { recursive: true });
-  await writeFile(join(outputRoot, "junit", "mixer.xml"), "<testsuite></testsuite>\n");
+  await writeFile(join(outputRoot, "junit", "mixer.e2e.ts.xml"), "<testsuite></testsuite>\n");
   await writeFile(join(outputRoot, "timings.json"), "{}\n");
   return outputRoot;
 }
 
 test("rejects a run when the JUnit artifact is missing", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "volumecontrol-e2e-missing-junit-"));
+  await mkdir(join(outputRoot, "junit"), { recursive: true });
+  await writeFile(join(outputRoot, "junit", "stale.e2e.ts.xml"), "<testsuite></testsuite>\n");
   await writeFile(join(outputRoot, "timings.json"), "{}\n");
-  await writeE2eManifest(outputRoot, { results: [{ spec: "mixer.e2e.ts", status: "passed" }] });
+  await writeE2eManifest(outputRoot, { runId: "current-run", results: [{ spec: "mixer.e2e.ts", surface: "mixer", status: "passed" }] });
 
   await assert.rejects(
     assertE2eEvidence(outputRoot, ["mixer.e2e.ts"]),
@@ -51,12 +53,44 @@ test("rejects a run when the JUnit artifact is missing", async () => {
 test("rejects a manifest that omits an expected spec result", async () => {
   const outputRoot = await evidenceFixture();
   const manifest: E2eManifest = {
-    results: [{ spec: "mixer.e2e.ts", status: "passed" }],
+    runId: "current-run",
+    results: [{ spec: "mixer.e2e.ts", surface: "mixer", status: "passed" }],
   };
   await writeE2eManifest(outputRoot, manifest);
 
   await assert.rejects(
     assertE2eEvidence(outputRoot, ["mixer.e2e.ts", "runtime.e2e.ts"]),
     /Manifest is missing result for expected spec: runtime\.e2e\.ts/,
+  );
+});
+
+test("requires an exact current manifest entry for every requested surface", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "volumecontrol-e2e-all-surfaces-"));
+  const expectedSpecs = [
+    "mixer.e2e.ts",
+    "runtime.e2e.ts",
+    "windows.e2e.ts",
+    "recovery.e2e.ts",
+    "settings.e2e.ts",
+    "help.e2e.ts",
+  ];
+  await mkdir(join(outputRoot, "junit"), { recursive: true });
+  for (const spec of expectedSpecs) {
+    await writeFile(join(outputRoot, "junit", `${spec}.xml`), "<testsuite></testsuite>\n");
+  }
+  await writeFile(join(outputRoot, "timings.json"), "{}\n");
+  await writeE2eManifest(outputRoot, {
+    runId: "current-run",
+    results: expectedSpecs.map((spec) => ({
+      spec,
+      surface: spec.replace(/\.e2e\.ts$/u, ""),
+      status: "passed" as const,
+    })),
+  });
+
+  await assertE2eEvidence(outputRoot, expectedSpecs, "current-run");
+  await assert.rejects(
+    assertE2eEvidence(outputRoot, expectedSpecs, "previous-run"),
+    /Manifest run ID is stale/,
   );
 });

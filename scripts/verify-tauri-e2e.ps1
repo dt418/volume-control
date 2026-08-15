@@ -23,7 +23,11 @@ if (-not $SkipBuild) {
 if (-not (Test-Path $Binary)) { throw "debug E2E binary does not exist: $Binary" }
 
 $env:TAURI_E2E_BINARY = (Resolve-Path $Binary).Path
-$env:TAURI_E2E_OUTPUT = (Resolve-Path (New-Item -ItemType Directory -Force -Path $OutputRoot)).Path
+$baseOutputRoot = (Resolve-Path (New-Item -ItemType Directory -Force -Path $OutputRoot)).Path
+$runId = "run-{0}-{1}" -f (Get-Date -AsUTC -Format "yyyyMMddTHHmmssfffZ"), ([guid]::NewGuid().ToString("N"))
+$runOutputRoot = (Resolve-Path (New-Item -ItemType Directory -Force -Path (Join-Path $baseOutputRoot $runId))).Path
+$env:TAURI_E2E_OUTPUT = $runOutputRoot
+$env:TAURI_E2E_RUN_ID = $runId
 $expectedSpecs = switch ($Surface) {
   "all" { @("mixer.e2e.ts", "runtime.e2e.ts", "windows.e2e.ts", "recovery.e2e.ts", "settings.e2e.ts", "help.e2e.ts") }
   default { @("$Surface.e2e.ts") }
@@ -34,12 +38,13 @@ try {
   & npm --prefix $e2e run test:e2e:debug -- --surface $Surface
   $code = $LASTEXITCODE
   if ($code -eq 0) {
-    & node --import tsx --input-type=module -e "import { assertE2eEvidence } from '$($e2e.Replace('\', '/'))/support/artifacts.ts'; const [root, ...expected] = process.argv.slice(1); await assertE2eEvidence(root, expected);" $env:TAURI_E2E_OUTPUT @expectedSpecs
+    & node --import tsx --input-type=module -e "import { assertE2eEvidence } from '$($e2e.Replace('\', '/'))/support/artifacts.ts'; const [root, runId, ...expected] = process.argv.slice(1); await assertE2eEvidence(root, expected, runId);" $env:TAURI_E2E_OUTPUT $env:TAURI_E2E_RUN_ID @expectedSpecs
     $evidenceCode = $LASTEXITCODE
   }
 } finally {
   Remove-Item Env:TAURI_E2E_BINARY -ErrorAction SilentlyContinue
   Remove-Item Env:TAURI_E2E_OUTPUT -ErrorAction SilentlyContinue
+  Remove-Item Env:TAURI_E2E_RUN_ID -ErrorAction SilentlyContinue
 }
 
 if (Test-Path (Join-Path $repo "src-tauri\capabilities\e2e-wdio.json")) {
