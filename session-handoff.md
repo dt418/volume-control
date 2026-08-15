@@ -15,7 +15,7 @@ Developer ID/notarization evidence boundaries.
 Local verification on Windows:
 
 - `cargo fmt --all --check`, `git diff --check`, clippy with `-D warnings`, and
-  `cargo test --workspace --no-default-features` pass (280 tests across the
+  `cargo test --workspace --no-default-features` pass (308 tests across the
   workspace crates and host suites).
 - `npm test --prefix frontend` passes 15 files / 84 tests; frontend build passes.
 - E2E support/type/contract/production-exclusion/Pilot contracts pass; the

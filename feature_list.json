@@ -33,7 +33,8 @@
                          "evidence":  [
                                               "Session 052 (2026-08-15): Ubuntu release dependency list aligned with the working CI Tauri prerequisites; gdk-sys root cause confirmed through cargo tree.",
                                               "Session 057 (2026-08-15): Release validation now uses SHA-bound reusable desktop artifacts, validates package metadata/checksums for every platform, rejects missing packages, and gates publish on both tag preflight and matrix validation. Local release workflow and metadata contracts pass; hosted Ubuntu/macOS/Windows release evidence remains required before marking passing.",
-                                              "Session 061 (2026-08-15): Review fixes add tag-to-github.sha binding for manual/tag releases and fail-closed required E2E/platform evidence assembly; bash scripts/test-release-workflow.sh passes all static and fixture contracts."
+                                              "Session 061 (2026-08-15): Review fixes add tag-to-github.sha binding for manual/tag releases and fail-closed required E2E/platform evidence assembly; bash scripts/test-release-workflow.sh passes all static and fixture contracts.",
+                                              "Session 062 (2026-08-15): Final Windows local gate passes: Rust workspace 308 tests, frontend 84 tests/build, E2E contracts and six-surface debug run 11/11, ship/release/Codex contracts, and records guard. Whole-branch adversarial review is clean; hosted cross-platform/release evidence remains required."
                                        ],
                          "notes":  "Local verification cannot execute apt/pkg-config on Windows; hosted Ubuntu release evidence remains required."
                      },

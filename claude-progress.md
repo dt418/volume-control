@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 062 (2026-08-15) - Final local gate and adversarial review
+
+- Full local gate is green on Windows: Rust fmt/diff/clippy/workspace tests
+  (308 tests), frontend Vitest (15 files / 84 tests) and Vite build, E2E
+  support/type/package/production-exclusion/Pilot contracts, Codex config,
+  ship/release workflow contracts, and staged records guard.
+- Official `npm run test:e2e:debug --prefix e2e/tauri -- --surface all` passed
+  six Windows surfaces and 11 tests with runtime bridge, JUnit/manifest/timing,
+  log, and cleanup evidence. The raw `npm run test:e2e` command is retained as
+  a low-level WDIO entry and is not the lifecycle-managed CI gate.
+- Whole-branch adversarial review found and fixed release tag-to-SHA binding,
+  fail-closed required E2E/platform evidence assembly, and Vietnamese platform
+  claim wording; scoped re-review is clean. Hosted Windows/Linux/macOS runs and
+  disposable release rehearsal remain required before publishing/marking passing.
+
 ## Session 061 (2026-08-15) - Release SHA binding and evidence fail-closed fix
 
 - Review fix: release preflight now resolves the requested tag through the
