@@ -1,5 +1,83 @@
 # Session Handoff
 
+## Session 064 (2026-08-15) — Full verification and pre-push hardening
+
+Fresh verification found and fixed a process-global config-test race and a
+records-guard deletion bypass. The current branch has:
+
+- shared poison-tolerant `CONFIG_DIR_LOCK` for all tests mutating
+  `VOLUMECTL_CONFIG_DIR`;
+- fail-closed staged/branch deletion detection for both audit records plus
+  regression fixtures;
+- canonical INI documentation in `CLAUDE.md` and current ship-test counts.
+
+Evidence: Rust workspace test groups all pass (333 total: 280 library + 12
+Tauri + 4 session + 21 host integration + 16 host suite), frontend 89/89 +
+production build, fmt/diff/clippy, Linux/macOS `volumectl` target checks
+(Linux GTK feature included), records/format-lint/ship/release/Codex/E2E
+contracts, and the real Windows auto-start registry restoration verifier all
+pass. A clean `tauri build --no-bundle --ci` produced
+`target/release/VolumeControl.exe`. Three-domain pre-push review is clean
+after the fixes. Hosted desktop/release matrix still remains the authoritative
+cross-platform artifact gate.
+
+PR CI follow-up: removed a tracked `.superpowers/` report rejected by the diff
+policy and fixed both E2E wrappers to run their evidence assertion from
+`e2e/tauri`, where the isolated `tsx` dependency is installed.
+
+## Session 063 (2026-08-15) — Auto-start and canonical INI integration
+
+The active feature branch now contains the current Tauri-path auto-start and
+INI work on top of merge commit `b740a28c`:
+
+- Windows HKCU Run adapter plus `get_autostart`/`set_autostart` commands and
+  an accessible immediate Settings switch with read-back and retry behavior.
+- Typed canonical `config.ini` persistence with strict parsing, atomic writes,
+  legacy JSON backup migration/recovery, malformed-edit preservation, and
+  visible Storage notices; Settings remains the primary typed editor.
+- `scripts/verify-autostart.ps1` has a native Windows run recorded: enable,
+  read-back, disable cleanup, restoration, and unrelated Run-value checks
+  pass without launching the binary. Linux/macOS target checks remain hosted-CI
+  work because this Windows host lacks their native system dependencies.
+
+Local Windows verification: Rust fmt/diff/clippy/workspace tests pass;
+frontend Vitest 15 files / 89 tests and the production build pass. Before
+publishing, run the Windows registry restoration verifier and hosted
+Windows/Linux/macOS release matrix, then inspect SHA-bound artifacts.
+
+## Session 061 (2026-08-15) — Cross-platform testing and release-safety plan
+
+Plan `docs/superpowers/plans/2026-08-15-cross-platform-testing-release-safety.md`
+is complete through local Task 7 review. The branch now has reproducible
+coordinator depth/config contracts, fail-closed WDIO evidence with explicit
+providers, balanced Windows/Linux/macOS CI scheduling, SHA-bound reusable
+desktop release artifacts, tag-to-`github.sha` preflight binding (including
+annotated tags), and fail-closed JUnit/manifest/timings/platform-log assembly.
+The cross-platform checklist documents Windows interactive hotkey latency,
+Ubuntu/Xvfb, WSLg, hosted macOS, package inspection, and ad-hoc versus future
+Developer ID/notarization evidence boundaries.
+
+Local verification on Windows:
+
+- `cargo fmt --all --check`, `git diff --check`, clippy with `-D warnings`, and
+  `cargo test --workspace --no-default-features` pass (308 tests across the
+  workspace crates and host suites).
+- `npm test --prefix frontend` passes 15 files / 84 tests; frontend build passes.
+- E2E support/type/contract/production-exclusion/Pilot contracts pass; the
+  official `npm run test:e2e:debug --prefix e2e/tauri -- --surface all` passes
+  all 6 surfaces / 11 tests with runtime evidence. The raw `test:e2e` script
+  is a low-level WDIO command and requires the debug wrapper lifecycle.
+- `bash scripts/test-ship.sh`, `bash scripts/test-release-workflow.sh`,
+  `python scripts/test-codex-config.py`, and the staged records guard pass.
+- `scripts/verify-hotkey-latency.ps1 -?` is usage-only verified; real native
+  latency evidence remains a Windows interactive/manual release step.
+
+Hosted Ubuntu/macOS/Windows workflow runs, artifact inspection, and a
+disposable release rehearsal remain required before marking cross-platform
+features as passing or publishing a release. Do not claim native Linux/macOS
+hotkey, tray, hardware-audio, Wayland, TCC/Accessibility, Retina/multi-monitor,
+or Gatekeeper coverage from the local Windows run.
+
 ## Session 051 (2026-08-15)
 
 README.md and README.vi.md now describe the native-first Tauri hybrid UI,

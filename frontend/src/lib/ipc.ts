@@ -15,7 +15,7 @@ export function recommendedBlacklist(): Promise<string[]> {
   return invoke<string[]>("recommended_blacklist");
 }
 
-/** The on-disk config path shown by the Storage section. */
+/** The canonical INI config path shown by the Storage section. */
 export function getConfigPath(): Promise<string> {
   return invoke<string>("config_path");
 }

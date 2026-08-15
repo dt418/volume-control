@@ -26,7 +26,9 @@ test -s "$bin" || { echo "release binary missing: $bin" >&2 ; exit 1; }
 
 name="volumecontrol-${version}-${platform}.${ext}"
 mkdir -p dist
-rm -f "dist/$name" dist/SHA256SUMS.txt
+# A release artifact directory is promoted as a unit. Remove stale packages,
+# checksums, or metadata from an earlier local run before creating this one.
+find dist -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 case "$ext" in
   zip)
@@ -74,4 +76,5 @@ else
   (cd dist && shasum -a 256 "$name" > SHA256SUMS.txt)
 fi
 echo "packaged: dist/$name"
+echo "artifact: $name"
 ls -la "dist/$name"

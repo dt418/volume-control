@@ -120,6 +120,17 @@ volume_step=1
 volume_step_large=10
 overlay_duration_ms=1800
 modifier=CtrlAlt
+autostart=false
+
+[hotkeys]
+volume_up=Ctrl+Alt+ArrowUp
+volume_down=Ctrl+Alt+ArrowDown
+volume_up_large=Ctrl+Alt+Shift+ArrowUp
+volume_down_large=Ctrl+Alt+Shift+ArrowDown
+toggle_mute=Ctrl+Alt+KeyM
+reset_50=Ctrl+Alt+KeyR
+open_mixer=Ctrl+Alt+KeyV
+open_menu=Ctrl+Alt+Shift+KeyM
 
 [appearance]
 theme=System

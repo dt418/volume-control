@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
+use volumectl_lib::autostart::AutostartStatus;
 use volumectl_lib::config::HotkeyModifier;
 use volumectl_lib::host_core::{AppCore, AudioSessionInfo, BootstrapPayload, SettingsPatch};
 use volumectl_lib::ui::AppAction;
@@ -82,6 +83,20 @@ pub fn update_settings(
     core.save_config()
 }
 
+/// Read the current-user startup registration. This is deliberately separate
+/// from AppCore's draft config because the registry is an immediate side
+/// effect and must report the platform's read-back state.
+#[tauri::command]
+pub fn get_autostart() -> Result<AutostartStatus, String> {
+    volumectl_lib::autostart::status()
+}
+
+/// Enable or disable startup registration and return the verified state.
+#[tauri::command]
+pub fn set_autostart(enabled: bool) -> Result<AutostartStatus, String> {
+    volumectl_lib::autostart::set_enabled(enabled)
+}
+
 /// Read-only: the recommended blacklist presets for the current modifier
 /// (feeds the Blacklist editor's "Apply Recommended" draft merge).
 #[tauri::command]
@@ -91,7 +106,7 @@ pub fn recommended_blacklist(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<Vec
         .map(|core| core.recommended_blacklist())
 }
 
-/// Read-only: the on-disk config path for the Storage section.
+/// Read-only: the canonical on-disk INI config path for the Storage section.
 #[tauri::command]
 pub fn config_path() -> Result<String, String> {
     Ok(volumectl_lib::config::config_path()

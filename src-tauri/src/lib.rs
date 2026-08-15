@@ -7,9 +7,10 @@ use volumectl_lib::audio::{AudioBackend, UnavailableAudio};
 use volumectl_lib::host_core::AppCore;
 
 use commands::{
-    adjust_volume, close_surface, config_path, get_audio_sessions, get_bootstrap, mute_session,
-    open_config_location, open_surface, recommended_blacklist, reset_volume, save_config,
-    set_modifier, set_session_volume, set_volume, surface_ready, toggle_mute, update_settings,
+    adjust_volume, close_surface, config_path, get_audio_sessions, get_autostart, get_bootstrap,
+    mute_session, open_config_location, open_surface, recommended_blacklist, reset_volume,
+    save_config, set_autostart, set_modifier, set_session_volume, set_volume, surface_ready,
+    toggle_mute, update_settings,
 };
 use events_sink::TauriSink;
 use window_manager::{SurfaceId, WindowManager};
@@ -26,6 +27,7 @@ mod window_manager;
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     register_debug_plugins(tauri::Builder::default()).invoke_handler(tauri::generate_handler![
         get_bootstrap,
+        get_autostart,
         adjust_volume,
         set_volume,
         toggle_mute,
@@ -33,6 +35,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         set_modifier,
         save_config,
         update_settings,
+        set_autostart,
         recommended_blacklist,
         config_path,
         open_config_location,
@@ -149,10 +152,10 @@ pub fn run() -> tauri::Result<()> {
                     Box::new(UnavailableAudio::new(error)) as Box<dyn AudioBackend>
                 }
             };
-            let config = volumectl_lib::config::load();
+            let (config, config_notice) = volumectl_lib::config::load_with_notice();
             let modifier = config.modifier;
             let sink = Arc::new(TauriSink::new(handle));
-            let core = AppCore::new(audio, config, modifier, sink)
+            let core = AppCore::new_with_notice(audio, config, modifier, sink, config_notice)
                 .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
             // AppCore is shared behind a Mutex so commands can mutate it and
@@ -222,6 +225,7 @@ pub fn run() -> tauri::Result<()> {
         })
         .invoke_handler(tauri::generate_handler![
             get_bootstrap,
+            get_autostart,
             adjust_volume,
             set_volume,
             toggle_mute,
@@ -229,6 +233,7 @@ pub fn run() -> tauri::Result<()> {
             set_modifier,
             save_config,
             update_settings,
+            set_autostart,
             recommended_blacklist,
             config_path,
             open_config_location,

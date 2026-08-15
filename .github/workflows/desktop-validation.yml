@@ -1,0 +1,172 @@
+name: Desktop validation
+
+on:
+  workflow_call:
+    inputs:
+      release_mode:
+        description: "Build and package release artifacts"
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: "Release tag used in package names"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-15
+          - platform: ubuntu
+            os: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install GTK4/libadwaita and Tauri dependencies (Ubuntu)
+        if: matrix.platform == 'ubuntu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev pkg-config libasound2-dev \
+            libgtk-3-dev libgtk-4-dev libadwaita-1-dev \
+            libpulse-dev libx11-dev libxi-dev libxtst-dev zip xvfb
+          pkg-config --modversion gdk-3.0
+          pkg-config --modversion webkit2gtk-4.1
+          if apt-cache show libgtk4-layer-shell-dev >/dev/null 2>&1; then
+            sudo apt-get install -y libgtk4-layer-shell-dev
+          else
+            echo "GTK4 layer-shell development package unavailable; release uses the X11 fallback."
+          fi
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install isolated Tauri E2E dependencies
+        working-directory: e2e/tauri
+        run: npm ci
+      - name: Build frontend for E2E
+        run: npm --prefix frontend run build
+      - name: Run Windows E2E gate
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        env:
+          E2E_DRIVER_PROVIDER: embedded
+        run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/release-windows
+      - name: Run macOS E2E gate
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          E2E_DRIVER_PROVIDER: embedded
+        run: bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/release-macos
+      - name: Run Ubuntu E2E gate under Xvfb
+        if: matrix.platform == 'ubuntu'
+        shell: bash
+        env:
+          E2E_DRIVER_PROVIDER: embedded
+        run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/release-ubuntu
+      - name: Run platform core checks
+        shell: bash
+        run: cargo test --workspace --no-default-features
+      - name: Build release Tauri host
+        shell: bash
+        run: |
+          npm --prefix frontend run build
+          frontend/node_modules/.bin/tauri build --no-bundle --ci
+      - name: Package release artifact
+        shell: bash
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          release_tag="$RELEASE_TAG"
+          if [ -z "$release_tag" ]; then release_tag="v0.0.0-validation"; fi
+          export RELEASE_TAG="$release_tag"
+          bash scripts/package.sh
+      - name: Write SHA-bound build metadata
+        shell: bash
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          artifact="$(find dist -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' \) -print -quit)"
+          test -n "$artifact" && test -s "$artifact"
+          artifact_name="$(basename "$artifact")"
+          if command -v sha256sum >/dev/null 2>&1; then
+            artifact_sha256="$(sha256sum "$artifact" | awk '{print $1}')"
+          else
+            artifact_sha256="$(shasum -a 256 "$artifact" | awk '{print $1}')"
+          fi
+          runner_arch="$(uname -m 2>/dev/null || echo unknown)"
+          file_description="$(file "$artifact" 2>/dev/null || echo unavailable)"
+          rustc_version="$(rustc --version)"
+          node_version="$(node --version)"
+          export artifact_name artifact_sha256 runner_arch file_description rustc_version node_version
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const metadata = {
+            commit_sha: process.env.RELEASE_COMMIT_SHA,
+            platform: process.env.RELEASE_PLATFORM,
+            runner_arch: process.env.runner_arch,
+            rustc: process.env.rustc_version,
+            node: process.env.node_version,
+            artifact: process.env.artifact_name,
+            artifact_sha256: process.env.artifact_sha256,
+            file: process.env.file_description,
+          };
+          fs.writeFileSync("dist/build-metadata.json", `${JSON.stringify(metadata, null, 2)}\n`);
+          NODE
+          cat dist/build-metadata.json
+      - name: Assemble validation evidence
+        shell: bash
+        run: |
+          rm -rf validation-artifact
+          mkdir -p validation-artifact/e2e validation-artifact/platform-logs
+          cp dist/* validation-artifact/
+          mapfile -t junit_files < <(find output/tauri-e2e -type f -name '*.xml' -path '*/junit/*' -size +0c -print)
+          mapfile -t manifest_files < <(find output/tauri-e2e -type f -name 'manifest.json' -size +0c -print)
+          mapfile -t timing_files < <(find output/tauri-e2e -type f -name 'timings.json' -size +0c -print)
+          mapfile -t platform_log_files < <(find output/tauri-e2e -type f -path '*/logs/*' -size +0c -print)
+          (( ${#junit_files[@]} > 0 )) || { echo 'Missing non-empty JUnit XML evidence' >&2; exit 1; }
+          (( ${#manifest_files[@]} > 0 )) || { echo 'Missing non-empty manifest.json evidence' >&2; exit 1; }
+          (( ${#timing_files[@]} > 0 )) || { echo 'Missing non-empty timings.json evidence' >&2; exit 1; }
+          (( ${#platform_log_files[@]} > 0 )) || { echo 'Missing non-empty platform log evidence' >&2; exit 1; }
+          for evidence_file in "${junit_files[@]}" "${manifest_files[@]}" "${timing_files[@]}"; do
+            cp --parents "$evidence_file" validation-artifact/e2e/
+          done
+          for log_file in "${platform_log_files[@]}"; do
+            cp --parents "$log_file" validation-artifact/platform-logs/
+          done
+          test -s validation-artifact/build-metadata.json
+          test -s validation-artifact/SHA256SUMS.txt
+          find validation-artifact/e2e -type f -name '*.xml' -size +0c -print -quit | grep -q .
+          find validation-artifact/e2e -type f -name 'manifest.json' -size +0c -print -quit | grep -q .
+          find validation-artifact/e2e -type f -name 'timings.json' -size +0c -print -quit | grep -q .
+          find validation-artifact/platform-logs -type f -size +0c -print -quit | grep -q .
+      - name: Upload SHA-bound validation artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: validated-${{ matrix.platform }}-${{ github.sha }}
+          path: validation-artifact/
+          if-no-files-found: error

@@ -178,6 +178,21 @@ else
     report FAIL '--staged: code + both records passes' "rc=$rc"
 fi
 
+# --staged: deleting both record files is not a valid update. The guard must
+# inspect deletion status separately because --name-only still lists deleted
+# paths as if they were edited files.
+git -C "$tmpdir" rm -q --cached feature_list.json claude-progress.md
+staged_deleted_out="$(guard_in_tmp --staged 2>&1)"
+rc=$?
+if [ "$rc" -eq 1 ] && \
+   printf '%s' "$staged_deleted_out" | grep -q 'feature_list.json - add a new entry' && \
+   printf '%s' "$staged_deleted_out" | grep -q 'claude-progress.md - append a new session entry'; then
+    report ok '--staged: deleted records fail closed'
+else
+    report FAIL '--staged: deleted records fail closed' "rc=$rc; output=$staged_deleted_out"
+fi
+git -C "$tmpdir" add feature_list.json claude-progress.md
+
 # --staged: empty staged set passes (common real-world case)
 git -C "$tmpdir" reset -q
 guard_in_tmp --staged >/dev/null 2>&1
@@ -237,6 +252,34 @@ if [ "$rc" -eq 0 ]; then
     report ok '--branch: records anywhere in the branch passes'
 else
     report FAIL '--branch: records anywhere in the branch passes' "rc=$rc"
+fi
+
+# --branch: a commit that deletes both record files must fail, even though the
+# deleted names remain present in `git diff --name-only`.
+delete_repo="$tmpdir/delete-records"
+git init -q "$delete_repo"
+git -C "$delete_repo" config user.email test@example.com
+git -C "$delete_repo" config user.name test
+git -C "$delete_repo" config core.autocrlf false
+mkdir -p "$delete_repo/crates/volumectl/src"
+printf 'code\n' > "$delete_repo/crates/volumectl/src/app.rs"
+printf '{"last_updated":"base"}\n' > "$delete_repo/feature_list.json"
+printf '# Progress\n' > "$delete_repo/claude-progress.md"
+git -C "$delete_repo" add crates/volumectl/src/app.rs feature_list.json claude-progress.md
+git -C "$delete_repo" commit -qm base
+delete_base="$(git -C "$delete_repo" rev-parse HEAD)"
+printf 'changed code\n' > "$delete_repo/crates/volumectl/src/app.rs"
+git -C "$delete_repo" rm -q feature_list.json claude-progress.md
+git -C "$delete_repo" add crates/volumectl/src/app.rs
+git -C "$delete_repo" commit -qm 'delete records'
+delete_branch_out="$(cd "$delete_repo" && sh "$guard_abs" --branch "$delete_base" 2>&1)"
+rc=$?
+if [ "$rc" -eq 1 ] && \
+   printf '%s' "$delete_branch_out" | grep -q 'feature_list.json - add a new entry' && \
+   printf '%s' "$delete_branch_out" | grep -q 'claude-progress.md - append a new session entry'; then
+    report ok '--branch: committed record deletions fail closed'
+else
+    report FAIL '--branch: committed record deletions fail closed' "rc=$rc; output=$delete_branch_out"
 fi
 
 noisy_out="$(cd "$tmpdir" && PATH="$noisy_bin:$PATH" sh "$guard_abs" --branch "$base_sha" 2>&1)"

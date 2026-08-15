@@ -1,0 +1,9 @@
+{
+  "commit_sha": "84e4e2a1d9997acdebaa8fadcac99a26c72f3628",
+  "platform": "ubuntu",
+  "runner_arch": "x86_64",
+  "rustc": "rustc 1.82.0",
+  "node": "v22.0.0",
+  "artifact": "volumecontrol-test.tar.gz",
+  "artifact_sha256": "c208935ff7856f2a555410d17b68798d83d241d974ea320f9424645879e61acf"
+}

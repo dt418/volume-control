@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { AutoStartControl } from "./AutoStartControl";
 import { FieldError } from "./FieldError";
 import type { DraftSetter, FieldErrors, SettingsConfig } from "./settingsTypes";
 
@@ -41,10 +42,16 @@ export function GeneralSection({
   draft,
   setDraft,
   errors,
+  autoStartEnabled = false,
+  autoStartDisabled = true,
+  onAutoStartChange = async () => {},
 }: {
   draft: SettingsConfig;
   setDraft: DraftSetter;
   errors: FieldErrors;
+  autoStartEnabled?: boolean;
+  autoStartDisabled?: boolean;
+  onAutoStartChange?: (enabled: boolean) => Promise<void>;
 }) {
   return (
     <Card>
@@ -70,6 +77,11 @@ export function GeneralSection({
             <FieldError message={errors[key]} />
           </label>
         ))}
+        <AutoStartControl
+          enabled={autoStartEnabled}
+          disabled={autoStartDisabled}
+          onChange={onAutoStartChange}
+        />
       </CardContent>
     </Card>
   );

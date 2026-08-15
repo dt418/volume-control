@@ -64,3 +64,28 @@ The equivalent local MCP configuration is:
 
 Never attach Pilot to a release binary. Do not use Pilot's synthetic X11
 keypresses as global-shortcut evidence; use the existing host IPC/probe tests.
+
+## Evidence boundaries
+
+WDIO shortcut cards prove only shortcut configuration and the rendered status
+surface. They do not prove native global-key delivery. Linux/Xvfb and hosted
+macOS runs likewise do not prove native shortcut delivery, accessibility/TCC,
+tray, or hardware-audio integration.
+
+For real Windows shortcut evidence, build the release binary and run the
+Windows-only Stopwatch probe from the repository root:
+
+```text
+pwsh -NoProfile -File scripts/verify-hotkey-latency.ps1 -Release -Iterations 10 -OutputRoot output/manual/hotkey-latency
+```
+
+The probe sends the configured `open_mixer` shortcut with `keybd_event`, polls
+the child-owned `Volume Mixer` window, and writes
+`output/manual/hotkey-latency/hotkey-latency.json` and `.txt`. It starts and
+terminates only its own child process. Do not use this report as synthetic
+Pilot evidence or run it on Linux/macOS. Set `E2E_DRIVER_PROVIDER=embedded`
+or `tauri-driver` explicitly before WDIO; provider preflight is available via:
+
+```text
+node e2e/tauri/test-provider.mjs --provider embedded --platform windows
+```

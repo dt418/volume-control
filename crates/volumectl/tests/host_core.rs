@@ -19,8 +19,8 @@ use volumectl_lib::ui::AppAction;
 /// (or the real user config), the mtimes differ, the reload fires spuriously
 /// and the assertion panics. Reproduced: 5/8 runs failed with
 /// "set_modifier must resync the config mtime (no spurious reload)" at the
-/// reload assertion. The production save path is flush-safe (config.rs
-/// save_at_path: temp file + write_all + sync_all + atomic rename) and NTFS/
+/// reload assertion. The production save path is flush-safe (config_ini's
+/// sibling temp file + write_all + sync_all + atomic replacement) and NTFS/
 /// ext4 mtime resolution is fine-grained, so there is no secondary mtime
 /// granularity or flush mechanism — the env race is the only failure mode.
 /// The lock makes each test see a stable config path for its whole body.
@@ -88,6 +88,32 @@ fn core_with(sink: Arc<RecordingSink>) -> AppCore {
         sink,
     )
     .unwrap()
+}
+
+#[test]
+fn bootstrap_exposes_config_load_notice_without_changing_config_shape() {
+    let sink = Arc::new(RecordingSink::default());
+    let core = AppCore::new_with_notice(
+        Box::new(StubAudio {
+            state: Mutex::new(VolumeState {
+                volume: 0.5,
+                muted: false,
+            }),
+        }),
+        Config::default(),
+        HotkeyModifier::CtrlAlt,
+        sink,
+        Some(volumectl_lib::config::ConfigLoadNotice::MigratedFromJson),
+    )
+    .unwrap();
+    let mut core = core;
+    let payload = core.bootstrap();
+
+    assert_eq!(
+        payload.config_notice,
+        Some(volumectl_lib::config::ConfigLoadNotice::MigratedFromJson)
+    );
+    assert_eq!(payload.config.volume_step, 1);
 }
 
 #[test]
@@ -177,6 +203,20 @@ fn update_settings_mutates_steps_and_appearance_without_writing_disk() {
         payload.config.appearance.accent,
         volumectl_lib::ui::AccentMode::Purple
     );
+}
+
+#[test]
+fn update_settings_mutates_autostart_preference_without_touching_registry() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink);
+
+    core.update_settings(volumectl_lib::host_core::SettingsPatch {
+        autostart: Some(true),
+        ..Default::default()
+    })
+    .expect("auto-start preference is a valid boolean");
+
+    assert!(core.bootstrap().config.autostart);
 }
 
 #[test]
@@ -445,10 +485,8 @@ fn blacklist_app_actions_mutate_and_persist() {
     // Apply Recommended: merges the modifier's presets (dedupe) and persists.
     core.handle_action(AppAction::ApplyRecommendedBlacklist);
     let after = core.bootstrap().config.blacklist.clone();
-    let saved: volumectl_lib::config::Config = serde_json::from_str(
-        &std::fs::read_to_string(volumectl_lib::config::config_path()).unwrap(),
-    )
-    .unwrap();
+    let saved = volumectl_lib::config_ini::load_ini(&volumectl_lib::config::config_path())
+        .expect("load persisted INI");
     assert_eq!(
         saved.blacklist, after,
         "persisted list must match in-memory"
@@ -458,10 +496,8 @@ fn blacklist_app_actions_mutate_and_persist() {
     // Clear: empties the list and persists.
     core.handle_action(AppAction::ClearBlacklist);
     assert!(core.bootstrap().config.blacklist.is_empty());
-    let saved: volumectl_lib::config::Config = serde_json::from_str(
-        &std::fs::read_to_string(volumectl_lib::config::config_path()).unwrap(),
-    )
-    .unwrap();
+    let saved = volumectl_lib::config_ini::load_ini(&volumectl_lib::config::config_path())
+        .expect("load persisted INI");
     assert!(saved.blacklist.is_empty());
 
     match old {
@@ -566,6 +602,48 @@ fn set_modifier_resyncs_mtime_so_reload_does_not_echo() {
         !core.reload_config_if_changed(),
         "set_modifier must resync the config mtime (no spurious reload)"
     );
+
+    match old {
+        Some(v) => std::env::set_var("VOLUMECTL_CONFIG_DIR", v),
+        None => std::env::remove_var("VOLUMECTL_CONFIG_DIR"),
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn reload_preserves_previous_config_on_malformed_ini_then_accepts_valid_edit() {
+    let _guard = CONFIG_DIR_LOCK.lock().unwrap();
+    let tmp = std::env::temp_dir().join(format!("volumectl-reload-ini-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).unwrap();
+    let old = std::env::var_os("VOLUMECTL_CONFIG_DIR");
+    std::env::set_var("VOLUMECTL_CONFIG_DIR", &tmp);
+
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink);
+    std::fs::write(
+        volumectl_lib::config::config_path(),
+        "[general]\nvolume_step=not-a-number\n",
+    )
+    .unwrap();
+
+    assert!(!core.reload_config_if_changed());
+    assert_eq!(core.bootstrap().config.volume_step, 1);
+
+    let edited = Config {
+        volume_step: 5,
+        volume_step_large: 20,
+        ..Config::default()
+    };
+    std::fs::write(
+        volumectl_lib::config::config_path(),
+        volumectl_lib::config_ini::serialize_ini(&edited).unwrap(),
+    )
+    .unwrap();
+    core.force_reload_config();
+    assert_eq!(core.bootstrap().config.volume_step, 5);
+    assert_eq!(core.bootstrap().config.volume_step_large, 20);
+    assert!(!core.reload_config_if_changed());
 
     match old {
         Some(v) => std::env::set_var("VOLUMECTL_CONFIG_DIR", v),

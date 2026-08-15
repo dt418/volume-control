@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+# Static and fixture contract for the SHA-bound release workflow.
+set -euo pipefail
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+release="$repo/.github/workflows/release.yml"
+validation="$repo/.github/workflows/desktop-validation.yml"
+verifier="$repo/scripts/verify-release-metadata.sh"
+failures=0
+
+report() {
+  local status="$1" description="$2"
+  if [[ "$status" == ok ]]; then
+    printf 'ok   - %s\n' "$description"
+  else
+    printf 'FAIL - %s\n' "$description"
+    failures=$((failures + 1))
+  fi
+}
+
+contains() {
+  local file="$1" pattern="$2"
+  grep -Eq "$pattern" "$file"
+}
+
+if contains "$release" 'uses:[[:space:]]*\./\.github/workflows/desktop-validation\.yml'; then
+  report ok 'release caller invokes the reusable desktop validation workflow'
+else
+  report FAIL 'release caller invokes the reusable desktop validation workflow'
+fi
+
+preflight_line="$(grep -n '^  preflight:' "$release" | head -n 1 | cut -d: -f1 || true)"
+validate_line="$(grep -n '^  validate:' "$release" | head -n 1 | cut -d: -f1 || true)"
+if [[ -n "$preflight_line" && -n "$validate_line" && "$preflight_line" -lt "$validate_line" ]] && \
+   contains "$release" 'needs:[[:space:]]*preflight'; then
+  report ok 'release tag preflight gates the reusable validation matrix'
+else
+  report FAIL 'release tag preflight gates the reusable validation matrix'
+fi
+
+if contains "$release" 'needs:[[:space:]]*\[[^]]*preflight[^]]*validate[^]]*\]'; then
+  report ok 'publish job requires preflight and validation'
+else
+  report FAIL 'publish job requires preflight and validation'
+fi
+
+if ! grep -Eq 'tauri[[:space:]]+build' "$release"; then
+  report ok 'release caller contains no direct tauri build'
+else
+  report FAIL 'release caller contains no direct tauri build'
+fi
+
+if contains "$release" 'pattern:[[:space:]]*validated-\*-\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}'; then
+  report ok 'release caller downloads only SHA-named validation artifacts'
+else
+  report FAIL 'release caller downloads only SHA-named validation artifacts'
+fi
+
+if contains "$release" 'EXPECTED_COMMIT_SHA:[[:space:]]*\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}' && \
+   contains "$release" 'validated-\$\{platform\}-\$\{EXPECTED_COMMIT_SHA\}' && \
+   contains "$validation" 'RELEASE_COMMIT_SHA:[[:space:]]*\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}' && \
+   contains "$validation" 'validated-\$\{\{[[:space:]]*matrix\.platform[[:space:]]*\}\}-\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}'; then
+  report ok 'publish and reusable validation remain bound to github.sha'
+else
+  report FAIL 'publish and reusable validation remain bound to github.sha'
+fi
+
+if contains "$release" 'tag_ref=' && \
+   contains "$release" 'git/ref/tags' && \
+   contains "$release" 'gh[[:space:]]+api[[:space:]]+"\$tag_ref"' && \
+   contains "$release" 'EXPECTED_COMMIT_SHA:[[:space:]]*\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}' && \
+   contains "$release" 'tag_sha.*EXPECTED_COMMIT_SHA'; then
+  report ok 'release preflight binds the requested tag to github.sha'
+else
+  report FAIL 'release preflight binds the requested tag to github.sha'
+fi
+
+if contains "$validation" 'release_mode:[[:space:]]*'; then
+  report ok 'reusable workflow declares release_mode input'
+else
+  report FAIL 'reusable workflow declares release_mode input'
+fi
+if contains "$validation" 'release_tag:[[:space:]]*'; then
+  report ok 'reusable workflow declares release_tag input'
+else
+  report FAIL 'reusable workflow declares release_tag input'
+fi
+if contains "$validation" 'name:[[:space:]]*validated-\$\{\{[[:space:]]*matrix\.platform[[:space:]]*\}\}-\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}'; then
+  report ok 'validation artifacts are named with platform and commit SHA'
+else
+  report FAIL 'validation artifacts are named with platform and commit SHA'
+fi
+
+verifier_line="$(grep -nF 'verify-release-metadata.sh' "$release" | head -n 1 | cut -d: -f1 || true)"
+create_line="$(grep -nF 'gh release create' "$release" | head -n 1 | cut -d: -f1 || true)"
+upload_line="$(grep -nF 'gh release upload' "$release" | head -n 1 | cut -d: -f1 || true)"
+if [[ -n "$verifier_line" && -n "$create_line" && -n "$upload_line" && "$verifier_line" -lt "$create_line" && "$verifier_line" -lt "$upload_line" ]]; then
+  report ok 'metadata verifier runs before release create/upload'
+else
+  report FAIL 'metadata verifier runs before release create/upload'
+fi
+
+if contains "$validation" 'find[[:space:]]+output/tauri-e2e.*junit.*-size[[:space:]]+\+0c' && \
+   contains "$validation" 'find[[:space:]]+output/tauri-e2e.*manifest\.json.*-size[[:space:]]+\+0c' && \
+   contains "$validation" 'find[[:space:]]+output/tauri-e2e.*timings\.json.*-size[[:space:]]+\+0c' && \
+   contains "$validation" 'find[[:space:]]+output/tauri-e2e.*logs/.*-size[[:space:]]+\+0c' && \
+   ! grep -Eq 'find[[:space:]]+output/tauri-e2e.*(junit|manifest\.json|timings\.json|logs/).*\|\|[[:space:]]*true' "$validation"; then
+  report ok 'validation assembly requires non-empty JUnit, manifest, timings, and platform logs'
+else
+  report FAIL 'validation assembly requires non-empty JUnit, manifest, timings, and platform logs'
+fi
+
+expected_sha="$(git -C "$repo" rev-parse HEAD)"
+valid="$repo/scripts/test-fixtures/release-valid"
+mismatch="$repo/scripts/test-fixtures/release-mismatch"
+wrong_platform="$repo/scripts/test-fixtures/release-wrong-platform"
+missing_package="$repo/scripts/test-fixtures/release-missing-package"
+
+# The committed valid fixture is anchored to the implementation baseline. On
+# later commits, refresh only its copy so the test continues to exercise the
+# verifier against the current commit without making a mutable SHA exception
+# part of the production verifier.
+tmp_root="$(mktemp -d "$repo/.release-workflow.XXXXXX")"
+cleanup() { rm -rf "$tmp_root"; }
+trap cleanup EXIT
+
+node_bin=node
+if ! command -v "$node_bin" >/dev/null 2>&1 && command -v node.exe >/dev/null 2>&1; then
+  node_bin=node.exe
+fi
+command -v "$node_bin" >/dev/null 2>&1 || { echo 'node is required for release workflow fixtures' >&2; exit 1; }
+node_path() {
+  local value="$1"
+  if [[ "$node_bin" == node.exe ]]; then
+    if [[ "$value" =~ ^/mnt/([A-Za-z])/(.*)$ ]]; then
+      printf '%s:/%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      return
+    fi
+    if [[ "$value" =~ ^/([A-Za-z])/(.*)$ ]]; then
+      printf '%s:/%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      return
+    fi
+  fi
+  printf '%s' "$value"
+}
+
+valid_copy="$tmp_root/release-valid"
+cp -R "$valid" "$valid_copy"
+"$node_bin" - "$(node_path "$valid_copy/build-metadata.json")" "$expected_sha" <<'NODE'
+const fs = require("node:fs");
+const path = process.argv[2];
+const value = JSON.parse(fs.readFileSync(path, "utf8"));
+value.commit_sha = process.argv[3];
+fs.writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+NODE
+
+missing_copy="$tmp_root/release-missing-package"
+cp -R "$missing_package" "$missing_copy"
+"$node_bin" - "$(node_path "$missing_copy/build-metadata.json")" "$expected_sha" <<'NODE'
+const fs = require("node:fs");
+const path = process.argv[2];
+const value = JSON.parse(fs.readFileSync(path, "utf8"));
+value.commit_sha = process.argv[3];
+fs.writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+NODE
+
+if bash "$verifier" "$valid_copy" "$expected_sha" ubuntu >/dev/null; then
+  report ok 'valid release metadata fixture passes'
+else
+  report FAIL 'valid release metadata fixture passes'
+fi
+
+if bash "$verifier" "$mismatch" "$expected_sha" ubuntu >/dev/null 2>&1; then
+  report FAIL 'mismatched commit fixture fails closed'
+else
+  report ok 'mismatched commit fixture fails closed'
+fi
+
+if bash "$verifier" "$wrong_platform" "$expected_sha" ubuntu >/dev/null 2>&1; then
+  report FAIL 'wrong-platform fixture fails closed'
+else
+  report ok 'wrong-platform fixture fails closed'
+fi
+
+if bash "$verifier" "$missing_copy" "$expected_sha" ubuntu >/dev/null 2>&1; then
+  report FAIL 'missing-package fixture fails closed'
+else
+  report ok 'missing-package fixture fails closed'
+fi
+
+if [[ "$failures" -eq 0 ]]; then
+  echo "All release workflow contract checks passed."
+  exit 0
+fi
+echo "$failures release workflow contract check(s) failed." >&2
+exit 1

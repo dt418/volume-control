@@ -1,18 +1,6 @@
-# Release packaging for VolumeControl.
-#
-# Triggered by a `v*` tag or from the Actions UI. Each platform builds its
-# release binary and packs it into `dist/` via scripts/package.sh (versioned
-# name + SHA256SUMS.txt); a final job assembles the GitHub release from every
-# artifact.
-#
-# Platform notes:
-# - Windows: portable zip (native installer arrives with a follow-on
-#   packaging task; the artifact is the signed-ready exe + docs).
-# - macOS: ad-hoc signed VolumeControl.app bundle (LSUIElement agent) so
-#   Gatekeeper and the Accessibility permission UI can identify the app.
-# - Ubuntu 24.04: tar.gz of the Tauri release host with embedded frontend
-#   assets; the GTK4/libadwaita renderer remains covered by the CI matrix.
-
+# Promote only the SHA-bound artifacts produced by desktop-validation.yml.
+# The reusable desktop validation remains mandatory for tag/manual releases;
+# the pull-request-only Linux/macOS skip applies only to ci.yml.
 name: Release
 
 on:
@@ -29,29 +17,22 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Package (${{ matrix.platform }})
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [windows, macos, ubuntu]
-        include:
-          - platform: windows
-            os: windows-latest
-          - platform: macos
-            os: macos-15
-          - platform: ubuntu
-            os: ubuntu-24.04
-    runs-on: ${{ matrix.os }}
+  preflight:
+    name: Validate release tag
+    runs-on: ubuntu-24.04
+    outputs:
+      release_tag: ${{ steps.release-tag.outputs.release_tag }}
     steps:
-      - uses: actions/checkout@v7
-      - name: Resolve release tag
+      - name: Resolve and validate release tag
         id: release-tag
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag }}
           REF_NAME: ${{ github.ref_name }}
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           release_tag="$REF_NAME"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -61,99 +42,94 @@ jobs:
             echo "Release tag must match vMAJOR.MINOR.PATCH, for example v0.1.0" >&2
             exit 1
           fi
-          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install GTK4/libadwaita (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev libx11-dev libxi-dev libxtst-dev zip
-          # GTK4 layer-shell is optional. Probe before installing so Ubuntu
-          # releases without the package use the X11 fallback cleanly.
-          if apt-cache show libgtk4-layer-shell-dev >/dev/null 2>&1; then
-            sudo apt-get install -y libgtk4-layer-shell-dev
-          else
-            echo "GTK4 layer-shell development package unavailable; release uses the X11 fallback."
-          fi
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-      - name: Build release Tauri host (frontend + backend)
-        shell: bash
-        run: |
-          npm --prefix frontend run build
-          frontend/node_modules/.bin/tauri build --no-bundle --ci
-      - name: Package artifacts
-        shell: bash
-        env:
-          RELEASE_PLATFORM: ${{ matrix.platform }}
-          RELEASE_TAG: ${{ steps.release-tag.outputs.release_tag }}
-        run: bash scripts/package.sh
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.platform }}
-          path: dist/
 
-  release:
+          # Bind both tag pushes and manual dispatches to the exact commit
+          # selected by this workflow run. A manually entered tag must not be
+          # allowed to publish artifacts from a different commit.
+          tag_type=""
+          tag_sha=""
+          tag_ref="repos/$REPOSITORY/git/ref/tags/$release_tag"
+          if ! tag_type_and_sha="$(gh api "$tag_ref" --jq '.object.type + " " + .object.sha')"; then
+            echo "Unable to resolve release tag $release_tag through the GitHub API" >&2
+            exit 1
+          fi
+          read -r tag_type tag_sha <<< "$tag_type_and_sha"
+          for _ in 1 2 3; do
+            if [ "$tag_type" = "commit" ]; then break; fi
+            if [ "$tag_type" != "tag" ] || [ -z "$tag_sha" ]; then
+              echo "Release tag $release_tag did not resolve to a commit" >&2
+              exit 1
+            fi
+            if ! tag_type_and_sha="$(gh api "repos/$REPOSITORY/git/tags/$tag_sha" --jq '.object.type + " " + .object.sha')"; then
+              echo "Unable to dereference annotated release tag $release_tag" >&2
+              exit 1
+            fi
+            read -r tag_type tag_sha <<< "$tag_type_and_sha"
+          done
+          if [ "$tag_type" != "commit" ] || [ "$tag_sha" != "$EXPECTED_COMMIT_SHA" ]; then
+            echo "Release tag $release_tag resolves to ${tag_sha:-unknown}, expected $EXPECTED_COMMIT_SHA" >&2
+            exit 1
+          fi
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: Validate desktop artifacts
+    needs: preflight
+    uses: ./.github/workflows/desktop-validation.yml
+    with:
+      release_mode: true
+      release_tag: ${{ needs.preflight.outputs.release_tag }}
+    secrets: inherit
+
+  publish:
     name: Create GitHub release
-    needs: build
+    needs: [preflight, validate]
     runs-on: ubuntu-24.04
     steps:
-      - name: Resolve release tag
-        id: release-tag
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          INPUT_TAG: ${{ inputs.tag }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          release_tag="$REF_NAME"
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            release_tag="$INPUT_TAG"
-          fi
-          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Release tag must match vMAJOR.MINOR.PATCH, for example v0.1.0" >&2
-            exit 1
-          fi
-          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: dist
-      - name: Generate checksums
+          pattern: validated-*-${{ github.sha }}
+          merge-multiple: false
+      - name: Verify every validated artifact
+        shell: bash
+        env:
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
         run: |
-          cd dist
-          find . -type f | sort | while read -r f; do
-            if [ "${f##*.}" != "txt" ]; then sha256sum "$f"; fi
-          done | tee SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          for platform in windows macos ubuntu; do
+            artifact_dir="dist/validated-${platform}-${EXPECTED_COMMIT_SHA}"
+            test -d "$artifact_dir"
+            bash scripts/verify-release-metadata.sh "$artifact_dir" "$EXPECTED_COMMIT_SHA" "$platform"
+          done
+      - name: Generate release checksums
+        shell: bash
+        run: |
+          find dist -type f \( -name '*.zip' -o -name '*.tar.gz' \) -print0 \
+            | sort -z \
+            | while IFS= read -r -d '' artifact; do sha256sum "$artifact"; done \
+            > dist/SHA256SUMS.txt
+          test -s dist/SHA256SUMS.txt
+          cat dist/SHA256SUMS.txt
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release-tag.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
           RELEASE_TARGET: ${{ github.sha }}
+        shell: bash
         run: |
           mapfile -d '' release_assets < <(
-            find dist -mindepth 2 -type f \
+            find dist -type f \
               \( -name '*.zip' -o -name '*.tar.gz' \) \
               -print0 | sort -z
           )
           release_assets+=(dist/SHA256SUMS.txt)
-
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $RELEASE_TAG already exists; uploading refreshed assets."
             gh release upload "$RELEASE_TAG" "${release_assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --clobber
+              --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$RELEASE_TAG" "${release_assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$RELEASE_TARGET" \
-              --title "VolumeControl $RELEASE_TAG" \
-              --generate-notes
+              --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" \
+              --title "VolumeControl $RELEASE_TAG" --generate-notes
           fi

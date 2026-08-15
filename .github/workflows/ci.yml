@@ -27,6 +27,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate Codex coordinator contract
+        run: python scripts/test-codex-config.py
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
@@ -89,14 +94,22 @@ jobs:
         run: npm ci
       - name: Run Windows Tauri WebDriver E2E (release gate)
         shell: pwsh
+        env:
+          E2E_DRIVER_PROVIDER: embedded
         run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/ci-windows
       - name: Upload Windows Tauri E2E artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tauri-e2e-windows
-          path: output/tauri-e2e/ci-windows
-          if-no-files-found: warn
+          path: |
+            output/tauri-e2e/ci-windows/**/junit
+            output/tauri-e2e/ci-windows/**/manifest.json
+            output/tauri-e2e/ci-windows/**/timings.json
+            output/tauri-e2e/ci-windows/**/screenshot.png
+            output/tauri-e2e/ci-windows/**/accessibility-snapshot.json
+            output/tauri-e2e/ci-windows/**/logs
+          if-no-files-found: error
       - name: Build
         run: cargo build
       - name: Test
@@ -119,6 +132,7 @@ jobs:
   macos:
     name: macOS (build + tests + renderer smoke)
     runs-on: macos-15
+    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -138,14 +152,22 @@ jobs:
         run: npm ci
       - name: Run macOS Tauri WebDriver E2E
         shell: bash
+        env:
+          E2E_DRIVER_PROVIDER: embedded
         run: bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-macos
       - name: Upload macOS Tauri E2E artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tauri-e2e-macos
-          path: output/tauri-e2e/ci-macos
-          if-no-files-found: warn
+          path: |
+            output/tauri-e2e/ci-macos/**/junit
+            output/tauri-e2e/ci-macos/**/manifest.json
+            output/tauri-e2e/ci-macos/**/timings.json
+            output/tauri-e2e/ci-macos/**/screenshot.png
+            output/tauri-e2e/ci-macos/**/accessibility-snapshot.json
+            output/tauri-e2e/ci-macos/**/logs
+          if-no-files-found: error
       - name: Build
         run: cargo build
       - name: Test (includes AppKit renderer smoke tests)
@@ -179,6 +201,7 @@ jobs:
   ubuntu:
     name: Ubuntu 24.04 (GTK4/libadwaita + layer-shell)
     runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -211,14 +234,22 @@ jobs:
         working-directory: e2e/tauri
         run: npm ci
       - name: Run Linux Tauri WebDriver E2E under Xvfb
+        env:
+          E2E_DRIVER_PROVIDER: embedded
         run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-linux
       - name: Upload Linux Tauri E2E artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tauri-e2e-linux
-          path: output/tauri-e2e/ci-linux
-          if-no-files-found: warn
+          path: |
+            output/tauri-e2e/ci-linux/**/junit
+            output/tauri-e2e/ci-linux/**/manifest.json
+            output/tauri-e2e/ci-linux/**/timings.json
+            output/tauri-e2e/ci-linux/**/screenshot.png
+            output/tauri-e2e/ci-linux/**/accessibility-snapshot.json
+            output/tauri-e2e/ci-linux/**/logs
+          if-no-files-found: error
       - name: Build (no features — CLI fallback)
         run: cargo build
       - name: Test (no features — pure planning)

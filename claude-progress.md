@@ -1,5 +1,179 @@
 # Progress Log
 
+## Session 064 (2026-08-15) - Full pre-push verification and guard hardening
+
+- Fresh full verification initially exposed two defects: parallel Rust tests
+  raced while mutating `VOLUMECTL_CONFIG_DIR`, and the records guard counted
+  deleted `feature_list.json`/`claude-progress.md` paths as valid updates.
+- Fixed both defects. A shared poison-tolerant `CONFIG_DIR_LOCK` now covers
+  all in-process config/host-core environment tests; the guard now checks Git
+  deletion status separately in staged and branch modes. Added staged and
+  committed deletion attack fixtures to `scripts/test-check-records.sh`.
+- Updated `CLAUDE.md` to document canonical `config.ini`, corrected the current
+  ship self-test count to 31, and recorded this review in feature records.
+- Fresh verification: Rust workspace test groups all pass (333 total:
+  280 library + 12 Tauri + 4 session + 21 host integration + 16 host suite),
+  frontend Vitest 89/89 and production build, fmt/diff/clippy, Linux/macOS
+  `volumectl` cross-target checks (including Linux `gtk-renderer` with the
+  documented pkg-config shim), records/format-lint/ship/release/Codex/E2E
+  contract suites all pass. A clean `tauri build --no-bundle --ci` also
+  produced `target/release/VolumeControl.exe` successfully.
+- PR CI caught two integration-only issues before merge: a tracked
+  `.superpowers/` report violated the repository diff policy, and the E2E
+  evidence wrapper resolved `tsx` from the absent repository-root
+  `node_modules`. Removed the forbidden report and made both PowerShell and
+  Bash wrappers resolve the isolated `e2e/tauri` dependency directory.
+- Windows auto-start verifier passed enable/read-back, disable, restoration,
+  and unrelated Run-value checks with `binary_launched: false`. The three
+  pre-push review domains found no remaining defect after the guard fix.
+
+## Session 063 (2026-08-15) - Auto-start and canonical INI integration
+
+- Investigated all local/remote topic branches after merging the latest
+  `origin/master` into `feature/tauri-ui-hybrid`; release/CI branches are
+  patch-equivalent or stale architecture and were not merged wholesale.
+- Added the current Tauri-path auto-start implementation: Windows HKCU Run
+  adapter with command quoting, read-back confirmation, cleanup, explicit
+  Linux/macOS unsupported behavior, Tauri commands, and an accessible
+  immediate Settings switch with retry/error handling.
+- Switched the canonical AppCore store to typed `config.ini`: strict schema
+  parsing/serialization, atomic writes, legacy JSON migration that preserves
+  the backup, malformed-INI recovery, live-reload preservation, visible
+  Settings recovery notices, and round-tripping of recorded per-action
+  shortcuts in `[hotkeys]`. Direct Settings editing remains the primary typed
+  workflow; raw file opening is explicitly advanced.
+- Verification on Windows: Rust workspace tests pass (280 library tests plus
+  Tauri/host suites), `cargo fmt --all --check`, `git diff --check`, and
+  clippy with `-D warnings` pass; frontend Vitest passes 15 files / 89 tests
+  and the TypeScript/Vite production build passes. Cross-target checks are
+  environment-blocked locally by missing Linux pkg-config sysroot and macOS
+  compiler; hosted CI remains the authoritative cross-platform gate.
+- Windows verifier evidence was exercised on the current host: enable/read-back,
+  disable cleanup, restoration, and unrelated Run-value fingerprints all pass;
+  the binary was not launched. Hosted Linux/macOS release matrix evidence is
+  still required before marking the feature passing.
+
+## Session 062 (2026-08-15) - Final local gate and adversarial review
+
+- Full local gate is green on Windows: Rust fmt/diff/clippy/workspace tests
+  (308 tests), frontend Vitest (15 files / 84 tests) and Vite build, E2E
+  support/type/package/production-exclusion/Pilot contracts, Codex config,
+  ship/release workflow contracts, and staged records guard.
+- Official `npm run test:e2e:debug --prefix e2e/tauri -- --surface all` passed
+  six Windows surfaces and 11 tests with runtime bridge, JUnit/manifest/timing,
+  log, and cleanup evidence. The raw `npm run test:e2e` command is retained as
+  a low-level WDIO entry and is not the lifecycle-managed CI gate.
+- Whole-branch adversarial review found and fixed release tag-to-SHA binding,
+  fail-closed required E2E/platform evidence assembly, and Vietnamese platform
+  claim wording; scoped re-review is clean. Hosted Windows/Linux/macOS runs and
+  disposable release rehearsal remain required before publishing/marking passing.
+
+## Session 061 (2026-08-15) - Release SHA binding and evidence fail-closed fix
+
+- Review fix: release preflight now resolves the requested tag through the
+  GitHub API and rejects any tag whose peeled commit differs from `github.sha`,
+  including manual dispatches and tag pushes.
+- Review fix: reusable desktop validation requires non-empty JUnit XML,
+  `manifest.json`, `timings.json`, and platform logs before assembling the
+  SHA-bound artifact; the release contract checks these requirements.
+- Verification: `bash scripts/test-release-workflow.sh` passes all static and
+  fixture checks; `bash -n scripts/test-release-workflow.sh`, PyYAML parsing of
+  release and desktop-validation workflows, and `git diff --check` pass.
+
+## Session 059 (2026-08-15) - Balanced CI schedule and release evidence boundaries
+
+- Task 4 (`5d7a682`): CI keeps Windows unconditional for pull requests, skips Linux/macOS only on ordinary pull requests, and preserves full validation on master/release events. `scripts/test-ship.sh` now asserts the schedule, fail-closed E2E uploads, and reusable release dependency; ship checks and PyYAML parsing pass.
+- Task 6 (`5147acaf`, `b27be78a`): added the cross-platform release checklist and updated English/Vietnamese README plus CHANGELOG. The checklist records strong/partial/compile-only/not-claimed evidence for Windows, Ubuntu/Xvfb, WSLg, hosted macOS, and SHA-bound release inspection. Publish claims are limited to metadata/checksum/package verification; E2E evidence is reviewed separately. macOS local inspection explicitly builds/packages with the repository's frontend Tauri CLI, while public Developer ID/notarization remains a future protected workflow.
+- Scoped re-reviews: Task 4 clean; Task 6 clean after one documentation fix round. Hosted cross-platform and release runs remain required before records can be marked passing.
+
+## Session 057 (2026-08-15) - SHA-bound release validation and provider wiring
+
+- Parallel Task 3 and Task 5 implementation/review completed with disjoint file ownership.
+- Task 3 (`bf3991b8`, `540bff01`): WDIO wrappers default to `embedded` only when unset, preserve explicit `tauri-driver`, and all Windows/macOS/Ubuntu CI E2E steps set `E2E_DRIVER_PROVIDER=embedded`. Provider contracts cover embedded success, missing `tauri-driver`, unknown providers, and environment immutability; focused provider/timing tests and typecheck pass. Windows hotkey latency remains a real-host/manual probe and is not claimed by Linux/macOS CI.
+- Task 5 (`4393d2be`, `ecd15a38`, `38c4ee95`): reusable desktop validation builds and packages SHA-bound artifacts; metadata verifier checks commit SHA, platform, package, and checksum; valid/mismatch/wrong-platform/missing-package fixtures are exercised; release publish depends directly on both `preflight` and `validate` and reuses the validated tag. `bash scripts/test-release-workflow.sh`, shell syntax, and diff checks pass.
+- Scoped re-reviews: Task 3 clean after one fix round; Task 5 clean after two fix rounds. Hosted cross-platform/release runs are still required before records can be marked passing.
+
+## Session 056 (2026-08-15) - WDIO evidence freshness and backend logs fix round
+
+- WDIO wrappers now allocate a unique `run-...` output directory for every
+  invocation, pass the run ID into WDIO, and validate that `manifest.json`
+  belongs to that exact run before accepting JUnit and timings evidence.
+- Manifest validation now requires exact spec/surface pairs for Mixer,
+  Runtime, Windows, Recovery, Settings, and Help when the full surface gate is
+  requested; timing JSON is also parsed before acceptance. CI artifact globs
+  follow the unique run directory.
+- Runtime diagnostics scan both the configured service log directory and the
+  WDIO output root (including nested log files), retaining explicit backend
+  ERROR/SEVERE/PANIC lines while ignoring WARN text that merely contains
+  "error". The support test covers the real `[Tauri:Backend:0]` log shape.
+- Verification: `npm test --prefix e2e/tauri` (13/13), `npm run typecheck
+  --prefix e2e/tauri`, `npm run test:contract --prefix e2e/tauri`, `npm run
+  test:production-exclusion --prefix e2e/tauri`, and `git diff --check` pass.
+  No desktop WDIO run was started in this Windows-hosted fix round.
+
+## Session 055 (2026-08-15) - Fail-closed WDIO evidence gate
+
+- Pinned `@wdio/junit-reporter` 9.30.1 in the isolated E2E package and added
+  the package `npm test` support-suite alias.
+- Added deterministic `manifest.json` writing/validation, root `timings.json`
+  p50/p95 output with optional bootstrap/IPC environment budgets, and focused
+  negative contracts for missing JUnit, missing spec results, and unexpected
+  frontend runtime errors.
+- WDIO now records per-surface result entries, captures service logs under the
+  output root, and asserts that only unavailable-audio/degraded-hotkey messages
+  may remain. PowerShell and Bash wrappers preserve WDIO failures, verify
+  evidence after successful runs, and always perform temporary bridge/capability
+  cleanup checks.
+- Windows, Linux, and macOS CI artifact uploads are fail-closed and include
+  JUnit, manifest, timings, screenshots, accessibility snapshots, and logs.
+- Verification: `npm test --prefix e2e/tauri` (11/11), `npm run typecheck
+  --prefix e2e/tauri`, `npm run test:contract --prefix e2e/tauri`, `npm run
+  test:production-exclusion --prefix e2e/tauri`, wrapper shell syntax checks,
+  and `git diff --check` pass. A real desktop E2E run remains unavailable in
+  this Windows-hosted handoff because no approved debug binary run was started.
+
+## Session 054 (2026-08-15) - Coordinator handoff contract hardening
+
+- Tightened `scripts/test-codex-config.py` so orchestration documentation must
+  contain the `## Handoff contract` section, the coordinator ownership text,
+  and the final handoff state text; the generic words `coordinator` and
+  `handoff` are no longer sufficient.
+- Focused negative coverage replaces `ORCHESTRATOR.md` in memory with a
+  substring-only fixture and confirms the contract rejects it.
+- Verification: local contract, clean committed archive contract, repository
+  `git diff --check`, and the staged record guard pass.
+
+## Session 053 (2026-08-15) - Reproducible Codex coordinator contract
+
+- Added `scripts/test-codex-config.py`, a Python 3.11+ contract that validates
+  the coordinator pipeline's relative profiles, `max_threads = 4`,
+  `max_depth = 2`, and the documented coordinator handoff. The contract accepts
+  an optional repository-root argument so it can validate clean archives.
+- Raised the nested-agent depth cap to 2, synchronized `.codex/AGENTS.md` and
+  `.codex/ORCHESTRATOR.md`, and kept the restarted-runtime model identifiers
+  commented until the model catalog is confirmed.
+- Added Python setup plus the contract invocation to the shared Ubuntu checks
+  job; Windows and macOS jobs remain independent of this configuration check.
+- Verification: local contract passes; the same command passes after
+  extracting `git archive HEAD` into a temporary clean checkout. The Rust
+  quality gate and staged record guard remain required before handoff.
+
+## Session 052 (2026-08-15) - Ubuntu release WebKitGTK dependency fix
+
+- Diagnosed the Ubuntu release failure: `gdk-sys v0.18.2` is required by the
+  Tauri/WebKitGTK stack (`tauri` → `wry`/`webkit2gtk` → GTK3/GDK), but the
+  release workflow installed GTK4/libadwaita without the WebKitGTK 4.1
+  development package that provides `gdk-3.0.pc`.
+- Updated `.github/workflows/release.yml` to install the complete Tauri Linux
+  prerequisite set, including `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, and
+  `pkg-config`; added explicit `gdk-3.0` and `webkit2gtk-4.1` probes so the
+  release fails early with a precise dependency error.
+- Verification: release YAML parses with PyYAML; the dependency/probe
+  contract passes; `cargo tree --target x86_64-unknown-linux-gnu -i gdk-sys`
+  confirms the dependency path; Rust fmt, clippy, workspace tests, and
+  `git diff --check` pass locally. Hosted Ubuntu release validation is still
+  required because the development host is Windows.
+
 ## Session 051 (2026-08-15) - Release documentation and final verification
 
 - Refreshed English and Vietnamese README files to describe the current

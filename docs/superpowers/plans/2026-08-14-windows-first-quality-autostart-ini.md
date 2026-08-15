@@ -330,7 +330,7 @@ Expected: compile failure because the codec is absent.
 
 - [ ] **Step 4: Implement parse/serialize with explicit field mapping**
 
-Map `[general]`, `[appearance]`, `[feedback]`, `[color_thresholds]`, and `[blacklist]` to existing `Config` fields. Use the current validation functions after parsing; never let parser defaults bypass validation.
+Map `[general]`, `[hotkeys]`, `[appearance]`, `[feedback]`, `[color_thresholds]`, and `[blacklist]` to existing `Config` fields. Preserve recorded per-action shortcuts in the typed `[hotkeys]` section. Use the current validation functions after parsing; never let parser defaults bypass validation.
 
 - [ ] **Step 5: Implement atomic writes**
 

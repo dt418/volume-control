@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-15T00:00",
+    "last_updated":  "2026-08-15T15:32",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,70 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-035",
+                         "priority":  35,
+                         "area":  "tooling-quality",
+                         "title":  "Fail-closed record deletion guard and deterministic config tests",
+                         "user_visible_behavior":  "Release and commit checks reject substantive changes that delete the audit records, while configuration tests no longer race on the process-global test override.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "scripts/test-check-records.sh passes all current guard tests, including staged and committed record-deletion negatives.",
+                                               "cargo test --workspace --no-default-features passes all 333 tests with the shared config-directory lock (280 library + 12 Tauri + 4 session + 21 host integration + 16 host suite).",
+                                               "cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings pass.",
+                                               "The three-domain pre-push review finds no remaining guard-chain or wiring defect."
+                                           ],
+                         "evidence":  [
+                                              "Session 064 (2026-08-15): records guard now checks Git deletion status separately and its self-test covers staged and committed deletion attacks; all guard checks pass.",
+                                              "Session 064 (2026-08-15): shared CONFIG_DIR_LOCK serializes all in-process VOLUMECTL_CONFIG_DIR tests; repeated library and workspace test runs pass without poisoning."
+                                       ],
+                         "notes":  "The guard still requires both records for any substantive change; deleted records are never counted as a valid update."
+                     },
+                     {
+                         "id":  "vol-034",
+                         "priority":  34,
+                         "area":  "settings-autostart",
+                         "title":  "Windows auto-start and canonical INI settings",
+                         "user_visible_behavior":  "Settings exposes a verified Windows sign-in auto-start switch, while configuration is stored in a typed human-readable config.ini with safe JSON migration, backup recovery, atomic writes, and visible recovery notices.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "cargo fmt --all --check and git diff --check pass.",
+                                               "cargo clippy --workspace --all-targets --no-default-features -- -D warnings passes.",
+                                               "cargo test --workspace --no-default-features passes all workspace, host-core, INI, and auto-start contract tests.",
+                                               "npm test --prefix frontend passes 15 files / 89 tests and npm run build --prefix frontend passes.",
+                                               "Windows hosted/manual verification must exercise HKCU Run enable/read-back/disable/restore with scripts/verify-autostart.ps1 before marking passing.",
+                                               "Linux/macOS builds must retain typed INI parity and return the explicit unsupported auto-start result until native adapters are approved."
+                                           ],
+                         "evidence":  [
+                                              "Session 063 (2026-08-15): Tauri auto-start commands and accessible General Settings switch added; Windows adapter uses the current-user Run key with read-back confirmation and no elevation.",
+                                              "Session 063 (2026-08-15): config.ini codec covers strict typed parsing, canonical atomic persistence, JSON backup migration/recovery, malformed-edit preservation, Storage notices, and lossless per-action shortcut round-tripping; Rust and frontend local gates pass.",
+                                              "Session 063 (2026-08-15): Windows verifier passed enable/read-back, disable cleanup, restoration, and unrelated Run-value fingerprint checks without launching the binary; hosted Linux/macOS release evidence remains required before status can change to passing."
+                                       ],
+                         "notes":  "Auto-start is an immediate registry side effect separate from the typed Save/Reset draft. Linux/macOS return a documented unsupported error in this wave."
+                     },
+                     {
+                         "id":  "vol-033",
+                         "priority":  33,
+                         "area":  "ci-release",
+                         "title":  "Ubuntu release installs the complete Tauri WebKitGTK dependency set",
+                         "user_visible_behavior":  "Ubuntu release builds no longer fail in gdk-sys because the Tauri WebKitGTK/GTK3 development packages and pkg-config metadata are missing from the release runner.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "release.yml parses with PyYAML and its Ubuntu step contains libwebkit2gtk-4.1-dev, libgtk-3-dev, and gdk-3.0/webkit2gtk-4.1 pkg-config probes.",
+                                               "cargo tree --target x86_64-unknown-linux-gnu -i gdk-sys --workspace --no-default-features confirms gdk-sys is pulled by the Tauri/WebKitGTK stack.",
+                                               "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, and cargo test --workspace --no-default-features pass locally.",
+                                               "A hosted Ubuntu release run must pass the new package probes and complete tauri build before this feature is marked passing.",
+                                               "Review fix: release preflight resolves both tag pushes and manual-dispatch input tags through the GitHub API and requires the resolved commit to equal github.sha.",
+                                               "Review fix: validation assembly requires non-empty JUnit XML, manifest.json, timings.json, and platform log files before uploading evidence."
+                                           ],
+                         "evidence":  [
+                                              "Session 052 (2026-08-15): Ubuntu release dependency list aligned with the working CI Tauri prerequisites; gdk-sys root cause confirmed through cargo tree.",
+                                              "Session 057 (2026-08-15): Release validation now uses SHA-bound reusable desktop artifacts, validates package metadata/checksums for every platform, rejects missing packages, and gates publish on both tag preflight and matrix validation. Local release workflow and metadata contracts pass; hosted Ubuntu/macOS/Windows release evidence remains required before marking passing.",
+                                              "Session 061 (2026-08-15): Review fixes add tag-to-github.sha binding for manual/tag releases and fail-closed required E2E/platform evidence assembly; bash scripts/test-release-workflow.sh passes all static and fixture contracts.",
+                                              "Session 062 (2026-08-15): Final Windows local gate passes: Rust workspace 308 tests, frontend 84 tests/build, E2E contracts and six-surface debug run 11/11, ship/release/Codex contracts, and records guard. Whole-branch adversarial review is clean; hosted cross-platform/release evidence remains required."
+                                       ],
+                         "notes":  "Local verification cannot execute apt/pkg-config on Windows; hosted Ubuntu release evidence remains required."
+                     },
                      {
                          "id":  "vol-032",
                          "priority":  32,
@@ -32,10 +96,12 @@
                                                "Global hotkey manager creation degrades to explicit unavailable statuses when a native GUI/input service is missing, avoiding host startup panics.",
                                                "Help E2E verifies its accessible Close control without racing the WebKit transport while the WebView destroys itself.",
                                                "Host-core tests assert platform-specific blacklist normalization (`.app` on macOS, `.exe` on Windows, bare names on Linux).",
-                                               "Full release gate is rerun before PR creation; hosted Linux/macOS CI remains required for cross-platform evidence."
+                                               "Full release gate is rerun before PR creation; hosted Linux/macOS CI remains required for cross-platform evidence.",
+                                               "Session 060 (2026-08-15): Cross-platform release checklist documents Windows interactive hotkey evidence, Ubuntu/Xvfb and WSLg boundaries, hosted macOS package inspection, SHA-bound release verification, and ad-hoc versus future Developer ID/notarization signing. README claims are limited to what the current workflow actually verifies; hosted URLs/artifacts remain intentionally unrecorded until a run completes."
                                            ],
                          "evidence":  [
-                                           "Session 051 (2026-08-15): README.md, README.vi.md, CHANGELOG.md, and CI/Release FE+BE build wiring updated to match the current Tauri hybrid implementation."
+                                           "Session 051 (2026-08-15): README.md, README.vi.md, CHANGELOG.md, and CI/Release FE+BE build wiring updated to match the current Tauri hybrid implementation.",
+                                           "Session 060 (2026-08-15): Task 6 implementation/review clean after one documentation fix round; command/link/secret scans and git diff --check pass."
                                        ],
                          "notes":  "Documentation-only release follow-up for the verified feature branch; mark passing after the final local gate and hosted CI review."
                      },
@@ -689,7 +755,7 @@
                                               "npm run test:pilot --prefix e2e/tauri -- scenario=mixer (7/7), settings (7/7), help (6/6), and recovery (4/4) live Windows scenarios pass with JUnit/screenshots/console-error artifacts under output/tauri-pilot/.",
                                               "Pilot runner syntax and cleanup checks pass; it uses temporary pilot:default capability/global Tauri state, one isolated debug app per surface, unique config/output, and stale registry cleanup.",
                                               "CI workflow now runs the isolated WDIO matrix on Windows, Ubuntu/Xvfb, and macOS with artifact upload steps; PyYAML validates .github/workflows/ci.yml.",
-                                              "scripts/test-ship.sh passes all 25 checks after ship.sh adds the fail-closed WDIO gate between frontend build and tauri release build.",
+                                              "scripts/test-ship.sh passes all 31 checks after ship.sh adds the fail-closed WDIO gate between frontend build and tauri release build.",
                                               "Root .gitignore ignores output/ so E2E screenshots, JUnit, logs, and timing artifacts cannot be staged by ship.sh.",
                                               "npm run test:production-exclusion and capability --check-only contracts (pass).",
                                               "npm run typecheck --prefix e2e/tauri (clean).",
@@ -702,7 +768,13 @@
                                               "Session 050 (2026-08-15): frontend Vitest 15 files / 84 tests, frontend build, Rust fmt/clippy/workspace tests, E2E contracts/support/Pilot contract, Mixer 2/2, and the full Windows WebDriver matrix 11/11 pass after the mixer Retry/fail-soft and contrast improvements.",
                                               "scripts/verify-tauri-e2e.ps1 and scripts/verify-tauri-e2e.sh fail closed on missing dependencies/binary and assert temporary bridge/capability cleanup.",
                                               "PowerShell wrapper real run passes windows surface; deliberate missing-binary fixture exits 1 without creating a capability or bridge residue.",
-                                              "Root .gitignore now ignores node_modules/ globally; git ls-files contains no tracked node_modules paths."
+                                              "Root .gitignore now ignores node_modules/ globally; git ls-files contains no tracked node_modules paths.",
+                                              "python scripts/test-codex-config.py passes with max_threads=4, max_depth=2, all configured coordinator profiles inside .codex/agents/, and the documented handoff contract.",
+                                              "Clean-checkout contract passes after extracting git archive HEAD into a temporary directory and invoking python scripts/test-codex-config.py against the extracted repository root.",
+                                              "Negative handoff fixture rejects an ORCHESTRATOR.md containing only the words coordinator and handoff; the required Handoff contract section and coordinator ownership/final handoff text are enforced.",
+                                              "Task 2 evidence contracts pass: npm test --prefix e2e/tauri (11/11), npm run typecheck --prefix e2e/tauri, npm run test:contract --prefix e2e/tauri, and npm run test:production-exclusion --prefix e2e/tauri. Missing JUnit, missing manifest result, and unexpected frontend runtime errors fail with category-specific diagnostics.",
+                                              "Task 2 freshness fix passes: each wrapper writes to a unique run directory and checks the manifest run ID, exact Mixer/Runtime/Windows/Recovery/Settings/Help spec-surface pairs, current JUnit files, and parseable timings JSON; backend ERROR/SEVERE/PANIC lines are collected from configured and WDIO output log directories with a concrete [Tauri:Backend:0] support test.",
+                                              "Task 4 scheduling contract passes: Windows remains unconditional on pull requests; Linux/macOS skip only pull_request events; all three desktop E2E uploads use if-no-files-found: error; release remains gated by reusable desktop validation. bash scripts/test-ship.sh and PyYAML parsing pass."
                                           ],
                          "evidence":  [
                                           "Context7 Tauri docs confirm @wdio/tauri-service with embedded provider; npm registry pins @wdio/tauri-service 1.3.0 and WebdriverIO runner/reporter packages 9.30.1.",
@@ -710,7 +782,12 @@
                                             "Session 045 (2026-08-14): debug-only plugin wiring, temporary global Tauri bridge, Vite preview lifecycle, and release-gated WebDriver surface specs verified on Windows.",
                                            "Session 046 (2026-08-14): recovery fault injection, owned-window enumeration, timing budget helper, and cross-shell E2E wrappers verified on Windows.",
                                            "Session 047 (2026-08-15): Pilot CLI 0.7.2 installed; Mixer/Settings/Help/recovery live scenarios pass on Windows with debug-only per-surface startup and cleanup.",
-                                           "Session 048 (2026-08-15): CI Windows/Linux/macOS WDIO matrix, fail-closed ship gate, output ignore, and 25-check ship self-test verified."
+                                              "Session 048 (2026-08-15): CI Windows/Linux/macOS WDIO matrix, fail-closed ship gate, output ignore, and the then-current ship self-test verified; the current 31-check contract is revalidated in Session 064.",
+                                           "Session 053 (2026-08-15): Codex coordinator contract, depth-safe configuration, role documentation, and shared Ubuntu checks wiring verified locally and from a clean git archive.",
+                                           "Session 054 (2026-08-15): Hardened the coordinator contract to require the Handoff contract section plus coordinator ownership and final handoff text; focused negative coverage rejects substring-only documentation.",
+                                           "Session 055 (2026-08-15): WDIO now pins @wdio/junit-reporter 9.30.1, writes per-surface JUnit/manifest/timing evidence, asserts zero unexpected runtime errors with unavailable-audio/degraded-hotkey allowlists, verifies evidence in both wrappers, and uploads JUnit/manifest/timings/screenshots/snapshots/logs with if-no-files-found: error.",
+                                           "Session 056 (2026-08-15): fix round adds unique wrapper run roots and run-ID freshness checks, exact six-surface manifest coverage, parseable timing validation, and backend log-directory ERROR evidence; 13/13 focused E2E support tests pass.",
+                                           "Session 058 (2026-08-15): Explicit E2E provider selection is wired through wrappers and all desktop CI jobs; embedded-provider, missing-driver, unknown-provider, and environment-immutability contracts pass. Windows hotkey latency remains real-host/manual evidence only; hosted Linux/macOS do not claim native shortcut delivery."
                                       ],
                          "notes":  "WDIO foundation, Windows-first surface coverage, recovery, owned-window timing checks, live Windows Pilot scenarios, CI matrix wiring, and fail-closed ship gate are implemented. Hosted cross-platform CI and final release review remain before marking vol-031 complete. Production remains excluded by Cargo features, capabilities, frontend dependency boundaries, debug fault marker, and withGlobalTauri contract."
                      }
