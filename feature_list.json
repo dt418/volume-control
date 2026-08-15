@@ -16,6 +16,25 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-035",
+                         "priority":  35,
+                         "area":  "tooling-quality",
+                         "title":  "Fail-closed record deletion guard and deterministic config tests",
+                         "user_visible_behavior":  "Release and commit checks reject substantive changes that delete the audit records, while configuration tests no longer race on the process-global test override.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "scripts/test-check-records.sh passes all current guard tests, including staged and committed record-deletion negatives.",
+                                               "cargo test --workspace --no-default-features passes 332 tests with the shared config-directory lock.",
+                                               "cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings pass.",
+                                               "The three-domain pre-push review finds no remaining guard-chain or wiring defect."
+                                           ],
+                         "evidence":  [
+                                              "Session 064 (2026-08-15): records guard now checks Git deletion status separately and its self-test covers staged and committed deletion attacks; all guard checks pass.",
+                                              "Session 064 (2026-08-15): shared CONFIG_DIR_LOCK serializes all in-process VOLUMECTL_CONFIG_DIR tests; repeated library and workspace test runs pass without poisoning."
+                                       ],
+                         "notes":  "The guard still requires both records for any substantive change; deleted records are never counted as a valid update."
+                     },
+                     {
                          "id":  "vol-034",
                          "priority":  34,
                          "area":  "settings-autostart",
@@ -736,7 +755,7 @@
                                               "npm run test:pilot --prefix e2e/tauri -- scenario=mixer (7/7), settings (7/7), help (6/6), and recovery (4/4) live Windows scenarios pass with JUnit/screenshots/console-error artifacts under output/tauri-pilot/.",
                                               "Pilot runner syntax and cleanup checks pass; it uses temporary pilot:default capability/global Tauri state, one isolated debug app per surface, unique config/output, and stale registry cleanup.",
                                               "CI workflow now runs the isolated WDIO matrix on Windows, Ubuntu/Xvfb, and macOS with artifact upload steps; PyYAML validates .github/workflows/ci.yml.",
-                                              "scripts/test-ship.sh passes all 25 checks after ship.sh adds the fail-closed WDIO gate between frontend build and tauri release build.",
+                                              "scripts/test-ship.sh passes all 31 checks after ship.sh adds the fail-closed WDIO gate between frontend build and tauri release build.",
                                               "Root .gitignore ignores output/ so E2E screenshots, JUnit, logs, and timing artifacts cannot be staged by ship.sh.",
                                               "npm run test:production-exclusion and capability --check-only contracts (pass).",
                                               "npm run typecheck --prefix e2e/tauri (clean).",
@@ -763,7 +782,7 @@
                                             "Session 045 (2026-08-14): debug-only plugin wiring, temporary global Tauri bridge, Vite preview lifecycle, and release-gated WebDriver surface specs verified on Windows.",
                                            "Session 046 (2026-08-14): recovery fault injection, owned-window enumeration, timing budget helper, and cross-shell E2E wrappers verified on Windows.",
                                            "Session 047 (2026-08-15): Pilot CLI 0.7.2 installed; Mixer/Settings/Help/recovery live scenarios pass on Windows with debug-only per-surface startup and cleanup.",
-                                           "Session 048 (2026-08-15): CI Windows/Linux/macOS WDIO matrix, fail-closed ship gate, output ignore, and 25-check ship self-test verified.",
+                                              "Session 048 (2026-08-15): CI Windows/Linux/macOS WDIO matrix, fail-closed ship gate, output ignore, and the then-current ship self-test verified; the current 31-check contract is revalidated in Session 064.",
                                            "Session 053 (2026-08-15): Codex coordinator contract, depth-safe configuration, role documentation, and shared Ubuntu checks wiring verified locally and from a clean git archive.",
                                            "Session 054 (2026-08-15): Hardened the coordinator contract to require the Handoff contract section plus coordinator ownership and final handoff text; focused negative coverage rejects substring-only documentation.",
                                            "Session 055 (2026-08-15): WDIO now pins @wdio/junit-reporter 9.30.1, writes per-surface JUnit/manifest/timing evidence, asserts zero unexpected runtime errors with unavailable-audio/degraded-hotkey allowlists, verifies evidence in both wrappers, and uploads JUnit/manifest/timings/screenshots/snapshots/logs with if-no-files-found: error.",

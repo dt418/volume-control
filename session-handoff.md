@@ -1,5 +1,23 @@
 # Session Handoff
 
+## Session 064 (2026-08-15) — Full verification and pre-push hardening
+
+Fresh verification found and fixed a process-global config-test race and a
+records-guard deletion bypass. The current branch has:
+
+- shared poison-tolerant `CONFIG_DIR_LOCK` for all tests mutating
+  `VOLUMECTL_CONFIG_DIR`;
+- fail-closed staged/branch deletion detection for both audit records plus
+  regression fixtures;
+- canonical INI documentation in `CLAUDE.md` and current ship-test counts.
+
+Evidence: Rust workspace 332/332, frontend 89/89 + production build,
+fmt/diff/clippy, Linux/macOS `volumectl` target checks (Linux GTK feature
+included), records/format-lint/ship/release/Codex/E2E contracts, and the real
+Windows auto-start registry restoration verifier all pass. Three-domain
+pre-push review is clean after the fixes. Hosted desktop/release matrix still
+remains the authoritative cross-platform artifact gate.
+
 ## Session 063 (2026-08-15) — Auto-start and canonical INI integration
 
 The active feature branch now contains the current Tauri-path auto-start and

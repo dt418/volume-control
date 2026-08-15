@@ -142,10 +142,11 @@ state publication:
   in `ui/platform/linux` uses Wayland layer-shell when available and X11/plain-window
   fallbacks otherwise. `ui/platform/macos` contains the AppKit renderer.
 
-Configuration is JSON under the platform user config directory. Hosts use safe mtime
-reload: a valid parsed and normalized config replaces active state; malformed input
-leaves the current configuration intact. Audio failures preserve the last confirmed
-state and use bounded recovery rather than fabricating a zero volume.
+Configuration is typed INI under the platform user config directory (`config.ini`);
+legacy `config.json` is retained as a migration/recovery backup. Hosts use safe
+mtime reload: a valid parsed and normalized config replaces active state; malformed
+input leaves the current configuration intact. Audio failures preserve the last
+confirmed state and use bounded recovery rather than fabricating a zero volume.
 
 ## Working rules
 

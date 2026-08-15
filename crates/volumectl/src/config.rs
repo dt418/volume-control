@@ -18,9 +18,13 @@ use std::{
 
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(test)]
+use std::sync::Mutex;
 
 #[cfg(test)]
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+#[cfg(test)]
+pub(crate) static CONFIG_DIR_LOCK: Mutex<()> = Mutex::new(());
 
 const MIN_VOLUME_STEP: u32 = 1;
 const MAX_VOLUME_STEP: u32 = 50;
@@ -821,10 +825,6 @@ pub fn open_in_editor() {
 mod tests {
     use super::*;
     use crate::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
-    use std::sync::Mutex;
-
-    static CONFIG_DIR_LOCK: Mutex<()> = Mutex::new(());
-
     fn with_config_dir(name: &str) -> (std::path::PathBuf, Option<std::ffi::OsString>) {
         let dir = std::env::temp_dir().join(format!(
             "volumectl-config-integration-{}-{name}",
@@ -847,7 +847,9 @@ mod tests {
 
     #[test]
     fn config_path_uses_ini_filename_with_directory_override() {
-        let _guard = CONFIG_DIR_LOCK.lock().expect("config directory lock");
+        let _guard = CONFIG_DIR_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let (dir, old) = with_config_dir("path");
 
         assert_eq!(config_path(), dir.join("config.ini"));
@@ -857,7 +859,9 @@ mod tests {
 
     #[test]
     fn load_without_legacy_files_does_not_report_recovery_warning() {
-        let _guard = CONFIG_DIR_LOCK.lock().expect("config directory lock");
+        let _guard = CONFIG_DIR_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let (dir, old) = with_config_dir("fresh");
 
         let (loaded, notice) = load_with_notice();
@@ -870,7 +874,9 @@ mod tests {
 
     #[test]
     fn load_existing_migrates_json_and_keeps_backup() {
-        let _guard = CONFIG_DIR_LOCK.lock().expect("config directory lock");
+        let _guard = CONFIG_DIR_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let (dir, old) = with_config_dir("migration");
         let expected = Config {
             autostart: true,
@@ -895,7 +901,9 @@ mod tests {
 
     #[test]
     fn load_existing_recovers_valid_json_when_ini_is_malformed() {
-        let _guard = CONFIG_DIR_LOCK.lock().expect("config directory lock");
+        let _guard = CONFIG_DIR_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let (dir, old) = with_config_dir("recovery");
         let expected = Config {
             autostart: true,

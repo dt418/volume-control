@@ -1265,6 +1265,9 @@ mod tests {
 
     #[test]
     fn config_mtime_is_none_then_some_and_stable() {
+        let _guard = crate::config::CONFIG_DIR_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         // Point the config path at a fresh temp dir (hermetic; never touches
         // the real user config on any platform).
         let tmp = std::env::temp_dir().join(format!("volumectl-mtime-{}", std::process::id()));

@@ -75,6 +75,11 @@ decide() {
     done <<EOF
 $LIST
 EOF
+    # A deleted record is not a valid record update. Keep this separate from
+    # the path list because `git diff --name-only` otherwise makes a deletion
+    # indistinguishable from an edited record.
+    [ "${deleted_feature:-0}" -eq 1 ] && has_feature=0
+    [ "${deleted_progress:-0}" -eq 1 ] && has_progress=0
     if [ "$has_feature" -eq 1 ] && [ "$has_progress" -eq 1 ]; then
         has_records=1
     else
@@ -143,6 +148,8 @@ report() { # <fail_header_line1> [fail_header_line2]
 
 # ---- Mode: --check (stdin) --------------------------------------------------
 check_stdin() {
+    deleted_feature=0
+    deleted_progress=0
     collect_list
     decide
     report "substantive change requires record updates"
@@ -161,6 +168,23 @@ check_staged() {
         git diff --cached --name-only 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
+    deleted_list="$(git diff --cached --diff-filter=D --name-only 2>/dev/null)"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "FAIL - git diff --cached deletion check failed (exit $rc):" >&2
+        git diff --cached --diff-filter=D --name-only 2>&1 | sed 's/^/      /' >&2
+        return 1
+    fi
+    deleted_feature=0
+    deleted_progress=0
+    while IFS= read -r path || [ -n "$path" ]; do
+        case "$path" in
+            feature_list.json) deleted_feature=1 ;;
+            claude-progress.md) deleted_progress=1 ;;
+        esac
+    done <<EOF
+$deleted_list
+EOF
     collect_list <<EOF
 $staged_list
 EOF
@@ -185,11 +209,25 @@ check_branch() {
         git diff --name-only "$base...HEAD" 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
+    branch_deleted="$(git diff --diff-filter=D --name-only "$base...HEAD" 2>/dev/null)"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "FAIL - git diff deletion check vs '$base' failed (exit $rc):" >&2
+        git diff --diff-filter=D --name-only "$base...HEAD" 2>&1 | sed 's/^/      /' >&2
+        return 1
+    fi
     working_list="$(git diff --name-only HEAD 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff of the working tree failed (exit $rc):" >&2
         git diff --name-only HEAD 2>&1 | sed 's/^/      /' >&2
+        return 1
+    fi
+    working_deleted="$(git diff --diff-filter=D --name-only HEAD 2>/dev/null)"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "FAIL - git diff working-tree deletion check failed (exit $rc):" >&2
+        git diff --diff-filter=D --name-only HEAD 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
     untracked_list="$(git ls-files --others --exclude-standard 2>/dev/null)"
@@ -199,6 +237,17 @@ check_branch() {
         git ls-files --others --exclude-standard 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
+    deleted_feature=0
+    deleted_progress=0
+    while IFS= read -r path || [ -n "$path" ]; do
+        case "$path" in
+            feature_list.json) deleted_feature=1 ;;
+            claude-progress.md) deleted_progress=1 ;;
+        esac
+    done <<EOF
+$branch_deleted
+$working_deleted
+EOF
     collect_list <<EOF
 $branch_list
 $working_list

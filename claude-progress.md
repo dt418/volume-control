@@ -1,5 +1,24 @@
 # Progress Log
 
+## Session 064 (2026-08-15) - Full pre-push verification and guard hardening
+
+- Fresh full verification initially exposed two defects: parallel Rust tests
+  raced while mutating `VOLUMECTL_CONFIG_DIR`, and the records guard counted
+  deleted `feature_list.json`/`claude-progress.md` paths as valid updates.
+- Fixed both defects. A shared poison-tolerant `CONFIG_DIR_LOCK` now covers
+  all in-process config/host-core environment tests; the guard now checks Git
+  deletion status separately in staged and branch modes. Added staged and
+  committed deletion attack fixtures to `scripts/test-check-records.sh`.
+- Updated `CLAUDE.md` to document canonical `config.ini`, corrected the current
+  ship self-test count to 31, and recorded this review in feature records.
+- Fresh verification: Rust workspace tests 332/332, frontend Vitest 89/89 and
+  production build, fmt/diff/clippy, Linux/macOS `volumectl` cross-target
+  checks (including Linux `gtk-renderer` with the documented pkg-config shim),
+  records/format-lint/ship/release/Codex/E2E contract suites all pass.
+- Windows auto-start verifier passed enable/read-back, disable, restoration,
+  and unrelated Run-value checks with `binary_launched: false`. The three
+  pre-push review domains found no remaining defect after the guard fix.
+
 ## Session 063 (2026-08-15) - Auto-start and canonical INI integration
 
 - Investigated all local/remote topic branches after merging the latest
