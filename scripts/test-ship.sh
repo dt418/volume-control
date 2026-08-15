@@ -80,6 +80,62 @@ invokes scripts/ship.sh 'node_modules/[.]bin/tauri' \
 invokes scripts/ship.sh 'build --no-bundle' \
     'ship.sh: release flow runs tauri build --no-bundle after E2E'
 
+# --- desktop CI schedule and artifact contracts ------------------------------
+# Keep the Windows pull-request gate unconditional. Linux/macOS are expensive
+# hosted checks and run on master pushes/releases, but must not be silently
+# skipped for any other event.
+ci_workflow=.github/workflows/ci.yml
+job_block() { # <job>
+    awk -v job="$1" '
+        $0 ~ "^  " job ":$" { inside=1; next }
+        inside && $0 ~ "^  [A-Za-z0-9_-]+:" { exit }
+        inside { print }
+    ' "$ci_workflow"
+}
+
+windows_job="$(job_block windows)"
+if grep -Eq '^    if:' <<<"$windows_job"; then
+    report FAIL 'ci.yml: Windows job remains unconditional for pull requests'
+else
+    report ok 'ci.yml: Windows job remains unconditional for pull requests'
+fi
+
+for desktop_job in macos ubuntu; do
+    desktop_block="$(job_block "$desktop_job")"
+    desktop_condition_count="$(grep -Ec '^    if: ' <<<"$desktop_block" || true)"
+    if [ "$desktop_condition_count" -eq 1 ] && \
+       grep -Eq "^    if: github\.event_name != 'pull_request'$" <<<"$desktop_block"; then
+        report ok "ci.yml: $desktop_job skips only ordinary pull requests"
+    else
+        report FAIL "ci.yml: $desktop_job skips only ordinary pull requests"
+    fi
+done
+
+# Every CI desktop E2E artifact step must fail closed. Match the step boundary
+# so a nearby non-E2E upload cannot satisfy this contract accidentally.
+e2e_upload_contracts="$(awk '
+    /^[[:space:]]*- name: .*Tauri E2E artifacts/ { pending=1; next }
+    pending && /if-no-files-found: error/ { passed++; pending=0; next }
+    pending && /^[[:space:]]*- name:/ { pending=0 }
+    END { print passed + 0 }
+' "$ci_workflow")"
+e2e_upload_steps="$(grep -Ec '^[[:space:]]*- name: .*Tauri E2E artifacts' "$ci_workflow" || true)"
+if [ "$e2e_upload_steps" -gt 0 ] && [ "$e2e_upload_contracts" -eq "$e2e_upload_steps" ]; then
+    report ok "ci.yml: all $e2e_upload_steps desktop E2E uploads fail when artifacts are absent"
+else
+    report FAIL 'ci.yml: all desktop E2E uploads fail when artifacts are absent' "found $e2e_upload_contracts/$e2e_upload_steps"
+fi
+
+# Release is tag/manual-dispatch only; its reusable validation must remain
+# unconditional even while ordinary pull requests skip the hosted Linux/macOS
+# jobs above.
+if grep -q '^    uses: \./\.github/workflows/desktop-validation\.yml$' .github/workflows/release.yml && \
+   grep -q '^    needs: \[preflight, validate\]$' .github/workflows/release.yml; then
+    report ok 'release.yml: publishing remains gated by reusable desktop validation'
+else
+    report FAIL 'release.yml: publishing remains gated by reusable desktop validation'
+fi
+
 # --- no bypass flags may exist --------------------------------------------------
 # "NEVER bypass by default": there is no --skip-* / --bypass flag anywhere in
 # the canonical flow. (--force relaxes git hygiene only and is documented as

@@ -1,4 +1,6 @@
 # Promote only the SHA-bound artifacts produced by desktop-validation.yml.
+# The reusable desktop validation remains mandatory for tag/manual releases;
+# the pull-request-only Linux/macOS skip applies only to ci.yml.
 name: Release
 
 on:

@@ -132,6 +132,7 @@ jobs:
   macos:
     name: macOS (build + tests + renderer smoke)
     runs-on: macos-15
+    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -200,6 +201,7 @@ jobs:
   ubuntu:
     name: Ubuntu 24.04 (GTK4/libadwaita + layer-shell)
     runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request'
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
