@@ -19,6 +19,6 @@ describe("surface recovery", () => {
   it("shows a readable alert and keeps the shell mounted after bootstrap failure", async () => {
     await waitForSurface(app, "mixer");
     await expect($(selectors.surfaceRoot("mixer"))).toBeDisplayed();
-    await expect($('[data-surface="mixer"] [role="alert"]')).toHaveText(/Mixer unavailable:.*E2E bootstrap failure/);
+    await expect($('[data-surface="mixer"] [role="alert"]')).toHaveText(/Mixer connection needs attention.*E2E bootstrap failure/);
   });
 });

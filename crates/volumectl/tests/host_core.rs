@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use volumectl_lib::audio::{AudioBackend, AudioError, VolumeState};
-use volumectl_lib::config::{Config, HotkeyModifier};
+use volumectl_lib::config::{Config, HotkeyBindings, HotkeyModifier};
 use volumectl_lib::host_core::{AppCore, AudioSessionInfo, EventSink};
 use volumectl_lib::hotkeys::HotkeyRegResult;
 use volumectl_lib::ui::AppAction;
@@ -375,6 +375,24 @@ fn update_settings_blacklist_replace_normalizes_entries() {
     );
     #[cfg(not(target_os = "windows"))]
     assert_eq!(list, vec!["code".to_string(), "notepad++".to_string()]);
+}
+
+#[test]
+fn update_settings_adopts_recorded_hotkey_bindings() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink);
+    let bindings = HotkeyBindings {
+        toggle_mute: "Ctrl+Shift+KeyU".into(),
+        ..HotkeyBindings::default()
+    };
+
+    core.update_settings(volumectl_lib::host_core::SettingsPatch {
+        hotkeys: Some(bindings.clone()),
+        ..Default::default()
+    })
+    .expect("valid recorded bindings are accepted");
+
+    assert_eq!(core.bootstrap().config.hotkeys, Some(bindings));
 }
 
 #[test]

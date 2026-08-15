@@ -14,7 +14,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::audio::{AudioBackend, VolumeState};
-use crate::config::{Config, HotkeyModifier};
+use crate::config::{Config, HotkeyBindings, HotkeyModifier};
 use crate::hotkeys::{HotkeyAction, HotkeyRegResult};
 use crate::hotkeys_global::GlobalHotkeys;
 use crate::ui::{AccentMode, AppAction, MaterialMode, MotionMode, SurfaceId, ThemeMode};
@@ -37,6 +37,9 @@ pub struct SettingsPatch {
     pub accent: Option<String>,
     /// Overlay visible time in ms (200..=10_000).
     pub overlay_duration_ms: Option<u64>,
+    /// Full shortcut map recorded in Settings. The backend validates every
+    /// entry and only adopts the map after it has been persisted safely.
+    pub hotkeys: Option<HotkeyBindings>,
     /// Beep feedback fields (all optional within the group).
     pub beep: Option<BeepPatch>,
     /// Colour legend thresholds (all optional within the group).
@@ -188,7 +191,8 @@ impl AppCore {
         modifier: HotkeyModifier,
         sink: Arc<dyn EventSink>,
     ) -> Result<Self, String> {
-        let hotkeys = GlobalHotkeys::new(modifier)?;
+        let bindings = config_hotkeys(&config);
+        let hotkeys = GlobalHotkeys::new_with_bindings(&bindings)?;
         // Keep the wheel-bridge modifier in sync with the initial config on
         // Windows (legacy app.rs initialized it at startup; the modifier
         // change paths below re-sync on every change). Idempotent atomic
@@ -450,6 +454,10 @@ impl AppCore {
         let motion = patch.motion.as_deref().map(parse_motion).transpose()?;
         let accent = patch.accent.as_deref().map(parse_accent).transpose()?;
 
+        if let Some(hotkeys) = &patch.hotkeys {
+            crate::config::validate_hotkeys(hotkeys).map_err(|e| e.to_string())?;
+        }
+
         // Step sizes: validate the prospective values (patch values fall back
         // to the current config) against the same rules `save_validated`
         // enforces — identical error strings via config::validate_steps.
@@ -529,6 +537,9 @@ impl AppCore {
         if let Some(overlay) = patch.overlay_duration_ms {
             self.config.overlay_duration_ms = overlay;
         }
+        if let Some(hotkeys) = patch.hotkeys {
+            self.config.hotkeys = Some(hotkeys);
+        }
         if let Some(beep) = patch.beep {
             if let Some(v) = beep.enabled {
                 self.config.beep.enabled = v;
@@ -580,15 +591,17 @@ impl AppCore {
         // normalized config; adopt it so memory matches disk.
         let mut next = self.config.clone();
         next.modifier = modifier;
+        next.hotkeys = Some(HotkeyBindings::for_modifier(modifier));
         let saved = crate::config::save_validated(&next).map_err(|e| e.to_string())?;
+        let bindings_changed = saved.hotkeys != self.config.hotkeys;
         let modifier_changed = saved.modifier != self.config.modifier;
         self.config = saved;
         // Resync the mtime so the 150 ms reloader never sees our own write as
         // an external change (same class as `adopt_saved_config`).
         self.last_config_mtime = config_mtime();
-        if modifier_changed {
-            log::info!("config: modifier changed — updating global listener");
-            self.hotkeys.set_modifier(self.config.modifier);
+        if modifier_changed || bindings_changed {
+            log::info!("config: global shortcuts changed — updating listener");
+            self.hotkeys.set_bindings(&config_hotkeys(&self.config));
             // Keep the wheel-bridge modifier in sync on Windows (legacy synced
             // the wheel in every modifier-change path).
             #[cfg(target_os = "windows")]
@@ -677,6 +690,7 @@ impl AppCore {
         self.last_config_mtime = mtime;
         let new_cfg = crate::config::load();
         let modifier_changed = new_cfg.modifier != self.config.modifier;
+        let bindings_changed = new_cfg.hotkeys != self.config.hotkeys;
         log::info!(
             "config reloaded (step={}, step_large={}, overlay_ms={}, modifier={:?})",
             new_cfg.volume_step,
@@ -685,8 +699,8 @@ impl AppCore {
             new_cfg.modifier
         );
         self.config = new_cfg;
-        if modifier_changed {
-            self.hotkeys.set_modifier(self.config.modifier);
+        if modifier_changed || bindings_changed {
+            self.hotkeys.set_bindings(&config_hotkeys(&self.config));
             #[cfg(target_os = "windows")]
             crate::wheel_win32::set_modifier(self.config.modifier);
             self.hotkey_status = self.hotkeys.status();
@@ -704,13 +718,14 @@ impl AppCore {
 
     fn adopt_saved_config(&mut self, saved: Config) {
         let modifier_changed = saved.modifier != self.config.modifier;
+        let bindings_changed = saved.hotkeys != self.config.hotkeys;
         self.config = saved;
         // Resync the mtime so a save never triggers the 150 ms reloader into
         // a spurious reload + HUD flash (legacy resynced here too).
         self.last_config_mtime = config_mtime();
-        if modifier_changed {
-            log::info!("config: modifier changed — updating global listener");
-            self.hotkeys.set_modifier(self.config.modifier);
+        if modifier_changed || bindings_changed {
+            log::info!("config: global shortcuts changed — updating listener");
+            self.hotkeys.set_bindings(&config_hotkeys(&self.config));
             #[cfg(target_os = "windows")]
             crate::wheel_win32::set_modifier(self.config.modifier);
             self.hotkey_status = self.hotkeys.status();
@@ -819,6 +834,13 @@ fn accent_str(a: AccentMode) -> &'static str {
         AccentMode::Purple => "Purple",
         AccentMode::Orange => "Orange",
     }
+}
+
+fn config_hotkeys(config: &Config) -> HotkeyBindings {
+    config
+        .hotkeys
+        .clone()
+        .unwrap_or_else(|| HotkeyBindings::for_modifier(config.modifier))
 }
 
 /// Resolve the platform system theme (true = dark). Windows reads the

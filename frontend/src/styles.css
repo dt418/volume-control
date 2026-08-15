@@ -127,13 +127,14 @@ body {
   }
 
   .glass-surface {
-    background-color: color-mix(in oklab, var(--background) 85%, transparent);
+    /* Keep the transparent-window treatment readable on bright wallpapers. */
+    background-color: color-mix(in oklab, var(--background) 94%, transparent);
   }
   @supports ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
     .glass-surface {
       -webkit-backdrop-filter: blur(12px);
       backdrop-filter: blur(12px);
-      background-color: color-mix(in oklab, var(--background) 60%, transparent);
+      background-color: color-mix(in oklab, var(--background) 88%, transparent);
     }
   }
 }

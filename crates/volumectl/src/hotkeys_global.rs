@@ -22,7 +22,7 @@ use std::time::Duration;
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 
-use crate::config::HotkeyModifier;
+use crate::config::{HotkeyBindings, HotkeyModifier};
 use crate::hotkeys::{
     hotkey_from_id, hotkey_id, HotkeyAction, HotkeyRegError, HotkeyRegResult, HotkeyRegStatus,
     ALL_HOTKEY_ACTIONS,
@@ -72,6 +72,31 @@ pub fn combos_for(modifier: HotkeyModifier) -> Vec<(HotKey, HotkeyAction)> {
     push(Code::KeyR, Modifiers::empty(), HotkeyAction::Reset50);
     push(Code::KeyV, Modifiers::empty(), HotkeyAction::OpenMixer);
     combos
+}
+
+/// Parse the persisted bindings into the native registration list while
+/// preserving the Help/Settings action order.
+fn combos_from_bindings(bindings: &HotkeyBindings) -> Result<Vec<(HotKey, HotkeyAction)>, String> {
+    let entries = [
+        (&bindings.volume_up, HotkeyAction::VolumeUp),
+        (&bindings.volume_down, HotkeyAction::VolumeDown),
+        (&bindings.volume_up_large, HotkeyAction::VolumeUpLarge),
+        (&bindings.volume_down_large, HotkeyAction::VolumeDownLarge),
+        (&bindings.toggle_mute, HotkeyAction::ToggleMute),
+        (&bindings.reset_50, HotkeyAction::Reset50),
+        (&bindings.open_mixer, HotkeyAction::OpenMixer),
+        (&bindings.open_menu, HotkeyAction::OpenMenu),
+    ];
+    entries
+        .into_iter()
+        .filter(|(value, _)| !value.trim().is_empty())
+        .map(|(value, action)| {
+            value
+                .parse::<HotKey>()
+                .map(|hotkey| (hotkey, action))
+                .map_err(|error| format!("invalid hotkey for {action:?}: {error}"))
+        })
+        .collect()
 }
 
 fn is_volume_action(action: HotkeyAction) -> bool {
@@ -284,6 +309,10 @@ fn register_combos(
 
     // An action is active if at least one of its combos registered.
     for result in &mut reg_results {
+        if !combos.iter().any(|(_, action)| *action == result.action) {
+            result.status = HotkeyRegStatus::Disabled;
+            continue;
+        }
         if combos
             .iter()
             .any(|(hotkey, action)| *action == result.action && ids.contains_key(&hotkey.id()))
@@ -325,12 +354,14 @@ unsafe impl Sync for GlobalHotkeys {}
 
 impl GlobalHotkeys {
     pub fn new(initial_modifier: HotkeyModifier) -> Result<Self, String> {
-        if initial_modifier == HotkeyModifier::CapsLock {
-            log::warn!("CapsLock is not supported by global-hotkey; using Ctrl+Alt combos instead");
-        }
+        Self::new_with_bindings(&HotkeyBindings::for_modifier(initial_modifier))
+    }
+
+    /// Create the native listener from the user-recorded bindings.
+    pub fn new_with_bindings(bindings: &HotkeyBindings) -> Result<Self, String> {
         let manager = GlobalHotKeyManager::new()
             .map_err(|error| format!("create global hotkey manager: {error}"))?;
-        let combos = combos_for(initial_modifier);
+        let combos = combos_from_bindings(bindings)?;
         let (ids, registered, reg_results) = register_combos(&manager, &combos);
 
         let (tx, rx) = mpsc::channel();
@@ -374,10 +405,21 @@ impl GlobalHotkeys {
     /// Apply a config change: unregister and re-register every combo for the
     /// new modifier without restarting the host.
     pub fn set_modifier(&self, modifier: HotkeyModifier) {
+        self.set_bindings(&HotkeyBindings::for_modifier(modifier));
+    }
+
+    /// Unregister the previous set and atomically replace it with the
+    /// validated user bindings. Registration conflicts remain per-action and
+    /// are exposed through `status`, matching the legacy behavior.
+    pub fn set_bindings(&self, bindings: &HotkeyBindings) {
+        let combos = match combos_from_bindings(bindings) {
+            Ok(combos) => combos,
+            Err(error) => {
+                log::error!("{error}; keeping current global shortcuts");
+                return;
+            }
+        };
         self.hold.stop();
-        if modifier == HotkeyModifier::CapsLock {
-            log::warn!("CapsLock is not supported by global-hotkey; using Ctrl+Alt combos instead");
-        }
         {
             let registered = self.registered.lock().expect("hotkey list poisoned");
             for hotkey in registered.iter() {
@@ -389,7 +431,6 @@ impl GlobalHotkeys {
                 let _ = self.manager.unregister(*hotkey);
             }
         }
-        let combos = combos_for(modifier);
         let (ids, registered, reg_results) = register_combos(&self.manager, &combos);
         *self.ids.write().expect("hotkey ids poisoned") = ids;
         *self.registered.lock().expect("hotkey list poisoned") = registered;
@@ -555,6 +596,19 @@ mod tests {
     #[test]
     fn combos_for_caps_lock_falls_back_to_ctrl_alt() {
         assert_eq!(combos_for(HotkeyModifier::CapsLock), combos());
+    }
+
+    #[test]
+    fn recorded_bindings_skip_cleared_actions() {
+        let bindings = HotkeyBindings {
+            open_menu: String::new(),
+            ..HotkeyBindings::default()
+        };
+        let combos = combos_from_bindings(&bindings).expect("default bindings parse");
+        assert_eq!(combos.len(), 7);
+        assert!(!combos
+            .iter()
+            .any(|(_, action)| *action == HotkeyAction::OpenMenu));
     }
 
     #[test]

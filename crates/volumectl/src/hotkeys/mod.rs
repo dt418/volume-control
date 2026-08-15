@@ -59,6 +59,8 @@ pub struct HotkeyRegResult {
 pub enum HotkeyRegStatus {
     /// The action is handled by the global hotkey listener.
     Registered,
+    /// The user intentionally cleared this action's shortcut.
+    Disabled,
     /// Kept for compatibility with older persisted/help models.
     Conflicted(HotkeyRegError),
     /// Kept for compatibility with older hook-backed configurations.

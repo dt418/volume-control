@@ -6,6 +6,8 @@ import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
 import type { HotkeyRegResult } from "../settings/KeyCard";
+import { bindingsForModifier } from "../settings/modifierOptions";
+import type { HotkeyBindings } from "../settings/settingsTypes";
 import { ConflictCallout, conflictSentence, type ConflictCalloutData } from "./ConflictCallout";
 import { HelpFooter } from "./HelpFooter";
 import { HotkeyStatusBadge } from "./HotkeyStatusBadge";
@@ -40,7 +42,7 @@ function ShortcutCard({ item, status }: { item: HelpShortcut; status: ReturnType
 }
 
 interface BootstrapPayload {
-  config: { modifier?: string };
+  config: { modifier?: string; hotkeys?: HotkeyBindings };
   hotkey_status: HotkeyRegResult[];
   appearance: AppearancePayload;
 }
@@ -49,10 +51,10 @@ interface BootstrapPayload {
  *  another app (legacy help.rs `conflict_callout` parity: base actions only,
  *  shift variants deduplicated). `None` when everything registered cleanly. */
 function buildCallout(
-  modifier: string,
+  bindings: HotkeyBindings,
   status: HotkeyRegResult[],
 ): ConflictCalloutData | null {
-  const conflicted = baseActions(modifier).filter(
+  const conflicted = baseActions(bindings).filter(
     (item) => statusForAction(status, item.action) === "in-use",
   );
   if (conflicted.length === 0) return null;
@@ -64,6 +66,7 @@ function buildCallout(
 
 export function HelpSurface() {
   const [modifier, setModifier] = useState("CtrlAlt");
+  const [bindings, setBindings] = useState<HotkeyBindings>(() => bindingsForModifier("CtrlAlt"));
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyRegResult[]>([]);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +78,9 @@ export function HelpSurface() {
         if (alive) {
           setError(null);
           applyAppearance(bootstrap.appearance as AppearancePayload);
-          setModifier(bootstrap.config?.modifier ?? "CtrlAlt");
+          const nextModifier = bootstrap.config?.modifier ?? "CtrlAlt";
+          setModifier(nextModifier);
+          setBindings(bootstrap.config?.hotkeys ?? bindingsForModifier(nextModifier));
           setHotkeyStatus(bootstrap.hotkey_status ?? []);
         }
       })
@@ -102,11 +107,11 @@ export function HelpSurface() {
     };
   }, []);
 
-  const groups = useMemo(() => helpGroups(modifier), [modifier]);
+  const groups = useMemo(() => helpGroups(bindings), [bindings]);
   const note = helpNote(modifier);
   const callout = useMemo(
-    () => buildCallout(modifier, hotkeyStatus),
-    [modifier, hotkeyStatus],
+    () => buildCallout(bindings, hotkeyStatus),
+    [bindings, hotkeyStatus],
   );
 
   const filtered = useMemo(() => {

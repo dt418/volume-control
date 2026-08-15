@@ -10,7 +10,13 @@
  * combos, with shift variants sharing the base action's status).
  */
 
-import { modifierById } from "../settings/modifierOptions";
+import {
+  bindingsForModifier,
+  formatShortcut,
+  HOTKEY_ACTIONS,
+  type HotkeyActionKey,
+} from "../settings/modifierOptions";
+import type { HotkeyBindings } from "../settings/settingsTypes";
 
 export interface HelpShortcut {
   action: string;
@@ -36,18 +42,18 @@ const BASE_ACTIONS = [
 /** Extended webview additions: the shift variants + the menu action. */
 const EXTENDED_ACTIONS = ["VolumeUpLarge", "VolumeDownLarge", "OpenMenu"] as const;
 
-/** Grouped shortcuts for the configured modifier (CapsLock → Ctrl+Alt fallback). */
-export function helpGroups(modifier: string): HelpGroup[] {
-  // CapsLock is unsupported by the backend; show the Ctrl+Alt combos it falls back to.
-  const mod = modifier === "CapsLock" ? modifierById("CtrlAlt") : modifierById(modifier);
-  const byAction = new Map(mod.combos.map((c) => [c.action, c]));
+/** Grouped shortcuts for the configured bindings. The string overload keeps
+ * old callers/tests working while a fresh config uses the recorded map. */
+export function helpGroups(source: string | HotkeyBindings): HelpGroup[] {
+  const bindings = typeof source === "string" ? bindingsForModifier(source) : source;
   const pick = (action: string): HelpShortcut => {
-    const combo = byAction.get(action);
-    if (!combo) {
+    const entry = HOTKEY_ACTIONS.find((candidate) => candidate.action === action);
+    const value = entry ? bindings[entry.key as HotkeyActionKey] : "";
+    if (!value) {
       // Defensive: never render a card without its combo.
-      return { action, label: action, combo: "" };
+      return { action, label: entry?.label ?? action, combo: "" };
     }
-    return { action, label: combo.label, combo: combo.combo };
+    return { action, label: entry?.label ?? action, combo: formatShortcut(value) };
   };
   return [
     { id: "volume", title: "Volume", items: BASE_ACTIONS.slice(0, 2).map(pick) },
@@ -65,8 +71,8 @@ export function helpGroups(modifier: string): HelpGroup[] {
 }
 
 /** The five base actions (used for status badges + the conflict callout). */
-export function baseActions(modifier: string): HelpShortcut[] {
-  return helpGroups(modifier)
+export function baseActions(source: string | HotkeyBindings): HelpShortcut[] {
+  return helpGroups(source)
     .filter((g) => g.id !== "extended")
     .flatMap((g) => g.items);
 }

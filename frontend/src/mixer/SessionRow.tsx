@@ -14,7 +14,7 @@ export function SessionRow({ session, onMute, onVolumeError }: SessionRowProps) 
   return (
     <div
       data-testid="session-row"
-      className="flex items-center gap-3 rounded-lg border border-foreground/10 bg-background/60 px-3 py-2"
+      className="flex items-center gap-3 rounded-lg border border-foreground/20 bg-background/88 px-3 py-2 shadow-sm"
     >
       <span className="w-28 shrink-0 truncate text-xs font-medium" title={session.name}>
         {session.name}
@@ -30,7 +30,7 @@ export function SessionRow({ session, onMute, onVolumeError }: SessionRowProps) 
         type="button"
         aria-label={session.muted ? `Unmute ${session.name}` : `Mute ${session.name}`}
         onClick={() => onMute(session.id)}
-        className="shrink-0 rounded-md p-1.5 text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
+        className="shrink-0 rounded-md p-1.5 text-foreground/85 transition-colors hover:bg-foreground/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <MuteIcon className="h-4 w-4" />
       </button>

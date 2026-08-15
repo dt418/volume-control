@@ -1,7 +1,8 @@
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Kbd } from "../components/ui/kbd";
-import { modifierById, type ModifierOption } from "./modifierOptions";
+import { HOTKEY_ACTIONS, formatShortcut, modifierById, type ModifierOption } from "./modifierOptions";
+import type { HotkeyBindings } from "./settingsTypes";
 
 /**
  * Per-action registration outcome mirrored from bootstrap.hotkey_status /
@@ -11,6 +12,7 @@ import { modifierById, type ModifierOption } from "./modifierOptions";
  */
 export type HotkeyRegStatus =
   | "Registered"
+  | "Disabled"
   | "HookRouted"
   | { Conflicted: { error_code: number; message: string } };
 
@@ -37,34 +39,35 @@ export function conflictForAction(
 }
 
 export interface KeyCardProps {
-  modifier: ModifierOption;
+  bindings: HotkeyBindings;
   hotkeyStatus: HotkeyRegResult[];
 }
 
 /** Card of read-only key combos for the selected modifier, with conflict
  *  badges per action (spec §5.2). */
-export function KeyCard({ modifier, hotkeyStatus }: KeyCardProps) {
+export function KeyCard({ bindings, hotkeyStatus }: KeyCardProps) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Hotkeys</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        {modifier.combos.map((combo) => {
-          const conflict = conflictForAction(hotkeyStatus, combo.action);
+        {HOTKEY_ACTIONS.map((entry) => {
+          const conflict = conflictForAction(hotkeyStatus, entry.action);
+          const shortcut = bindings[entry.key];
           return (
             <div
-              key={combo.action}
+              key={entry.action}
               className="flex items-center justify-between gap-2 text-sm"
             >
-              <span className="text-foreground/80">{combo.label}</span>
+              <span className="text-foreground/80">{entry.label}</span>
               <span className="flex items-center gap-2">
                 {conflict ? (
                   <Badge variant="destructive" className="destructive">
                     {conflict}
                   </Badge>
                 ) : null}
-                <Kbd>{combo.combo}</Kbd>
+                <Kbd>{formatShortcut(shortcut)}</Kbd>
               </span>
             </div>
           );

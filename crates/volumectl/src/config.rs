@@ -112,6 +112,66 @@ pub enum HotkeyModifier {
     CapsLock,
 }
 
+/// User-configurable global shortcuts.
+///
+/// Values use the portable `global-hotkey` spelling (for example
+/// `Ctrl+Shift+KeyU` or `Ctrl+Alt+ArrowUp`). Keeping the wire format as text
+/// lets the settings surface record a native keyboard event without leaking
+/// platform-specific key codes into the persisted config.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HotkeyBindings {
+    pub volume_up: String,
+    pub volume_down: String,
+    pub volume_up_large: String,
+    pub volume_down_large: String,
+    pub toggle_mute: String,
+    pub reset_50: String,
+    pub open_mixer: String,
+    pub open_menu: String,
+}
+
+impl HotkeyBindings {
+    /// Build the legacy preset used by the modifier picker.
+    pub fn for_modifier(modifier: HotkeyModifier) -> Self {
+        let base = match modifier {
+            HotkeyModifier::CtrlAlt | HotkeyModifier::CapsLock => "Ctrl+Alt",
+            HotkeyModifier::Alt => "Alt",
+            HotkeyModifier::Ctrl => "Ctrl",
+        };
+        Self {
+            volume_up: format!("{base}+ArrowUp"),
+            volume_down: format!("{base}+ArrowDown"),
+            volume_up_large: format!("{base}+Shift+ArrowUp"),
+            volume_down_large: format!("{base}+Shift+ArrowDown"),
+            toggle_mute: format!("{base}+KeyM"),
+            reset_50: format!("{base}+KeyR"),
+            open_mixer: format!("{base}+KeyV"),
+            open_menu: format!("{base}+Shift+KeyM"),
+        }
+    }
+
+    /// Return every persisted field for validation and native registration.
+    pub fn entries(&self) -> [(&'static str, &str); 8] {
+        [
+            ("hotkeys.volume_up", &self.volume_up),
+            ("hotkeys.volume_down", &self.volume_down),
+            ("hotkeys.volume_up_large", &self.volume_up_large),
+            ("hotkeys.volume_down_large", &self.volume_down_large),
+            ("hotkeys.toggle_mute", &self.toggle_mute),
+            ("hotkeys.reset_50", &self.reset_50),
+            ("hotkeys.open_mixer", &self.open_mixer),
+            ("hotkeys.open_menu", &self.open_menu),
+        ]
+    }
+}
+
+impl Default for HotkeyBindings {
+    fn default() -> Self {
+        Self::for_modifier(HotkeyModifier::CtrlAlt)
+    }
+}
+
 /// App-level configuration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -124,6 +184,10 @@ pub struct Config {
     pub overlay_duration_ms: u64,
     /// Modifier used for custom hotkeys (default CtrlAlt).
     pub modifier: HotkeyModifier,
+    /// Individual global shortcuts. Older config files that only contain the
+    /// modifier are upgraded to the corresponding preset during normalization.
+    #[serde(default)]
+    pub hotkeys: Option<HotkeyBindings>,
     /// Executable names (lowercase, with `.exe`) where custom hotkeys are
     /// suppressed while that process has the foreground window.
     pub blacklist: Vec<String>,
@@ -180,6 +244,7 @@ impl Default for Config {
             volume_step_large: 10,
             overlay_duration_ms: 1800,
             modifier: HotkeyModifier::CtrlAlt,
+            hotkeys: Some(HotkeyBindings::default()),
             blacklist: Vec::new(),
             color_thresholds: ColorThresholds {
                 green_up_to: 40,
@@ -438,6 +503,32 @@ pub fn validate(cfg: &Config) -> Result<(), ConfigValidationError> {
             "must be between 10 and 2000",
         ));
     }
+    validate_hotkeys(cfg.hotkeys.as_ref().unwrap_or(&HotkeyBindings::default()))?;
+    Ok(())
+}
+
+/// Validate every recorded shortcut before it reaches the native manager.
+/// Empty shortcuts, malformed key names, and duplicate registrations are all
+/// rejected with a field-specific message so Settings can focus the right
+/// row instead of leaving a partially applied configuration active.
+pub fn validate_hotkeys(bindings: &HotkeyBindings) -> Result<(), ConfigValidationError> {
+    use std::collections::HashSet;
+    use std::str::FromStr;
+
+    let mut seen = HashSet::new();
+    for (field, value) in bindings.entries() {
+        if value.trim().is_empty() {
+            continue;
+        }
+        let hotkey = global_hotkey::hotkey::HotKey::from_str(value)
+            .map_err(|error| validation(field, format!("invalid shortcut: {error}")))?;
+        if hotkey.mods.is_empty() {
+            return Err(validation(field, "must include at least one modifier"));
+        }
+        if !seen.insert(hotkey.id()) {
+            return Err(validation(field, "duplicates another shortcut"));
+        }
+    }
     Ok(())
 }
 
@@ -518,6 +609,20 @@ pub fn normalize_blacklist_entry(entry: &str) -> String {
 
 /// Return a normalized copy while preserving the existing config bounds.
 pub fn normalize(mut cfg: Config) -> Config {
+    // Legacy config files only had a single modifier. Preserve their behavior
+    // by upgrading the freshly deserialized default binding set to that
+    // modifier's preset. A custom set is left untouched.
+    if cfg.hotkeys.is_none() {
+        cfg.hotkeys = Some(HotkeyBindings::for_modifier(cfg.modifier));
+    }
+    if cfg
+        .hotkeys
+        .as_ref()
+        .is_some_and(|bindings| validate_hotkeys(bindings).is_err())
+    {
+        log::warn!("invalid hotkey bindings; restoring the configured modifier preset");
+        cfg.hotkeys = Some(HotkeyBindings::for_modifier(cfg.modifier));
+    }
     // There must be room for a strictly larger large step within the existing
     // 1..=50 bounds, so the small step's effective maximum is 49.
     cfg.volume_step = cfg
@@ -1003,5 +1108,55 @@ mod tests {
         let cfg = Config::default();
         assert_eq!(cfg.volume_step, 1, "small step must default to 1%");
         assert_eq!(cfg.volume_step_large, 10, "large step stays 10%");
+    }
+
+    #[test]
+    fn hotkey_bindings_follow_legacy_modifier_presets() {
+        let mut cfg = Config {
+            modifier: HotkeyModifier::Alt,
+            ..Config::default()
+        };
+        cfg.hotkeys = None;
+        let normalized = normalize(cfg);
+        assert_eq!(
+            normalized.hotkeys,
+            Some(HotkeyBindings::for_modifier(HotkeyModifier::Alt))
+        );
+        validate(&normalized).expect("preset bindings are valid");
+    }
+
+    #[test]
+    fn hotkey_validation_rejects_duplicates_and_missing_modifiers() {
+        let mut duplicate = HotkeyBindings::default();
+        duplicate.volume_down = duplicate.volume_up.clone();
+        let error = validate_hotkeys(&duplicate).expect_err("duplicate must be rejected");
+        assert_eq!(error.field, "hotkeys.volume_down");
+        assert!(error.message.contains("duplicates"));
+
+        let bare_key = HotkeyBindings {
+            volume_up: "KeyU".into(),
+            ..HotkeyBindings::default()
+        };
+        let error = validate_hotkeys(&bare_key).expect_err("bare key must be rejected");
+        assert_eq!(error.field, "hotkeys.volume_up");
+        assert!(error.message.contains("modifier"));
+    }
+
+    #[test]
+    fn hotkey_validation_accepts_recorded_shortcut_spelling() {
+        let bindings = HotkeyBindings {
+            open_menu: "Ctrl+Shift+KeyU".into(),
+            ..HotkeyBindings::default()
+        };
+        validate_hotkeys(&bindings).expect("recorded Code shortcut is valid");
+    }
+
+    #[test]
+    fn hotkey_validation_allows_cleared_shortcuts() {
+        let bindings = HotkeyBindings {
+            open_menu: String::new(),
+            ..HotkeyBindings::default()
+        };
+        validate_hotkeys(&bindings).expect("cleared actions are intentionally disabled");
     }
 }

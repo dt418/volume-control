@@ -22,6 +22,7 @@ export function MixerSurface() {
     sessionsSupported,
     notice,
     error,
+    retry,
     setNotice,
     removeSession,
     updateSession,
@@ -85,18 +86,18 @@ export function MixerSurface() {
     <main data-surface="mixer" className="mixer-surface surface-shell h-dvh min-h-0 overflow-hidden glass-surface flex flex-col gap-1 p-2">
       <header data-testid="surface-header" className="flex flex-shrink-0 flex-col gap-2">
         <h1 className="text-sm font-semibold">Volume Mixer</h1>
-        <div className="text-xs text-foreground/60">
+        <div className="text-xs text-foreground/80">
           {muted ? <span className="font-medium">Muted</span> : `Volume ${volumePct}%`}
         </div>
 
       <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/40" />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/65" />
         <input
           type="text"
           placeholder="Search apps…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          className="w-full rounded-md border border-foreground/10 bg-background/60 py-1.5 pl-8 pr-3 text-xs outline-none placeholder:text-foreground/40 focus:border-accent"
+          className="w-full rounded-md border border-foreground/20 bg-background/88 py-1.5 pl-8 pr-3 text-xs outline-none placeholder:text-foreground/60 focus:border-accent focus:ring-2 focus:ring-accent/35"
         />
       </div>
 
@@ -114,15 +115,25 @@ export function MixerSurface() {
 
       <div data-testid="surface-content" className="surface-content surface-scroll min-h-0 flex-1 space-y-2 overflow-y-auto">
         {error ? (
-          <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-            Mixer unavailable: {surfaceErrorMessage(error)}
+          <div role="alert" aria-live="assertive" className="flex items-start justify-between gap-3 rounded-md border border-amber-500/45 bg-amber-500/12 p-3 text-xs text-foreground">
+            <div className="min-w-0">
+              <p className="font-semibold">Mixer connection needs attention</p>
+              <p className="mt-1 break-words text-foreground/75">{surfaceErrorMessage(error)}</p>
+            </div>
+            <button
+              type="button"
+              onClick={retry}
+              className="shrink-0 rounded-md border border-foreground/25 bg-background/80 px-2 py-1 font-medium text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Retry
+            </button>
           </div>
         ) : !sessionsSupported ? (
-          <p className="py-8 text-center text-xs text-foreground/50">
+          <p className="py-8 text-center text-xs text-foreground/70">
             Per-app mixing is Windows-only
           </p>
         ) : filtered.length === 0 ? (
-          <p className="py-8 text-center text-xs text-foreground/50">
+          <p className="py-8 text-center text-xs text-foreground/70">
             {sessions.length === 0 ? "No audio sessions" : "No matching apps"}
           </p>
         ) : (
@@ -142,9 +153,9 @@ export function MixerSurface() {
         )}
       </div>
 
-      <footer data-testid="surface-footer" className="flex flex-shrink-0 items-center justify-between border-t border-foreground/10 pt-1 text-[11px] text-foreground/55">
+      <footer data-testid="surface-footer" className="flex flex-shrink-0 items-center justify-between border-t border-foreground/20 pt-1 text-[11px] text-foreground/70">
         <span>{sessionsSupported ? `${filtered.length} app sessions` : "System output"}</span>
-        {error ? <span className="text-destructive">Backend unavailable</span> : <span>Esc to close</span>}
+        {error ? <span className="font-medium text-amber-700 dark:text-amber-300">Retry connection</span> : <span>Esc to close</span>}
       </footer>
     </main>
   );

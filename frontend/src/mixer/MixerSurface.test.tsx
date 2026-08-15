@@ -136,6 +136,30 @@ describe("MixerSurface", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a retry instead of leaving a scary backend-unavailable footer", async () => {
+    let attempts = 0;
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") {
+        attempts += 1;
+        if (attempts === 1) throw new Error("temporary bootstrap failure");
+        return bootstrap;
+      }
+      return {};
+    });
+
+    render(<MixerSurface />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Mixer connection needs attention",
+    );
+    expect(screen.getByTestId("surface-footer")).not.toHaveTextContent(
+      "Backend unavailable",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getAllByTestId("session-row")).toHaveLength(3));
+    expect(attempts).toBe(2);
+  });
+
   it("renders two distinct rows when sessions share the same id and name", async () => {
     // AudioSessionInfo ids are process ids: a single process (e.g. a
     // Chromium-style multi-stream process) can own several sessions with the

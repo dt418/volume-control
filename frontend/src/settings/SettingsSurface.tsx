@@ -9,6 +9,7 @@ import { BlacklistEditor } from "./BlacklistEditor";
 import { FeedbackSection } from "./FeedbackSection";
 import { GeneralSection } from "./GeneralSection";
 import { HotkeysSection } from "./HotkeysSection";
+import { bindingsForModifier } from "./modifierOptions";
 import { SectionNav, type SettingsSection } from "./SectionNav";
 import { StorageSection } from "./StorageSection";
 import type { FieldErrors, SettingsConfig } from "./settingsTypes";
@@ -41,8 +42,15 @@ const SECTION_FOR_FIELD: Record<string, SettingsSection> = {
  *  Display). Extract the field so the surface can place an inline error and
  *  switch to the owning section. */
 function fieldFromMessage(message: string): string | null {
-  const match = /^([a-z][a-z_.]*): /.exec(message);
+  const match = /^([a-z_][a-z0-9_.]*): /.exec(message);
   return match ? match[1] : null;
+}
+
+function hydrateConfig(config: SettingsConfig): SettingsConfig {
+  return {
+    ...config,
+    hotkeys: config.hotkeys ?? bindingsForModifier(config.modifier),
+  };
 }
 
 /** Build ONE SettingsPatch from the draft (atomic commit; the backend only
@@ -53,6 +61,7 @@ function buildPatch(draft: SettingsConfig): Record<string, unknown> {
     volume_step: draft.volume_step,
     volume_step_large: draft.volume_step_large,
     overlay_duration_ms: draft.overlay_duration_ms,
+    hotkeys: { ...(draft.hotkeys ?? bindingsForModifier(draft.modifier)) },
     theme: draft.appearance.theme,
     material: draft.appearance.material,
     motion: draft.appearance.motion,
@@ -84,8 +93,9 @@ export function SettingsSurface() {
         if (disposed) return;
         setError(null);
         applyAppearance(payload.appearance);
-        setConfig(payload.config);
-        setDraft(payload.config);
+        const hydrated = hydrateConfig(payload.config);
+        setConfig(hydrated);
+        setDraft(hydrated);
         setHotkeyStatus(payload.hotkey_status);
       })
       .catch((reason) => {
@@ -146,7 +156,7 @@ export function SettingsSurface() {
       const field = fieldFromMessage(message);
       if (field) {
         setFieldErrors({ [field]: message });
-        const section = SECTION_FOR_FIELD[field];
+        const section = field.startsWith("hotkeys.") ? "Hotkeys" : SECTION_FOR_FIELD[field];
         if (section) setActiveSection(section);
       } else {
         setStatus(message);
@@ -212,7 +222,12 @@ export function SettingsSurface() {
                 <GeneralSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
               )}
               {activeSection === "Hotkeys" && (
-                <HotkeysSection draft={draft} setDraft={updateDraft} hotkeyStatus={hotkeyStatus} />
+                <HotkeysSection
+                  draft={draft}
+                  setDraft={updateDraft}
+                  hotkeyStatus={hotkeyStatus}
+                  errors={fieldErrors}
+                />
               )}
               {activeSection === "Appearance" && (
                 <AppearanceSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />

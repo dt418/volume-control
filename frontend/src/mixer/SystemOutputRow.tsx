@@ -57,7 +57,7 @@ export function SystemOutputRow({ value, muted, thresholds }: SystemOutputRowPro
     <section
       data-testid="system-output-row"
       aria-label="System output"
-      className="rounded-lg border border-foreground/10 bg-background/60 px-3 py-2"
+      className="rounded-lg border border-foreground/20 bg-background/88 px-3 py-2 shadow-sm"
     >
       <div className="flex items-baseline justify-between">
         <h2 className="text-xs font-semibold">System output</h2>
@@ -76,7 +76,7 @@ export function SystemOutputRow({ value, muted, thresholds }: SystemOutputRowPro
           type="button"
           aria-label={muted ? "Unmute system output" : "Mute system output"}
           onClick={() => void invoke<void>("toggle_mute").catch(() => {})}
-          className="inline-flex items-center gap-1 rounded-md border border-foreground/10 bg-foreground/5 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-foreground/10 hover:text-foreground"
+          className="inline-flex items-center gap-1 rounded-md border border-foreground/20 bg-foreground/10 px-2 py-1 text-xs text-foreground/90 transition-colors hover:bg-foreground/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <MuteIcon className="h-3.5 w-3.5" />
           {muted ? "Unmute" : "Mute"}
@@ -85,7 +85,7 @@ export function SystemOutputRow({ value, muted, thresholds }: SystemOutputRowPro
           type="button"
           aria-label="Reset volume to 50%"
           onClick={() => void invoke<void>("reset_volume").catch(() => {})}
-          className="rounded-md border border-foreground/10 bg-foreground/5 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-foreground/10 hover:text-foreground"
+          className="rounded-md border border-foreground/20 bg-foreground/10 px-2 py-1 text-xs text-foreground/90 transition-colors hover:bg-foreground/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           Reset volume to 50%
         </button>

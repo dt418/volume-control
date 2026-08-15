@@ -50,9 +50,11 @@ export function useSessions() {
   const [sessionsSupported, setSessionsSupported] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
 
   useEffect(() => {
     let disposed = false;
+    setError(null);
     invoke<BootstrapPayload>("get_bootstrap")
       .then((b) => {
         if (disposed) return;
@@ -71,13 +73,22 @@ export function useSessions() {
         void markSurfaceReady();
       });
 
+    return () => {
+      disposed = true;
+    };
+  }, [bootstrapAttempt]);
+
+  useEffect(() => {
+    let disposed = false;
     const unlisteners: Array<() => void> = [];
     void listen<AudioSession[]>("state://sessions", (payload) => {
-      setSessions(payload ?? []);
+      if (!disposed) setSessions(payload ?? []);
     }).then((unlisten) => unlisteners.push(unlisten));
     void listen<VolumeEvent>("state://volume", (payload) => {
-      setVolumePct(payload.pct);
-      setMuted(payload.muted);
+      if (!disposed) {
+        setVolumePct(payload.pct);
+        setMuted(payload.muted);
+      }
     }).then((unlisten) => unlisteners.push(unlisten));
 
     return () => {
@@ -93,6 +104,7 @@ export function useSessions() {
   const updateSession = useCallback((id: string, patch: Partial<AudioSession>) => {
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }, []);
+  const retry = useCallback(() => setBootstrapAttempt((attempt) => attempt + 1), []);
 
   return {
     sessions: sortSessions(sessions),
@@ -102,6 +114,7 @@ export function useSessions() {
     sessionsSupported,
     notice,
     error,
+    retry,
     setNotice,
     removeSession,
     updateSession,

@@ -6,12 +6,10 @@ export interface ModifierPickerProps {
   onSelect: (id: string) => void;
 }
 
-/** Restricted hotkey recorder (spec D4): pick the modifier; the fixed key
- *  set is shown separately in the KeyCard. CapsLock is disabled with a
- *  fallback note (the backend maps it to Ctrl+Alt combos). */
+/** Compatibility presets for users who prefer the original modifier layouts. */
 export function ModifierPicker({ selected, onSelect }: ModifierPickerProps) {
   return (
-    <div className="flex flex-wrap gap-2" role="group" aria-label="Modifier">
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Shortcut presets">
       {MODIFIER_OPTIONS.map((option) => {
         const active = selected === option.id;
         return (

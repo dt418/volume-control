@@ -18,9 +18,12 @@ pub fn get_bootstrap(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<BootstrapPa
     {
         return Err("E2E bootstrap failure".to_string());
     }
-    core.lock()
-        .map_err(|e| e.to_string())
-        .map(|mut core| core.bootstrap())
+    // A poisoned lock should not take the mixer surface down permanently. A
+    // worker panic is already recorded by Rust's panic hook; recovering the
+    // guard lets the read-only bootstrap path render a useful surface and
+    // keeps the process alive for the user to retry.
+    let mut core = core.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    Ok(core.bootstrap())
 }
 
 #[tauri::command]

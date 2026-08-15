@@ -1,5 +1,25 @@
 # Session Handoff
 
+## Session 050 (2026-08-15)
+
+Mixer resilience and readability pass completed. `get_bootstrap` and the
+native fast/slow poll loops recover poisoned mutex guards instead of leaving a
+backend error stuck; the webview now shows an actionable connection alert with
+Retry rather than `Backend unavailable`. Mixer glass/card/control alpha,
+borders, labels, and focus rings were strengthened for readable contrast.
+Frontend 15/84, Rust workspace, build, recovery, Mixer, and full Windows E2E
+11/11 evidence pass. Hosted Linux/macOS CI remains outstanding.
+
+## Session 049 (2026-08-15)
+
+Implemented configurable global shortcut recording. Settings now renders one
+Record/Clear row per action, captures portable modifier + key combinations,
+supports disabling a shortcut, and keeps preset layouts for Ctrl+Alt/Alt/Ctrl.
+The backend persists `Config.hotkeys`, validates malformed/duplicate bindings,
+registers native shortcuts safely, and publishes `Disabled`/conflict status to
+Help and Settings. Rust/frontend tests and the Windows WebDriver matrix pass;
+hosted Linux/macOS CI remains the final cross-platform evidence.
+
 ## Session 048 (2026-08-15)
 
 The Tauri WebDriver/Pilot integration now has Windows-first live evidence and

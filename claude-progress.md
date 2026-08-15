@@ -1,5 +1,40 @@
 # Progress Log
 
+## Session 050 (2026-08-15) - Mixer resilience and contrast pass
+
+- Made `get_bootstrap` recover a poisoned `AppCore` mutex and kept both native
+  poll loops alive after a worker failure, so the mixer does not turn a
+  recoverable backend hiccup into a permanent IPC error or process crash.
+- Replaced the alarming `Backend unavailable` footer with a clear inline
+  connection alert and Retry action; retrying reloads bootstrap state without
+  remounting the surface. Recovery E2E now verifies the updated copy.
+- Increased mixer surface/card/control opacity and border contrast, improved
+  muted/empty-state text contrast, and added visible keyboard focus rings.
+- Verification: frontend Vitest 15 files / 84 tests, `npm --prefix frontend
+  run build`, Rust fmt/clippy/workspace tests (257 volumectl + 12 Tauri +
+  host/session suites), E2E contracts/support/Pilot contract, Mixer 2/2, and
+  full Windows WebDriver matrix 11/11 all pass. Hosted Linux/macOS runners
+  remain the final cross-platform release evidence.
+
+## Session 049 (2026-08-15) - Configurable global shortcut recorder
+
+- Replaced the read-only modifier-only hotkey presentation with per-action
+  Record/Clear rows matching the reference UI. Each row captures a modifier +
+  key, supports Escape cancellation, Backspace/Delete/Clear disabling, and
+  exposes action-specific accessible labels and inline conflict feedback.
+- Added persisted `Config.hotkeys` bindings with legacy migration, portable
+  `global-hotkey` parsing, duplicate/invalid validation, disabled-action
+  registration status, and safe unregister/re-register adoption in AppCore.
+- Updated Help to render recorded bindings and Settings to commit the map in
+  the existing atomic draft/save flow. Preset Ctrl+Alt/Alt/Ctrl buttons remain
+  available for quick restoration.
+- Added Rust config/AppCore/hotkey coverage, 3 ShortcutRecorder tests, and a
+  Settings WebDriver test covering Record + Clear. Frontend suite is 15 files /
+  83 tests; full Windows WebDriver matrix is 11/11; Settings surface is 4/4.
+- Verification: `cargo fmt`, clippy, workspace tests, frontend build/tests,
+  E2E typecheck/contracts, and cleanup checks pass. Hosted Linux/macOS CI still
+  remains the final cross-platform release evidence.
+
 ## Session 048 (2026-08-15) - CI matrix and fail-closed ship gate
 
 - Added Windows, Linux/Xvfb, and macOS CI steps that install the isolated

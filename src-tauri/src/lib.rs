@@ -177,13 +177,15 @@ pub fn run() -> tauri::Result<()> {
             #[cfg(target_os = "windows")]
             let fast_native = native.clone();
             std::thread::spawn(move || loop {
-                if let Ok(mut core) = fast_shared.lock() {
-                    core.poll_hotkeys();
-                    #[cfg(target_os = "windows")]
-                    while let Some(action) = fast_native.try_recv_wheel() {
-                        core.apply_hotkey(action);
-                    }
+                let mut core = fast_shared
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                core.poll_hotkeys();
+                #[cfg(target_os = "windows")]
+                while let Some(action) = fast_native.try_recv_wheel() {
+                    core.apply_hotkey(action);
                 }
+                drop(core);
                 std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
             });
 
@@ -194,17 +196,19 @@ pub fn run() -> tauri::Result<()> {
             #[cfg(target_os = "windows")]
             let slow_native = native.clone();
             std::thread::spawn(move || loop {
-                if let Ok(mut core) = slow_shared.lock() {
-                    core.reload_config_if_changed();
-                    // External audio-state sync: volume changed outside the
-                    // app (media keys, other apps) — keeps the tray tooltip
-                    // and open webviews fresh (legacy 150 ms host timer).
-                    core.sync_external_state();
-                    #[cfg(target_os = "windows")]
-                    while let Some(cmd) = slow_native.poll_tray() {
-                        core.handle_action(volumectl_lib::host_core::tray_command_to_action(cmd));
-                    }
+                let mut core = slow_shared
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                core.reload_config_if_changed();
+                // External audio-state sync: volume changed outside the
+                // app (media keys, other apps) — keeps the tray tooltip
+                // and open webviews fresh (legacy 150 ms host timer).
+                core.sync_external_state();
+                #[cfg(target_os = "windows")]
+                while let Some(cmd) = slow_native.poll_tray() {
+                    core.handle_action(volumectl_lib::host_core::tray_command_to_action(cmd));
                 }
+                drop(core);
                 std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
             });
 

@@ -40,4 +40,29 @@ describe("Settings surface", () => {
     await $(selectors.settings.save).click();
     await expect($("[data-surface=settings] [role=alert]")).toBeDisplayed();
   });
+
+  it("records a custom shortcut in the draft before Save", async () => {
+    await $(`//nav[@aria-label="Settings sections"]//button[normalize-space()="Hotkeys"]`).click();
+    await $(`[data-surface=settings] button[aria-label="Open Mixer shortcut: Ctrl+Alt+V"]`).click();
+    if (!app.execute) throw new Error("WDIO browser execute is unavailable");
+    await app.execute(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "U",
+          code: "KeyU",
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+        }),
+      );
+    });
+    await expect(
+      $(`[data-surface=settings] button[aria-label="Open Mixer shortcut: Ctrl+Shift+U"]`),
+    ).toBeDisplayed();
+    await expect($(selectors.settings.save)).toBeEnabled();
+    await $(`[data-surface=settings] [data-shortcut-action="open_mixer"] [data-testid="shortcut-clear-open_mixer"]`).click();
+    await expect(
+      $(`[data-surface=settings] button[aria-label="Open Mixer shortcut: Not set"]`),
+    ).toBeDisplayed();
+  });
 });

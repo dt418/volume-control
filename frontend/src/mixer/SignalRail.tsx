@@ -65,11 +65,11 @@ export function SignalRail({ value, muted, thresholds }: SignalRailProps) {
         <>
           <span
             aria-hidden="true"
-            className="rail-muted-diamond absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-foreground bg-background/60"
+            className="rail-muted-diamond absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-foreground bg-background/88"
             style={{ left: `${clamped}%` }}
           />
           <span
-            className="absolute -top-0.5 -translate-x-1/2 text-[9px] font-medium uppercase tracking-wide text-foreground/60"
+            className="absolute -top-0.5 -translate-x-1/2 text-[9px] font-medium uppercase tracking-wide text-foreground/80"
             style={{ left: `${clamped}%` }}
           >
             Muted
