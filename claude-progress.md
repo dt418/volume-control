@@ -142,6 +142,9 @@
     `TopLevelWindowForOverflowXamlIsland`) before showing any surface;
     verified with `WindowFromPoint` returning the Help webview at the footer
     button position.
+- The CI deadlock-guard step initially failed on GitHub runners because the
+  script used `rg`, which is not in the runner PATH; switched the bash guard
+  to portable `grep` (fixed-strings for wrapper signatures).
 
 ## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
 
