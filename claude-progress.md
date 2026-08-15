@@ -1,5 +1,22 @@
 # Progress Log
 
+## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
+
+- Added `.claude/hooks/agent-safe-flow.sh` and wired it through the project
+  `.claude/settings.json` Bash `PreToolUse` hook.
+- The guard blocks direct `git push`, destructive reset/clean/branch deletion,
+  `git commit --no-verify`, and `gh pr merge --admin`; it allows the canonical
+  `scripts/ship.sh --push`, safe local `git branch -d`, and normal PR merges
+  protected by GitHub's required Release gate.
+- Added `scripts/test-agent-safe-flow.sh` with malformed-input, blocked,
+  allowed, executable-bit, and settings wiring cases; the contract passes
+  under the repository's Git Bash path. Review hardening covers git global
+  options (`-C`, `-c`, `-p`, `-P`, `--config-env` and related forms), separate
+  force flags, restore/checkout path forms, and `git commit -n`, while preserving
+  safe checkout and ref/path arguments named `push`; CI
+  now runs the hook contract on both checks and Windows, and hook/settings
+  changes select the full platform scope.
+
 ## Session 070 (2026-08-15) - Enforce the release gate on main
 
 - Configured GitHub branch protection for `main` with strict required status

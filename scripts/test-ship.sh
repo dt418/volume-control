@@ -29,6 +29,13 @@ report() { # <ok|FAIL> <description> [detail]
     fi
 }
 
+if bash scripts/test-agent-safe-flow.sh >/tmp/volume-control-agent-safe-flow.log 2>&1; then
+    report ok 'agent safe-flow hook blocks unsafe git/review bypasses'
+else
+    report FAIL 'agent safe-flow hook blocks unsafe git/review bypasses' \
+        "see /tmp/volume-control-agent-safe-flow.log"
+fi
+
 # Comment-aware and progress-line-aware: the pattern must appear on a real
 # code line (not a comment, not an echo/printf progress line that merely
 # mentions the command), so a check that was dropped, commented out, or

@@ -1,5 +1,22 @@
 # Session Handoff
 
+## Session 071 (2026-08-15) — Project-scoped Claude safe-flow hook
+
+`.claude/settings.json` now wires `.claude/hooks/agent-safe-flow.sh` as a Bash
+`PreToolUse` hook. It blocks direct pushes, destructive git operations,
+verification bypasses, and admin merge bypasses. The supported deletion paths
+are `git branch -d <merged-local-branch>` and
+`gh pr merge <PR> --merge --delete-branch`; `main` remains protected by the
+strict `Release gate (required)` check.
+
+The contract runner `scripts/test-agent-safe-flow.sh` passes blocked/allowed
+cases, malformed input, documented git global-option/force-flag variants,
+restore/checkout path forms, short `-n`, executable-bit, and exact settings-wiring checks under
+Git Bash, including false-positive checks for safe checkout and refs named
+`push`. CI invokes this contract in the shared checks and Windows jobs, and
+`test-ship.sh` also covers it; hook/settings diffs select the full platform
+scope.
+
 ## Session 070 (2026-08-15) — Main branch protection
 
 GitHub `main` is now protected with strict required check `Release gate

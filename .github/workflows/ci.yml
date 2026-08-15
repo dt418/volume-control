@@ -65,6 +65,7 @@ jobs:
                   crates/*|src-tauri/*|frontend/*|e2e/*|Cargo.toml|Cargo.lock|\
                   scripts/verify-tauri-e2e.ps1|scripts/verify-tauri-e2e.sh|\
                   scripts/ship.sh|scripts/package.sh|scripts/test-ship.sh|\
+                  scripts/test-agent-safe-flow.sh|.claude/hooks/*|.claude/settings.json|\
                   .github/workflows/*)
                     platform_required=true
                     reason="pull request changes runtime, UI, E2E, release, or workflow code"
@@ -94,6 +95,8 @@ jobs:
           python-version: '3.11'
       - name: Validate Codex coordinator contract
         run: python scripts/test-codex-config.py
+      - name: Smoke-test agent safe-flow hook
+        run: bash scripts/test-agent-safe-flow.sh
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v7
@@ -182,6 +185,9 @@ jobs:
       - name: Smoke-test record-keeping guard
         shell: bash
         run: bash scripts/test-check-records.sh
+      - name: Smoke-test agent safe-flow hook
+        shell: bash
+        run: bash scripts/test-agent-safe-flow.sh
       - name: Build release Tauri host and validate artifact
         shell: bash
         run: |

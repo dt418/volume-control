@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-15T16:56",
+    "last_updated":  "2026-08-15T17:55",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,24 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-039",
+                         "priority":  39,
+                         "area":  "agent-safety",
+                         "title":  "Project-scoped Claude safe-flow agent hook",
+                         "user_visible_behavior":  "Claude Code blocks direct pushes, destructive git operations, verification bypasses, and admin merge bypasses while preserving the canonical ship and merged-branch deletion paths.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "scripts/test-agent-safe-flow.sh passes blocked, allowed, malformed-input, documented global-option bypasses, short no-verify, false-positive ref-argument, executable-bit, and exact settings-wiring cases.",
+                                               "Claude settings JSON parses and wires a Bash PreToolUse command hook.",
+                                               "CI runs the safe-flow contract in both shared checks and Windows jobs; hook/settings diffs select the full platform matrix alongside the existing records and release gates."
+                                           ],
+                         "evidence":  [
+                                              "Session 071 (2026-08-15): `.claude/hooks/agent-safe-flow.sh` blocks direct push, documented Git global-option bypasses (`-C`, `-c`, `-p`, `-P`, `--config-env`, and related forms), destructive reset/clean/restore/checkout/branch deletion, no-verify (`--no-verify` and `-n`), and `gh pr merge --admin`; `git branch -d`, normal/dotted branch checkout, ref arguments named `push`, and `gh pr merge --delete-branch` remain allowed.",
+                                              "Session 071 (2026-08-15): `scripts/test-agent-safe-flow.sh` passes under the repository's Git Bash verification path, and hook/settings changes select the full platform CI scope."
+                                       ],
+                         "notes":  "This is a local agent guard and does not replace GitHub branch protection or CI; `main` remains protected by the required Release gate check."
+                     },
                      {
                          "id":  "vol-037",
                          "priority":  37,
