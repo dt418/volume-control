@@ -16,6 +16,24 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-037",
+                         "priority":  37,
+                         "area":  "developer-tooling",
+                         "title":  "Reusable GitHub Actions workflow warning auditor skill",
+                         "user_visible_behavior":  "Workflow authors receive deterministic warnings and upgrade guidance before Node runtime deprecations or unsafe trigger/configuration drift reaches CI.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "quick_validate.py validates the project skill metadata and structure.",
+                                               "The bundled PyYAML audit runs successfully in text and JSON modes against all live workflows.",
+                                               "The audit reports the current setup-node v4/setup-python v5 Node-runtime findings without mutating workflow files."
+                                           ],
+                         "evidence":  [
+                                              "Session 067 (2026-08-15): workflow-warning-auditor initialized with init_skill.py, populated with deterministic audit logic, and validated.",
+                                              "Session 067 (2026-08-15): `.gitignore` whitelists the project-authored skill for reuse after clean checkout."
+                                       ],
+                         "notes":  "Runtime baselines are intentionally narrow; verify official action release notes before upgrading majors not covered by the reference."
+                     },
+                     {
                          "id":  "vol-036",
                          "priority":  36,
                          "area":  "repository-governance",

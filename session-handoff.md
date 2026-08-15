@@ -8,6 +8,15 @@ Windows-style `.exe` expectations. Production parsing intentionally applies
 macOS. The tests now compare round-trip/save/migration/order results against
 that public normalization contract.
 
+## Session 067 (2026-08-15) — Reusable workflow warning auditor skill
+
+Added `.agents/skills/workflow-warning-auditor` and whitelisted it as a
+project-authored skill. It audits workflow YAML with PyYAML, reports actionable
+Node runtime, mutable-ref, permissions, branch-trigger, and dangerous-trigger
+findings, and supports strict JSON/text output. The skill and bundled script
+validate successfully; the current workflows correctly report the setup-node
+v4/setup-python v5 Node-runtime warnings for planned upgrades.
+
 ## Session 066 (2026-08-15) — Cross-platform E2E evidence path fix
 
 CI on `main` showed Ubuntu and macOS WDIO specs passing but evidence validation
