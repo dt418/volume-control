@@ -6,8 +6,8 @@ major from the action's official release notes before editing a workflow.
 
 Known migration baseline used by the bundled audit:
 
-- `actions/setup-node@v5+` — Node 24 line.
-- `actions/setup-python@v6+` — Node 24 line.
+- `actions/setup-node@v7+` — Node 24 line.
+- `actions/setup-python@v7+` — Node 24 line.
 
 The audit deliberately does not guess baselines for every action. When an
 action emits a runtime warning but is not in this table, inspect its official

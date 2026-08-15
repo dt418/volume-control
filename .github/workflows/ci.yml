@@ -8,6 +8,9 @@
 #   Wayland layer-shell build when the system library is available.
 #
 # A shared "checks" job runs formatting, whitespace, and forbidden-diff gates.
+# Pull requests that only touch docs/tooling keep the hosted Linux/macOS cost
+# bounded; code, UI, E2E, workflow, and release changes still exercise all
+# desktop platforms before merge. Pushes to main always run the full matrix.
 
 name: CI
 
@@ -20,6 +23,65 @@ permissions:
   contents: read
 
 jobs:
+  scope:
+    name: Determine platform scope
+    runs-on: ubuntu-24.04
+    outputs:
+      platform_required: ${{ steps.scope.outputs.platform_required }}
+      reason: ${{ steps.scope.outputs.reason }}
+      changed_file_count: ${{ steps.scope.outputs.changed_file_count }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Classify change set
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          platform_required=false
+          reason="pull request only changes docs or developer tooling"
+          changed_file_count=0
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            platform_required=true
+            reason="non-pull-request event always runs the release platform matrix"
+          elif [[ -z "$BASE_SHA" || -z "$HEAD_SHA" ]]; then
+            platform_required=true
+            reason="pull request SHAs were unavailable; fail open to full platform coverage"
+          else
+            if ! changed_files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"; then
+              platform_required=true
+              reason="unable to inspect pull request diff; fail open to full platform coverage"
+            else
+              while IFS= read -r path; do
+                [[ -z "$path" ]] && continue
+                changed_file_count=$((changed_file_count + 1))
+                case "$path" in
+                  crates/*|src-tauri/*|frontend/*|e2e/*|Cargo.toml|Cargo.lock|\
+                  scripts/verify-tauri-e2e.ps1|scripts/verify-tauri-e2e.sh|\
+                  scripts/ship.sh|scripts/package.sh|scripts/test-ship.sh|\
+                  .github/workflows/*)
+                    platform_required=true
+                    reason="pull request changes runtime, UI, E2E, release, or workflow code"
+                    break
+                    ;;
+                esac
+              done <<< "$changed_files"
+            fi
+          fi
+
+          {
+            echo "platform_required=$platform_required"
+            echo "reason=$reason"
+            echo "changed_file_count=$changed_file_count"
+          } >> "$GITHUB_OUTPUT"
+          echo "platform_required=$platform_required ($reason; changed_files=$changed_file_count)"
+
   checks:
     name: Format, lint, diff gate, CLI fallback
     runs-on: ubuntu-24.04
@@ -27,14 +89,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Validate Codex coordinator contract
         run: python scripts/test-codex-config.py
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -79,7 +141,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -99,7 +161,7 @@ jobs:
         run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/ci-windows
       - name: Upload Windows Tauri E2E artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-e2e-windows
           path: |
@@ -131,13 +193,14 @@ jobs:
 
   macos:
     name: macOS (build + tests + renderer smoke)
+    needs: scope
     runs-on: macos-15
-    if: github.event_name != 'pull_request'
+    if: ${{ needs.scope.outputs.platform_required == 'true' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -157,7 +220,7 @@ jobs:
         run: bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-macos
       - name: Upload macOS Tauri E2E artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-e2e-macos
           path: |
@@ -200,13 +263,14 @@ jobs:
 
   ubuntu:
     name: Ubuntu 24.04 (GTK4/libadwaita + layer-shell)
+    needs: scope
     runs-on: ubuntu-24.04
-    if: github.event_name != 'pull_request'
+    if: ${{ needs.scope.outputs.platform_required == 'true' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -239,7 +303,7 @@ jobs:
         run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-linux
       - name: Upload Linux Tauri E2E artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tauri-e2e-linux
           path: |
@@ -273,3 +337,45 @@ jobs:
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
           file target/release/VolumeControl
+
+  release-gate:
+    name: Release gate (required)
+    if: ${{ always() }}
+    needs: [scope, checks, windows, macos, ubuntu]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce the selected platform matrix
+        shell: bash
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          PLATFORM_REQUIRED: ${{ needs.scope.outputs.platform_required }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+          MACOS_RESULT: ${{ needs.macos.result }}
+          UBUNTU_RESULT: ${{ needs.ubuntu.result }}
+        run: |
+          set -euo pipefail
+          if [[ "$SCOPE_RESULT" != "success" ]]; then
+            echo "Scope classification failed; refusing to claim release readiness." >&2
+            exit 1
+          fi
+          if [[ "$CHECKS_RESULT" != "success" || "$WINDOWS_RESULT" != "success" ]]; then
+            echo "Required checks/windows jobs did not succeed." >&2
+            printf 'checks=%s windows=%s\n' "$CHECKS_RESULT" "$WINDOWS_RESULT" >&2
+            exit 1
+          fi
+          if [[ "$PLATFORM_REQUIRED" == "true" ]]; then
+            if [[ "$MACOS_RESULT" != "success" || "$UBUNTU_RESULT" != "success" ]]; then
+              echo "Cross-platform coverage was required but Linux/macOS did not succeed." >&2
+              printf 'macos=%s ubuntu=%s\n' "$MACOS_RESULT" "$UBUNTU_RESULT" >&2
+              exit 1
+            fi
+            echo "Full Windows/Linux/macOS platform matrix passed."
+          else
+            if [[ "$MACOS_RESULT" != "skipped" || "$UBUNTU_RESULT" != "skipped" ]]; then
+              echo "Docs/tooling-only scope expected Linux/macOS jobs to be skipped." >&2
+              printf 'macos=%s ubuntu=%s\n' "$MACOS_RESULT" "$UBUNTU_RESULT" >&2
+              exit 1
+            fi
+            echo "Docs/tooling-only pull request used the bounded-cost platform path."
+          fi

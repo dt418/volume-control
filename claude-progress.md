@@ -1,5 +1,25 @@
 # Progress Log
 
+## Session 069 (2026-08-15) - Cost-balanced CI with release fail-closed gate
+
+- Merged PR #23 so `.agents/skills/workflow-warning-auditor` is available on
+  `main`; its runtime baseline now tracks `actions/setup-node@v7+` and
+  `actions/setup-python@v7+` after checking current official action metadata.
+- Upgraded setup-node/setup-python and CI artifact uploads to Node 24-capable
+  action majors. The strict workflow audit now reports no warnings across all
+  three live workflows.
+- Added a diff-aware `scope` job: docs/tooling-only pull requests keep the
+  hosted Linux/macOS jobs skipped, while runtime/UI/E2E/workflow/release diffs
+  and every non-PR event fail open to the full desktop matrix.
+- Added an always-running release gate that requires checks and Windows for
+  every change and requires successful Linux/macOS jobs whenever scope selects
+  them. The release workflow's reusable three-platform validation remains
+  unconditional for tag/manual releases.
+- Updated `scripts/test-ship.sh` to lock the scope and release-gate contracts.
+  Local workflow audit and static contract verification are green; hosted
+  main/PR matrix validation remains required before release readiness is
+  claimed.
+
 ## Session 068 (2026-08-15) - Fix macOS config INI test expectations
 
 - Full `main` CI found five macOS-only config INI test failures after the E2E

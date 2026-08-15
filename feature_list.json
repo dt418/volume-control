@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-15T16:29",
+    "last_updated":  "2026-08-15T16:56",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -25,11 +25,12 @@
                          "verification":  [
                                                "quick_validate.py validates the project skill metadata and structure.",
                                                "The bundled PyYAML audit runs successfully in text and JSON modes against all live workflows.",
-                                               "The audit reports the current setup-node v4/setup-python v5 Node-runtime findings without mutating workflow files."
+                                               "The strict audit reports no findings after all live workflows move to Node 24-capable action majors."
                                            ],
                          "evidence":  [
                                               "Session 067 (2026-08-15): workflow-warning-auditor initialized with init_skill.py, populated with deterministic audit logic, and validated.",
-                                              "Session 067 (2026-08-15): `.gitignore` whitelists the project-authored skill for reuse after clean checkout."
+                                              "Session 067 (2026-08-15): `.gitignore` whitelists the project-authored skill for reuse after clean checkout.",
+                                              "Session 069 (2026-08-15): setup-node/setup-python and artifact uploads are upgraded; diff-aware CI scope and an always-running release gate balance PR cost while keeping code/release coverage fail-closed."
                                        ],
                          "notes":  "Runtime baselines are intentionally narrow; verify official action release notes before upgrading majors not covered by the reference."
                      },
