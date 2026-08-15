@@ -144,14 +144,17 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
 
 | Tính năng        | Windows | macOS | Linux |
 |------------------|:-------:|:-----:|:-----:|
-| Điều khiển âm lượng | ✅ WASAPI | 🔜 CoreAudio | 🔜 PulseAudio/PipeWire |
-| Phím tắt toàn cục | ✅ RegisterHotKey | 🔜 | 🔜 |
-| Overlay          | ✅ native Win32 | 🔜 host | 🔜 host |
+| Điều khiển âm lượng | ✅ WASAPI | ⚠️ CoreAudio host — manual | ⚠️ PulseAudio/PipeWire host — manual |
+| Phím tắt toàn cục | ✅ RegisterHotKey | ⚠️ global-hotkey host — manual | ⚠️ global-hotkey host — manual |
+| Overlay          | ✅ native Win32 | ⚠️ host — manual | ⚠️ host — manual |
 | Mixer            | ✅ Tauri + session WASAPI | ✅ Tauri / 🔜 audio từng app | ✅ Tauri / 🔜 audio từng app |
 | Cửa sổ Settings  | ✅ Tauri | ✅ Tauri | ✅ Tauri |
-| Khay hệ thống    | ✅ tray-icon | 🔜 | 🔜 |
+| Khay hệ thống    | ✅ tray-icon | ⚠️ menu-bar — manual | ⚠️ tray — manual |
 | Cấu hình trực tiếp | ✅ | — | — |
 | Renderer UI thích ứng | ✅ native Win32 | ✅ AppKit (surface + smoke test) | ✅ GTK4/libadwaita (surface, CI test dưới Xvfb) |
+
+`⚠️` nghĩa là host/backend hoặc surface đã có nhưng cần bằng chứng thủ công
+trên desktop thật; `🔜` chỉ phần chưa được triển khai hoặc chưa có trong host.
 
 macOS và Linux chạy host `global-hotkey` cùng backend audio native. Các surface
 Tauri Settings/Help/Mixer dùng chung; enumeration session từng app và overlay/
