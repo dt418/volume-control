@@ -113,12 +113,6 @@ pub struct WindowsAudio {
     /// IMMDeviceEnumerator* — released before the endpoint on Drop.
     enumerator: *mut c_void,
     device: *mut c_void,
-    /// COM apartment guard for the thread that created this backend. Must be
-    /// STA (never MTA) so tao's OleInitialize can create webview windows on
-    /// the same (main) thread without RPC_E_CHANGED_MODE.
-    /// RAII-only: never read, uninitializes on drop.
-    #[allow(dead_code)]
-    com: crate::com_guard::ComGuard,
 }
 
 // COM refcounts make these safe to move across threads.
@@ -126,14 +120,19 @@ unsafe impl Send for WindowsAudio {}
 unsafe impl Sync for WindowsAudio {}
 
 impl WindowsAudio {
+    fn init_com() -> Result<crate::com_guard::ComGuard, AudioError> {
+        crate::com_guard::ComGuard::init_apartment_sta()
+            .map_err(|hr| AudioError::Init(format!("CoInitializeEx(STA): 0x{hr:x}")))
+    }
+
     pub fn new() -> Result<Self, AudioError> {
         unsafe {
-            // The main thread must stay STA: tao/OleInitialize needs it to
-            // create webview windows. COINIT_MULTITHREADED here flipped the
-            // thread to MTA and made every surface open panic with
-            // RPC_E_CHANGED_MODE.
-            let com = crate::com_guard::ComGuard::init_apartment_sta()
-                .map_err(|hr| AudioError::Init(format!("CoInitializeEx(STA): 0x{hr:x}")))?;
+            // COM is initialized for this setup call only. Each later audio
+            // operation initializes COM on its calling thread as well; the
+            // backend is shared by Tauri commands and the host poll thread,
+            // so a guard stored in this struct would be dropped on the wrong
+            // thread and leave those calls outside an apartment.
+            let _com = Self::init_com()?;
 
             let mut enumerator: *mut c_void = std::ptr::null_mut();
             let hr = CoCreateInstance(
@@ -181,7 +180,6 @@ impl WindowsAudio {
                 endpoint,
                 enumerator,
                 device,
-                com,
             })
         }
     }
@@ -189,6 +187,7 @@ impl WindowsAudio {
 
 impl AudioBackend for WindowsAudio {
     fn get_state(&self) -> Result<VolumeState, AudioError> {
+        let _com = Self::init_com()?;
         unsafe {
             let v = vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint);
             let mut vol = 0.0_f32;
@@ -211,6 +210,7 @@ impl AudioBackend for WindowsAudio {
     }
 
     fn set_volume(&self, volume: f32) -> Result<(), AudioError> {
+        let _com = Self::init_com()?;
         let v = volume.clamp(0.0, 1.0);
         unsafe {
             let hr = (vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint)
@@ -231,6 +231,7 @@ impl AudioBackend for WindowsAudio {
     }
 
     fn toggle_mute(&self) -> Result<VolumeState, AudioError> {
+        let _com = Self::init_com()?;
         let mut state = self.get_state()?;
         state.muted = !state.muted;
         self.set_mute(state.muted)?;
@@ -238,6 +239,7 @@ impl AudioBackend for WindowsAudio {
     }
 
     fn set_mute(&self, muted: bool) -> Result<(), AudioError> {
+        let _com = Self::init_com()?;
         unsafe {
             let hr = (vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint).set_mute)(
                 self.endpoint,
@@ -264,9 +266,6 @@ impl Drop for WindowsAudio {
             if !self.enumerator.is_null() {
                 (vtbl::<IMMDeviceEnumeratorVtbl>(self.enumerator).release)(self.enumerator);
             }
-            // self.com drops after this and uninitializes the apartment iff
-            // this backend owned its init (S_OK); an S_FALSE guard leaves the
-            // pre-existing apartment alone.
         }
     }
 }

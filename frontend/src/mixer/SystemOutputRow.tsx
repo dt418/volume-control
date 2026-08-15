@@ -9,6 +9,7 @@ interface SystemOutputRowProps {
   value: number;
   muted: boolean;
   thresholds: ColorThresholds;
+  onError?: (error: unknown) => void;
 }
 
 /**
@@ -51,7 +52,7 @@ function SystemVolumeSlider({ value }: { value: number }) {
  * slider (`set_volume`), Mute/Unmute (`toggle_mute`) and `Reset volume to
  * 50%` (`reset_volume`).
  */
-export function SystemOutputRow({ value, muted, thresholds }: SystemOutputRowProps) {
+export function SystemOutputRow({ value, muted, thresholds, onError }: SystemOutputRowProps) {
   const MuteIcon = muted ? VolumeX : Volume2;
   return (
     <section
@@ -75,7 +76,7 @@ export function SystemOutputRow({ value, muted, thresholds }: SystemOutputRowPro
         <button
           type="button"
           aria-label={muted ? "Unmute system output" : "Mute system output"}
-          onClick={() => void invoke<void>("toggle_mute").catch(() => {})}
+          onClick={() => void invoke<void>("toggle_mute").catch((error) => onError?.(error))}
           className="inline-flex items-center gap-1 rounded-md border border-foreground/20 bg-foreground/10 px-2 py-1 text-xs text-foreground/90 transition-colors hover:bg-foreground/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <MuteIcon className="h-3.5 w-3.5" />
@@ -84,7 +85,7 @@ export function SystemOutputRow({ value, muted, thresholds }: SystemOutputRowPro
         <button
           type="button"
           aria-label="Reset volume to 50%"
-          onClick={() => void invoke<void>("reset_volume").catch(() => {})}
+          onClick={() => void invoke<void>("reset_volume").catch((error) => onError?.(error))}
           className="rounded-md border border-foreground/20 bg-foreground/10 px-2 py-1 text-xs text-foreground/90 transition-colors hover:bg-foreground/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           Reset volume to 50%

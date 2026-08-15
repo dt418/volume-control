@@ -1,5 +1,140 @@
 # Session Handoff
 
+## Session 072 (2026-08-15) - Volume and mute regression coverage
+
+`crates/volumectl/tests/host_core.rs` now covers the complete system action
+matrix: +/-1%, +/-10% large steps, boundary clamping, reset 50%, and two-way
+mute transitions. The fake backend was corrected to toggle its mute bit so the
+test exercises the same contract as Windows WASAPI/PulseAudio/CoreAudio.
+
+The Tauri `toggle_mute` command now calls a fallible `AppCore::toggle_mute`
+method, publishes the backend-returned state directly, and returns endpoint
+errors to the frontend instead of silently swallowing them.
+
+Windows WASAPI operations now initialize COM on the thread that performs each
+read/write; the backend no longer stores a startup-thread guard that could be
+moved and dropped on a different thread.
+
+AppCore now enforces mute as an audible-zero operation (native mute flag plus
+scalar volume 0) and restores the saved scalar on unmute. Direct positive
+volume and reset actions explicitly clear the mute fallback.
+
+The focused mixer E2E asserts the scalar slider sequence `50 -> 0 -> 50`, not
+just the frontend “Muted” label.
+
+The frontend now registers volume/session listeners before bootstrap and uses
+an event revision to prevent an older bootstrap response from overwriting a
+newer mute result. `MixerSurface.test.tsx` covers this race explicitly.
+
+Settings E2E now waits for the actual General inputs before editing, avoiding
+the separate shell-ready/form-ready timing race observed in the full matrix.
+
+`e2e/tauri/specs/mixer.e2e.ts` now waits for the actual `state://volume` result
+and asserts Mute -> Unmute -> Mute accessibility state. The full Windows ship
+gate passed before this assertion was added; a focused rerun later hit an
+environmental WebDriver startup refusal on port 4445 and did not reach the
+application, so hosted CI must provide the final E2E evidence.
+
+## Session 073 (2026-08-15) - Hosted E2E audio fallback
+
+The failed PR run was investigated from the Ubuntu and Windows job logs. Both
+runners lacked a default audio endpoint, so the intentional `UnavailableAudio`
+fallback returned an error from `toggle_mute`; the frontend therefore kept the
+truthful unmuted label. This was an environment limitation, not a regression
+in the real backend path.
+
+`volumectl::audio::E2eAudio` is now a debug-only in-memory backend with a unit
+test for the scalar/mute round trip. `src-tauri` selects it only when the debug
+marker and `VOLUMECTL_E2E_AUDIO=virtual` are both set. The Tauri debug E2E
+wrapper supplies that marker, making hosted Linux/Windows IPC/event/UI checks
+deterministic without weakening production behavior or release contents.
+
+## Session 074 (2026-08-15) - FE/BE connection diagnosis
+
+The FE→BE bridge is wired correctly: `ipc.ts` delegates to Tauri core invoke
+and event APIs, `commands.rs` registers `toggle_mute`/`set_volume`/reset, and
+`TauriSink` emits `state://volume`. The observed “connection lost” symptom was
+the audio backend returning an endpoint/init error; `SystemOutputRow` caught it
+with an empty handler, so users saw no explanation and no state change.
+
+`MixerSurface` now passes an error callback into the system output row. Mute
+and reset rejections render an accessible status notice while retaining the
+last confirmed backend state. The new React regression test proves that a
+failed mute does not fabricate a Muted label.
+
+## Session 075 (2026-08-15) - WDIO debug single-instance guard
+
+The ship gate also exposed a separate Windows harness failure: the Tauri app
+exited with code 0 before the embedded WebDriver endpoint was ready because
+the production single-instance mutex rejected a debug WDIO process. The guard
+now bypasses that mutex only when `debug_assertions` and
+`VOLUMECTL_E2E_DEBUG=1` are both true. Release builds and ordinary launches
+retain the original single-instance protection.
+
+## Session 076 (2026-08-15) - Tray menu commands + tray-host lifecycle
+
+Two independent bugs made every tray menu item appear dead:
+
+1. Event routing: Tauri's runtime installs its own global `muda` menu-event
+   handler, which by design stops sending events to
+   `MenuEvent::receiver()`. The old 150 ms poll drained an empty channel.
+   The host now registers `Builder::on_menu_event` and dispatches the menu id
+   through `TrayCommand::from_menu_id` into `AppCore::handle_action`.
+2. Lifecycle: Tauri exits when the last webview surface closes. Opening
+   mixer/settings/help and then closing the window killed the whole app, so
+   the tray vanished. `RunEvent::ExitRequested` is now prevented unless the
+   tray Exit command set `EXIT_REQUESTED` first.
+
+Also: `AppCore` publishes its initial confirmed state at construction so the
+tray label shows the real volume immediately, and a unit test covers the
+startup publish. Verified on the Windows release build via UI Automation:
+Mute/Reset update the label, Open mixer/Settings/Help open and the host stays
+alive after each close, Reload keeps the host alive, Open config file opens
+the editor dialog, and Exit terminates the process.
+
+## Session 077 (2026-08-15) - Webview surfaces unresponsive in release
+
+Two root causes made Help/Settings appear completely dead in release builds:
+
+1. Missing `custom-protocol` feature. `tauri/build.rs` sets `cfg(dev)` when
+   the feature is absent, so even release binaries resolved every
+   `WebviewUrl::App` to `http://localhost:1420`. With no dev server running,
+   webviews showed ERR_CONNECTION_REFUSED, frontend JS never ran, and
+   `surface_ready` never showed the window. Fix: `tauri` features now include
+   `custom-protocol`.
+2. Main-thread deadlock. Surface commands were sync; Tauri ran them inside an
+   async task on the main thread, and `WebviewWindowBuilder::build()` (wry)
+   needs the event loop message pump — so creating Settings from the Help
+   footer hung forever and the whole app became laggy/unresponsive. Fix:
+   `open_surface`/`close_surface`/`surface_ready` are async and marshal the
+   window work through `run_on_main_thread` with an async channel;
+   `WindowManager::on_main` does the same for tray/poll-thread callers with a
+   10s timeout.
+
+Also fixed: PowerShell single-surface E2E evidence (scalar `switch` splatted
+as characters) and added an E2E regression clicking Help footer Settings.
+Verified on Windows release: Help search filters, Help footer Settings opens
+the Settings surface, Edit config opens Notepad, Close closes Help, and the
+host stays alive; `verify-tauri-e2e.ps1 -Surface help` passes 3/3 including
+evidence.
+
+## Session 071 (2026-08-15) — Project-scoped Claude safe-flow hook
+
+`.claude/settings.json` now wires `.claude/hooks/agent-safe-flow.sh` as a Bash
+`PreToolUse` hook. It blocks direct pushes, destructive git operations,
+verification bypasses, and admin merge bypasses. The supported deletion paths
+are `git branch -d <merged-local-branch>` and
+`gh pr merge <PR> --merge --delete-branch`; `main` remains protected by the
+strict `Release gate (required)` check.
+
+The contract runner `scripts/test-agent-safe-flow.sh` passes blocked/allowed
+cases, malformed input, documented git global-option/force-flag variants,
+restore/checkout path forms, short `-n`, executable-bit, and exact settings-wiring checks under
+Git Bash, including false-positive checks for safe checkout and refs named
+`push`. CI invokes this contract in the shared checks and Windows jobs, and
+`test-ship.sh` also covers it; hook/settings diffs select the full platform
+scope.
+
 ## Session 070 (2026-08-15) — Main branch protection
 
 GitHub `main` is now protected with strict required check `Release gate

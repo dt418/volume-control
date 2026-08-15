@@ -7,6 +7,9 @@
 
 use std::fmt;
 
+#[cfg(debug_assertions)]
+use std::sync::Mutex;
+
 /// The current volume state of the default output device.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VolumeState {
@@ -126,6 +129,64 @@ impl AudioBackend for UnavailableAudio {
     }
 }
 
+/// Deterministic in-memory audio endpoint used only by the debug E2E harness.
+///
+/// CI runners do not promise a physical default output device, but the Tauri
+/// E2E suite still needs to exercise the complete command/event/UI path. This
+/// backend is compiled out of release builds and is only selected when the
+/// host sees the explicit debug E2E marker.
+#[cfg(debug_assertions)]
+#[derive(Debug)]
+pub struct E2eAudio {
+    state: Mutex<VolumeState>,
+}
+
+#[cfg(debug_assertions)]
+impl E2eAudio {
+    pub fn new() -> Self {
+        Self {
+            state: Mutex::new(VolumeState {
+                volume: 0.5,
+                muted: false,
+            }),
+        }
+    }
+}
+
+#[cfg(debug_assertions)]
+impl Default for E2eAudio {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(debug_assertions)]
+impl AudioBackend for E2eAudio {
+    fn get_state(&self) -> Result<VolumeState, AudioError> {
+        Ok(*self.state.lock().expect("E2E audio state lock"))
+    }
+
+    fn set_volume(&self, volume: f32) -> Result<(), AudioError> {
+        let mut state = self.state.lock().expect("E2E audio state lock");
+        state.volume = volume.clamp(0.0, 1.0);
+        if state.volume > 0.0 {
+            state.muted = false;
+        }
+        Ok(())
+    }
+
+    fn toggle_mute(&self) -> Result<VolumeState, AudioError> {
+        let mut state = self.state.lock().expect("E2E audio state lock");
+        state.muted = !state.muted;
+        Ok(*state)
+    }
+
+    fn set_mute(&self, muted: bool) -> Result<(), AudioError> {
+        self.state.lock().expect("E2E audio state lock").muted = muted;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{AudioBackend, UnavailableAudio};
@@ -138,5 +199,37 @@ mod tests {
         assert!(backend.set_volume(0.5).is_err());
         assert!(backend.toggle_mute().is_err());
         assert!(backend.set_mute(true).is_err());
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_e2e_audio_round_trips_scalar_volume_and_mute() {
+        let backend = super::E2eAudio::new();
+
+        assert_eq!(
+            backend.get_state().unwrap(),
+            super::VolumeState {
+                volume: 0.5,
+                muted: false,
+            }
+        );
+        backend.set_mute(true).unwrap();
+        backend.set_volume(0.0).unwrap();
+        assert_eq!(
+            backend.get_state().unwrap(),
+            super::VolumeState {
+                volume: 0.0,
+                muted: true,
+            }
+        );
+        backend.set_mute(false).unwrap();
+        backend.set_volume(0.5).unwrap();
+        assert_eq!(
+            backend.get_state().unwrap(),
+            super::VolumeState {
+                volume: 0.5,
+                muted: false,
+            }
+        );
     }
 }

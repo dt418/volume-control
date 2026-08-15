@@ -74,6 +74,7 @@ try {
     env: {
       ...process.env,
       VOLUMECTL_E2E_DEBUG: "1",
+      VOLUMECTL_E2E_AUDIO: "virtual",
       VOLUMECTL_PILOT_SCENARIO: requested,
       VOLUMECTL_CONFIG_DIR: configDir,
     },

@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use tauri::{AppHandle, Emitter, State, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use volumectl_lib::autostart::AutostartStatus;
 use volumectl_lib::config::HotkeyModifier;
@@ -50,7 +50,7 @@ pub fn set_volume(core: State<'_, Arc<Mutex<AppCore>>>, percent: u8) -> Result<(
 pub fn toggle_mute(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<(), String> {
     core.lock()
         .map_err(|e| e.to_string())
-        .map(|mut core| core.handle_action(AppAction::ToggleMute))
+        .and_then(|mut core| core.toggle_mute())
 }
 
 #[tauri::command]
@@ -171,30 +171,54 @@ pub fn mute_session(
 }
 
 #[tauri::command]
-pub fn open_surface(
-    window_manager: State<'_, WindowManager>,
-    surface: String,
-) -> Result<(), String> {
+pub async fn open_surface(app: AppHandle, surface: String) -> Result<(), String> {
     let surface = SurfaceId::from_label(&surface).ok_or("unknown surface")?;
-    window_manager.open(surface)
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
+    let handle = app.clone();
+    let handle_inner = handle.clone();
+    handle
+        .run_on_main_thread(move || {
+            let result = handle_inner.state::<WindowManager>().open(surface);
+            let _ = tx.blocking_send(result);
+        })
+        .map_err(|error| error.to_string())?;
+    rx.recv()
+        .await
+        .ok_or_else(|| "window manager closed".to_string())?
 }
 
 #[tauri::command]
-pub fn close_surface(
-    window_manager: State<'_, WindowManager>,
-    surface: String,
-) -> Result<(), String> {
+pub async fn close_surface(app: AppHandle, surface: String) -> Result<(), String> {
     let surface = SurfaceId::from_label(&surface).ok_or("unknown surface")?;
-    window_manager.close(surface)
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
+    let handle = app.clone();
+    let handle_inner = handle.clone();
+    handle
+        .run_on_main_thread(move || {
+            let result = handle_inner.state::<WindowManager>().close(surface);
+            let _ = tx.blocking_send(result);
+        })
+        .map_err(|error| error.to_string())?;
+    rx.recv()
+        .await
+        .ok_or_else(|| "window manager closed".to_string())?
 }
 
 #[tauri::command]
-pub fn surface_ready(
-    window: WebviewWindow,
-    window_manager: State<'_, WindowManager>,
-) -> Result<(), String> {
+pub async fn surface_ready(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
     let surface = SurfaceId::from_label(window.label()).ok_or("unknown surface")?;
-    window_manager.surface_ready(surface)
+    let (tx, mut rx) = tauri::async_runtime::channel(1);
+    let handle = app.clone();
+    let handle_inner = handle.clone();
+    handle
+        .run_on_main_thread(move || {
+            let result = handle_inner.state::<WindowManager>().surface_ready(surface);
+            let _ = tx.blocking_send(result);
+        })
+        .map_err(|error| error.to_string())?;
+    rx.recv()
+        .await
+        .ok_or_else(|| "window manager closed".to_string())?
 }
 
 #[cfg(test)]

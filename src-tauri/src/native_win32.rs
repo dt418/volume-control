@@ -12,7 +12,7 @@ use volumectl_lib::audio::VolumeState;
 use volumectl_lib::config::Config;
 use volumectl_lib::hotkeys::{hotkey_from_id, HotkeyAction};
 use volumectl_lib::overlay::{Overlay, OverlayAppearance};
-use volumectl_lib::tray::{Tray, TrayCommand};
+use volumectl_lib::tray::Tray;
 use volumectl_lib::ui::UiCapabilities;
 use volumectl_lib::wheel_win32;
 
@@ -149,11 +149,6 @@ impl NativeWin32 {
     /// Refresh the tray tooltip/menu volume display.
     pub fn set_tray_volume(&self, state: &VolumeState) {
         self.tray.set_volume(state);
-    }
-
-    /// Poll tray menu commands (called from the slow host poll).
-    pub fn poll_tray(&self) -> Option<TrayCommand> {
-        self.tray.poll()
     }
 
     /// Non-blocking drain of wheel-hotkey actions.

@@ -1,6 +1,6 @@
 import { browser, $, expect } from "@wdio/globals";
 import { saveE2eArtifacts, recordTiming } from "../support/artifacts.ts";
-import { openSurface, type E2eBrowser } from "../support/commands.ts";
+import { openSurface, waitForSurface, type E2eBrowser } from "../support/commands.ts";
 import { selectors } from "../support/selectors.ts";
 
 const app = browser as unknown as E2eBrowser;
@@ -36,5 +36,17 @@ describe("Help surface", () => {
     // command response, yielding a false ECONNREFUSED. The close IPC path is
     // covered by HelpSurface tests; this E2E case verifies the control remains
     // rendered and accessible after filtering.
+  });
+
+  it("opens the Settings surface from the footer without crashing the host", async () => {
+    // Regression: clicking Settings while Help is open used to tear down the
+    // app (Tauri exits when the last webview closes; the second surface also
+    // exercised the open-surface path from a live WebView). The host must
+    // stay alive and the Settings surface must become visible.
+    await expect($(selectors.help.settings)).toBeDisplayed();
+    await $(selectors.help.settings).click();
+    await app.tauri?.switchWindow?.("window-settings");
+    await waitForSurface(app, "settings");
+    await expect($(selectors.settings.save)).toBeDisplayed();
   });
 });

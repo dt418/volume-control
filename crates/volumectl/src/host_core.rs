@@ -185,6 +185,11 @@ pub struct AppCore {
     hotkey_status: Vec<HotkeyRegResult>,
     sink: Arc<dyn EventSink>,
     sessions_source: Box<dyn SessionsSource>,
+    /// Volume to restore after the host-level mute fallback drives the
+    /// endpoint to zero. Native mute flags remain synchronized as well, but
+    /// zeroing the scalar guarantees audible output is actually silent on
+    /// devices/drivers that report a mute bit without attenuating playback.
+    mute_restore_volume: Option<f32>,
     last_config_mtime: Option<std::time::SystemTime>,
     config_notice: Option<crate::config::ConfigLoadNotice>,
 }
@@ -227,7 +232,7 @@ impl AppCore {
             Box::new(crate::audio_sessions_win32::WindowsSessions);
         #[cfg(not(target_os = "windows"))]
         let sessions_source: Box<dyn SessionsSource> = Box::new(NoopSessions);
-        Ok(Self {
+        let core = Self {
             audio,
             hotkeys,
             config,
@@ -235,9 +240,18 @@ impl AppCore {
             hotkey_status,
             sink,
             sessions_source,
+            mute_restore_volume: None,
             last_config_mtime: config_mtime(),
             config_notice,
-        })
+        };
+
+        // Publish the first confirmed (or safe fallback) state immediately.
+        // The Tauri host creates the tray before AppCore, so without this
+        // startup notification the native menu remains stuck at
+        // `VolumeControl — --` until the first volume mutation.
+        core.sink
+            .volume(core.last_state.percent(), core.last_state.muted);
+        Ok(core)
     }
 
     /// Snapshot for a webview mount: current config, confirmed state,
@@ -310,6 +324,11 @@ impl AppCore {
                 let pct = (percent.min(100) as f32) / 100.0;
                 if let Err(e) = self.audio.set_volume(pct) {
                     log::warn!("{e}");
+                } else if pct > 0.0 {
+                    // A positive direct volume write is an explicit request
+                    // to resume audible output after a mute fallback.
+                    let _ = self.audio.set_mute(false);
+                    self.mute_restore_volume = None;
                 }
                 self.publish_confirmed_state(true);
             }
@@ -326,6 +345,9 @@ impl AppCore {
                 );
                 if let Err(e) = self.audio.set_volume(target) {
                     log::warn!("{e}");
+                } else if target > 0.0 {
+                    let _ = self.audio.set_mute(false);
+                    self.mute_restore_volume = None;
                 }
                 if target == old.volume && (old.volume == 0.0 || old.volume == 1.0) {
                     beep_limit(&self.config);
@@ -333,20 +355,21 @@ impl AppCore {
                 self.publish_confirmed_state(true);
             }
             A::ToggleMute => {
-                if let Err(e) = self.audio.toggle_mute() {
+                if let Err(e) = self.toggle_mute() {
                     log::warn!("{e}");
                 }
-                self.publish_confirmed_state(true);
             }
             A::SetMute { muted } => {
-                if let Err(e) = self.audio.set_mute(muted) {
+                if let Err(e) = self.set_mute(muted) {
                     log::warn!("{e}");
                 }
-                self.publish_confirmed_state(true);
             }
             A::ResetVolume => {
                 if let Err(e) = self.audio.set_volume(0.5) {
                     log::warn!("{e}");
+                } else {
+                    let _ = self.audio.set_mute(false);
+                    self.mute_restore_volume = None;
                 }
                 self.publish_confirmed_state(true);
             }
@@ -655,6 +678,65 @@ impl AppCore {
         self.sessions_source.mute(id)
     }
 
+    /// Toggle the default output mute state and publish the exact state
+    /// returned by the backend. The Tauri command uses this fallible seam so
+    /// an unavailable endpoint is reported to the caller instead of silently
+    /// leaving the UI on a stale mute label.
+    pub fn toggle_mute(&mut self) -> Result<(), String> {
+        let current = self.audio.get_state().map_err(|error| error.to_string())?;
+        if current.muted {
+            let restore = self.mute_restore_volume.take().unwrap_or(current.volume);
+            self.audio
+                .set_mute(false)
+                .map_err(|error| error.to_string())?;
+            self.audio
+                .set_volume(restore)
+                .map_err(|error| error.to_string())?;
+        } else {
+            self.mute_restore_volume = Some(current.volume);
+            self.audio
+                .set_mute(true)
+                .map_err(|error| error.to_string())?;
+            if let Err(error) = self.audio.set_volume(0.0) {
+                let _ = self.audio.set_mute(false);
+                return Err(error.to_string());
+            }
+        }
+        let state = self.audio.get_state().map_err(|error| error.to_string())?;
+        self.publish_state(state, true);
+        Ok(())
+    }
+
+    /// Apply an explicit mute value using the same audible-zero fallback as
+    /// [`Self::toggle_mute`].
+    pub fn set_mute(&mut self, muted: bool) -> Result<(), String> {
+        let current = self.audio.get_state().map_err(|error| error.to_string())?;
+        if muted == current.muted && (!muted || current.volume == 0.0) {
+            self.publish_state(current, true);
+            return Ok(());
+        }
+        if muted {
+            self.mute_restore_volume = Some(current.volume);
+            self.audio
+                .set_mute(true)
+                .map_err(|error| error.to_string())?;
+            self.audio
+                .set_volume(0.0)
+                .map_err(|error| error.to_string())?;
+        } else {
+            let restore = self.mute_restore_volume.take().unwrap_or(current.volume);
+            self.audio
+                .set_mute(false)
+                .map_err(|error| error.to_string())?;
+            self.audio
+                .set_volume(restore)
+                .map_err(|error| error.to_string())?;
+        }
+        let state = self.audio.get_state().map_err(|error| error.to_string())?;
+        self.publish_state(state, true);
+        Ok(())
+    }
+
     /// Re-read the audio state and push the confirmed volume/mute to the
     /// host. `show_overlay` controls whether the native HUD overlay is shown:
     /// volume-mutating actions pass `true` (mirroring the legacy host's
@@ -666,6 +748,10 @@ impl AppCore {
         let Ok(st) = self.audio.get_state() else {
             return;
         };
+        self.publish_state(st, show_overlay);
+    }
+
+    fn publish_state(&mut self, st: VolumeState, show_overlay: bool) {
         self.last_state = st;
         log::debug!("publish: state={}%% muted={}", st.percent(), st.muted);
         self.sink.volume(st.percent(), st.muted);

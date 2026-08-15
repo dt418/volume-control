@@ -55,6 +55,7 @@ bash scripts/check-records.sh --branch origin/main
 bash scripts/test-check-records.sh
 bash scripts/test-format-lint.sh
 bash scripts/test-ship.sh
+bash scripts/test-agent-safe-flow.sh
 bash scripts/ship.sh --dry-run
 ```
 
@@ -63,6 +64,12 @@ run by the canonical gate and CI. `scripts/format-lint-steps.json` is the single
 source of truth for gate steps and forbidden paths. `AGENTS.md` and `GUARDRAILS.md`
 define the detailed enforcement and shipping rules. Use `rtk` prefixes according to
 the global Claude Code instructions when executing commands.
+
+Claude Code also loads the project-scoped `.claude/settings.json` PreToolUse hook.
+It blocks direct pushes, destructive git operations, `--no-verify`, and admin
+merge bypasses. Use `scripts/ship.sh --push` for the canonical push path; delete
+only an already-merged local branch with `git branch -d`, or let
+`gh pr merge <PR> --delete-branch` remove the remote branch after required checks.
 
 On macOS, the normal native checks are:
 

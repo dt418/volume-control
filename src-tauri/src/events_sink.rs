@@ -82,6 +82,7 @@ impl EventSink for TauriSink {
 
     fn exit(&self) {
         log::info!("exiting via tray command");
+        crate::mark_exit_requested();
         // Release native resources first: uninstall the wheel hook and destroy
         // the bridge window (legacy host did the same on exit).
         #[cfg(target_os = "windows")]

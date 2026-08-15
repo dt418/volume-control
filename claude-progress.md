@@ -1,5 +1,141 @@
 # Progress Log
 
+## Session 072 (2026-08-15) - Volume and mute regression coverage
+
+- Added host-core regression coverage for small +/-1% steps, configured large
+  +/-10% steps, 0/100% clamping, reset-to-50%, and mute/unmute transitions.
+  The integration-test audio fake now toggles mute exactly like the real
+  backend instead of returning a stale state.
+- The Tauri mute command now uses a fallible `AppCore::toggle_mute` seam,
+  publishes the exact state returned by the audio backend, and propagates
+  endpoint errors to the IPC caller instead of silently retaining a stale UI
+  label.
+- Hardened the Windows WASAPI backend's COM lifecycle: the endpoint is no
+  longer tied to a guard created on the startup thread; every audio operation
+  initializes an STA guard on its actual caller thread, avoiding stale/no-op
+  mutations from Tauri IPC and the host poll loop.
+- Changed the Tauri host mute contract to enforce an audible zero: it sets the
+  native mute flag, writes scalar volume 0, and restores the prior scalar on
+  unmute. Positive volume/reset actions clear the saved mute level and resume
+  output, so a stale mute bit cannot leave the UI and device out of sync.
+- Mixer E2E now verifies the backend-visible scalar sequence `50 -> 0 -> 50`
+  around Mute/Unmute, in addition to the accessibility label transition.
+- Fixed the frontend race that made a successful mute appear ineffective:
+  `useSessions` now installs `state://volume`/`state://sessions` listeners
+  before requesting bootstrap and ignores a stale bootstrap volume snapshot
+  after a newer event. The race has a focused React test.
+- Hardened Settings E2E against asynchronous bootstrap timing by waiting for
+  the concrete General controls before editing; this removes a false failure
+  where the surface shell was ready but its form was not yet mounted.
+- Extended the Windows mixer E2E contract to assert the real system-output
+  label and aria action switch after mute and unmute state events. A manual
+  Windows probe also confirmed the Ctrl+Alt+M path publishes `muted=true` and
+  `muted=false`; a standalone driver startup failure is recorded separately
+  from application behavior.
+
+## Session 073 (2026-08-15) - Deterministic audio state for hosted E2E
+
+- CI logs showed both Ubuntu and Windows hosted runners had no usable default
+  output endpoint. The production-safe fallback (`UnavailableAudio`) therefore
+  rejected `toggle_mute`, which correctly left the UI unchanged but made the
+  end-to-end command/event assertion impossible to run on those runners.
+- Added `E2eAudio`, an in-memory `AudioBackend` compiled only in debug builds,
+  with a unit test covering the 50% -> muted/0% -> unmuted/50% round trip.
+- `src-tauri` selects that backend only when both `VOLUMECTL_E2E_DEBUG=1` and
+  `VOLUMECTL_E2E_AUDIO=virtual` are present. Release builds cannot select or
+  contain the debug backend.
+- The Tauri debug E2E wrapper now sets the explicit virtual marker. This keeps
+  hosted Linux/Windows checks deterministic while preserving native Linux,
+  macOS, and Windows backend coverage in the Rust host tests and release build.
+
+## Session 074 (2026-08-15) - FE/BE audio connection diagnostics
+
+- Traced the mixer path from `@tauri-apps/api/core` `invoke`/event listeners
+  through `src-tauri` commands, `TauriSink`, `AppCore`, and the platform audio
+  backend. The IPC bridge is connected; hosted “connection” failures were audio
+  endpoint errors returned by the backend, while the system row silently
+  swallowed those rejections.
+- Added a Mixer regression test for a rejected `toggle_mute` command. The
+  system output row now reports mute/reset command failures through the
+  accessible status notice and leaves the last confirmed state unchanged,
+  instead of pretending that mute succeeded.
+
+## Session 075 (2026-08-15) - Debug E2E single-instance isolation
+
+- A ship-gate run reached the WDIO launcher but the debug app exited with code
+  0 before the embedded driver became ready. The Windows single-instance guard
+  treated the WDIO debug process like a second production instance.
+- The guard now bypasses the mutex only for debug builds carrying
+  `VOLUMECTL_E2E_DEBUG=1`; normal debug/manual launches and all release builds
+  still enforce single-instance behavior.
+
+## Session 076 (2026-08-15) - Tray menu commands and tray-host lifecycle
+
+- Root cause of "tray clicks do nothing": Tauri installs a process-wide
+  `muda::MenuEvent` handler at runtime, which disables the
+  `MenuEvent::receiver()` channel the tray poll thread drained — every click
+  landed in Tauri's event loop while the app polled an empty channel.
+- Tray commands now route through `Builder::on_menu_event` into the same
+  `AppCore::handle_action` path as hotkeys/IPC; `TrayCommand::from_menu_id`
+  is the single id→command mapping (unit-tested for all 8 menu ids, label
+  ids excluded).
+- Second crash-class bug: Tauri exits by default when the last webview
+  surface closes, so closing the mixer/settings/help window silently killed
+  the tray host. `RunEvent::ExitRequested` is now prevented unless the tray
+  Exit command set the `EXIT_REQUESTED` flag first (tray `Exit` still
+  terminates the process).
+- AppCore now publishes the initial confirmed state at construction, so the
+  native tray label shows the real volume instead of `VolumeControl — --`
+  until the first mutation.
+- Manual UI-Automation verification on Windows release build: Mute (0%),
+  Reset (50%), Open mixer, Settings, Help, Reload configuration, Open config
+  file, and Exit all work; the process stays alive after every surface
+  close/reopen cycle.
+
+## Session 077 (2026-08-15) - Webview surfaces unresponsive in release
+
+- Users saw "localhost refused to connect" inside Settings/Help and every
+  footer/search interaction appeared dead. Root cause: `tauri` was declared
+  without the `custom-protocol` feature, so `tauri/build.rs` set `cfg(dev)`
+  even in release builds and every `WebviewUrl::App` resolved to
+  `http://localhost:1420` (devUrl) instead of the embedded assets. Added
+  `custom-protocol` to the tauri features; release surfaces now load from the
+  asset protocol and `surface_ready` runs.
+- Second deadlock: opening a surface through the webview IPC (e.g. the Help
+  footer "Settings" button) called `WebviewWindowBuilder::build()` from a sync
+  command on the main thread while the runtime was inside an async task; wry
+  needs a live message pump, so the call hung forever and the whole app
+  became unresponsive (closing Help left the app laggy/dead). The three
+  surface commands (`open_surface`, `close_surface`, `surface_ready`) are now
+  async and marshal the window operation through `run_on_main_thread` with an
+  async channel; `WindowManager::on_main` covers the tray/poll paths that can
+  arrive from non-main threads (10s timeout so a stuck wry call cannot freeze
+  the host).
+- Windows E2E evidence check failed for single-surface runs because
+  PowerShell unwraps a one-element `switch` into a scalar and splatting a
+  scalar string enumerates its characters ("h","e","l",...). The wrapper now
+  wraps the switch result in `@()` before splatting.
+- Added an E2E regression (`help.e2e.ts`) that clicks the Help footer
+  "Settings" button and asserts the Settings surface opens; it passes in ~1s
+  with the fixes.
+
+## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
+
+- Added `.claude/hooks/agent-safe-flow.sh` and wired it through the project
+  `.claude/settings.json` Bash `PreToolUse` hook.
+- The guard blocks direct `git push`, destructive reset/clean/branch deletion,
+  `git commit --no-verify`, and `gh pr merge --admin`; it allows the canonical
+  `scripts/ship.sh --push`, safe local `git branch -d`, and normal PR merges
+  protected by GitHub's required Release gate.
+- Added `scripts/test-agent-safe-flow.sh` with malformed-input, blocked,
+  allowed, executable-bit, and settings wiring cases; the contract passes
+  under the repository's Git Bash path. Review hardening covers git global
+  options (`-C`, `-c`, `-p`, `-P`, `--config-env` and related forms), separate
+  force flags, restore/checkout path forms, and `git commit -n`, while preserving
+  safe checkout and ref/path arguments named `push`; CI
+  now runs the hook contract on both checks and Windows, and hook/settings
+  changes select the full platform scope.
+
 ## Session 070 (2026-08-15) - Enforce the release gate on main
 
 - Configured GitHub branch protection for `main` with strict required status

@@ -39,6 +39,7 @@ const app = spawn(binary, [], {
   env: {
     ...process.env,
     VOLUMECTL_E2E_DEBUG: "1",
+    VOLUMECTL_E2E_AUDIO: "virtual",
     VITE_TAURI_E2E_DEBUG: "1",
     VOLUMECTL_E2E_PILOT: "1",
     VOLUMECTL_VERIFY_SURFACE: startupWindow,
