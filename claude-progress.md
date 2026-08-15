@@ -11,10 +11,13 @@
   committed deletion attack fixtures to `scripts/test-check-records.sh`.
 - Updated `CLAUDE.md` to document canonical `config.ini`, corrected the current
   ship self-test count to 31, and recorded this review in feature records.
-- Fresh verification: Rust workspace tests 332/332, frontend Vitest 89/89 and
-  production build, fmt/diff/clippy, Linux/macOS `volumectl` cross-target
-  checks (including Linux `gtk-renderer` with the documented pkg-config shim),
-  records/format-lint/ship/release/Codex/E2E contract suites all pass.
+- Fresh verification: Rust workspace test groups all pass (333 total:
+  280 library + 12 Tauri + 4 session + 21 host integration + 16 host suite),
+  frontend Vitest 89/89 and production build, fmt/diff/clippy, Linux/macOS
+  `volumectl` cross-target checks (including Linux `gtk-renderer` with the
+  documented pkg-config shim), records/format-lint/ship/release/Codex/E2E
+  contract suites all pass. A clean `tauri build --no-bundle --ci` also
+  produced `target/release/VolumeControl.exe` successfully.
 - Windows auto-start verifier passed enable/read-back, disable, restoration,
   and unrelated Run-value checks with `binary_launched: false`. The three
   pre-push review domains found no remaining defect after the guard fix.

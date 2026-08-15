@@ -11,12 +11,15 @@ records-guard deletion bypass. The current branch has:
   regression fixtures;
 - canonical INI documentation in `CLAUDE.md` and current ship-test counts.
 
-Evidence: Rust workspace 332/332, frontend 89/89 + production build,
-fmt/diff/clippy, Linux/macOS `volumectl` target checks (Linux GTK feature
-included), records/format-lint/ship/release/Codex/E2E contracts, and the real
-Windows auto-start registry restoration verifier all pass. Three-domain
-pre-push review is clean after the fixes. Hosted desktop/release matrix still
-remains the authoritative cross-platform artifact gate.
+Evidence: Rust workspace test groups all pass (333 total: 280 library + 12
+Tauri + 4 session + 21 host integration + 16 host suite), frontend 89/89 +
+production build, fmt/diff/clippy, Linux/macOS `volumectl` target checks
+(Linux GTK feature included), records/format-lint/ship/release/Codex/E2E
+contracts, and the real Windows auto-start registry restoration verifier all
+pass. A clean `tauri build --no-bundle --ci` produced
+`target/release/VolumeControl.exe`. Three-domain pre-push review is clean
+after the fixes. Hosted desktop/release matrix still remains the authoritative
+cross-platform artifact gate.
 
 ## Session 063 (2026-08-15) — Auto-start and canonical INI integration
 

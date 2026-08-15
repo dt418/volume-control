@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-15T14:05",
+    "last_updated":  "2026-08-15T15:18",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -24,7 +24,7 @@
                          "status":  "passing",
                          "verification":  [
                                                "scripts/test-check-records.sh passes all current guard tests, including staged and committed record-deletion negatives.",
-                                               "cargo test --workspace --no-default-features passes 332 tests with the shared config-directory lock.",
+                                               "cargo test --workspace --no-default-features passes all 333 tests with the shared config-directory lock (280 library + 12 Tauri + 4 session + 21 host integration + 16 host suite).",
                                                "cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings pass.",
                                                "The three-domain pre-push review finds no remaining guard-chain or wiring defect."
                                            ],
