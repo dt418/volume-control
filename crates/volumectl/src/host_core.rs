@@ -203,7 +203,7 @@ impl AppCore {
         _modifier: HotkeyModifier,
         sink: Arc<dyn EventSink>,
     ) -> Result<Self, String> {
-        Self::new_with_notice(audio, config, _modifier, sink, None)
+        Self::new_inner(audio, config, _modifier, sink, None, false)
     }
 
     /// Create the core with an optional startup config migration/recovery notice.
@@ -214,8 +214,42 @@ impl AppCore {
         sink: Arc<dyn EventSink>,
         config_notice: Option<crate::config::ConfigLoadNotice>,
     ) -> Result<Self, String> {
+        Self::new_inner(audio, config, _modifier, sink, config_notice, false)
+    }
+
+    /// Create the core without touching the OS-level hotkey manager.
+    ///
+    /// Integration tests use this seam so a headless CI session (or
+    /// concurrent Carbon registration from parallel test threads) can never
+    /// abort the test process. Production hosts keep using [`Self::new`].
+    #[doc(hidden)]
+    pub fn new_without_native_hotkeys(
+        audio: Box<dyn AudioBackend>,
+        config: Config,
+        _modifier: HotkeyModifier,
+        sink: Arc<dyn EventSink>,
+        config_notice: Option<crate::config::ConfigLoadNotice>,
+    ) -> Result<Self, String> {
+        Self::new_inner(audio, config, _modifier, sink, config_notice, true)
+    }
+
+    fn new_inner(
+        audio: Box<dyn AudioBackend>,
+        config: Config,
+        _modifier: HotkeyModifier,
+        sink: Arc<dyn EventSink>,
+        config_notice: Option<crate::config::ConfigLoadNotice>,
+        hotkeys_unavailable: bool,
+    ) -> Result<Self, String> {
         let bindings = config_hotkeys(&config);
-        let hotkeys = GlobalHotkeys::new_with_bindings(&bindings)?;
+        let hotkeys = if hotkeys_unavailable {
+            GlobalHotkeys::unavailable(
+                &bindings,
+                "native hotkey manager disabled for host-core tests",
+            )
+        } else {
+            GlobalHotkeys::new_with_bindings(&bindings)?
+        };
         // Keep the wheel-bridge modifier in sync with the initial config on
         // Windows (legacy app.rs initialized it at startup; the modifier
         // change paths below re-sync on every change). Idempotent atomic

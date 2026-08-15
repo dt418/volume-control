@@ -393,9 +393,7 @@ impl GlobalHotkeys {
                 // Settings/Help can render the degraded state instead of
                 // crashing during Tauri setup or unit tests.
                 let failure = format!("create global hotkey manager: {error}");
-                log::warn!("global hotkeys unavailable: {failure}");
-                let reg_results = unavailable_results(&combos, &failure);
-                (None, HashMap::new(), Vec::new(), reg_results, Some(failure))
+                return Ok(Self::unavailable(bindings, &failure));
             }
         };
 
@@ -441,6 +439,32 @@ impl GlobalHotkeys {
             rx,
             failure,
         })
+    }
+
+    /// Degraded constructor: no native manager, no listener/repeat threads.
+    ///
+    /// Produces the same state as a failed [`GlobalHotKeyManager::new()`] and
+    /// is used by host-core integration tests so they never touch OS-level
+    /// input services (which can abort on headless or concurrent-Carbon CI
+    /// runners).
+    pub fn unavailable(bindings: &HotkeyBindings, reason: &str) -> Self {
+        let combos = combos_from_bindings(bindings).unwrap_or_default();
+        let failure = reason.to_string();
+        log::warn!("global hotkeys unavailable: {failure}");
+        let reg_results = unavailable_results(&combos, &failure);
+        let (_tx, rx) = mpsc::channel();
+        Self {
+            manager: None,
+            registered: Mutex::new(Vec::new()),
+            ids: Arc::new(RwLock::new(HashMap::new())),
+            hold: Arc::new(HotkeyHold::new()),
+            stop: Arc::new(AtomicBool::new(false)),
+            worker: None,
+            listener: None,
+            reg_results: Mutex::new(reg_results),
+            rx,
+            failure: Some(failure),
+        }
     }
 
     /// Apply a config change: unregister and re-register every combo for the

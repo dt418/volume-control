@@ -1,5 +1,22 @@
 # Progress Log
 
+## Session 074 (2026-08-16) - Host-core tests independent of the native hotkey manager
+
+- PR #30 (release v0.1.2 prep) CI run 31903072628 failed on macOS: the
+  `host_core` test binary aborted with SIGABRT 27ms after `running 23 tests`
+  and before any test result line, with no Rust panic message. The identical
+  Rust code had passed 23/23 on macOS 6 hours earlier (run 31898000671), so
+  the abort was a native Carbon crash from parallel `GlobalHotKeyManager`
+  create/drop across test threads - an environment/timing-dependent failure.
+- Fix (root cause, not a workaround): host-core integration tests no longer
+  create the OS-level hotkey manager. `AppCore` gains a `#[doc(hidden)]`
+  `new_without_native_hotkeys` seam and `GlobalHotkeys::unavailable` (no
+  manager, no listener/repeat threads, explicit degraded status);
+  `new`/`new_with_notice` production paths are unchanged.
+- Verification: `cargo test -p volumectl --test host_core --no-default-features`
+  passes 23/23 locally; full workspace gate passes. macOS CI re-run on PR #30
+  is expected green. Records: feature_list.json vol-074 added (in_progress).
+
 ## Session 073 (2026-08-16) - Release v0.1.2 preparation and tag binding
 
 - Diagnosed the failing Release run 31901602099: workflow_dispatch with tag

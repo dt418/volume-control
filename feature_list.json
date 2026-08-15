@@ -16,6 +16,24 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-074",
+                         "priority":  74,
+                         "area":  "testing",
+                         "title":  "Host-core tests independent of the native hotkey manager",
+                         "user_visible_behavior":  "Developer-facing: the host-core integration suite no longer creates OS-level hotkey managers, so CI test runs cannot be aborted by concurrent Carbon registration on macOS runners.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "cargo test -p volumectl --test host_core --no-default-features passes 23/23 locally (0.27s) with the no-native-manager seam.",
+                                               "cargo test --workspace --no-default-features passes locally; full format-lint gate passes.",
+                                               "macOS CI job re-run on PR #30 expected green; status updated after the hosted run completes."
+                                           ],
+                         "evidence":  [
+                                              "Session 074 (2026-08-16): PR #30 CI run 31903072628 aborted the macOS host_core binary with SIGABRT 27ms after 'running 23 tests' and before any test result line, with no Rust panic - a native Carbon abort from parallel GlobalHotKeyManager create/drop in test threads (green runs of the identical code 6h earlier passed 23/23).",
+                                              "Session 074 (2026-08-16): AppCore gains a #[doc(hidden)] new_without_native_hotkeys seam and GlobalHotkeys::unavailable (no manager, no listener/repeat threads); production new/new_with_notice paths are unchanged."
+                                       ],
+                         "notes":  "Native hotkey registration remains covered by hotkeys_global unit tests, the real Tauri host, and the desktop E2E matrix."
+                     },
+                     {
                          "id":  "vol-073",
                          "priority":  73,
                          "area":  "release",
