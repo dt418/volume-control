@@ -8,6 +8,7 @@ args = [
     "-y",
     "@modelcontextprotocol/server-github",
 ]
+enabled = false
 
 [mcp_servers.context7]
 command = "npx"
@@ -15,9 +16,11 @@ args = [
     "-y",
     "@upstash/context7-mcp@latest",
 ]
+enabled = false
 
 [mcp_servers.exa]
 url = "https://mcp.exa.ai/mcp"
+enabled = false
 
 [mcp_servers.memory]
 command = "npx"
@@ -25,6 +28,7 @@ args = [
     "-y",
     "@modelcontextprotocol/server-memory",
 ]
+enabled = false
 
 [mcp_servers.playwright]
 command = "npx"
@@ -33,6 +37,7 @@ args = [
     "@playwright/mcp@latest",
     "--extension",
 ]
+enabled = false
 
 [mcp_servers.sequential-thinking]
 command = "npx"
@@ -40,6 +45,7 @@ args = [
     "-y",
     "@modelcontextprotocol/server-sequential-thinking",
 ]
+enabled = false
 
 [features]
 multi_agent = true
