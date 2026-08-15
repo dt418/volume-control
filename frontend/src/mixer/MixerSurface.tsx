@@ -101,7 +101,14 @@ export function MixerSurface() {
         />
       </div>
 
-      <SystemOutputRow value={volumePct} muted={muted} thresholds={thresholds} />
+      <SystemOutputRow
+        value={volumePct}
+        muted={muted}
+        thresholds={thresholds}
+        onError={(actionError) =>
+          setNotice(`Audio backend unavailable: ${surfaceErrorMessage(actionError)}`)
+        }
+      />
       </header>
 
       {notice && (

@@ -49,6 +49,19 @@ marker and `VOLUMECTL_E2E_AUDIO=virtual` are both set. The Tauri debug E2E
 wrapper supplies that marker, making hosted Linux/Windows IPC/event/UI checks
 deterministic without weakening production behavior or release contents.
 
+## Session 074 (2026-08-15) - FE/BE connection diagnosis
+
+The FE→BE bridge is wired correctly: `ipc.ts` delegates to Tauri core invoke
+and event APIs, `commands.rs` registers `toggle_mute`/`set_volume`/reset, and
+`TauriSink` emits `state://volume`. The observed “connection lost” symptom was
+the audio backend returning an endpoint/init error; `SystemOutputRow` caught it
+with an empty handler, so users saw no explanation and no state change.
+
+`MixerSurface` now passes an error callback into the system output row. Mute
+and reset rejections render an accessible status notice while retaining the
+last confirmed backend state. The new React regression test proves that a
+failed mute does not fabricate a Muted label.
+
 ## Session 071 (2026-08-15) — Project-scoped Claude safe-flow hook
 
 `.claude/settings.json` now wires `.claude/hooks/agent-safe-flow.sh` as a Bash

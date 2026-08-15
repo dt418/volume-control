@@ -48,6 +48,18 @@
   hosted Linux/Windows checks deterministic while preserving native Linux,
   macOS, and Windows backend coverage in the Rust host tests and release build.
 
+## Session 074 (2026-08-15) - FE/BE audio connection diagnostics
+
+- Traced the mixer path from `@tauri-apps/api/core` `invoke`/event listeners
+  through `src-tauri` commands, `TauriSink`, `AppCore`, and the platform audio
+  backend. The IPC bridge is connected; hosted “connection” failures were audio
+  endpoint errors returned by the backend, while the system row silently
+  swallowed those rejections.
+- Added a Mixer regression test for a rejected `toggle_mute` command. The
+  system output row now reports mute/reset command failures through the
+  accessible status notice and leaves the last confirmed state unchanged,
+  instead of pretending that mute succeeded.
+
 ## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
 
 - Added `.claude/hooks/agent-safe-flow.sh` and wired it through the project

@@ -229,6 +229,24 @@ describe("MixerSurface", () => {
     });
   });
 
+  it("shows a backend notice when system mute cannot reach the audio endpoint", async () => {
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") return bootstrap;
+      if (cmd === "toggle_mute") throw new Error("audio init failed: endpoint unavailable");
+      return {};
+    });
+
+    await renderSurface();
+    fireEvent.click(screen.getByRole("button", { name: "Mute system output" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Audio backend unavailable: audio init failed: endpoint unavailable",
+      );
+    });
+    expect(screen.getByTestId("system-output-value")).toHaveTextContent("55%");
+  });
+
   it("renders the glass-surface class on the root for transparent-window readability", async () => {
     await renderSurface();
     expect(screen.getByRole("main").className).toContain("glass-surface");
