@@ -16,6 +16,24 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-033",
+                         "priority":  33,
+                         "area":  "ci-release",
+                         "title":  "Ubuntu release installs the complete Tauri WebKitGTK dependency set",
+                         "user_visible_behavior":  "Ubuntu release builds no longer fail in gdk-sys because the Tauri WebKitGTK/GTK3 development packages and pkg-config metadata are missing from the release runner.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "release.yml parses with PyYAML and its Ubuntu step contains libwebkit2gtk-4.1-dev, libgtk-3-dev, and gdk-3.0/webkit2gtk-4.1 pkg-config probes.",
+                                               "cargo tree --target x86_64-unknown-linux-gnu -i gdk-sys --workspace --no-default-features confirms gdk-sys is pulled by the Tauri/WebKitGTK stack.",
+                                               "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, and cargo test --workspace --no-default-features pass locally.",
+                                               "A hosted Ubuntu release run must pass the new package probes and complete tauri build before this feature is marked passing."
+                                           ],
+                         "evidence":  [
+                                           "Session 052 (2026-08-15): Ubuntu release dependency list aligned with the working CI Tauri prerequisites; gdk-sys root cause confirmed through cargo tree."
+                                       ],
+                         "notes":  "Local verification cannot execute apt/pkg-config on Windows; hosted Ubuntu release evidence remains required."
+                     },
+                     {
                          "id":  "vol-032",
                          "priority":  32,
                          "area":  "docs-release",

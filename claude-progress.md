@@ -1,5 +1,21 @@
 # Progress Log
 
+## Session 052 (2026-08-15) - Ubuntu release WebKitGTK dependency fix
+
+- Diagnosed the Ubuntu release failure: `gdk-sys v0.18.2` is required by the
+  Tauri/WebKitGTK stack (`tauri` → `wry`/`webkit2gtk` → GTK3/GDK), but the
+  release workflow installed GTK4/libadwaita without the WebKitGTK 4.1
+  development package that provides `gdk-3.0.pc`.
+- Updated `.github/workflows/release.yml` to install the complete Tauri Linux
+  prerequisite set, including `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, and
+  `pkg-config`; added explicit `gdk-3.0` and `webkit2gtk-4.1` probes so the
+  release fails early with a precise dependency error.
+- Verification: release YAML parses with PyYAML; the dependency/probe
+  contract passes; `cargo tree --target x86_64-unknown-linux-gnu -i gdk-sys`
+  confirms the dependency path; Rust fmt, clippy, workspace tests, and
+  `git diff --check` pass locally. Hosted Ubuntu release validation is still
+  required because the development host is Windows.
+
 ## Session 051 (2026-08-15) - Release documentation and final verification
 
 - Refreshed English and Vietnamese README files to describe the current
