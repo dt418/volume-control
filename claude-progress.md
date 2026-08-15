@@ -20,6 +20,9 @@
   unavailable backend so the UI can show recovery state instead of panicking.
 - Made the Mixer WebDriver empty-state assertion platform-agnostic so native
   Linux/macOS runs verify the intentional Windows-only session fallback.
+- Made global-hotkey manager creation fail-soft when a GUI/input service is
+  unavailable; AppCore stays alive with explicit conflicted statuses and no
+  listener threads, so headless tests and desktop startup do not panic.
 - Final release verification is being rerun on the complete tree before the
   feature branch is pushed for the `master` PR; hosted Linux/macOS evidence is
   still supplied by GitHub Actions.

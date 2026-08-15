@@ -29,6 +29,7 @@
                                                "src-tauri/tauri.conf.json resolves `npm --prefix ../../frontend` from Tauri's hook workspace; local Tauri CLI verification reproduces and then prevents the root package.json lookup failure.",
                                                "Audio backend initialization falls back to an explicit unavailable backend when no default output endpoint exists, preventing a Tauri setup panic.",
                                                "Mixer E2E accepts the intentional Windows-only session fallback on Linux/macOS while preserving the no-session path.",
+                                               "Global hotkey manager creation degrades to explicit unavailable statuses when a native GUI/input service is missing, avoiding host startup panics.",
                                                "Full release gate is rerun before PR creation; hosted Linux/macOS CI remains required for cross-platform evidence."
                                            ],
                          "evidence":  [

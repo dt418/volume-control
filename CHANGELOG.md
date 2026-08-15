@@ -37,6 +37,9 @@ All notable changes to VolumeControl are documented here.
   exists, keeping the host alive so the mixer can present its recovery state.
 - Mixer E2E coverage accepts the intentional Windows-only session empty state
   on Linux and macOS while retaining the Windows no-session assertions.
+- Global hotkey initialization now degrades to explicit unavailable statuses
+  when the native input service cannot be created, keeping the host alive in
+  headless sessions and CI.
 
 ### Verification
 
