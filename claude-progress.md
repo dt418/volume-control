@@ -1,5 +1,13 @@
 # Progress Log
 
+## Session 066 (2026-08-15) - Fix cross-platform E2E evidence path
+
+- CI on `main` exposed a real Linux/macOS regression after the isolated `tsx`
+  fix: `verify-tauri-e2e.sh` changed cwd to `e2e/tauri` before checking a
+  relative `TAURI_E2E_OUTPUT`, so the JUnit evidence lookup searched the wrong
+  directory even though every WDIO spec passed.
+- Normalized relative output roots to repository-absolute paths before the cwd
+  change and added a ship-flow assertion preventing this regression.
 ## Session 065 (2026-08-15) - Rename default branch to main
 
 - PR #21 (`fix: harden records guard and finalize release verification`) was

@@ -85,6 +85,11 @@ if grep -qF 'pushd "$repo/e2e/tauri"' scripts/verify-tauri-e2e.sh; then
 else
     report FAIL 'verify-tauri-e2e.sh: evidence check resolves tsx from the isolated E2E package'
 fi
+if grep -qF 'output_root="$repo/$output_root"' scripts/verify-tauri-e2e.sh; then
+    report ok 'verify-tauri-e2e.sh: normalizes relative evidence roots before changing cwd'
+else
+    report FAIL 'verify-tauri-e2e.sh: normalizes relative evidence roots before changing cwd'
+fi
 invokes scripts/ship.sh 'node_modules/[.]bin/tauri' \
     'ship.sh: release flow resolves the local tauri CLI (never npx tauri)'
 invokes scripts/ship.sh 'build --no-bundle' \

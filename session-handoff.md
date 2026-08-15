@@ -1,5 +1,13 @@
 # Session Handoff
 
+## Session 066 (2026-08-15) — Cross-platform E2E evidence path fix
+
+CI on `main` showed Ubuntu and macOS WDIO specs passing but evidence validation
+failing with a missing JUnit under `output/...` because the Bash wrapper changed
+cwd to `e2e/tauri` while retaining a relative output root. The wrapper now
+normalizes relative roots to absolute repository paths before the cwd change;
+the ship smoke test asserts this contract.
+
 ## Session 065 (2026-08-15) — Default branch renamed to main
 
 PR #21 merged successfully at `9cb0a66` after green format/lint, Windows E2E,
