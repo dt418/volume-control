@@ -1,5 +1,13 @@
 # Progress Log
 
+## Session 068 (2026-08-15) - Fix macOS config INI test expectations
+
+- Full `main` CI found five macOS-only config INI test failures after the E2E
+  path fix. The codec correctly normalizes blacklist entries to `.app`; tests
+  incorrectly compared against unnormalized `.exe` fixtures.
+- Updated round-trip, atomic-save, migration, and numeric blacklist-order tests
+  to compare against the public platform normalization contract.
+
 ## Session 066 (2026-08-15) - Fix cross-platform E2E evidence path
 
 - CI on `main` exposed a real Linux/macOS regression after the isolated `tsx`
