@@ -1,4 +1,5 @@
 import { browser, expect } from "@wdio/globals";
+import { assertNoRuntimeErrors, type E2eBrowser } from "../support/commands.ts";
 
 describe("Tauri runtime bridge", () => {
   it("exposes the global API and WDIO guest bridge", async () => {
@@ -44,6 +45,7 @@ describe("Tauri runtime bridge", () => {
       };
     });
     console.log("Tauri runtime bridge state", state);
+    await assertNoRuntimeErrors(browser as unknown as E2eBrowser);
     expect(state.globalTauri).toBe("object");
     expect(state.invoke).toBe("function");
     expect(state.wdio).toBe("object");

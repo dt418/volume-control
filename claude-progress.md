@@ -1,5 +1,26 @@
 # Progress Log
 
+## Session 055 (2026-08-15) - Fail-closed WDIO evidence gate
+
+- Pinned `@wdio/junit-reporter` 9.30.1 in the isolated E2E package and added
+  the package `npm test` support-suite alias.
+- Added deterministic `manifest.json` writing/validation, root `timings.json`
+  p50/p95 output with optional bootstrap/IPC environment budgets, and focused
+  negative contracts for missing JUnit, missing spec results, and unexpected
+  frontend runtime errors.
+- WDIO now records per-surface result entries, captures service logs under the
+  output root, and asserts that only unavailable-audio/degraded-hotkey messages
+  may remain. PowerShell and Bash wrappers preserve WDIO failures, verify
+  evidence after successful runs, and always perform temporary bridge/capability
+  cleanup checks.
+- Windows, Linux, and macOS CI artifact uploads are fail-closed and include
+  JUnit, manifest, timings, screenshots, accessibility snapshots, and logs.
+- Verification: `npm test --prefix e2e/tauri` (11/11), `npm run typecheck
+  --prefix e2e/tauri`, `npm run test:contract --prefix e2e/tauri`, `npm run
+  test:production-exclusion --prefix e2e/tauri`, wrapper shell syntax checks,
+  and `git diff --check` pass. A real desktop E2E run remains unavailable in
+  this Windows-hosted handoff because no approved debug binary run was started.
+
 ## Session 054 (2026-08-15) - Coordinator handoff contract hardening
 
 - Tightened `scripts/test-codex-config.py` so orchestration documentation must

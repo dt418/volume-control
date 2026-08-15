@@ -100,8 +100,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tauri-e2e-windows
-          path: output/tauri-e2e/ci-windows
-          if-no-files-found: warn
+          path: |
+            output/tauri-e2e/ci-windows/junit
+            output/tauri-e2e/ci-windows/manifest.json
+            output/tauri-e2e/ci-windows/timings.json
+            output/tauri-e2e/ci-windows/**/screenshot.png
+            output/tauri-e2e/ci-windows/**/accessibility-snapshot.json
+            output/tauri-e2e/ci-windows/logs
+          if-no-files-found: error
       - name: Build
         run: cargo build
       - name: Test
@@ -149,8 +155,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tauri-e2e-macos
-          path: output/tauri-e2e/ci-macos
-          if-no-files-found: warn
+          path: |
+            output/tauri-e2e/ci-macos/junit
+            output/tauri-e2e/ci-macos/manifest.json
+            output/tauri-e2e/ci-macos/timings.json
+            output/tauri-e2e/ci-macos/**/screenshot.png
+            output/tauri-e2e/ci-macos/**/accessibility-snapshot.json
+            output/tauri-e2e/ci-macos/logs
+          if-no-files-found: error
       - name: Build
         run: cargo build
       - name: Test (includes AppKit renderer smoke tests)
@@ -222,8 +234,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tauri-e2e-linux
-          path: output/tauri-e2e/ci-linux
-          if-no-files-found: warn
+          path: |
+            output/tauri-e2e/ci-linux/junit
+            output/tauri-e2e/ci-linux/manifest.json
+            output/tauri-e2e/ci-linux/timings.json
+            output/tauri-e2e/ci-linux/**/screenshot.png
+            output/tauri-e2e/ci-linux/**/accessibility-snapshot.json
+            output/tauri-e2e/ci-linux/logs
+          if-no-files-found: error
       - name: Build (no features — CLI fallback)
         run: cargo build
       - name: Test (no features — pure planning)

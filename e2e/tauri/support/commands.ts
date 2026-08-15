@@ -11,6 +11,7 @@ export interface SurfaceElement {
 export interface E2eBrowser {
   $: (selector: string) => Promise<SurfaceElement>;
   execute?: (script: unknown, ...args: unknown[]) => Promise<unknown>;
+  getLogs?: (type?: string) => Promise<unknown[]>;
   refresh?: () => Promise<void>;
   tauri?: {
     execute: (script: unknown, ...args: unknown[]) => Promise<unknown>;
@@ -18,6 +19,7 @@ export interface E2eBrowser {
     listWindows?: () => Promise<string[]>;
     mock?: (command: string) => Promise<{ mockRejectedValue: (error: unknown) => Promise<unknown> }>;
     restoreAllMocks?: (commandPrefix?: string) => Promise<unknown>;
+    getBackendLogs?: () => Promise<unknown>;
   };
 }
 
@@ -65,6 +67,94 @@ export async function invokeForTest(
       tauri.core.invoke(payload.command, payload.args),
     { command, args },
   );
+}
+
+function asMessages(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") return entry;
+      if (!entry || typeof entry !== "object") return String(entry);
+      const record = entry as { message?: unknown; text?: unknown; args?: unknown };
+      if (typeof record.message === "string") return record.message;
+      if (typeof record.text === "string") return record.text;
+      return JSON.stringify(record.args ?? record);
+    })
+    .filter((message): message is string => message.length > 0);
+}
+
+function isErrorLog(entry: unknown): boolean {
+  if (!entry || typeof entry !== "object") return false;
+  const record = entry as { level?: unknown; severity?: unknown };
+  return record.level === "error" || record.level === "SEVERE" || record.severity === 3 || record.severity === "error";
+}
+
+export async function collectRuntimeErrors(browser: E2eBrowser): Promise<{ frontend: string[]; backend: string[] }> {
+  let captured: { frontend?: unknown; backend?: unknown } = {};
+  if (browser.execute) {
+    try {
+      const value = await browser.execute(() => {
+        const win = window as Window & {
+          __volumecontrol_e2e_errors?: unknown[];
+          __volumecontrol_e2e_backend_errors?: unknown[];
+        };
+        return {
+          frontend: win.__volumecontrol_e2e_errors ?? [],
+          backend: win.__volumecontrol_e2e_backend_errors ?? [],
+        };
+      });
+      if (value && typeof value === "object") captured = value as typeof captured;
+    } catch (error) {
+      captured.frontend = [error instanceof Error ? error.message : String(error)];
+    }
+  }
+
+  let browserLogs: unknown[] = [];
+  if (browser.getLogs) {
+    try {
+      browserLogs = await browser.getLogs("browser");
+    } catch {
+      // A provider without the WebDriver log endpoint still has the in-page
+      // error buffer above; do not turn a diagnostic API limitation into a
+      // synthetic application error.
+    }
+  }
+  const frontend = [...asMessages(captured.frontend), ...asMessages(browserLogs.filter(isErrorLog))];
+
+  let backend: unknown = captured.backend;
+  if (browser.tauri?.getBackendLogs) {
+    try {
+      backend = await browser.tauri.getBackendLogs();
+    } catch (error) {
+      backend = [error instanceof Error ? error.message : String(error)];
+    }
+  }
+  return {
+    frontend: [...new Set(frontend)],
+    backend: [...new Set(asMessages(backend))],
+  };
+}
+
+const allowedDegradedMessages = [
+  /audio backend unavailable/i,
+  /global hotkeys? unavailable/i,
+  /degraded hotkeys?/i,
+];
+
+function isAllowedDegradedMessage(message: string): boolean {
+  return allowedDegradedMessages.some((pattern) => pattern.test(message));
+}
+
+export async function assertNoRuntimeErrors(browser: E2eBrowser): Promise<void> {
+  const errors = await collectRuntimeErrors(browser);
+  const frontend = errors.frontend.filter((message) => !isAllowedDegradedMessage(message));
+  const backend = errors.backend.filter((message) => !isAllowedDegradedMessage(message));
+  if (frontend.length > 0) {
+    throw new Error(`Unexpected frontend runtime errors: ${frontend.join("; ")}`);
+  }
+  if (backend.length > 0) {
+    throw new Error(`Unexpected backend runtime errors: ${backend.join("; ")}`);
+  }
 }
 
 export async function mockBootstrapFailure(browser: E2eBrowser): Promise<() => Promise<void>> {

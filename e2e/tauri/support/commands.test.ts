@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { invokeForTest, startE2eApp, waitForSurface, type E2eBrowser } from "./commands.ts";
+import {
+  assertNoRuntimeErrors,
+  collectRuntimeErrors,
+  invokeForTest,
+  startE2eApp,
+  waitForSurface,
+  type E2eBrowser,
+} from "./commands.ts";
 
 function fakeBrowser(): { browser: E2eBrowser; waits: string[] } {
   const waits: string[] = [];
@@ -44,4 +51,18 @@ test("invokes deterministic backend setup through browser.tauri.execute", async 
 
 test("requires a connected WDIO session", async () => {
   await assert.rejects(startE2eApp("embedded", undefined), /not connected/);
+});
+
+test("rejects non-empty frontend runtime errors", async () => {
+  const { browser } = fakeBrowser();
+  browser.execute = async () => ({ frontend: ["uncaught frontend failure"], backend: [] });
+
+  assert.deepEqual(await collectRuntimeErrors(browser), {
+    frontend: ["uncaught frontend failure"],
+    backend: [],
+  });
+  await assert.rejects(
+    assertNoRuntimeErrors(browser),
+    /Unexpected frontend runtime errors: uncaught frontend failure/,
+  );
 });

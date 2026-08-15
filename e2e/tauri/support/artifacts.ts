@@ -1,8 +1,29 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 
 type BrowserLike = Record<string, unknown>;
 const timings = new Map<string, number[]>();
+
+export interface E2eResult {
+  spec: string;
+  status: "passed" | "failed" | "skipped";
+  surface?: string;
+  durationMs?: number;
+  screenshot?: string;
+  snapshot?: string;
+  frontendLog?: string;
+  backendLog?: string;
+}
+
+export interface E2eManifest {
+  schemaVersion?: 1;
+  runId?: string;
+  platform?: string;
+  provider?: string;
+  results: E2eResult[];
+  [key: string]: unknown;
+}
 
 export function sanitizeArtifactName(value: string): string {
   return value
@@ -31,17 +52,36 @@ function percentile(values: number[], percentage: number): number {
   return sorted[rank] ?? 0;
 }
 
-export function timingReport(): Record<string, { count: number; p50: number; p95: number }> {
-  return Object.fromEntries(
+export type TimingReport = Record<string, { count: number; p50: number; p95: number; budget?: number }>;
+
+function configuredBudget(name: string): number | undefined {
+  const variable = name === "bootstrap"
+    ? "TAURI_E2E_P95_BOOTSTRAP_MS"
+    : name === "ipc"
+      ? "TAURI_E2E_P95_IPC_MS"
+      : undefined;
+  if (!variable) return undefined;
+  const value = Number(process.env[variable]);
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+export function timingReport(outputRoot?: string): TimingReport {
+  const report: TimingReport = Object.fromEntries(
     [...timings.entries()].map(([name, values]) => [name, {
       count: values.length,
       p50: percentile(values, 50),
       p95: percentile(values, 95),
+      ...(configuredBudget(name) === undefined ? {} : { budget: configuredBudget(name) }),
     }]),
   );
+  if (outputRoot) {
+    mkdirSync(outputRoot, { recursive: true });
+    writeFileSync(join(outputRoot, "timings.json"), `${JSON.stringify(report, null, 2)}\n`);
+  }
+  return report;
 }
 
-export function assertTimingBudget(name: string, p95LimitMilliseconds: number): void {
+export function assertTimingBudget(name: string, p95LimitMilliseconds = configuredBudget(name) ?? Number.POSITIVE_INFINITY): void {
   if (!Number.isFinite(p95LimitMilliseconds) || p95LimitMilliseconds < 0) {
     throw new Error(`Invalid p95 budget for ${name}: ${p95LimitMilliseconds}`);
   }
@@ -59,6 +99,101 @@ async function callOptional(browser: BrowserLike, method: string, ...args: unkno
     return await (candidate as (...values: unknown[]) => unknown)(...args);
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function normalizeSpecName(value: string): string {
+  const pathName = basename(value.replaceAll("\\", "/"));
+  return pathName === "" ? sanitizeArtifactName(value) : pathName;
+}
+
+function sanitizeManifestPath(value: string | undefined): string | undefined {
+  if (!value) return value;
+  return value
+    .split(/[\\/]+/u)
+    .filter(Boolean)
+    .map(sanitizeArtifactName)
+    .join("/");
+}
+
+export async function writeE2eManifest(outputRoot: string, manifest: E2eManifest): Promise<string> {
+  await mkdir(outputRoot, { recursive: true });
+  const normalized: E2eManifest = {
+    ...manifest,
+    schemaVersion: manifest.schemaVersion ?? 1,
+    results: [...manifest.results]
+      .map((result) => ({
+        ...result,
+        spec: normalizeSpecName(result.spec),
+        screenshot: sanitizeManifestPath(result.screenshot),
+        snapshot: sanitizeManifestPath(result.snapshot),
+        frontendLog: sanitizeManifestPath(result.frontendLog),
+        backendLog: sanitizeManifestPath(result.backendLog),
+      }))
+      .sort((left, right) => left.spec.localeCompare(right.spec)),
+  };
+  const manifestPath = join(outputRoot, "manifest.json");
+  await writeFile(manifestPath, `${JSON.stringify(normalized, null, 2)}\n`);
+  return manifestPath;
+}
+
+async function hasNonEmptyFile(path: string): Promise<boolean> {
+  try {
+    const contents = await readFile(path);
+    return contents.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export async function assertE2eEvidence(outputRoot: string, expectedSpecs: string[]): Promise<void> {
+  const junitRoot = join(outputRoot, "junit");
+  let junitFiles: string[] = [];
+  try {
+    junitFiles = (await readdir(junitRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".xml"))
+      .map((entry) => join(junitRoot, entry.name));
+  } catch {
+    // The category-specific error below is intentionally stable for wrappers.
+  }
+  if (!(await Promise.all(junitFiles.map(hasNonEmptyFile))).some(Boolean)) {
+    throw new Error(`Missing required JUnit artifact under ${junitRoot}`);
+  }
+
+  const manifestPath = join(outputRoot, "manifest.json");
+  let manifest: E2eManifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, "utf8")) as E2eManifest;
+  } catch {
+    throw new Error(`Missing required manifest artifact: ${manifestPath}`);
+  }
+  if (!Array.isArray(manifest.results)) {
+    throw new Error(`Manifest has no result entries: ${manifestPath}`);
+  }
+
+  const resultKeys = new Set(
+    manifest.results.flatMap((result) => [
+      normalizeSpecName(result.spec),
+      result.surface ? normalizeSpecName(result.surface) : "",
+    ]),
+  );
+  for (const expectedSpec of expectedSpecs) {
+    const normalizedExpected = normalizeSpecName(expectedSpec);
+    if (!resultKeys.has(normalizedExpected)) {
+      throw new Error(`Manifest is missing result for expected spec: ${normalizedExpected}`);
+    }
+    const result = manifest.results.find((entry) =>
+      normalizeSpecName(entry.spec) === normalizedExpected ||
+      (entry.surface ? normalizeSpecName(entry.surface) === normalizedExpected : false),
+    );
+    if (result?.status !== "passed") {
+      throw new Error(`Manifest result is not passing for expected spec: ${normalizedExpected}`);
+    }
+  }
+
+  const timingsPath = join(outputRoot, "timings.json");
+  if (!(await hasNonEmptyFile(timingsPath))) {
+    throw new Error(`Missing required timings artifact: ${timingsPath}`);
   }
 }
 

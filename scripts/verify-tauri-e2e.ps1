@@ -24,14 +24,31 @@ if (-not (Test-Path $Binary)) { throw "debug E2E binary does not exist: $Binary"
 
 $env:TAURI_E2E_BINARY = (Resolve-Path $Binary).Path
 $env:TAURI_E2E_OUTPUT = (Resolve-Path (New-Item -ItemType Directory -Force -Path $OutputRoot)).Path
+$expectedSpecs = switch ($Surface) {
+  "all" { @("mixer.e2e.ts", "runtime.e2e.ts", "windows.e2e.ts", "recovery.e2e.ts", "settings.e2e.ts", "help.e2e.ts") }
+  default { @("$Surface.e2e.ts") }
+}
+$code = 1
+$evidenceCode = 0
 try {
   & npm --prefix $e2e run test:e2e:debug -- --surface $Surface
   $code = $LASTEXITCODE
+  if ($code -eq 0) {
+    & node --import tsx --input-type=module -e "import { assertE2eEvidence } from '$($e2e.Replace('\', '/'))/support/artifacts.ts'; const [root, ...expected] = process.argv.slice(1); await assertE2eEvidence(root, expected);" $env:TAURI_E2E_OUTPUT @expectedSpecs
+    $evidenceCode = $LASTEXITCODE
+  }
 } finally {
   Remove-Item Env:TAURI_E2E_BINARY -ErrorAction SilentlyContinue
   Remove-Item Env:TAURI_E2E_OUTPUT -ErrorAction SilentlyContinue
 }
 
-if (Test-Path (Join-Path $repo "src-tauri\capabilities\e2e-wdio.json")) { throw "temporary WDIO capability was not restored" }
-if (Test-Path (Join-Path $repo "frontend\dist\tauri-plugin.wdio.js")) { throw "temporary guest bridge was not restored" }
+if (Test-Path (Join-Path $repo "src-tauri\capabilities\e2e-wdio.json")) {
+  Write-Error "temporary WDIO capability was not restored"
+  $evidenceCode = 1
+}
+if (Test-Path (Join-Path $repo "frontend\dist\tauri-plugin.wdio.js")) {
+  Write-Error "temporary guest bridge was not restored"
+  $evidenceCode = 1
+}
+if ($code -eq 0 -and $evidenceCode -ne 0) { $code = $evidenceCode }
 exit $code
