@@ -124,6 +124,8 @@ src-tauri/gen
 !.claude/skills/subagent-driven-development/
 !.agents/skills/systematic-debugging/
 !.claude/skills/systematic-debugging/
+!.agents/skills/tauri-deadlock-guard/
+!.claude/skills/tauri-deadlock-guard/
 !.agents/skills/test-driven-development/
 !.claude/skills/test-driven-development/
 !.agents/skills/using-git-worktrees/

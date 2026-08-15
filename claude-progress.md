@@ -145,6 +145,10 @@
 - The CI deadlock-guard step initially failed on GitHub runners because the
   script used `rg`, which is not in the runner PATH; switched the bash guard
   to portable `grep` (fixed-strings for wrapper signatures).
+- The `tauri-deadlock-guard` skill is now versioned in the repository: the
+  `.gitignore` whitelist (`.agents/skills/*` + `.claude/skills/*`) now
+  includes `tauri-deadlock-guard/`, so a fresh clone keeps the skill and its
+  mirror instead of depending on local-only installs.
 
 ## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
 
