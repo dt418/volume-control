@@ -38,6 +38,10 @@ $expectedSpecs = switch ($Surface) {
   "all" { @("mixer.e2e.ts", "runtime.e2e.ts", "windows.e2e.ts", "recovery.e2e.ts", "settings.e2e.ts", "help.e2e.ts") }
   default { @("$Surface.e2e.ts") }
 }
+# PowerShell unwraps a single-output switch into a scalar; splatting a scalar
+# string would enumerate its characters ("h","e","l",...) and break the
+# evidence contract for single-surface runs.
+$expectedSpecs = @($expectedSpecs)
 $code = 1
 $evidenceCode = 0
 try {

@@ -92,6 +92,33 @@
   file, and Exit all work; the process stays alive after every surface
   close/reopen cycle.
 
+## Session 077 (2026-08-15) - Webview surfaces unresponsive in release
+
+- Users saw "localhost refused to connect" inside Settings/Help and every
+  footer/search interaction appeared dead. Root cause: `tauri` was declared
+  without the `custom-protocol` feature, so `tauri/build.rs` set `cfg(dev)`
+  even in release builds and every `WebviewUrl::App` resolved to
+  `http://localhost:1420` (devUrl) instead of the embedded assets. Added
+  `custom-protocol` to the tauri features; release surfaces now load from the
+  asset protocol and `surface_ready` runs.
+- Second deadlock: opening a surface through the webview IPC (e.g. the Help
+  footer "Settings" button) called `WebviewWindowBuilder::build()` from a sync
+  command on the main thread while the runtime was inside an async task; wry
+  needs a live message pump, so the call hung forever and the whole app
+  became unresponsive (closing Help left the app laggy/dead). The three
+  surface commands (`open_surface`, `close_surface`, `surface_ready`) are now
+  async and marshal the window operation through `run_on_main_thread` with an
+  async channel; `WindowManager::on_main` covers the tray/poll paths that can
+  arrive from non-main threads (10s timeout so a stuck wry call cannot freeze
+  the host).
+- Windows E2E evidence check failed for single-surface runs because
+  PowerShell unwraps a one-element `switch` into a scalar and splatting a
+  scalar string enumerates its characters ("h","e","l",...). The wrapper now
+  wraps the switch result in `@()` before splatting.
+- Added an E2E regression (`help.e2e.ts`) that clicks the Help footer
+  "Settings" button and asserts the Settings surface opens; it passes in ~1s
+  with the fixes.
+
 ## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
 
 - Added `.claude/hooks/agent-safe-flow.sh` and wired it through the project

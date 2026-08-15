@@ -92,6 +92,32 @@ Mute/Reset update the label, Open mixer/Settings/Help open and the host stays
 alive after each close, Reload keeps the host alive, Open config file opens
 the editor dialog, and Exit terminates the process.
 
+## Session 077 (2026-08-15) - Webview surfaces unresponsive in release
+
+Two root causes made Help/Settings appear completely dead in release builds:
+
+1. Missing `custom-protocol` feature. `tauri/build.rs` sets `cfg(dev)` when
+   the feature is absent, so even release binaries resolved every
+   `WebviewUrl::App` to `http://localhost:1420`. With no dev server running,
+   webviews showed ERR_CONNECTION_REFUSED, frontend JS never ran, and
+   `surface_ready` never showed the window. Fix: `tauri` features now include
+   `custom-protocol`.
+2. Main-thread deadlock. Surface commands were sync; Tauri ran them inside an
+   async task on the main thread, and `WebviewWindowBuilder::build()` (wry)
+   needs the event loop message pump — so creating Settings from the Help
+   footer hung forever and the whole app became laggy/unresponsive. Fix:
+   `open_surface`/`close_surface`/`surface_ready` are async and marshal the
+   window work through `run_on_main_thread` with an async channel;
+   `WindowManager::on_main` does the same for tray/poll-thread callers with a
+   10s timeout.
+
+Also fixed: PowerShell single-surface E2E evidence (scalar `switch` splatted
+as characters) and added an E2E regression clicking Help footer Settings.
+Verified on Windows release: Help search filters, Help footer Settings opens
+the Settings surface, Edit config opens Notepad, Close closes Help, and the
+host stays alive; `verify-tauri-e2e.ps1 -Surface help` passes 3/3 including
+evidence.
+
 ## Session 071 (2026-08-15) — Project-scoped Claude safe-flow hook
 
 `.claude/settings.json` now wires `.claude/hooks/agent-safe-flow.sh` as a Bash

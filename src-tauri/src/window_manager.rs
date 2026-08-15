@@ -122,6 +122,10 @@ pub fn place_surface(
 pub struct WindowManager {
     app: AppHandle,
     active: Mutex<HashSet<SurfaceId>>,
+    /// Thread that owns the Tauri runtime event loop. WebView2 windows must
+    /// be created/destroyed on this thread (wry requirement), so every public
+    /// surface operation marshals here when called from an IPC/poll thread.
+    main_thread: std::thread::ThreadId,
 }
 
 impl WindowManager {
@@ -129,6 +133,7 @@ impl WindowManager {
         Self {
             app,
             active: Mutex::new(HashSet::new()),
+            main_thread: std::thread::current().id(),
         }
     }
 
@@ -137,6 +142,10 @@ impl WindowManager {
     }
 
     pub fn open(&self, surface: SurfaceId) -> Result<(), String> {
+        self.on_main(move |manager| manager.open_impl(surface))?
+    }
+
+    fn open_impl(&self, surface: SurfaceId) -> Result<(), String> {
         if self.is_open(surface) {
             if let Some(window) = self.app.get_webview_window(surface.label()) {
                 if let Ok(Some(monitor)) = window.current_monitor() {
@@ -149,6 +158,7 @@ impl WindowManager {
             }
             return Ok(());
         }
+        log::debug!("window_manager: opening {surface:?} (new webview)");
         let mut builder = WebviewWindowBuilder::new(
             &self.app,
             surface.label(),
@@ -192,6 +202,14 @@ impl WindowManager {
             }
         }
         let window = builder.build().map_err(|e| e.to_string())?;
+        log::debug!(
+            "window_manager: created {} url={:?}",
+            surface.label(),
+            window
+                .url()
+                .map(|url| url.to_string())
+                .unwrap_or_else(|error| format!("<url error: {error}>"))
+        );
         #[cfg(feature = "e2e-wdio")]
         if cfg!(debug_assertions) && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1") {
             log::info!(
@@ -241,22 +259,35 @@ impl WindowManager {
     /// appearance. Geometry is applied once more immediately before showing
     /// so the user never sees the OS default position or size.
     pub fn surface_ready(&self, surface: SurfaceId) -> Result<(), String> {
+        self.on_main(move |manager| manager.surface_ready_impl(surface))?
+    }
+
+    fn surface_ready_impl(&self, surface: SurfaceId) -> Result<(), String> {
         let window = self
             .app
             .get_webview_window(surface.label())
             .ok_or_else(|| format!("surface {} is not open", surface.label()))?;
+        log::debug!("window_manager: surface_ready for {surface:?}");
 
         if let Ok(Some(monitor)) = window.current_monitor() {
             apply_placement(&window, surface, &monitor);
         } else if let Ok(Some(monitor)) = window.primary_monitor() {
             apply_placement(&window, surface, &monitor);
         }
-        window.show().map_err(|e| e.to_string())?;
+        window.show().map_err(|e| {
+            log::warn!("window_manager: show {surface:?} failed: {e}");
+            e.to_string()
+        })?;
         let _ = window.set_focus();
+        log::debug!("window_manager: open_impl {surface:?} done");
         Ok(())
     }
 
     pub fn close(&self, surface: SurfaceId) -> Result<(), String> {
+        self.on_main(move |manager| manager.close_impl(surface))?
+    }
+
+    fn close_impl(&self, surface: SurfaceId) -> Result<(), String> {
         if let Some(window) = self.app.get_webview_window(surface.label()) {
             window.destroy().map_err(|e| e.to_string())?;
         }
@@ -282,6 +313,33 @@ impl WindowManager {
             self.close(surface)?;
         }
         Ok(())
+    }
+
+    /// Run a window operation on the Tauri main thread.
+    ///
+    /// Tray menu events and the setup hook already run on the main thread and
+    /// call through directly. IPC commands and the hotkey/wheel poll threads
+    /// run elsewhere; wry/WebView2 requires window creation and destruction
+    /// on the thread owning the event loop, so those calls are marshalled
+    /// with `run_on_main_thread` and the caller blocks for the result.
+    fn on_main<T: Send + 'static>(
+        &self,
+        operation: impl FnOnce(&WindowManager) -> T + Send + 'static,
+    ) -> Result<T, String> {
+        if std::thread::current().id() == self.main_thread {
+            return Ok(operation(self));
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = self.app.clone();
+        let handle_inner = handle.clone();
+        handle
+            .run_on_main_thread(move || {
+                let manager = handle_inner.state::<WindowManager>();
+                let _ = tx.send(operation(&manager));
+            })
+            .map_err(|error| error.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(10))
+            .map_err(|_| "window manager operation timed out".to_string())
     }
 }
 
