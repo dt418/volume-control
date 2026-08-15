@@ -22,6 +22,13 @@ while (($#)); do
   esac
 done
 
+# The evidence assertion runs from e2e/tauri so Node resolves the isolated
+# tsx dependency. Normalize caller-provided relative output roots first;
+# otherwise that cwd change makes the checker look under e2e/tauri/output.
+if [[ "$output_root" != /* ]]; then
+  output_root="$repo/$output_root"
+fi
+
 if [[ "$skip_build" -eq 0 ]]; then
   node "$repo/e2e/tauri/prepare-debug-frontend.mjs" -- \
     node "$repo/e2e/tauri/prepare-debug-capabilities.mjs" --provider wdio -- \
