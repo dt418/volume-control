@@ -1,0 +1,9 @@
+{
+  "commit_sha": "84e4e2a1d9997acdebaa8fadcac99a26c72f3628",
+  "platform": "macos",
+  "runner_arch": "x86_64",
+  "rustc": "rustc 1.82.0",
+  "node": "v22.0.0",
+  "artifact": "volumecontrol-test.zip",
+  "artifact_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+}
