@@ -15,9 +15,9 @@ unmutes" rule lives in two layers that can drift.
 ## Scope
 
 `crates/volumectl/src/audio_windows.rs`,
-`crates/volumectl/src/host_core.rs` (no change needed beyond confirming the
-existing unmute paths), and `crates/volumectl/tests/host_core.rs`. No public
-interface changes.
+`crates/volumectl/src/audio/mod.rs` (trait contract doc), the Linux/macOS
+backends if they auto-unmute, and `crates/volumectl/tests/host_core.rs`. No
+public interface changes.
 
 ## Requirements
 
@@ -27,6 +27,12 @@ interface changes.
   `if v > 0 { let _ = self.set_mute(false); }` block and its comment. The
   backend's job is to write the scalar volume; unmute policy belongs to
   `AppCore`.
+- `audio/mod.rs`: update the trait doc for `set_volume` from
+  "(impl should clamp + unmute)" to "(impl should clamp; unmute policy is
+  owned by AppCore)" so the trait contract matches every backend.
+- Check `audio_linux.rs` and `audio_macos.rs` `set_volume` implementations:
+  if either auto-unmutes, remove that behavior there too so all backends
+  follow the same scalar-only contract.
 - `host_core.rs` keeps the existing `set_mute(false)` + `mute_restore_volume
   = None` calls in `SetVolumePercent`, `AdjustVolume`, and `ResetVolume` — no
   change.

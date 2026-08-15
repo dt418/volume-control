@@ -76,6 +76,34 @@ if (Boolean(draft.autostart) !== Boolean(config.autostart)) {
 }
 ```
 
+### R3 — Bootstrap syncs the switch with the registry
+
+- `SettingsSurface.tsx` bootstrap: when `get_autostart` resolves, update the
+  committed config AND the draft so the switch reflects the real registry
+  state instead of the stale INI `autostart` preference (the INI never
+  persists `autostart`; `set_autostart` owns the registry).
+
+```ts
+void invoke<AutostartStatus>("get_autostart")
+  .then((autostart) => {
+    if (disposed) return;
+    setAutostartDisabled(false);
+    setConfig((current) =>
+      current ? { ...current, autostart: autostart.enabled } : current,
+    );
+    setDraft((current) =>
+      current ? { ...current, autostart: autostart.enabled } : current,
+    );
+  })
+  .catch(() => {
+    if (!disposed) setAutostartDisabled(true);
+  });
+```
+
+- Bootstrap runs once on mount before the user can edit, so this cannot
+  overwrite a user edit; after any Save, the committed config already carries
+  the latest draft value.
+
 ## Testing
 
 - `npm test` (frontend) must pass, including:
@@ -83,7 +111,9 @@ if (Boolean(draft.autostart) !== Boolean(config.autostart)) {
     (retry succeeds) and after two rejections (logs, still resolves).
   - `SettingsSurface.test.tsx`: `set_autostart` rejection after a successful
     `update_settings` shows `Saved — auto-start failed` and disables Save;
-    success path still shows `Saved` and disables Save.
+    success path still shows `Saved` and disables Save; `get_autostart`
+    resolving to `enabled: true` flips the switch on from an initial
+    `autostart: false` bootstrap config.
 - Existing 92 frontend tests stay green; `npm run build` (tsc) passes.
 - E2E `verify-tauri-e2e.ps1 -Surface settings` stays green.
 
