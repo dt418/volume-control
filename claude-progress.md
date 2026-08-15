@@ -1,5 +1,11 @@
 # Progress Log
 
+## Session 059 (2026-08-15) - Balanced CI schedule and release evidence boundaries
+
+- Task 4 (`5d7a682`): CI keeps Windows unconditional for pull requests, skips Linux/macOS only on ordinary pull requests, and preserves full validation on master/release events. `scripts/test-ship.sh` now asserts the schedule, fail-closed E2E uploads, and reusable release dependency; ship checks and PyYAML parsing pass.
+- Task 6 (`5147acaf`, `b27be78a`): added the cross-platform release checklist and updated English/Vietnamese README plus CHANGELOG. The checklist records strong/partial/compile-only/not-claimed evidence for Windows, Ubuntu/Xvfb, WSLg, hosted macOS, and SHA-bound release inspection. Publish claims are limited to metadata/checksum/package verification; E2E evidence is reviewed separately. macOS local inspection explicitly builds/packages with the repository's frontend Tauri CLI, while public Developer ID/notarization remains a future protected workflow.
+- Scoped re-reviews: Task 4 clean; Task 6 clean after one documentation fix round. Hosted cross-platform and release runs remain required before records can be marked passing.
+
 ## Session 057 (2026-08-15) - SHA-bound release validation and provider wiring
 
 - Parallel Task 3 and Task 5 implementation/review completed with disjoint file ownership.
