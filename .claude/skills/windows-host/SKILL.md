@@ -94,7 +94,7 @@ bash scripts/test-format-lint.sh
 bash scripts/test-ship.sh
 
 # Records guard + ship:
-bash scripts/check-records.sh --branch origin/master
+bash scripts/check-records.sh --branch origin/main
 powershell -ExecutionPolicy Bypass -File scripts/ship.ps1 -Push
 ```
 

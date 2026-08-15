@@ -5,11 +5,11 @@
 # files).
 #
 # Usage: bash scripts/ci-diff-check.sh [base-ref]
-#   base-ref defaults to origin/master; the diff is taken against the merge
+#   base-ref defaults to origin/main; the diff is taken against the merge
 #   base of HEAD and that ref.
 set -euo pipefail
 
-base="${1:-origin/master}"
+base="${1:-origin/main}"
 base_sha="$(git merge-base "$base" HEAD 2>/dev/null || echo "$base")"
 
 if ! git diff --check "$base_sha" HEAD; then

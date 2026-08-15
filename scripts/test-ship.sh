@@ -45,8 +45,8 @@ invokes() { # <file> <pattern> <description>
 }
 
 # --- hard checks must still be invoked by ship.sh ------------------------------
-invokes scripts/ship.sh 'check-records[.]sh.*--branch origin/master' \
-    'ship.sh: runs the branch records guard vs origin/master'
+invokes scripts/ship.sh 'check-records[.]sh.*--branch origin/main' \
+    'ship.sh: runs the branch records guard vs origin/main'
 # The branch guard runs before the explicit staging phase, so check-records.sh
 # must include ordinary working-tree changes rather than only HEAD ancestry.
 if grep -q 'git diff --name-only HEAD' scripts/check-records.sh; then
@@ -92,7 +92,7 @@ invokes scripts/ship.sh 'build --no-bundle' \
 
 # --- desktop CI schedule and artifact contracts ------------------------------
 # Keep the Windows pull-request gate unconditional. Linux/macOS are expensive
-# hosted checks and run on master pushes/releases, but must not be silently
+# hosted checks and run on main pushes/releases, but must not be silently
 # skipped for any other event.
 ci_workflow=.github/workflows/ci.yml
 job_block() { # <job>

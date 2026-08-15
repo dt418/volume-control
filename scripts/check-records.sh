@@ -195,9 +195,9 @@ EOF
 
 # ---- Mode: --branch -----------------------------------------------------------
 check_branch() {
-    base="${1:-origin/master}"
+    base="${1:-origin/main}"
     if ! git rev-parse --verify --quiet "$base" >/dev/null; then
-        echo "FAIL - base ref '$base' not found; pass one explicitly (e.g. origin/master)" >&2
+        echo "FAIL - base ref '$base' not found; pass one explicitly (e.g. origin/main)" >&2
         return 2
     fi
     # Same stderr discipline as check_staged: warnings must not pollute the
@@ -261,7 +261,7 @@ EOF
 mode="${1:---staged}"
 case "$mode" in
     --staged) check_staged ;;
-    --branch) shift; check_branch "${1:-origin/master}" ;;
+    --branch) shift; check_branch "${1:-origin/main}" ;;
     --check) check_stdin ;;
     -h|--help)
         echo "usage: $0 [--staged|--branch [base]|--check]" >&2

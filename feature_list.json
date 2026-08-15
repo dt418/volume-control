@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-15T15:32",
+    "last_updated":  "2026-08-15T15:48",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,24 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-036",
+                         "priority":  36,
+                         "area":  "repository-governance",
+                         "title":  "Rename the default branch from master to main",
+                         "user_visible_behavior":  "The repository, CI triggers, release guardrails, and local checkout consistently use main as the default branch.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "PR #21 is merged at 9cb0a66 after green format/lint, Windows E2E, release artifact, and security checks.",
+                                               "GitHub default_branch is main; origin/main and local main resolve to 9cb0a66, while the old master ref is absent.",
+                                               "Operational scripts and CI push filters no longer reference origin/master; branch guard, ship smoke tests, and diff checks pass with origin/main."
+                                           ],
+                         "evidence":  [
+                                              "Session 065 (2026-08-15): default branch rename completed and local/remote tracking verified.",
+                                              "Session 065 (2026-08-15): active guardrail, CI, ship, and handoff references updated; historical records retain their original branch names."
+                                       ],
+                         "notes":  "Historical progress and plan entries may mention master when describing the branch name that existed at that time."
+                     },
                      {
                          "id":  "vol-035",
                          "priority":  35,

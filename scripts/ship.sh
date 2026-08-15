@@ -11,9 +11,9 @@
 # the same adversarial pass; the mechanical battery below is its base.
 #
 # Hard checks - NO flag can skip these:
-#   1. check-records.sh --branch origin/master  records updated somewhere
+#   1. check-records.sh --branch origin/main  records updated somewhere
 #      in the change set (skipped with a warning only when there is no
-#      origin/master to diff against; the staged check and pre-commit hook
+#      origin/main to diff against; the staged check and pre-commit hook
 #      still enforce the rule then)
 #   2. scripts/format-lint.sh                   the FULL gate, tests included
 #      (fmt, diff, forbidden paths, records, clippy, test)
@@ -27,7 +27,7 @@
 #      re-checked AFTER staging
 #
 # Soft preconditions - relaxed ONLY with --force, never by default:
-#   - --push while HEAD is behind origin/master (refused early so you pull
+#   - --push while HEAD is behind origin/main (refused early so you pull
 #     first; with --force, git itself rejects the non-fast-forward)
 #   - --push with no 'origin' remote (hard refuse; --force does not help)
 #
@@ -132,10 +132,10 @@ fail() {
 # defined before use so the phase bodies below can call it.
 do_push() {
     if "$GIT_BIN" rev-parse --verify --quiet origin >/dev/null 2>&1; then
-        if "$GIT_BIN" rev-parse --verify --quiet origin/master >/dev/null 2>&1; then
-            behind="$("$GIT_BIN" rev-list --count HEAD..origin/master 2>/dev/null || echo 0)"
+        if "$GIT_BIN" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
+            behind="$("$GIT_BIN" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
             if [ "${behind:-0}" -gt 0 ] && [ "$force_flag" = false ]; then
-                echo "error: HEAD is $behind commit(s) behind origin/master; pull first" >&2
+                echo "error: HEAD is $behind commit(s) behind origin/main; pull first" >&2
                 echo "       (or re-run with --force to let git itself reject a non-fast-forward)" >&2
                 exit 1
             fi
@@ -152,13 +152,13 @@ do_push() {
     fi
 }
 
-echo "[1/6] records guard (branch change set vs origin/master)"
-if "$GIT_BIN" rev-parse --verify --quiet origin/master >/dev/null 2>&1; then
-    if ! "$SH_BIN" "$repo_root/scripts/check-records.sh" --branch origin/master; then
+echo "[1/6] records guard (branch change set vs origin/main)"
+if "$GIT_BIN" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
+    if ! "$SH_BIN" "$repo_root/scripts/check-records.sh" --branch origin/main; then
         fail "the change set misses feature_list.json and/or claude-progress.md (see templates above)"
     fi
 else
-    echo "      no origin/master to diff against - branch check skipped;"
+    echo "      no origin/main to diff against - branch check skipped;"
     echo "      the staged check (step 6) and the pre-commit hook still enforce the rule"
 fi
 

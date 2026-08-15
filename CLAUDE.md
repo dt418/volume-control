@@ -51,7 +51,7 @@ bash scripts/format-lint.sh
 bash scripts/format-lint.sh --skip-tests
 bash scripts/format-lint.sh --all-features
 bash scripts/check-records.sh --staged
-bash scripts/check-records.sh --branch origin/master
+bash scripts/check-records.sh --branch origin/main
 bash scripts/test-check-records.sh
 bash scripts/test-format-lint.sh
 bash scripts/test-ship.sh

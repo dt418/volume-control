@@ -1,5 +1,16 @@
 # Progress Log
 
+## Session 065 (2026-08-15) - Rename default branch to main
+
+- PR #21 (`fix: harden records guard and finalize release verification`) was
+  merged into `master` at `9cb0a66`; all required PR checks passed, including
+  Windows Tauri E2E and the release artifact build.
+- Renamed the GitHub default branch from `master` to `main`, updated local and
+  remote tracking, and pruned the deleted feature/master refs.
+- Updated operational scripts, CI push filters, guardrail mirrors, and current
+  handoff instructions from `origin/master` to `origin/main`; historical notes
+  retain their original branch names.
+
 ## Session 064 (2026-08-15) - Full pre-push verification and guard hardening
 
 - Fresh full verification initially exposed two defects: parallel Rust tests

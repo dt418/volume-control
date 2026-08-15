@@ -1,5 +1,13 @@
 # Session Handoff
 
+## Session 065 (2026-08-15) — Default branch renamed to main
+
+PR #21 merged successfully at `9cb0a66` after green format/lint, Windows E2E,
+release-artifact, and security checks. GitHub now uses `main` as the default
+branch; local `main` tracks `origin/main`, and the old `master` ref is gone.
+Operational guard, ship, CI, skill-mirror, and handoff references now use
+`origin/main`.
+
 ## Session 064 (2026-08-15) — Full verification and pre-push hardening
 
 Fresh verification found and fixed a process-global config-test race and a
@@ -85,7 +93,7 @@ Settings-first configuration, per-action shortcut recording, platform status,
 and the safe frontend/E2E commands. Added CHANGELOG.md for the unreleased
 feature set. CI/Release workflows now explicitly install/build the frontend
 and use `tauri build --no-bundle --ci` for FE+BE artifacts. The final full local verification is being rerun before pushing
-the branch to a PR targeting the repository default branch `master`; hosted
+the branch to a PR targeting the repository default branch `main`; hosted
 Linux/macOS jobs remain the cross-platform release evidence.
 
 ## Session 050 (2026-08-15)
@@ -205,7 +213,7 @@ bash scripts/test-format-lint.sh
 bash scripts/test-ship.sh
 
 # Records guard
-sh scripts/check-records.sh --branch origin/master
+sh scripts/check-records.sh --branch origin/main
 
 # Ship flow (dry run)
 bash scripts/ship.sh --dry-run

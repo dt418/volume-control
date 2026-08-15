@@ -57,7 +57,7 @@ recorded in `feature_list.json` and `claude-progress.md`.
 is the supported path to commit + push. It runs, in order, and none of
 these can be skipped by any flag:
 
-1. `check-records.sh --branch origin/master` — records updated somewhere
+1. `check-records.sh --branch origin/main` — records updated somewhere
    in the change set.
 2. `scripts/format-lint.sh` — the FULL gate, tests included.
 3. `scripts/test-check-records.sh` and `scripts/test-format-lint.sh` — the
