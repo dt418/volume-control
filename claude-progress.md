@@ -1,5 +1,24 @@
 # Progress Log
 
+## Session 073 (2026-08-16) - Release v0.1.2 preparation and tag binding
+
+- Diagnosed the failing Release run 31901602099: workflow_dispatch with tag
+  input `v0.1.2` failed in preflight because `gh api .../git/ref/tags/v0.1.2`
+  returned 404 - the tag was never pushed (remote has only v0.1.0/v0.1.1).
+- Bumped the app version to 0.1.2 consistently: workspace `Cargo.toml`,
+  `crates/volumectl`, `src-tauri/Cargo.toml`, `Cargo.lock`, `tauri.conf.json`,
+  `frontend/package.json`, and `frontend/package-lock.json`. Previous releases
+  (including v0.1.1) shipped with version files still at 0.1.0.
+- Promoted the accumulated CHANGELOG Unreleased work into `[0.1.2] - 2026-08-16`
+  and opened a fresh Unreleased section.
+- Hardened release.yml preflight: when the requested tag is missing, it now
+  prints the exact `git tag -a` + `git push origin` commands instead of the
+  terse "Unable to resolve release tag ... through the GitHub API" message.
+- Verification: version files consistent (cargo check clean), full
+  format-lint gate passed (fmt, whitespace, clippy -D warnings, workspace
+  tests), pre-commit hook passed, and the tag-push Release run published
+  v0.1.2 artifacts. Records: feature_list.json vol-073 added.
+
 ## Session 072 (2026-08-15) - Volume and mute regression coverage
 
 - Added host-core regression coverage for small +/-1% steps, configured large

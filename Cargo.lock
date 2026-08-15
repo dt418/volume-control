@@ -4749,7 +4749,7 @@ dependencies = [
 
 [[package]]
 name = "volumecontrol-tauri"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "log",
  "serde",
@@ -4776,7 +4776,7 @@ dependencies = [
 
 [[package]]
 name = "volumectl"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "global-hotkey",
  "gtk4",
