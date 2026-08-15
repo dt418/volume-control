@@ -47,6 +47,9 @@ All notable changes to VolumeControl are documented here.
 - Release packaging is now SHA-bound to the validated Windows, macOS, and
   Ubuntu desktop artifacts; the publish job verifies metadata and checksums
   instead of rebuilding an unvalidated tag binary.
+- Manual-dispatch releases now resolve the requested tag and fail closed when
+  it does not point to the selected workflow commit; annotated tags are
+  dereferenced before comparison.
 - Added the [cross-platform release evidence checklist](docs/testing/cross-platform-release-checklist.md)
   with exact Windows, Ubuntu/Xvfb, WSLg, macOS inspection, and release review
   commands. Hosted headless checks are explicitly bounded to deterministic

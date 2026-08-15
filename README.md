@@ -231,8 +231,10 @@ repository. See the [cross-platform release checklist](docs/testing/cross-platfo
 for the exact inspection commands and signing boundary.
 
 You can also publish from the GitHub UI: open **Actions → Release → Run
-workflow**, select the source branch, enter a version tag such as `v0.1.0`,
-and run the workflow.
+workflow**, select the source branch that points at the existing version tag,
+enter that tag (for example `v0.1.0`), and run the workflow. Preflight resolves
+the tag, including annotated tags, and rejects the run unless it points to the
+selected `github.sha`; pushing the tag is the preferred release path.
 
 ## Architecture
 

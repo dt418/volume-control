@@ -197,6 +197,12 @@ cleanup keychain tạm thời); secret ký không được lưu trong repository
 [checklist bằng chứng phát hành đa nền tảng](docs/testing/cross-platform-release-checklist.md)
 để biết lệnh kiểm tra và ranh giới signing chính xác.
 
+Có thể phát hành từ GitHub UI: mở **Actions → Release → Run workflow**, chọn
+branch nguồn đang trỏ đúng vào tag phiên bản đã tồn tại, nhập tag (ví dụ
+`v0.1.0`), rồi chạy workflow. Preflight sẽ resolve cả annotated tag và từ chối
+nếu tag không trỏ tới đúng `github.sha` được chọn; push tag là đường phát hành
+được khuyến nghị.
+
 ## Kiến trúc
 
 ```

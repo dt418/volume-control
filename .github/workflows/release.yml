@@ -30,6 +30,9 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag }}
           REF_NAME: ${{ github.ref_name }}
+          EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           release_tag="$REF_NAME"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -37,6 +40,34 @@ jobs:
           fi
           if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Release tag must match vMAJOR.MINOR.PATCH, for example v0.1.0" >&2
+            exit 1
+          fi
+
+          # Bind both tag pushes and manual dispatches to the exact commit
+          # selected by this workflow run. A manually entered tag must not be
+          # allowed to publish artifacts from a different commit.
+          tag_type=""
+          tag_sha=""
+          tag_ref="repos/$REPOSITORY/git/ref/tags/$release_tag"
+          if ! tag_type_and_sha="$(gh api "$tag_ref" --jq '.object.type + " " + .object.sha')"; then
+            echo "Unable to resolve release tag $release_tag through the GitHub API" >&2
+            exit 1
+          fi
+          read -r tag_type tag_sha <<< "$tag_type_and_sha"
+          for _ in 1 2 3; do
+            if [ "$tag_type" = "commit" ]; then break; fi
+            if [ "$tag_type" != "tag" ] || [ -z "$tag_sha" ]; then
+              echo "Release tag $release_tag did not resolve to a commit" >&2
+              exit 1
+            fi
+            if ! tag_type_and_sha="$(gh api "repos/$REPOSITORY/git/tags/$tag_sha" --jq '.object.type + " " + .object.sha')"; then
+              echo "Unable to dereference annotated release tag $release_tag" >&2
+              exit 1
+            fi
+            read -r tag_type tag_sha <<< "$tag_type_and_sha"
+          done
+          if [ "$tag_type" != "commit" ] || [ "$tag_sha" != "$EXPECTED_COMMIT_SHA" ]; then
+            echo "Release tag $release_tag resolves to ${tag_sha:-unknown}, expected $EXPECTED_COMMIT_SHA" >&2
             exit 1
           fi
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"

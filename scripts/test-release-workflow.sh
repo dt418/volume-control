@@ -56,6 +56,25 @@ else
   report FAIL 'release caller downloads only SHA-named validation artifacts'
 fi
 
+if contains "$release" 'EXPECTED_COMMIT_SHA:[[:space:]]*\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}' && \
+   contains "$release" 'validated-\$\{platform\}-\$\{EXPECTED_COMMIT_SHA\}' && \
+   contains "$validation" 'RELEASE_COMMIT_SHA:[[:space:]]*\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}' && \
+   contains "$validation" 'validated-\$\{\{[[:space:]]*matrix\.platform[[:space:]]*\}\}-\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}'; then
+  report ok 'publish and reusable validation remain bound to github.sha'
+else
+  report FAIL 'publish and reusable validation remain bound to github.sha'
+fi
+
+if contains "$release" 'tag_ref=' && \
+   contains "$release" 'git/ref/tags' && \
+   contains "$release" 'gh[[:space:]]+api[[:space:]]+"\$tag_ref"' && \
+   contains "$release" 'EXPECTED_COMMIT_SHA:[[:space:]]*\$\{\{[[:space:]]*github\.sha[[:space:]]*\}\}' && \
+   contains "$release" 'tag_sha.*EXPECTED_COMMIT_SHA'; then
+  report ok 'release preflight binds the requested tag to github.sha'
+else
+  report FAIL 'release preflight binds the requested tag to github.sha'
+fi
+
 if contains "$validation" 'release_mode:[[:space:]]*'; then
   report ok 'reusable workflow declares release_mode input'
 else
@@ -81,6 +100,16 @@ else
   report FAIL 'metadata verifier runs before release create/upload'
 fi
 
+if contains "$validation" 'find[[:space:]]+output/tauri-e2e.*junit.*-size[[:space:]]+\+0c' && \
+   contains "$validation" 'find[[:space:]]+output/tauri-e2e.*manifest\.json.*-size[[:space:]]+\+0c' && \
+   contains "$validation" 'find[[:space:]]+output/tauri-e2e.*timings\.json.*-size[[:space:]]+\+0c' && \
+   contains "$validation" 'find[[:space:]]+output/tauri-e2e.*logs/.*-size[[:space:]]+\+0c' && \
+   ! grep -Eq 'find[[:space:]]+output/tauri-e2e.*(junit|manifest\.json|timings\.json|logs/).*\|\|[[:space:]]*true' "$validation"; then
+  report ok 'validation assembly requires non-empty JUnit, manifest, timings, and platform logs'
+else
+  report FAIL 'validation assembly requires non-empty JUnit, manifest, timings, and platform logs'
+fi
+
 expected_sha="$(git -C "$repo" rev-parse HEAD)"
 valid="$repo/scripts/test-fixtures/release-valid"
 mismatch="$repo/scripts/test-fixtures/release-mismatch"
@@ -91,12 +120,33 @@ missing_package="$repo/scripts/test-fixtures/release-missing-package"
 # later commits, refresh only its copy so the test continues to exercise the
 # verifier against the current commit without making a mutable SHA exception
 # part of the production verifier.
-tmp_root="$(mktemp -d)"
+tmp_root="$(mktemp -d "$repo/.release-workflow.XXXXXX")"
 cleanup() { rm -rf "$tmp_root"; }
 trap cleanup EXIT
+
+node_bin=node
+if ! command -v "$node_bin" >/dev/null 2>&1 && command -v node.exe >/dev/null 2>&1; then
+  node_bin=node.exe
+fi
+command -v "$node_bin" >/dev/null 2>&1 || { echo 'node is required for release workflow fixtures' >&2; exit 1; }
+node_path() {
+  local value="$1"
+  if [[ "$node_bin" == node.exe ]]; then
+    if [[ "$value" =~ ^/mnt/([A-Za-z])/(.*)$ ]]; then
+      printf '%s:/%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      return
+    fi
+    if [[ "$value" =~ ^/([A-Za-z])/(.*)$ ]]; then
+      printf '%s:/%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      return
+    fi
+  fi
+  printf '%s' "$value"
+}
+
 valid_copy="$tmp_root/release-valid"
 cp -R "$valid" "$valid_copy"
-node - "$valid_copy/build-metadata.json" "$expected_sha" <<'NODE'
+"$node_bin" - "$(node_path "$valid_copy/build-metadata.json")" "$expected_sha" <<'NODE'
 const fs = require("node:fs");
 const path = process.argv[2];
 const value = JSON.parse(fs.readFileSync(path, "utf8"));
@@ -106,7 +156,7 @@ NODE
 
 missing_copy="$tmp_root/release-missing-package"
 cp -R "$missing_package" "$missing_copy"
-node - "$missing_copy/build-metadata.json" "$expected_sha" <<'NODE'
+"$node_bin" - "$(node_path "$missing_copy/build-metadata.json")" "$expected_sha" <<'NODE'
 const fs = require("node:fs");
 const path = process.argv[2];
 const value = JSON.parse(fs.readFileSync(path, "utf8"));

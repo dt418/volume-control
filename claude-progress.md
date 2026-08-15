@@ -1,5 +1,17 @@
 # Progress Log
 
+## Session 061 (2026-08-15) - Release SHA binding and evidence fail-closed fix
+
+- Review fix: release preflight now resolves the requested tag through the
+  GitHub API and rejects any tag whose peeled commit differs from `github.sha`,
+  including manual dispatches and tag pushes.
+- Review fix: reusable desktop validation requires non-empty JUnit XML,
+  `manifest.json`, `timings.json`, and platform logs before assembling the
+  SHA-bound artifact; the release contract checks these requirements.
+- Verification: `bash scripts/test-release-workflow.sh` passes all static and
+  fixture checks; `bash -n scripts/test-release-workflow.sh`, PyYAML parsing of
+  release and desktop-validation workflows, and `git diff --check` pass.
+
 ## Session 059 (2026-08-15) - Balanced CI schedule and release evidence boundaries
 
 - Task 4 (`5d7a682`): CI keeps Windows unconditional for pull requests, skips Linux/macOS only on ordinary pull requests, and preserves full validation on master/release events. `scripts/test-ship.sh` now asserts the schedule, fail-closed E2E uploads, and reusable release dependency; ship checks and PyYAML parsing pass.

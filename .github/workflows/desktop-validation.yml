@@ -144,12 +144,26 @@ jobs:
           rm -rf validation-artifact
           mkdir -p validation-artifact/e2e validation-artifact/platform-logs
           cp dist/* validation-artifact/
-          find output/tauri-e2e -type f -path '*/junit/*' -exec cp --parents '{}' validation-artifact/e2e/ \; || true
-          find output/tauri-e2e -type f -name 'manifest.json' -exec cp --parents '{}' validation-artifact/e2e/ \; || true
-          find output/tauri-e2e -type f -name 'timings.json' -exec cp --parents '{}' validation-artifact/e2e/ \; || true
-          find output/tauri-e2e -type f -path '*/logs/*' -exec cp --parents '{}' validation-artifact/platform-logs/ \; || true
+          mapfile -t junit_files < <(find output/tauri-e2e -type f -name '*.xml' -path '*/junit/*' -size +0c -print)
+          mapfile -t manifest_files < <(find output/tauri-e2e -type f -name 'manifest.json' -size +0c -print)
+          mapfile -t timing_files < <(find output/tauri-e2e -type f -name 'timings.json' -size +0c -print)
+          mapfile -t platform_log_files < <(find output/tauri-e2e -type f -path '*/logs/*' -size +0c -print)
+          (( ${#junit_files[@]} > 0 )) || { echo 'Missing non-empty JUnit XML evidence' >&2; exit 1; }
+          (( ${#manifest_files[@]} > 0 )) || { echo 'Missing non-empty manifest.json evidence' >&2; exit 1; }
+          (( ${#timing_files[@]} > 0 )) || { echo 'Missing non-empty timings.json evidence' >&2; exit 1; }
+          (( ${#platform_log_files[@]} > 0 )) || { echo 'Missing non-empty platform log evidence' >&2; exit 1; }
+          for evidence_file in "${junit_files[@]}" "${manifest_files[@]}" "${timing_files[@]}"; do
+            cp --parents "$evidence_file" validation-artifact/e2e/
+          done
+          for log_file in "${platform_log_files[@]}"; do
+            cp --parents "$log_file" validation-artifact/platform-logs/
+          done
           test -s validation-artifact/build-metadata.json
           test -s validation-artifact/SHA256SUMS.txt
+          find validation-artifact/e2e -type f -name '*.xml' -size +0c -print -quit | grep -q .
+          find validation-artifact/e2e -type f -name 'manifest.json' -size +0c -print -quit | grep -q .
+          find validation-artifact/e2e -type f -name 'timings.json' -size +0c -print -quit | grep -q .
+          find validation-artifact/platform-logs -type f -size +0c -print -quit | grep -q .
       - name: Upload SHA-bound validation artifact
         uses: actions/upload-artifact@v7
         with:
