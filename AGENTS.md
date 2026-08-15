@@ -8,7 +8,10 @@ Run the full quality gate before committing or opening a PR:
 2. `git diff --check`
 3. `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
 4. `cargo test --workspace --no-default-features`
-5. `sh scripts/check-records.sh --staged` (record-keeping guard; the
+5. `sh scripts/check-tauri-deadlock.sh` when `src-tauri` surface code
+   (window creation, surface commands, tauri features) changed — see
+   `.agents/skills/tauri-deadlock-guard/SKILL.md`
+6. `sh scripts/check-records.sh --staged` (record-keeping guard; the
    pre-commit hook runs this automatically)
 
 Install the pre-commit hook so format and lint checks run automatically on

@@ -50,6 +50,8 @@ The canonical manifest-driven gate is authoritative for local and CI quality che
 bash scripts/format-lint.sh
 bash scripts/format-lint.sh --skip-tests
 bash scripts/format-lint.sh --all-features
+bash scripts/check-tauri-deadlock.sh
+bash scripts/check-tauri-deadlock.ps1
 bash scripts/check-records.sh --staged
 bash scripts/check-records.sh --branch origin/main
 bash scripts/test-check-records.sh
@@ -64,6 +66,15 @@ run by the canonical gate and CI. `scripts/format-lint-steps.json` is the single
 source of truth for gate steps and forbidden paths. `AGENTS.md` and `GUARDRAILS.md`
 define the detailed enforcement and shipping rules. Use `rtk` prefixes according to
 the global Claude Code instructions when executing commands.
+
+Before touching `src-tauri` surface code (window creation, open/close/ready
+commands, the `tauri` dependency features), read
+`.agents/skills/tauri-deadlock-guard/SKILL.md` and run
+`scripts/check-tauri-deadlock.sh`. It enforces the two invariants that fixed the
+Session 077 production bugs: `custom-protocol` must stay in the `tauri`
+features (release webviews must load embedded assets, never `localhost:1420`),
+and every surface command must be async and marshalled onto the Tauri main
+thread (never call `WebviewWindowBuilder` from a sync command or a poll thread).
 
 Claude Code also loads the project-scoped `.claude/settings.json` PreToolUse hook.
 It blocks direct pushes, destructive git operations, `--no-verify`, and admin

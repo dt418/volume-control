@@ -155,9 +155,21 @@ impl WindowManager {
                 }
                 window.show().map_err(|e| e.to_string())?;
                 let _ = window.set_focus();
+                return Ok(());
             }
-            return Ok(());
+            // The surface is marked active but its window is gone (a
+            // destroy/race that slipped past the Destroyed handler). Recreate
+            // instead of returning a silent no-op that makes clicks appear
+            // dead.
+            log::warn!("window_manager: {surface:?} active but window missing; recreating");
+            self.active.lock().unwrap().remove(&surface);
         }
+        // Windows: the tray overflow flyout can stay open after a menu click
+        // and hover exactly where the bottom-right Help/Mixer surfaces are
+        // placed, swallowing their clicks. Dismiss it before showing any
+        // surface (same effect as the user clicking outside the flyout).
+        #[cfg(target_os = "windows")]
+        dismiss_tray_overflow();
         log::debug!("window_manager: opening {surface:?} (new webview)");
         let mut builder = WebviewWindowBuilder::new(
             &self.app,
@@ -340,6 +352,37 @@ impl WindowManager {
             .map_err(|error| error.to_string())?;
         rx.recv_timeout(std::time::Duration::from_secs(10))
             .map_err(|_| "window manager operation timed out".to_string())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn dismiss_tray_overflow() {
+    // The overflow flyout is an explorer top-level window with this class
+    // name. Closing it is equivalent to a click outside the flyout and never
+    // affects the VolumeControl tray icon itself.
+    unsafe {
+        use windows_sys::Win32::Foundation::BOOL;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            EnumWindows, GetClassNameW, PostMessageW, WM_CLOSE,
+        };
+
+        let mut window: isize = 0;
+        unsafe extern "system" fn enum_proc(hwnd: isize, lparam: isize) -> BOOL {
+            let mut class = [0u16; 128];
+            GetClassNameW(hwnd, class.as_mut_ptr(), 128);
+            let len = class.iter().position(|c| *c == 0).unwrap_or(0);
+            let class = String::from_utf16_lossy(&class[..len]);
+            if class == "TopLevelWindowForOverflowXamlIsland" {
+                *(lparam as *mut isize) = hwnd;
+                return 0; // FALSE stops the enumeration
+            }
+            1
+        }
+        EnumWindows(Some(enum_proc), (&mut window as *mut isize) as isize);
+        if window != 0 {
+            let _ = PostMessageW(window, WM_CLOSE, 0, 0);
+            log::debug!("window_manager: dismissed tray overflow flyout");
+        }
     }
 }
 

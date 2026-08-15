@@ -119,6 +119,33 @@
   "Settings" button and asserts the Settings surface opens; it passes in ~1s
   with the fixes.
 
+## Session 078 (2026-08-15) - Deadlock guard skill + post-merge review
+
+- PR #27 merged (all 8 GitHub checks green: format/lint, Windows, macOS,
+  Ubuntu, release gate, Socket Security x2, scope).
+- Created `.agents/skills/tauri-deadlock-guard` (mirrored to
+  `.claude/skills/tauri-deadlock-guard`) encoding the two Session 077
+  invariants: `custom-protocol` must stay in the `tauri` features, and every
+  surface command must be async + marshalled to the main thread via
+  `run_on_main_thread`/`WindowManager::on_main`.
+- Added `scripts/check-tauri-deadlock.sh` + `.ps1` (CI step in `ci.yml`
+  checks job; documented in AGENTS.md/CLAUDE.md) that fail when
+  `custom-protocol` is missing, a surface command is sync, or
+  `WebviewWindowBuilder`/window APIs are used outside `window_manager.rs`.
+- Review fixes on top of the merge:
+  - `WindowManager::open` no longer returns a silent no-op when the active
+    set says a surface is open but its window is gone — it logs, clears the
+    stale entry and recreates the surface.
+  - Windows tray overflow flyout used to stay open after a menu click and
+    swallow clicks exactly where the bottom-right Help/Mixer surfaces are
+    placed. `open_impl` now dismisses the flyout (`WM_CLOSE` to
+    `TopLevelWindowForOverflowXamlIsland`) before showing any surface;
+    verified with `WindowFromPoint` returning the Help webview at the footer
+    button position.
+- The CI deadlock-guard step initially failed on GitHub runners because the
+  script used `rg`, which is not in the runner PATH; switched the bash guard
+  to portable `grep` (fixed-strings for wrapper signatures).
+
 ## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
 
 - Added `.claude/hooks/agent-safe-flow.sh` and wired it through the project

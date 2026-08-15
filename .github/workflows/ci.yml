@@ -130,6 +130,8 @@ jobs:
         run: cargo test
       - name: Smoke-test format-lint gates
         run: bash scripts/test-format-lint.sh
+      - name: Tauri deadlock guard
+        run: bash scripts/check-tauri-deadlock.sh
       - name: Record-keeping guard (branch change set)
         run: bash scripts/check-records.sh --branch
       - name: Smoke-test record-keeping guard
