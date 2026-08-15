@@ -18,6 +18,8 @@
 - Made audio initialization fail-soft when a runner or desktop session has no
   default output endpoint; the Tauri host now stays alive with an explicit
   unavailable backend so the UI can show recovery state instead of panicking.
+- Made the Mixer WebDriver empty-state assertion platform-agnostic so native
+  Linux/macOS runs verify the intentional Windows-only session fallback.
 - Final release verification is being rerun on the complete tree before the
   feature branch is pushed for the `master` PR; hosted Linux/macOS evidence is
   still supplied by GitHub Actions.

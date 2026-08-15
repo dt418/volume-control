@@ -35,6 +35,8 @@ All notable changes to VolumeControl are documented here.
   CI builds.
 - Audio backend initialization is now fail-soft when no default output device
   exists, keeping the host alive so the mixer can present its recovery state.
+- Mixer E2E coverage accepts the intentional Windows-only session empty state
+  on Linux and macOS while retaining the Windows no-session assertions.
 
 ### Verification
 

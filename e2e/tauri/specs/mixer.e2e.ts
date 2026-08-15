@@ -33,7 +33,12 @@ describe("Mixer surface", () => {
     await search.setValue("__no_matching_volumecontrol_session__");
     const emptyMessage = $('[data-surface="mixer"] p');
     await expect(emptyMessage).toBeDisplayed();
-    expect(["No matching apps", "No audio sessions"]).toContain(await emptyMessage.getText());
+    // Native session support is Windows-only, while the empty filtered state
+    // is also valid on Windows when no sessions are present. Keep this check
+    // platform-agnostic so Linux/macOS validate their intentional fallback.
+    expect(["No matching apps", "No audio sessions", "Per-app mixing is Windows-only"]).toContain(
+      await emptyMessage.getText(),
+    );
     await search.clearValue();
     await $(selectors.mixer.mute).click();
     await $(selectors.mixer.reset).click();
