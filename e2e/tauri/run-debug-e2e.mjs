@@ -59,6 +59,10 @@ function runSurface(surface, spec) {
         ...process.env,
         VOLUMECTL_VERIFY_SURFACE: label,
         VOLUMECTL_E2E_REQUESTED_SURFACE: surface,
+        // Hosted CI runners do not guarantee a physical default output. The
+        // debug-only backend keeps IPC/event/UI assertions deterministic;
+        // native backends remain covered by the Rust host tests.
+        VOLUMECTL_E2E_AUDIO: "virtual",
         ...(surface === "recovery" ? { VOLUMECTL_E2E_BOOTSTRAP_FAILURE: "1" } : {}),
       },
       stdio: "inherit",

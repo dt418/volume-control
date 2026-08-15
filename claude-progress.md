@@ -33,6 +33,21 @@
   `muted=false`; a standalone driver startup failure is recorded separately
   from application behavior.
 
+## Session 073 (2026-08-15) - Deterministic audio state for hosted E2E
+
+- CI logs showed both Ubuntu and Windows hosted runners had no usable default
+  output endpoint. The production-safe fallback (`UnavailableAudio`) therefore
+  rejected `toggle_mute`, which correctly left the UI unchanged but made the
+  end-to-end command/event assertion impossible to run on those runners.
+- Added `E2eAudio`, an in-memory `AudioBackend` compiled only in debug builds,
+  with a unit test covering the 50% -> muted/0% -> unmuted/50% round trip.
+- `src-tauri` selects that backend only when both `VOLUMECTL_E2E_DEBUG=1` and
+  `VOLUMECTL_E2E_AUDIO=virtual` are present. Release builds cannot select or
+  contain the debug backend.
+- The Tauri debug E2E wrapper now sets the explicit virtual marker. This keeps
+  hosted Linux/Windows checks deterministic while preserving native Linux,
+  macOS, and Windows backend coverage in the Rust host tests and release build.
+
 ## Session 071 (2026-08-15) - Project-scoped agent safe-flow hook
 
 - Added `.claude/hooks/agent-safe-flow.sh` and wired it through the project

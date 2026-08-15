@@ -35,6 +35,20 @@ gate passed before this assertion was added; a focused rerun later hit an
 environmental WebDriver startup refusal on port 4445 and did not reach the
 application, so hosted CI must provide the final E2E evidence.
 
+## Session 073 (2026-08-15) - Hosted E2E audio fallback
+
+The failed PR run was investigated from the Ubuntu and Windows job logs. Both
+runners lacked a default audio endpoint, so the intentional `UnavailableAudio`
+fallback returned an error from `toggle_mute`; the frontend therefore kept the
+truthful unmuted label. This was an environment limitation, not a regression
+in the real backend path.
+
+`volumectl::audio::E2eAudio` is now a debug-only in-memory backend with a unit
+test for the scalar/mute round trip. `src-tauri` selects it only when the debug
+marker and `VOLUMECTL_E2E_AUDIO=virtual` are both set. The Tauri debug E2E
+wrapper supplies that marker, making hosted Linux/Windows IPC/event/UI checks
+deterministic without weakening production behavior or release contents.
+
 ## Session 071 (2026-08-15) — Project-scoped Claude safe-flow hook
 
 `.claude/settings.json` now wires `.claude/hooks/agent-safe-flow.sh` as a Bash

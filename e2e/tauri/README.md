@@ -63,3 +63,9 @@ Both wrappers reject a missing binary/dependency and verify that temporary
 capabilities and the guest bridge are gone after the run. The recovery surface
 uses the debug-only `VOLUMECTL_E2E_BOOTSTRAP_FAILURE=1` fault marker; release
 builds ignore it.
+
+Hosted runners do not guarantee a physical audio endpoint. The debug Tauri
+runner therefore sets `VOLUMECTL_E2E_AUDIO=virtual`; when combined with
+`VOLUMECTL_E2E_DEBUG=1`, the host uses an in-memory endpoint for deterministic
+IPC/event/UI volume and mute assertions. The endpoint is compiled out of
+release builds, so native backend behavior remains the production authority.

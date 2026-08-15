@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use tauri::Manager;
 
+#[cfg(debug_assertions)]
+use volumectl_lib::audio::E2eAudio;
 use volumectl_lib::audio::{AudioBackend, UnavailableAudio};
 use volumectl_lib::host_core::AppCore;
 
@@ -248,8 +250,26 @@ pub fn run() -> tauri::Result<()> {
 }
 
 /// Construct the platform audio backend.
+#[cfg(debug_assertions)]
+fn debug_audio_backend() -> Option<Box<dyn AudioBackend>> {
+    if std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1")
+        && std::env::var("VOLUMECTL_E2E_AUDIO").as_deref() == Ok("virtual")
+    {
+        return Some(Box::new(E2eAudio::new()));
+    }
+    None
+}
+
+#[cfg(not(debug_assertions))]
+fn debug_audio_backend() -> Option<Box<dyn AudioBackend>> {
+    None
+}
+
 #[cfg(target_os = "windows")]
 fn create_audio_backend() -> Result<Box<dyn AudioBackend>, String> {
+    if let Some(audio) = debug_audio_backend() {
+        return Ok(audio);
+    }
     volumectl_lib::audio_windows::WindowsAudio::new()
         .map(|a| Box::new(a) as Box<dyn AudioBackend>)
         .map_err(|e| e.to_string())
@@ -257,6 +277,9 @@ fn create_audio_backend() -> Result<Box<dyn AudioBackend>, String> {
 
 #[cfg(target_os = "linux")]
 fn create_audio_backend() -> Result<Box<dyn AudioBackend>, String> {
+    if let Some(audio) = debug_audio_backend() {
+        return Ok(audio);
+    }
     volumectl_lib::audio_linux::LinuxAudio::new()
         .map(|a| Box::new(a) as Box<dyn AudioBackend>)
         .map_err(|e| e.to_string())
@@ -264,6 +287,9 @@ fn create_audio_backend() -> Result<Box<dyn AudioBackend>, String> {
 
 #[cfg(target_os = "macos")]
 fn create_audio_backend() -> Result<Box<dyn AudioBackend>, String> {
+    if let Some(audio) = debug_audio_backend() {
+        return Ok(audio);
+    }
     volumectl_lib::audio_macos::MacAudio::new()
         .map(|a| Box::new(a) as Box<dyn AudioBackend>)
         .map_err(|e| e.to_string())
