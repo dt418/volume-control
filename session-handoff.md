@@ -1,5 +1,12 @@
 # Session Handoff
 
+## Session 070 (2026-08-15) — Main branch protection
+
+GitHub `main` is now protected with strict required check `Release gate
+(required)`, admin enforcement, and force-push/deletion disabled. The gate
+requires checks and Windows for every change, plus Linux/macOS whenever the
+scope classifier selects them; release/tag validation remains a full matrix.
+
 ## Session 069 (2026-08-15) — Cost-balanced CI and Node runtime warning cleanup
 
 PR #23 is merged, so the reusable `workflow-warning-auditor` skill is now on

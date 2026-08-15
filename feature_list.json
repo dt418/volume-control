@@ -30,7 +30,8 @@
                          "evidence":  [
                                               "Session 067 (2026-08-15): workflow-warning-auditor initialized with init_skill.py, populated with deterministic audit logic, and validated.",
                                               "Session 067 (2026-08-15): `.gitignore` whitelists the project-authored skill for reuse after clean checkout.",
-                                              "Session 069 (2026-08-15): setup-node/setup-python and artifact uploads are upgraded; diff-aware CI scope and an always-running release gate balance PR cost while keeping code/release coverage fail-closed."
+                                              "Session 069 (2026-08-15): setup-node/setup-python and artifact uploads are upgraded; diff-aware CI scope and an always-running release gate balance PR cost while keeping code/release coverage fail-closed.",
+                                              "Session 070 (2026-08-15): GitHub main branch protection requires the strict Release gate (required) check with admin and force-push/deletion protection enabled."
                                        ],
                          "notes":  "Runtime baselines are intentionally narrow; verify official action release notes before upgrading majors not covered by the reference."
                      },
