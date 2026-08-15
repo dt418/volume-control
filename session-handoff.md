@@ -118,6 +118,27 @@ the Settings surface, Edit config opens Notepad, Close closes Help, and the
 host stays alive; `verify-tauri-e2e.ps1 -Surface help` passes 3/3 including
 evidence.
 
+## Session 078 (2026-08-15) - Deadlock guard skill + post-merge review
+
+PR #27 (custom-protocol + async surface commands) merged to main with every
+GitHub check green. Follow-ups:
+
+- New skill `tauri-deadlock-guard` (mirrored to `.claude/skills/`) documents
+  the invariants and verification workflow; new guard scripts
+  `scripts/check-tauri-deadlock.sh` / `.ps1` enforce them automatically and
+  run as a CI step in the `checks` job. AGENTS.md/CLAUDE.md reference both.
+- `WindowManager::open` recreates a surface when the active set says it is
+  open but the native window is gone (was a silent no-op).
+- Windows tray overflow flyout is dismissed before showing any surface;
+  previously it stayed open after a menu click and swallowed clicks over the
+  bottom-right Help/Mixer area. Verified via `WindowFromPoint` + real clicks.
+
+Review notes (not yet changed): WASAPI `get_state` runs every 150 ms on the
+slow poll thread (COM STA init per call) — a callback/event-driven audio
+notification would cut idle wakeups; `get_bootstrap` enumerates sessions on
+the main-thread IPC path; frontend mixer bundle (~157 kB JS) is dominated by
+framer-motion/lucide. These are tracked as follow-ups, not regressions.
+
 ## Session 071 (2026-08-15) — Project-scoped Claude safe-flow hook
 
 `.claude/settings.json` now wires `.claude/hooks/agent-safe-flow.sh` as a Bash
