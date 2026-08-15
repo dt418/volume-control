@@ -1,5 +1,15 @@
 # Session Handoff
 
+## Session 051 (2026-08-15)
+
+README.md and README.vi.md now describe the native-first Tauri hybrid UI,
+Settings-first configuration, per-action shortcut recording, platform status,
+and the safe frontend/E2E commands. Added CHANGELOG.md for the unreleased
+feature set. CI/Release workflows now explicitly install/build the frontend
+and use `tauri build --no-bundle --ci` for FE+BE artifacts. The final full local verification is being rerun before pushing
+the branch to a PR targeting the repository default branch `master`; hosted
+Linux/macOS jobs remain the cross-platform release evidence.
+
 ## Session 050 (2026-08-15)
 
 Mixer resilience and readability pass completed. `get_bootstrap` and the

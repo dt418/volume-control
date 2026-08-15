@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-14T00:00",
+    "last_updated":  "2026-08-15T00:00",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,25 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-032",
+                         "priority":  32,
+                         "area":  "docs-release",
+                         "title":  "Release documentation and verification instructions",
+                         "user_visible_behavior":  "README files describe the current native-first Tauri UI, Settings-first configuration, shortcut recorder, platform status, and safe build/test commands; CHANGELOG records the unreleased feature set.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "PowerShell ConvertFrom-Json parses feature_list.json after the documentation update.",
+                                               "git diff --check and scripts/check-records.sh --staged pass before the documentation commit.",
+                                               "CI/Release YAML now installs Node/frontend dependencies, runs the frontend build, and invokes `tauri build --no-bundle --ci` for release FE+BE artifacts.",
+                                               "src-tauri/tauri.conf.json resolves `npm --prefix ../../frontend` from Tauri's hook workspace; local Tauri CLI verification reproduces and then prevents the root package.json lookup failure.",
+                                               "Full release gate is rerun before PR creation; hosted Linux/macOS CI remains required for cross-platform evidence."
+                                           ],
+                         "evidence":  [
+                                           "Session 051 (2026-08-15): README.md, README.vi.md, CHANGELOG.md, and CI/Release FE+BE build wiring updated to match the current Tauri hybrid implementation."
+                                       ],
+                         "notes":  "Documentation-only release follow-up for the verified feature branch; mark passing after the final local gate and hosted CI review."
+                     },
                      {
                          "id":  "vol-028",
                          "priority":  28,

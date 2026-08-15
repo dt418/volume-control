@@ -107,10 +107,11 @@ jobs:
       - name: Smoke-test record-keeping guard
         shell: bash
         run: bash scripts/test-check-records.sh
-      - name: Build release and validate artifact
+      - name: Build release Tauri host and validate artifact
         shell: bash
         run: |
-          cargo build --release
+          npm --prefix frontend run build
+          frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl.exe && echo "VolumeControl.exe present and non-empty"
           ls -la target/release/VolumeControl.exe
           file target/release/VolumeControl.exe || true
@@ -149,10 +150,11 @@ jobs:
         run: cargo build
       - name: Test (includes AppKit renderer smoke tests)
         run: cargo test
-      - name: Build release and validate artifact
+      - name: Build release Tauri host and validate artifact
         shell: bash
         run: |
-          cargo build --release
+          npm --prefix frontend run build
+          frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
           file target/release/VolumeControl
@@ -232,9 +234,11 @@ jobs:
           else
             echo "GTK4 layer-shell library unavailable; optional layer-shell build skipped."
           fi
-      - name: Build release and validate artifact (gtk-renderer)
+      - name: Build release Tauri host and validate artifact (FE + BE)
+        shell: bash
         run: |
-          cargo build --release --features gtk-renderer
+          npm --prefix frontend run build
+          frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
           file target/release/VolumeControl

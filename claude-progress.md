@@ -1,5 +1,24 @@
 # Progress Log
 
+## Session 051 (2026-08-15) - Release documentation and final verification
+
+- Refreshed English and Vietnamese README files to describe the current
+  native-first Tauri hybrid architecture, Settings-first configuration,
+  per-action shortcut recording, mixer recovery/readability, platform status,
+  and the correct frontend/E2E commands.
+- Added `CHANGELOG.md` with the current unreleased feature, UX, resilience,
+  testing, and CI changes.
+- Audited CI/Release workflows and fixed release artifact construction to run
+  `npm ci`/frontend build followed by `tauri build --no-bundle --ci`; package
+  validation now checks the Tauri host that embeds both FE assets and Rust BE.
+- Fixed `src-tauri/tauri.conf.json` dev/build hooks to resolve
+  `npm --prefix ../../frontend ...` from Tauri's hook workspace; a local Tauri
+  release build reproduced the old root-package lookup failure, then the
+  workspace-relative correction was applied.
+- Final release verification is being rerun on the complete tree before the
+  feature branch is pushed for the `master` PR; hosted Linux/macOS evidence is
+  still supplied by GitHub Actions.
+
 ## Session 050 (2026-08-15) - Mixer resilience and contrast pass
 
 - Made `get_bootstrap` recover a poisoned `AppCore` mutex and kept both native
