@@ -143,6 +143,9 @@ Requirements: Rust (stable) + a C toolchain:
   the real OS integration report to
   `output/manual/hotkey-latency/hotkey-latency.json` and `.txt`.
 
+  For the complete release candidate procedure and evidence classifications,
+  see the [cross-platform release checklist](docs/testing/cross-platform-release-checklist.md).
+
 ## Running on macOS
 
 The macOS release is a proper app bundle (`VolumeControl.app`) that runs the
@@ -189,22 +192,40 @@ session enumeration and the native overlay/tray host remain Windows-first.
 The AppKit and GTK4/libadwaita renderers implement the same Signal Glass
 surface contract behind the shared `NativeRenderer` bridge.
 
+The platform table describes implemented surfaces, not proof that every hosted
+runner can exercise native OS integration. WDIO proves surface/UI/configuration
+and IPC behavior. Windows shortcut delivery, tray behavior, hardware audio,
+TCC/Accessibility, menu-bar behavior, Wayland compositor behavior, and
+multi-monitor geometry require the manual evidence described in the
+[cross-platform release checklist](docs/testing/cross-platform-release-checklist.md).
+
 ## CI and releases
 
-GitHub Actions (`.github/workflows/`) verifies every push/PR:
+GitHub Actions (`.github/workflows/`) runs deterministic checks and desktop
+validation according to the event schedule:
 
-- **Windows** — build, full test suite, release artifact validation.
-- **macOS** — build and tests including the AppKit renderer smoke tests.
-- **Ubuntu 24.04** — CLI fallback build/test, GTK4/libadwaita build and
-  renderer smoke tests under Xvfb, and the Wayland layer-shell build.
+- **Windows** — build, full test suite, and the Windows WDIO release gate.
+- **macOS** — build and AppKit renderer smoke tests in full merge/release
+  validation.
+- **Ubuntu 24.04** — CLI fallback build/test, GTK4/libadwaita smoke tests under
+  Xvfb, and optional layer-shell compilation in full validation.
 - **Desktop E2E** — isolated WebdriverIO/Tauri surface tests for Mixer,
   Settings, Help, recovery, owned windows, and the runtime bridge. Debug-only
   Tauri Pilot scenarios are retained for exploratory replay; WDIO is the
-  release gate.
+  release gate. Hosted headless jobs do not claim native hotkey, tray,
+  hardware-audio, Wayland-compositor, or multi-monitor coverage.
 
-Pushing a `v*` tag installs/builds the frontend and then runs the Tauri release
-build (embedded frontend assets + Rust backend) on all three platforms before
-publishing versioned archives and `SHA256SUMS.txt` (`scripts/package.sh`).
+Pushing a `v*` tag first validates the tag, then runs the reusable SHA-bound
+Windows/macOS/Ubuntu desktop matrix. The publish job verifies each platform's
+metadata, package checksum, and evidence before promoting versioned archives
+and `SHA256SUMS.txt`; it does not rebuild an unvalidated binary.
+
+The current macOS package is ad-hoc signed for validation and local inspection,
+not public distribution. Public macOS distribution requires a future protected
+Developer ID and notarization workflow (`notarytool`, stapling, `spctl`, and
+temporary keychain cleanup). No signing credentials are stored in the
+repository. See the [cross-platform release checklist](docs/testing/cross-platform-release-checklist.md)
+for the exact inspection commands and signing boundary.
 
 You can also publish from the GitHub UI: open **Actions → Release → Run
 workflow**, select the source branch, enter a version tag such as `v0.1.0`,

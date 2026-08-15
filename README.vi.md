@@ -137,6 +137,9 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
   cùng `.txt`; không chạy probe trên Linux/macOS và không dùng báo cáo này làm
   bằng chứng Pilot tổng hợp.
 
+  Xem [checklist bằng chứng phát hành đa nền tảng](docs/testing/cross-platform-release-checklist.md)
+  để biết đầy đủ các bước kiểm tra, mức độ tin cậy và giới hạn của từng nền tảng.
+
 ## Trạng thái nền tảng
 
 | Tính năng        | Windows | macOS | Linux |
@@ -155,20 +158,39 @@ Tauri Settings/Help/Mixer dùng chung; enumeration session từng app và overla
 tray native vẫn ưu tiên Windows. Renderer macOS/Linux triển khai cùng hợp đồng
 Signal Glass thông qua bridge `NativeRenderer` dùng chung.
 
+Bảng trên mô tả các surface đã triển khai, không có nghĩa mọi hosted runner đều
+chứng minh được tích hợp native của hệ điều hành. WDIO chỉ chứng minh surface,
+UI/cấu hình và IPC. Việc giao shortcut native, tray, audio phần cứng,
+TCC/Accessibility, menu-bar, compositor Wayland và bố cục nhiều màn hình cần
+kiểm tra thủ công theo
+[checklist bằng chứng phát hành đa nền tảng](docs/testing/cross-platform-release-checklist.md).
+
 ## CI và bản phát hành
 
-GitHub Actions (`.github/workflows/`) kiểm tra mọi push/PR:
+GitHub Actions (`.github/workflows/`) chạy các kiểm tra xác định và validation
+desktop theo loại event:
 
-- **Windows** — build, toàn bộ test suite, kiểm tra artifact release.
-- **macOS** — build và test gồm cả smoke test renderer AppKit.
-- **Ubuntu 24.04** — build/test CLI fallback, build GTK4/libadwaita và smoke
-  test renderer dưới Xvfb, cùng build layer-shell Wayland.
+- **Windows** — build, toàn bộ test suite và WDIO release gate trên Windows.
+- **macOS** — build và smoke test renderer AppKit trong validation đầy đủ khi
+  merge/phát hành.
+- **Ubuntu 24.04** — build/test CLI fallback, smoke test GTK4/libadwaita dưới
+  Xvfb và compile layer-shell tùy chọn trong validation đầy đủ.
 - **Desktop E2E** — WebdriverIO/Tauri kiểm tra Mixer, Settings, Help, recovery,
-  owned windows và runtime bridge; Tauri Pilot chỉ dùng cho replay/debug.
+  owned windows và runtime bridge; Tauri Pilot chỉ dùng cho replay/debug. Các
+  job headless không chứng minh hotkey native, tray, audio phần cứng,
+  compositor Wayland hay nhiều màn hình.
 
-Push tag `v*` sẽ cài/build frontend rồi chạy Tauri release build (embed asset
-frontend + backend Rust) trên cả ba nền tảng trước khi xuất bản archive phiên
-bản và `SHA256SUMS.txt` (`scripts/package.sh`).
+Push tag `v*` trước hết kiểm tra format của tag, sau đó chạy matrix desktop
+Windows/macOS/Ubuntu có ràng buộc SHA. Job publish kiểm tra metadata, checksum
+package và bằng chứng của từng nền tảng trước khi đưa archive phiên bản cùng
+`SHA256SUMS.txt` lên release; job này không build lại binary chưa được validate.
+
+Package macOS hiện được ký ad-hoc để validation và kiểm tra local, không phải
+chữ ký phân phối công khai. Phân phối macOS trong tương lai cần workflow được
+bảo vệ với Developer ID và notarization (`notarytool`, stapling, `spctl` và
+cleanup keychain tạm thời); secret ký không được lưu trong repository. Xem
+[checklist bằng chứng phát hành đa nền tảng](docs/testing/cross-platform-release-checklist.md)
+để biết lệnh kiểm tra và ranh giới signing chính xác.
 
 ## Kiến trúc
 

@@ -44,6 +44,17 @@ All notable changes to VolumeControl are documented here.
   failure; it still verifies the filtered surface's accessible Close control.
 - Cross-platform host-core tests now assert macOS `.app` blacklist normalization
   alongside Windows `.exe` and Linux bare-name behavior.
+- Release packaging is now SHA-bound to the validated Windows, macOS, and
+  Ubuntu desktop artifacts; the publish job verifies metadata and checksums
+  instead of rebuilding an unvalidated tag binary.
+- Added the [cross-platform release evidence checklist](docs/testing/cross-platform-release-checklist.md)
+  with exact Windows, Ubuntu/Xvfb, WSLg, macOS inspection, and release review
+  commands. Hosted headless checks are explicitly bounded to deterministic
+  surface/build evidence and do not claim native hotkeys, tray, hardware audio,
+  Wayland, TCC/Accessibility, or multi-monitor behavior.
+- The current macOS package remains ad-hoc signed for validation. Public
+  distribution is deferred to a protected Developer ID/notarization workflow;
+  no signing secrets are stored in the repository.
 
 ### Verification
 
@@ -52,5 +63,7 @@ All notable changes to VolumeControl are documented here.
 - Rust format, clippy (`-D warnings`), and workspace tests passed.
 - E2E contract/support/Pilot contract and ship-flow checks passed.
 
-Cross-platform release evidence is produced by the hosted Linux/macOS CI jobs;
-the local interactive verification in this development session is Windows-first.
+Hosted cross-platform release evidence remains a required workflow outcome;
+this documentation update records no new hosted run URL, run ID, or artifact
+path. Local interactive verification remains Windows-first until hosted
+artifacts are inspected under the checklist.
