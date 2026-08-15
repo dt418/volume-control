@@ -27,6 +27,7 @@
                                                "git diff --check and scripts/check-records.sh --staged pass before the documentation commit.",
                                                "CI/Release YAML now installs Node/frontend dependencies, runs the frontend build, and invokes `tauri build --no-bundle --ci` for release FE+BE artifacts.",
                                                "src-tauri/tauri.conf.json resolves `npm --prefix ../../frontend` from Tauri's hook workspace; local Tauri CLI verification reproduces and then prevents the root package.json lookup failure.",
+                                               "Audio backend initialization falls back to an explicit unavailable backend when no default output endpoint exists, preventing a Tauri setup panic.",
                                                "Full release gate is rerun before PR creation; hosted Linux/macOS CI remains required for cross-platform evidence."
                                            ],
                          "evidence":  [

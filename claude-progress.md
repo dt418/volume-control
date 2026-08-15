@@ -15,6 +15,9 @@
   `npm --prefix ../../frontend ...` from Tauri's hook workspace; a local Tauri
   release build reproduced the old root-package lookup failure, then the
   workspace-relative correction was applied.
+- Made audio initialization fail-soft when a runner or desktop session has no
+  default output endpoint; the Tauri host now stays alive with an explicit
+  unavailable backend so the UI can show recovery state instead of panicking.
 - Final release verification is being rerun on the complete tree before the
   feature branch is pushed for the `master` PR; hosted Linux/macOS evidence is
   still supplied by GitHub Actions.

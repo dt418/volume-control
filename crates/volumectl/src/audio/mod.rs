@@ -84,3 +84,59 @@ pub trait AudioBackend: Send + Sync {
     /// Set mute to an explicit value.
     fn set_mute(&self, muted: bool) -> Result<(), AudioError>;
 }
+
+/// Audio backend used when the host has no usable default output device.
+///
+/// Desktop runners and headless environments can legitimately start without
+/// an audio endpoint. Keeping that condition behind the normal backend
+/// contract lets the Tauri host finish booting and lets the UI explain that
+/// mixer controls are unavailable instead of panicking during setup.
+#[derive(Debug, Clone)]
+pub struct UnavailableAudio {
+    reason: String,
+}
+
+impl UnavailableAudio {
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+        }
+    }
+
+    fn error(&self) -> AudioError {
+        AudioError::Init(self.reason.clone())
+    }
+}
+
+impl AudioBackend for UnavailableAudio {
+    fn get_state(&self) -> Result<VolumeState, AudioError> {
+        Err(self.error())
+    }
+
+    fn set_volume(&self, _volume: f32) -> Result<(), AudioError> {
+        Err(self.error())
+    }
+
+    fn toggle_mute(&self) -> Result<VolumeState, AudioError> {
+        Err(self.error())
+    }
+
+    fn set_mute(&self, _muted: bool) -> Result<(), AudioError> {
+        Err(self.error())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AudioBackend, UnavailableAudio};
+
+    #[test]
+    fn unavailable_backend_returns_initialization_error_without_panicking() {
+        let backend = UnavailableAudio::new("no default output");
+
+        assert!(backend.get_state().is_err());
+        assert!(backend.set_volume(0.5).is_err());
+        assert!(backend.toggle_mute().is_err());
+        assert!(backend.set_mute(true).is_err());
+    }
+}

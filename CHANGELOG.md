@@ -33,6 +33,8 @@ All notable changes to VolumeControl are documented here.
 - Tauri dev/build hooks now resolve the frontend from the hook workspace,
   preventing the root-directory `package.json` lookup failure during local or
   CI builds.
+- Audio backend initialization is now fail-soft when no default output device
+  exists, keeping the host alive so the mixer can present its recovery state.
 
 ### Verification
 

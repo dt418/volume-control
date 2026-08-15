@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use tauri::Manager;
 
-use volumectl_lib::audio::AudioBackend;
+use volumectl_lib::audio::{AudioBackend, UnavailableAudio};
 use volumectl_lib::host_core::AppCore;
 
 use commands::{
@@ -142,7 +142,13 @@ pub fn run() -> tauri::Result<()> {
                 native
             };
 
-            let audio = create_audio_backend()?;
+            let audio = match create_audio_backend() {
+                Ok(audio) => audio,
+                Err(error) => {
+                    log::warn!("audio backend unavailable; keeping host alive: {error}");
+                    Box::new(UnavailableAudio::new(error)) as Box<dyn AudioBackend>
+                }
+            };
             let config = volumectl_lib::config::load();
             let modifier = config.modifier;
             let sink = Arc::new(TauriSink::new(handle));

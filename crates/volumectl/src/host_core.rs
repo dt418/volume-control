@@ -188,7 +188,7 @@ impl AppCore {
     pub fn new(
         audio: Box<dyn AudioBackend>,
         config: Config,
-        modifier: HotkeyModifier,
+        _modifier: HotkeyModifier,
         sink: Arc<dyn EventSink>,
     ) -> Result<Self, String> {
         let bindings = config_hotkeys(&config);
@@ -198,7 +198,7 @@ impl AppCore {
         // change paths below re-sync on every change). Idempotent atomic
         // store — safe regardless of when install_wheel_hook runs.
         #[cfg(target_os = "windows")]
-        crate::wheel_win32::set_modifier(modifier);
+        crate::wheel_win32::set_modifier(_modifier);
         let last_state = audio.get_state().unwrap_or(VolumeState {
             volume: 0.5,
             muted: false,

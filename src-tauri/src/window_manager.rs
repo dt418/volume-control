@@ -169,9 +169,15 @@ impl WindowManager {
             .visible(false);
         match surface {
             SurfaceId::Mixer => {
+                builder = builder.decorations(false);
+                // Tauri's transparent window builder API is not available on
+                // macOS; the webview surface remains readable there through
+                // its native material/background fallback.
+                #[cfg(not(target_os = "macos"))]
+                {
+                    builder = builder.transparent(true);
+                }
                 builder = builder
-                    .decorations(false)
-                    .transparent(true)
                     .always_on_top(true)
                     .skip_taskbar(true)
                     .resizable(false);
