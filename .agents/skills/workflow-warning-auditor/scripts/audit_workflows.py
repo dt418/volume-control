@@ -14,8 +14,8 @@ import yaml
 
 
 NODE_RUNTIME_BASELINES = {
-    "actions/setup-node": (5, "Node 24"),
-    "actions/setup-python": (6, "Node 24"),
+    "actions/setup-node": (7, "Node 24"),
+    "actions/setup-python": (7, "Node 24"),
 }
 MUTABLE_REFS = {"main", "master", "HEAD", "latest"}
 

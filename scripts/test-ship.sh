@@ -96,9 +96,10 @@ invokes scripts/ship.sh 'build --no-bundle' \
     'ship.sh: release flow runs tauri build --no-bundle after E2E'
 
 # --- desktop CI schedule and artifact contracts ------------------------------
-# Keep the Windows pull-request gate unconditional. Linux/macOS are expensive
-# hosted checks and run on main pushes/releases, but must not be silently
-# skipped for any other event.
+# Keep Windows and the shared checks unconditional. Linux/macOS are expensive
+# hosted checks, so a docs/tooling-only pull request may use the bounded-cost
+# path; runtime/UI/E2E/workflow/release changes and every main/release event
+# must still run the full matrix. The release gate must fail closed either way.
 ci_workflow=.github/workflows/ci.yml
 job_block() { # <job>
     awk -v job="$1" '
@@ -115,16 +116,33 @@ else
     report ok 'ci.yml: Windows job remains unconditional for pull requests'
 fi
 
+scope_job="$(job_block scope)"
+if grep -q 'platform_required:.*steps.scope.outputs.platform_required' <<<"$scope_job" && \
+   grep -q 'git diff --name-only' <<<"$scope_job" && \
+   grep -q 'EVENT_NAME.*pull_request' <<<"$scope_job"; then
+    report ok 'ci.yml: scope job classifies pull-request diffs and fails open when uncertain'
+else
+    report FAIL 'ci.yml: scope job classifies pull-request diffs and fails open when uncertain'
+fi
+
 for desktop_job in macos ubuntu; do
     desktop_block="$(job_block "$desktop_job")"
-    desktop_condition_count="$(grep -Ec '^    if: ' <<<"$desktop_block" || true)"
-    if [ "$desktop_condition_count" -eq 1 ] && \
-       grep -Eq "^    if: github\.event_name != 'pull_request'$" <<<"$desktop_block"; then
-        report ok "ci.yml: $desktop_job skips only ordinary pull requests"
+    if grep -Eq '^    needs: scope$' <<<"$desktop_block" && \
+       grep -Eq 'needs\.scope\.outputs\.platform_required == '\''true'\''' <<<"$desktop_block"; then
+        report ok "ci.yml: $desktop_job follows the cost-balanced platform scope"
     else
-        report FAIL "ci.yml: $desktop_job skips only ordinary pull requests"
+        report FAIL "ci.yml: $desktop_job follows the cost-balanced platform scope"
     fi
 done
+
+release_gate_block="$(job_block release-gate)"
+if grep -q '^    if:.*always' <<<"$release_gate_block" && \
+   grep -q 'needs: \[scope, checks, windows, macos, ubuntu\]' <<<"$release_gate_block" && \
+   grep -q 'PLATFORM_REQUIRED' <<<"$release_gate_block"; then
+    report ok 'ci.yml: release gate evaluates every required job and skipped-platform policy'
+else
+    report FAIL 'ci.yml: release gate evaluates every required job and skipped-platform policy'
+fi
 
 # Every CI desktop E2E artifact step must fail closed. Match the step boundary
 # so a nearby non-E2E upload cannot satisfy this contract accidentally.

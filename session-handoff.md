@@ -1,5 +1,23 @@
 # Session Handoff
 
+## Session 069 (2026-08-15) — Cost-balanced CI and Node runtime warning cleanup
+
+PR #23 is merged, so the reusable `workflow-warning-auditor` skill is now on
+`main`. Its official-action runtime baseline is `setup-node@v7+` and
+`setup-python@v7+`; all live workflows use Node 24-capable majors and the
+strict audit is clean.
+
+`ci.yml` now classifies pull-request diffs. Documentation/tooling-only PRs
+retain the lower-cost Windows/checks path, while runtime, UI, E2E, workflow,
+release, and uncertain diffs run Linux/macOS too. Pushes to `main` always run
+the full matrix. An always-running `release-gate` fails closed if checks or
+Windows fail, or if selected Linux/macOS jobs fail; tag/manual release
+validation remains a three-platform reusable workflow.
+
+`scripts/test-ship.sh` covers the scope classifier and release-gate wiring.
+Local audit/contract checks pass; the new workflow must still complete a
+hosted PR/main run before its release-readiness claim is promoted.
+
 ## Session 068 (2026-08-15) — macOS config INI test normalization
 
 The full `main` CI run exposed five macOS-only config INI assertions that used
