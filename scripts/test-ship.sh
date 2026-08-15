@@ -75,6 +75,16 @@ invokes scripts/ship.sh 'npm run build --prefix' \
     'ship.sh: release flow builds the frontend explicitly before the tauri build'
 invokes scripts/ship.sh 'verify-tauri-e2e' \
     'ship.sh: release flow runs the fail-closed Tauri WebDriver E2E gate'
+if grep -qF 'Push-Location $e2e' scripts/verify-tauri-e2e.ps1; then
+    report ok 'verify-tauri-e2e.ps1: evidence check resolves tsx from the isolated E2E package'
+else
+    report FAIL 'verify-tauri-e2e.ps1: evidence check resolves tsx from the isolated E2E package'
+fi
+if grep -qF 'pushd "$repo/e2e/tauri"' scripts/verify-tauri-e2e.sh; then
+    report ok 'verify-tauri-e2e.sh: evidence check resolves tsx from the isolated E2E package'
+else
+    report FAIL 'verify-tauri-e2e.sh: evidence check resolves tsx from the isolated E2E package'
+fi
 invokes scripts/ship.sh 'node_modules/[.]bin/tauri' \
     'ship.sh: release flow resolves the local tauri CLI (never npx tauri)'
 invokes scripts/ship.sh 'build --no-bundle' \

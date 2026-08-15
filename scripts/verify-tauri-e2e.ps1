@@ -44,8 +44,16 @@ try {
   & npm --prefix $e2e run test:e2e:debug -- --surface $Surface
   $code = $LASTEXITCODE
   if ($code -eq 0) {
-    & node --import tsx --input-type=module -e "import { assertE2eEvidence } from '$($e2e.Replace('\', '/'))/support/artifacts.ts'; const [root, runId, ...expected] = process.argv.slice(1); await assertE2eEvidence(root, expected, runId);" $env:TAURI_E2E_OUTPUT $env:TAURI_E2E_RUN_ID @expectedSpecs
-    $evidenceCode = $LASTEXITCODE
+    # Resolve tsx from the isolated E2E installation. The CI runner does not
+    # install a repository-root node_modules, so `node --import tsx` fails
+    # unless this check runs with the E2E package as its working directory.
+    Push-Location $e2e
+    try {
+      & node --import tsx --input-type=module -e "import { assertE2eEvidence } from './support/artifacts.ts'; const [root, runId, ...expected] = process.argv.slice(1); await assertE2eEvidence(root, expected, runId);" $env:TAURI_E2E_OUTPUT $env:TAURI_E2E_RUN_ID @expectedSpecs
+      $evidenceCode = $LASTEXITCODE
+    } finally {
+      Pop-Location
+    }
   }
 } finally {
   Remove-Item Env:TAURI_E2E_BINARY -ErrorAction SilentlyContinue

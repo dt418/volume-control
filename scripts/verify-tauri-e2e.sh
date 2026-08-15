@@ -48,12 +48,17 @@ code=$?
 set -e
 if [[ "$code" -eq 0 ]]; then
   set +e
+  # Resolve tsx from the isolated E2E installation. CI intentionally does not
+  # install a repository-root node_modules, so run the evidence check from the
+  # package directory where npm ci installed tsx.
+  pushd "$repo/e2e/tauri" >/dev/null
   node --import tsx --input-type=module -e '
-    import { assertE2eEvidence } from "./e2e/tauri/support/artifacts.ts";
+    import { assertE2eEvidence } from "./support/artifacts.ts";
     const [root, runId, ...expected] = process.argv.slice(1);
     await assertE2eEvidence(root, expected, runId);
   ' "$run_output_root" "$run_id" "${expected_specs[@]}"
   evidence_code=$?
+  popd >/dev/null
   set -e
 else
   evidence_code=0

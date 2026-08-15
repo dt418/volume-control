@@ -18,6 +18,11 @@
   documented pkg-config shim), records/format-lint/ship/release/Codex/E2E
   contract suites all pass. A clean `tauri build --no-bundle --ci` also
   produced `target/release/VolumeControl.exe` successfully.
+- PR CI caught two integration-only issues before merge: a tracked
+  `.superpowers/` report violated the repository diff policy, and the E2E
+  evidence wrapper resolved `tsx` from the absent repository-root
+  `node_modules`. Removed the forbidden report and made both PowerShell and
+  Bash wrappers resolve the isolated `e2e/tauri` dependency directory.
 - Windows auto-start verifier passed enable/read-back, disable, restoration,
   and unrelated Run-value checks with `binary_launched: false`. The three
   pre-push review domains found no remaining defect after the guard fix.

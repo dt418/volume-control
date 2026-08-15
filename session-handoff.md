@@ -21,6 +21,10 @@ pass. A clean `tauri build --no-bundle --ci` produced
 after the fixes. Hosted desktop/release matrix still remains the authoritative
 cross-platform artifact gate.
 
+PR CI follow-up: removed a tracked `.superpowers/` report rejected by the diff
+policy and fixed both E2E wrappers to run their evidence assertion from
+`e2e/tauri`, where the isolated `tsx` dependency is installed.
+
 ## Session 063 (2026-08-15) — Auto-start and canonical INI integration
 
 The active feature branch now contains the current Tauri-path auto-start and
