@@ -133,6 +133,16 @@ Requirements: Rust (stable) + a C toolchain:
   from which the Tauri CLI is invoked and cannot search for a missing root
   `package.json`.
 
+  Set `E2E_DRIVER_PROVIDER=embedded` (or a preflighted `tauri-driver`) explicitly
+  before WDIO. Verify the provider contract with
+  `node e2e/tauri/test-provider.mjs --provider embedded --platform windows`.
+  WDIO shortcut cards prove only UI/configuration; Linux/Xvfb and hosted macOS
+  do not prove native shortcut delivery. On a real Windows desktop, run
+  `pwsh -NoProfile -File scripts/verify-hotkey-latency.ps1 -Release -Iterations 10 -OutputRoot output/manual/hotkey-latency`.
+  This sends the configured `open_mixer` shortcut with `keybd_event` and writes
+  the real OS integration report to
+  `output/manual/hotkey-latency/hotkey-latency.json` and `.txt`.
+
 ## Running on macOS
 
 The macOS release is a proper app bundle (`VolumeControl.app`) that runs the

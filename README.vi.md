@@ -124,6 +124,19 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
   dùng object command với `cwd: ../frontend`, nên lệnh frontend độc lập với
   thư mục gọi Tauri CLI và không còn tìm nhầm `package.json` ở thư mục sai.
 
+  Trước khi chạy WDIO, phải đặt rõ `E2E_DRIVER_PROVIDER=embedded` (hoặc
+  `tauri-driver` sau khi preflight). Kiểm tra provider bằng
+  `node e2e/tauri/test-provider.mjs --provider embedded --platform windows`.
+  Các shortcut card của WDIO chỉ chứng minh UI/cấu hình; Linux/Xvfb và macOS
+  hosted không chứng minh việc giao shortcut native. Trên Windows thật, chạy:
+
+  `pwsh -NoProfile -File scripts/verify-hotkey-latency.ps1 -Release -Iterations 10 -OutputRoot output/manual/hotkey-latency`
+
+  Probe gửi shortcut `open_mixer` đã cấu hình bằng `keybd_event`, đo trên OS
+  thật và ghi báo cáo vào `output/manual/hotkey-latency/hotkey-latency.json`
+  cùng `.txt`; không chạy probe trên Linux/macOS và không dùng báo cáo này làm
+  bằng chứng Pilot tổng hợp.
+
 ## Trạng thái nền tảng
 
 | Tính năng        | Windows | macOS | Linux |

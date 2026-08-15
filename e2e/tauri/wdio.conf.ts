@@ -2,17 +2,29 @@ import { mkdir, readFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import type { Capabilities, Options } from "@wdio/types";
 import { createAppFixture } from "./support/app-fixture.ts";
-import { sanitizeArtifactName, timingReport, writeE2eManifest, type E2eManifest } from "./support/artifacts.ts";
+import {
+  assertConfiguredTimingBudgets,
+  sanitizeArtifactName,
+  timingReport,
+  writeE2eManifest,
+  type E2eManifest,
+} from "./support/artifacts.ts";
 
 const packageRoot = resolve(import.meta.dirname);
 const repositoryRoot = resolve(packageRoot, "../..");
+const configuredProvider = process.env.E2E_DRIVER_PROVIDER;
+if (configuredProvider !== "embedded" && configuredProvider !== "tauri-driver") {
+  throw new Error(
+    "E2E_DRIVER_PROVIDER must be explicitly set to embedded or tauri-driver; refusing an implicit provider",
+  );
+}
+const driverProvider = configuredProvider;
 const binaryName = process.platform === "win32" ? "VolumeControl.exe" : "VolumeControl";
 const fixture = await createAppFixture({ binary: process.env.TAURI_E2E_BINARY });
 const appBinaryPath = process.env.TAURI_E2E_BINARY ?? fixture.binary ?? resolve(repositoryRoot, "target", "debug", binaryName);
 const outputRoot = resolve(
   process.env.TAURI_E2E_OUTPUT ?? fixture.outputDir,
 );
-const driverProvider = process.env.E2E_DRIVER_PROVIDER === "tauri-driver" ? "tauri-driver" : "embedded";
 const verifySurface = process.env.VOLUMECTL_VERIFY_SURFACE ?? "window-mixer";
 const requestedSurface = process.env.VOLUMECTL_E2E_REQUESTED_SURFACE ?? verifySurface.replace(/^window-/, "");
 const runId = process.env.TAURI_E2E_RUN_ID ?? ["wdio", Date.now(), Math.random().toString(36).slice(2, 10)].join("-");
@@ -73,6 +85,7 @@ export const config: Options.Testrunner & Capabilities.WithRequestedTestrunnerCa
   onComplete: async (exitCode) => {
     try {
       timingReport(outputRoot);
+      if (exitCode === 0) assertConfiguredTimingBudgets();
       const spec = specName();
       let existing: E2eManifest = { results: [] };
       try {

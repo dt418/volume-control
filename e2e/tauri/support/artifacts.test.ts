@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   assertE2eEvidence,
+  assertConfiguredTimingBudgets,
   clearTimings,
   recordTiming,
   sanitizeArtifactName,
@@ -21,7 +22,18 @@ test("sanitizes artifact names and keeps a bounded stable path segment", () => {
 test("reports deterministic p50 and p95 timing values", () => {
   clearTimings();
   for (const value of [10, 20, 30, 40]) recordTiming("bootstrap", value);
-  assert.deepEqual(timingReport(), { bootstrap: { count: 4, p50: 20, p95: 40 } });
+  assert.deepEqual(timingReport(), { bootstrap: { count: 4, p50: 20, p95: 40, budget: 3000 } });
+});
+
+test("enforces bootstrap and IPC budgets but leaves observational timings unblocked", () => {
+  clearTimings();
+  recordTiming("bootstrap", 3_000);
+  recordTiming("ipc", 250);
+  recordTiming("render", 60_000);
+  assert.doesNotThrow(() => assertConfiguredTimingBudgets());
+
+  recordTiming("ipc", 251);
+  assert.throws(() => assertConfiguredTimingBudgets(), /Timing budget exceeded for ipc/);
 });
 
 test("rejects invalid timings", () => {

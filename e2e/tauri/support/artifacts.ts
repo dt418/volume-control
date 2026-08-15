@@ -5,6 +5,21 @@ import { basename, join } from "node:path";
 type BrowserLike = Record<string, unknown>;
 const timings = new Map<string, number[]>();
 
+/**
+ * Only the two deterministic startup/IPC paths have release-gate budgets.
+ * Render, screenshot, and audio timings remain observational evidence because
+ * their host scheduling is intentionally outside the WDIO contract.
+ */
+export const DEFAULT_TIMING_BUDGETS: Readonly<Record<string, number>> = {
+  bootstrap: 3_000,
+  ipc: 250,
+};
+
+const budgetAliases: Readonly<Record<string, string>> = {
+  "bootstrap-to-ready": "bootstrap",
+  "mixer-to-ready": "bootstrap",
+};
+
 export interface E2eResult {
   spec: string;
   status: "passed" | "failed" | "skipped";
@@ -55,14 +70,17 @@ function percentile(values: number[], percentage: number): number {
 export type TimingReport = Record<string, { count: number; p50: number; p95: number; budget?: number }>;
 
 function configuredBudget(name: string): number | undefined {
-  const variable = name === "bootstrap"
+  const budgetName = budgetAliases[name] ?? name;
+  const variable = budgetName === "bootstrap"
     ? "TAURI_E2E_P95_BOOTSTRAP_MS"
-    : name === "ipc"
+    : budgetName === "ipc"
       ? "TAURI_E2E_P95_IPC_MS"
       : undefined;
-  if (!variable) return undefined;
-  const value = Number(process.env[variable]);
-  return Number.isFinite(value) && value >= 0 ? value : undefined;
+  if (variable) {
+    const value = Number(process.env[variable]);
+    if (Number.isFinite(value) && value >= 0) return value;
+  }
+  return DEFAULT_TIMING_BUDGETS[budgetName];
 }
 
 export function timingReport(outputRoot?: string): TimingReport {
@@ -89,6 +107,13 @@ export function assertTimingBudget(name: string, p95LimitMilliseconds = configur
   if (!report) throw new Error(`No timing samples recorded for ${name}`);
   if (report.p95 > p95LimitMilliseconds) {
     throw new Error(`Timing budget exceeded for ${name}: p95=${report.p95}ms > ${p95LimitMilliseconds}ms`);
+  }
+}
+
+/** Enforce only configured budgets; observational timings never block a run. */
+export function assertConfiguredTimingBudgets(): void {
+  for (const name of timings.keys()) {
+    if (configuredBudget(name) !== undefined) assertTimingBudget(name);
   }
 }
 
