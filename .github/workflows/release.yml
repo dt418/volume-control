@@ -50,7 +50,7 @@ jobs:
 
   publish:
     name: Create GitHub release
-    needs: validate
+    needs: [preflight, validate]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

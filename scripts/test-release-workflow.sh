@@ -38,10 +38,10 @@ else
   report FAIL 'release tag preflight gates the reusable validation matrix'
 fi
 
-if contains "$release" 'needs:[[:space:]]*validate'; then
-  report ok 'publish job requires validation'
+if contains "$release" 'needs:[[:space:]]*\[[^]]*preflight[^]]*validate[^]]*\]'; then
+  report ok 'publish job requires preflight and validation'
 else
-  report FAIL 'publish job requires validation'
+  report FAIL 'publish job requires preflight and validation'
 fi
 
 if ! grep -Eq 'tauri[[:space:]]+build' "$release"; then
