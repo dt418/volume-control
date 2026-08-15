@@ -31,6 +31,7 @@
                                                "Mixer E2E accepts the intentional Windows-only session fallback on Linux/macOS while preserving the no-session path.",
                                                "Global hotkey manager creation degrades to explicit unavailable statuses when a native GUI/input service is missing, avoiding host startup panics.",
                                                "Help E2E verifies its accessible Close control without racing the WebKit transport while the WebView destroys itself.",
+                                               "Host-core tests assert platform-specific blacklist normalization (`.app` on macOS, `.exe` on Windows, bare names on Linux).",
                                                "Full release gate is rerun before PR creation; hosted Linux/macOS CI remains required for cross-platform evidence."
                                            ],
                          "evidence":  [

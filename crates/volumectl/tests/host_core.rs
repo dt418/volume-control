@@ -373,7 +373,13 @@ fn update_settings_blacklist_replace_normalizes_entries() {
         list,
         vec!["code.exe".to_string(), "notepad++.exe".to_string()]
     );
+    #[cfg(target_os = "macos")]
+    assert_eq!(
+        list,
+        vec!["code.app".to_string(), "notepad++.app".to_string()]
+    );
     #[cfg(not(target_os = "windows"))]
+    #[cfg(not(target_os = "macos"))]
     assert_eq!(list, vec!["code".to_string(), "notepad++".to_string()]);
 }
 
@@ -413,7 +419,10 @@ fn blacklist_app_actions_mutate_and_persist() {
     let list = core.bootstrap().config.blacklist;
     #[cfg(target_os = "windows")]
     assert_eq!(list, vec!["code.exe".to_string()]);
+    #[cfg(target_os = "macos")]
+    assert_eq!(list, vec!["code.app".to_string()]);
     #[cfg(not(target_os = "windows"))]
+    #[cfg(not(target_os = "macos"))]
     assert_eq!(list, vec!["code".to_string()]);
 
     // Remove: only the matching normalized entry disappears.
@@ -424,7 +433,13 @@ fn blacklist_app_actions_mutate_and_persist() {
         core.bootstrap().config.blacklist,
         vec!["code.exe".to_string()]
     );
+    #[cfg(target_os = "macos")]
+    assert_eq!(
+        core.bootstrap().config.blacklist,
+        vec!["code.app".to_string()]
+    );
     #[cfg(not(target_os = "windows"))]
+    #[cfg(not(target_os = "macos"))]
     assert_eq!(core.bootstrap().config.blacklist, vec!["code".to_string()]);
 
     // Apply Recommended: merges the modifier's presets (dedupe) and persists.

@@ -42,6 +42,8 @@ All notable changes to VolumeControl are documented here.
   headless sessions and CI.
 - Help E2E no longer treats WebKit's expected transport close race as an app
   failure; it still verifies the filtered surface's accessible Close control.
+- Cross-platform host-core tests now assert macOS `.app` blacklist normalization
+  alongside Windows `.exe` and Linux bare-name behavior.
 
 ### Verification
 

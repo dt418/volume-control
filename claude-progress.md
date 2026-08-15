@@ -26,6 +26,8 @@
 - Hardened Help E2E against WebKit's self-destroying-WebView transport race;
   the test keeps the accessible Close control assertion while the close IPC
   behavior remains covered by the frontend/unit suite.
+- Corrected host-core blacklist expectations for macOS `.app` normalization;
+  Windows `.exe` and Linux bare-name contracts remain covered separately.
 - Final release verification is being rerun on the complete tree before the
   feature branch is pushed for the `master` PR; hosted Linux/macOS evidence is
   still supplied by GitHub Actions.
