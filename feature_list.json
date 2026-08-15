@@ -29,7 +29,8 @@
                                                "A hosted Ubuntu release run must pass the new package probes and complete tauri build before this feature is marked passing."
                                            ],
                          "evidence":  [
-                                           "Session 052 (2026-08-15): Ubuntu release dependency list aligned with the working CI Tauri prerequisites; gdk-sys root cause confirmed through cargo tree."
+                                              "Session 052 (2026-08-15): Ubuntu release dependency list aligned with the working CI Tauri prerequisites; gdk-sys root cause confirmed through cargo tree.",
+                                              "Session 057 (2026-08-15): Release validation now uses SHA-bound reusable desktop artifacts, validates package metadata/checksums for every platform, rejects missing packages, and gates publish on both tag preflight and matrix validation. Local release workflow and metadata contracts pass; hosted Ubuntu/macOS/Windows release evidence remains required before marking passing."
                                        ],
                          "notes":  "Local verification cannot execute apt/pkg-config on Windows; hosted Ubuntu release evidence remains required."
                      },
@@ -737,7 +738,8 @@
                                            "Session 053 (2026-08-15): Codex coordinator contract, depth-safe configuration, role documentation, and shared Ubuntu checks wiring verified locally and from a clean git archive.",
                                            "Session 054 (2026-08-15): Hardened the coordinator contract to require the Handoff contract section plus coordinator ownership and final handoff text; focused negative coverage rejects substring-only documentation.",
                                            "Session 055 (2026-08-15): WDIO now pins @wdio/junit-reporter 9.30.1, writes per-surface JUnit/manifest/timing evidence, asserts zero unexpected runtime errors with unavailable-audio/degraded-hotkey allowlists, verifies evidence in both wrappers, and uploads JUnit/manifest/timings/screenshots/snapshots/logs with if-no-files-found: error.",
-                                           "Session 056 (2026-08-15): fix round adds unique wrapper run roots and run-ID freshness checks, exact six-surface manifest coverage, parseable timing validation, and backend log-directory ERROR evidence; 13/13 focused E2E support tests pass."
+                                           "Session 056 (2026-08-15): fix round adds unique wrapper run roots and run-ID freshness checks, exact six-surface manifest coverage, parseable timing validation, and backend log-directory ERROR evidence; 13/13 focused E2E support tests pass.",
+                                           "Session 058 (2026-08-15): Explicit E2E provider selection is wired through wrappers and all desktop CI jobs; embedded-provider, missing-driver, unknown-provider, and environment-immutability contracts pass. Windows hotkey latency remains real-host/manual evidence only; hosted Linux/macOS do not claim native shortcut delivery."
                                       ],
                          "notes":  "WDIO foundation, Windows-first surface coverage, recovery, owned-window timing checks, live Windows Pilot scenarios, CI matrix wiring, and fail-closed ship gate are implemented. Hosted cross-platform CI and final release review remain before marking vol-031 complete. Production remains excluded by Cargo features, capabilities, frontend dependency boundaries, debug fault marker, and withGlobalTauri contract."
                      }

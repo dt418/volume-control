@@ -1,5 +1,12 @@
 # Progress Log
 
+## Session 057 (2026-08-15) - SHA-bound release validation and provider wiring
+
+- Parallel Task 3 and Task 5 implementation/review completed with disjoint file ownership.
+- Task 3 (`bf3991b8`, `540bff01`): WDIO wrappers default to `embedded` only when unset, preserve explicit `tauri-driver`, and all Windows/macOS/Ubuntu CI E2E steps set `E2E_DRIVER_PROVIDER=embedded`. Provider contracts cover embedded success, missing `tauri-driver`, unknown providers, and environment immutability; focused provider/timing tests and typecheck pass. Windows hotkey latency remains a real-host/manual probe and is not claimed by Linux/macOS CI.
+- Task 5 (`4393d2be`, `ecd15a38`, `38c4ee95`): reusable desktop validation builds and packages SHA-bound artifacts; metadata verifier checks commit SHA, platform, package, and checksum; valid/mismatch/wrong-platform/missing-package fixtures are exercised; release publish depends directly on both `preflight` and `validate` and reuses the validated tag. `bash scripts/test-release-workflow.sh`, shell syntax, and diff checks pass.
+- Scoped re-reviews: Task 3 clean after one fix round; Task 5 clean after two fix rounds. Hosted cross-platform/release runs are still required before records can be marked passing.
+
 ## Session 056 (2026-08-15) - WDIO evidence freshness and backend logs fix round
 
 - WDIO wrappers now allocate a unique `run-...` output directory for every
