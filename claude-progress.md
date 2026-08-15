@@ -1,5 +1,16 @@
 # Progress Log
 
+## Session 054 (2026-08-15) - Coordinator handoff contract hardening
+
+- Tightened `scripts/test-codex-config.py` so orchestration documentation must
+  contain the `## Handoff contract` section, the coordinator ownership text,
+  and the final handoff state text; the generic words `coordinator` and
+  `handoff` are no longer sufficient.
+- Focused negative coverage replaces `ORCHESTRATOR.md` in memory with a
+  substring-only fixture and confirms the contract rejects it.
+- Verification: local contract, clean committed archive contract, repository
+  `git diff --check`, and the staged record guard pass.
+
 ## Session 053 (2026-08-15) - Reproducible Codex coordinator contract
 
 - Added `scripts/test-codex-config.py`, a Python 3.11+ contract that validates

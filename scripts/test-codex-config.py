@@ -91,9 +91,21 @@ def validate(root: Path) -> list[str]:
         errors.append(f"unable to read {orchestrator_path}: {error}")
     else:
         normalized_orchestrator = orchestrator.casefold()
-        if "coordinator" not in normalized_orchestrator or "handoff" not in normalized_orchestrator:
+        required_handoff_text = (
+            "## handoff contract",
+            "coordinator records task ownership",
+            "final handoff state",
+        )
+        missing_handoff_text = [
+            text
+            for text in required_handoff_text
+            if text not in normalized_orchestrator
+        ]
+        if missing_handoff_text:
             errors.append(
-                ".codex/ORCHESTRATOR.md must document the coordinator handoff"
+                ".codex/ORCHESTRATOR.md must include the Handoff contract section "
+                "and coordinator ownership/handoff text; missing: "
+                + ", ".join(repr(text) for text in missing_handoff_text)
             )
 
     return errors
