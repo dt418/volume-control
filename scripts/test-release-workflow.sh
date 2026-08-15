@@ -29,6 +29,15 @@ else
   report FAIL 'release caller invokes the reusable desktop validation workflow'
 fi
 
+preflight_line="$(grep -n '^  preflight:' "$release" | head -n 1 | cut -d: -f1 || true)"
+validate_line="$(grep -n '^  validate:' "$release" | head -n 1 | cut -d: -f1 || true)"
+if [[ -n "$preflight_line" && -n "$validate_line" && "$preflight_line" -lt "$validate_line" ]] && \
+   contains "$release" 'needs:[[:space:]]*preflight'; then
+  report ok 'release tag preflight gates the reusable validation matrix'
+else
+  report FAIL 'release tag preflight gates the reusable validation matrix'
+fi
+
 if contains "$release" 'needs:[[:space:]]*validate'; then
   report ok 'publish job requires validation'
 else
@@ -76,6 +85,7 @@ expected_sha="$(git -C "$repo" rev-parse HEAD)"
 valid="$repo/scripts/test-fixtures/release-valid"
 mismatch="$repo/scripts/test-fixtures/release-mismatch"
 wrong_platform="$repo/scripts/test-fixtures/release-wrong-platform"
+missing_package="$repo/scripts/test-fixtures/release-missing-package"
 
 # The committed valid fixture is anchored to the implementation baseline. On
 # later commits, refresh only its copy so the test continues to exercise the
@@ -87,6 +97,16 @@ trap cleanup EXIT
 valid_copy="$tmp_root/release-valid"
 cp -R "$valid" "$valid_copy"
 node - "$valid_copy/build-metadata.json" "$expected_sha" <<'NODE'
+const fs = require("node:fs");
+const path = process.argv[2];
+const value = JSON.parse(fs.readFileSync(path, "utf8"));
+value.commit_sha = process.argv[3];
+fs.writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+NODE
+
+missing_copy="$tmp_root/release-missing-package"
+cp -R "$missing_package" "$missing_copy"
+node - "$missing_copy/build-metadata.json" "$expected_sha" <<'NODE'
 const fs = require("node:fs");
 const path = process.argv[2];
 const value = JSON.parse(fs.readFileSync(path, "utf8"));
@@ -110,6 +130,12 @@ if bash "$verifier" "$wrong_platform" "$expected_sha" ubuntu >/dev/null 2>&1; th
   report FAIL 'wrong-platform fixture fails closed'
 else
   report ok 'wrong-platform fixture fails closed'
+fi
+
+if bash "$verifier" "$missing_copy" "$expected_sha" ubuntu >/dev/null 2>&1; then
+  report FAIL 'missing-package fixture fails closed'
+else
+  report ok 'missing-package fixture fails closed'
 fi
 
 if [[ "$failures" -eq 0 ]]; then

@@ -15,21 +15,13 @@ permissions:
   contents: write
 
 jobs:
-  validate:
-    name: Validate desktop artifacts
-    uses: ./.github/workflows/desktop-validation.yml
-    with:
-      release_mode: true
-      release_tag: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-    secrets: inherit
-
-  publish:
-    name: Create GitHub release
-    needs: validate
+  preflight:
+    name: Validate release tag
     runs-on: ubuntu-24.04
+    outputs:
+      release_tag: ${{ steps.release-tag.outputs.release_tag }}
     steps:
-      - uses: actions/checkout@v7
-      - name: Resolve release tag
+      - name: Resolve and validate release tag
         id: release-tag
         shell: bash
         env:
@@ -46,6 +38,22 @@ jobs:
             exit 1
           fi
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: Validate desktop artifacts
+    needs: preflight
+    uses: ./.github/workflows/desktop-validation.yml
+    with:
+      release_mode: true
+      release_tag: ${{ needs.preflight.outputs.release_tag }}
+    secrets: inherit
+
+  publish:
+    name: Create GitHub release
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -73,7 +81,7 @@ jobs:
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release-tag.outputs.release_tag }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
           RELEASE_TARGET: ${{ github.sha }}
         shell: bash
         run: |
