@@ -144,19 +144,33 @@ jobs:
           rm -rf validation-artifact
           mkdir -p validation-artifact/e2e validation-artifact/platform-logs
           cp dist/* validation-artifact/
-          mapfile -t junit_files < <(find output/tauri-e2e -type f -name '*.xml' -path '*/junit/*' -size +0c -print)
-          mapfile -t manifest_files < <(find output/tauri-e2e -type f -name 'manifest.json' -size +0c -print)
-          mapfile -t timing_files < <(find output/tauri-e2e -type f -name 'timings.json' -size +0c -print)
-          mapfile -t platform_log_files < <(find output/tauri-e2e -type f -path '*/logs/*' -size +0c -print)
-          (( ${#junit_files[@]} > 0 )) || { echo 'Missing non-empty JUnit XML evidence' >&2; exit 1; }
-          (( ${#manifest_files[@]} > 0 )) || { echo 'Missing non-empty manifest.json evidence' >&2; exit 1; }
-          (( ${#timing_files[@]} > 0 )) || { echo 'Missing non-empty timings.json evidence' >&2; exit 1; }
-          (( ${#platform_log_files[@]} > 0 )) || { echo 'Missing non-empty platform log evidence' >&2; exit 1; }
+          # Portable bash 3.2 (macOS /bin/bash) + BSD utilities: no `mapfile`,
+          # no `cp --parents`. NUL-delimited reads keep paths with spaces safe.
+          junit_files=()
+          while IFS= read -r -d '' file; do junit_files+=("$file"); done \
+            < <(find output/tauri-e2e -type f -name '*.xml' -path '*/junit/*' -size +0c -print0)
+          manifest_files=()
+          while IFS= read -r -d '' file; do manifest_files+=("$file"); done \
+            < <(find output/tauri-e2e -type f -name 'manifest.json' -size +0c -print0)
+          timing_files=()
+          while IFS= read -r -d '' file; do timing_files+=("$file"); done \
+            < <(find output/tauri-e2e -type f -name 'timings.json' -size +0c -print0)
+          platform_log_files=()
+          while IFS= read -r -d '' file; do platform_log_files+=("$file"); done \
+            < <(find output/tauri-e2e -type f -path '*/logs/*' -size +0c -print0)
+          ((${#junit_files[@]} > 0)) || { echo 'Missing non-empty JUnit XML evidence' >&2; exit 1; }
+          ((${#manifest_files[@]} > 0)) || { echo 'Missing non-empty manifest.json evidence' >&2; exit 1; }
+          ((${#timing_files[@]} > 0)) || { echo 'Missing non-empty timings.json evidence' >&2; exit 1; }
+          ((${#platform_log_files[@]} > 0)) || { echo 'Missing non-empty platform log evidence' >&2; exit 1; }
           for evidence_file in "${junit_files[@]}" "${manifest_files[@]}" "${timing_files[@]}"; do
-            cp --parents "$evidence_file" validation-artifact/e2e/
+            target="validation-artifact/e2e/$evidence_file"
+            mkdir -p "$(dirname "$target")"
+            cp "$evidence_file" "$target"
           done
           for log_file in "${platform_log_files[@]}"; do
-            cp --parents "$log_file" validation-artifact/platform-logs/
+            target="validation-artifact/platform-logs/$log_file"
+            mkdir -p "$(dirname "$target")"
+            cp "$log_file" "$target"
           done
           test -s validation-artifact/build-metadata.json
           test -s validation-artifact/SHA256SUMS.txt

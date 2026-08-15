@@ -1,5 +1,22 @@
 # Progress Log
 
+## Session 075 (2026-08-16) - Release evidence assembly portable to macOS bash 3.2
+
+- Release run 31904687674 (tag v0.1.2) failed in the macOS validation job:
+  `mapfile: command not found` (exit 127). GitHub macOS runners default to
+  `/bin/bash` 3.2, which lacks `mapfile`, and the step also used GNU-only
+  `cp --parents`.
+- Rewrote the "Assemble validation evidence" step in `desktop-validation.yml`
+  with NUL-delimited `while read -r -d ''` loops and explicit `mkdir -p` +
+  `cp` per file, preserving the exact evidence layout for the publish job.
+- Verified locally: `bash -n` passes; a fixture run assembles
+  validation-artifact with dist files, e2e JUnit/manifest/timings, and
+  platform logs; the missing-JUnit negative case fails closed with the
+  expected message.
+- After merge, tag v0.1.2 will be moved to the fixed commit and re-pushed so
+  the release workflow runs the corrected step. Records: feature_list.json
+  vol-075 added (in_progress).
+
 ## Session 074 (2026-08-16) - Host-core tests independent of the native hotkey manager
 
 - PR #30 (release v0.1.2 prep) CI run 31903072628 failed on macOS: the

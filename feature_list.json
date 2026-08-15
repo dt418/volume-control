@@ -16,6 +16,25 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-075",
+                         "priority":  75,
+                         "area":  "release",
+                         "title":  "Release evidence assembly portable to macOS bash 3.2",
+                         "user_visible_behavior":  "The release workflow's validation-evidence step no longer depends on bash 4.2+ `mapfile` or GNU `cp --parents`, so macOS runners (which ship /bin/bash 3.2 and BSD cp) can assemble and upload release evidence.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "bash -n on the extracted step script passes (portable loops, no mapfile).",
+                                               "Local fixture run assembles validation-artifact with dist files, e2e evidence, and platform logs in the expected layout.",
+                                               "Negative fixture (missing JUnit) fails closed with the 'Missing non-empty JUnit XML evidence' message.",
+                                               "macOS desktop-validation job re-run on the release tag expected green; status updated after the hosted run completes."
+                                           ],
+                         "evidence":  [
+                                              "Session 075 (2026-08-16): release run 31904687674 for tag v0.1.2 failed in 'Validate desktop artifacts / Validate (macos)' with 'mapfile: command not found' (exit 127) because GitHub macOS runners default to /bin/bash 3.2, and `cp --parents` is GNU-only.",
+                                              "Session 075 (2026-08-16): the step was rewritten with NUL-delimited while-read loops and explicit mkdir + cp per file, preserving the evidence layout for the publish job."
+                                       ],
+                         "notes":  "The publish job keeps its ubuntu-24.04 runner where bash 5.2 mapfile is available; only the shared desktop-validation step needed the portable rewrite."
+                     },
+                     {
                          "id":  "vol-074",
                          "priority":  74,
                          "area":  "testing",
