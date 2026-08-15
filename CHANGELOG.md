@@ -40,6 +40,8 @@ All notable changes to VolumeControl are documented here.
 - Global hotkey initialization now degrades to explicit unavailable statuses
   when the native input service cannot be created, keeping the host alive in
   headless sessions and CI.
+- Help E2E no longer treats WebKit's expected transport close race as an app
+  failure; it still verifies the filtered surface's accessible Close control.
 
 ### Verification
 

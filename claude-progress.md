@@ -23,6 +23,9 @@
 - Made global-hotkey manager creation fail-soft when a GUI/input service is
   unavailable; AppCore stays alive with explicit conflicted statuses and no
   listener threads, so headless tests and desktop startup do not panic.
+- Hardened Help E2E against WebKit's self-destroying-WebView transport race;
+  the test keeps the accessible Close control assertion while the close IPC
+  behavior remains covered by the frontend/unit suite.
 - Final release verification is being rerun on the complete tree before the
   feature branch is pushed for the `master` PR; hosted Linux/macOS evidence is
   still supplied by GitHub Actions.
