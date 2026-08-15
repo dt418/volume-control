@@ -30,9 +30,9 @@ All notable changes to VolumeControl are documented here.
 - CI and Release workflows now use the Tauri CLI for release artifacts after
   an explicit frontend install/build, so packaged binaries contain both the
   webview assets and Rust backend rather than only a Cargo binary.
-- Tauri dev/build hooks now resolve the frontend from the hook workspace,
-  preventing the root-directory `package.json` lookup failure during local or
-  CI builds.
+- Tauri dev/build hooks now use the CLI object form with `cwd: ../frontend`,
+  preventing directory-dependent `package.json` lookup failures during local
+  or CI builds.
 - Audio backend initialization is now fail-soft when no default output device
   exists, keeping the host alive so the mixer can present its recovery state.
 - Mixer E2E coverage accepts the intentional Windows-only session empty state

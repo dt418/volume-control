@@ -121,8 +121,8 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
   Bộ E2E desktop nằm riêng trong `e2e/tauri`; cài bằng
   `npm ci --prefix e2e/tauri`. Trên Windows chạy
   `scripts\verify-tauri-e2e.ps1 -Surface all`. Hook dev/build của Tauri cũng
-  resolve `../../frontend` từ workspace hook, nên chạy CLI từ root không còn
-  tìm nhầm `package.json` ở thư mục sai.
+  dùng object command với `cwd: ../frontend`, nên lệnh frontend độc lập với
+  thư mục gọi Tauri CLI và không còn tìm nhầm `package.json` ở thư mục sai.
 
 ## Trạng thái nền tảng
 

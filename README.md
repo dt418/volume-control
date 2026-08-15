@@ -128,9 +128,10 @@ Requirements: Rust (stable) + a C toolchain:
   The isolated desktop E2E package lives in `e2e/tauri`; install it with
   `npm ci --prefix e2e/tauri`. Run the Windows release-gate matrix with
   `scripts\verify-tauri-e2e.ps1 -Surface all` or the Linux/macOS shell wrapper.
-  Tauri's configured dev/build hooks resolve `../../frontend` from the Tauri
-  hook workspace, so running the CLI from the repository root cannot
-  accidentally search for a missing root `package.json`.
+  Tauri's configured dev/build hooks use the CLI's object form with
+  `cwd: ../frontend`, so the frontend command is independent of the directory
+  from which the Tauri CLI is invoked and cannot search for a missing root
+  `package.json`.
 
 ## Running on macOS
 

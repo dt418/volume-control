@@ -242,10 +242,10 @@ fi
 
 # ---- Phase 7: release binary build + staging -------------------------------
 echo "[7/7] release binary build and staging"
-# tauri-cli resolves src-tauri/tauri.conf.json and runs beforeBuildCommand with
-# cwd = the repo root; use the local CLI binary, never `npx tauri` (npx cannot
-# resolve the frontend devDependency from the repo root and falls back to
-# fetching the wrong npm package).
+# tauri-cli resolves src-tauri/tauri.conf.json; its object-form
+# beforeBuildCommand pins the frontend hook to ../frontend. Use the local CLI
+# binary, never `npx tauri` (npx cannot resolve the frontend devDependency from
+# the repo root and falls back to fetching the wrong npm package).
 if ! (cd "$repo_root" && "$TAURI_BIN" build --no-bundle); then
     fail "tauri build --no-bundle failed (frontend assets or release binary)"
 fi

@@ -11,10 +11,9 @@
 - Audited CI/Release workflows and fixed release artifact construction to run
   `npm ci`/frontend build followed by `tauri build --no-bundle --ci`; package
   validation now checks the Tauri host that embeds both FE assets and Rust BE.
-- Fixed `src-tauri/tauri.conf.json` dev/build hooks to resolve
-  `npm --prefix ../../frontend ...` from Tauri's hook workspace; a local Tauri
-  release build reproduced the old root-package lookup failure, then the
-  workspace-relative correction was applied.
+- Fixed `src-tauri/tauri.conf.json` dev/build hooks with Tauri's object command
+  form and `cwd: ../frontend`; local and hosted builds now resolve the FE
+  independently of the CLI invocation directory.
 - Made audio initialization fail-soft when a runner or desktop session has no
   default output endpoint; the Tauri host now stays alive with an explicit
   unavailable backend so the UI can show recovery state instead of panicking.

@@ -26,7 +26,7 @@
                                                "PowerShell ConvertFrom-Json parses feature_list.json after the documentation update.",
                                                "git diff --check and scripts/check-records.sh --staged pass before the documentation commit.",
                                                "CI/Release YAML now installs Node/frontend dependencies, runs the frontend build, and invokes `tauri build --no-bundle --ci` for release FE+BE artifacts.",
-                                               "src-tauri/tauri.conf.json resolves `npm --prefix ../../frontend` from Tauri's hook workspace; local Tauri CLI verification reproduces and then prevents the root package.json lookup failure.",
+                                               "src-tauri/tauri.conf.json uses Tauri's object hook form with `cwd: ../frontend`, preventing directory-dependent package.json lookup failures in local and hosted builds.",
                                                "Audio backend initialization falls back to an explicit unavailable backend when no default output endpoint exists, preventing a Tauri setup panic.",
                                                "Mixer E2E accepts the intentional Windows-only session fallback on Linux/macOS while preserving the no-session path.",
                                                "Global hotkey manager creation degrades to explicit unavailable statuses when a native GUI/input service is missing, avoiding host startup panics.",
