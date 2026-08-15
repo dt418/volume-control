@@ -1,5 +1,13 @@
 # Session Handoff
 
+## Session 068 (2026-08-15) — macOS config INI test normalization
+
+The full `main` CI run exposed five macOS-only config INI assertions that used
+Windows-style `.exe` expectations. Production parsing intentionally applies
+`config::normalize_blacklist_entry`, which maps these entries to `.app` on
+macOS. The tests now compare round-trip/save/migration/order results against
+that public normalization contract.
+
 ## Session 067 (2026-08-15) — Reusable workflow warning auditor skill
 
 Added `.agents/skills/workflow-warning-auditor` and whitelisted it as a

@@ -617,22 +617,25 @@ mod tests {
     #[test]
     fn full_schema_round_trips_to_equal_config() {
         let config = full_config();
+        let expected = config::normalize(config.clone());
 
         let encoded = serialize_ini(&config).expect("serialize full INI config");
         let decoded = parse_ini(&encoded).expect("parse serialized INI config");
 
-        assert_eq!(decoded, config);
+        // Parsing adopts the platform blacklist normalization contract.
+        assert_eq!(decoded, expected);
     }
 
     #[test]
     fn custom_hotkey_bindings_round_trip_without_loss() {
         let mut config = full_config();
         config.hotkeys.as_mut().unwrap().volume_up = "Ctrl+Shift+KeyU".to_string();
+        let expected = config::normalize(config.clone());
 
         let encoded = serialize_ini(&config).expect("serialize custom hotkeys");
         let decoded = parse_ini(&encoded).expect("parse custom hotkeys");
 
-        assert_eq!(decoded, config);
+        assert_eq!(decoded, expected);
     }
 
     #[test]
@@ -657,7 +660,11 @@ mod tests {
         )
         .expect("blacklist items parse");
 
-        assert_eq!(decoded.blacklist, ["one.exe", "two.exe", "ten.exe"]);
+        let expected: Vec<_> = ["one.exe", "two.exe", "ten.exe"]
+            .into_iter()
+            .map(config::normalize_blacklist_entry)
+            .collect();
+        assert_eq!(decoded.blacklist, expected);
     }
 
     #[test]
@@ -737,10 +744,11 @@ mod tests {
         let destination = parent.join("config.ini");
         fs::write(&destination, "old config").expect("seed destination");
         let config = full_config();
+        let expected = config::normalize(config.clone());
 
         save_ini_atomic(&config, &destination).expect("replace destination atomically");
 
-        assert_eq!(load_ini(&destination).expect("load saved INI"), config);
+        assert_eq!(load_ini(&destination).expect("load saved INI"), expected);
         assert!(fs::read_dir(&parent)
             .expect("read temp parent")
             .filter_map(Result::ok)
@@ -754,7 +762,9 @@ mod tests {
         fs::create_dir_all(&parent).expect("create temp parent");
         let json_path = parent.join("config.json");
         let ini_path = parent.join("config.ini");
-        let original_json = serde_json::to_string(&full_config()).expect("serialize JSON fixture");
+        let config = full_config();
+        let expected = config::normalize(config.clone());
+        let original_json = serde_json::to_string(&config).expect("serialize JSON fixture");
         fs::write(&json_path, &original_json).expect("write JSON fixture");
 
         assert_eq!(
@@ -767,7 +777,7 @@ mod tests {
         );
         assert_eq!(
             parse_ini(&fs::read_to_string(&ini_path).expect("read migrated INI")).unwrap(),
-            full_config()
+            expected
         );
         assert_eq!(
             migrate_json_to_ini(&json_path, &ini_path).expect("do not overwrite INI"),
