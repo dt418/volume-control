@@ -1,5 +1,17 @@
 # Progress Log
 
+## Session 076 (2026-08-16) - Release v0.1.2 published
+
+- The final Release workflow run for tag v0.1.2 completed green: all three
+  desktop-validation jobs (Windows, macOS, Ubuntu) ran E2E gates, core
+  checks, release builds, evidence assembly, and SHA-bound artifact uploads;
+  the publish job verified metadata/checksums and created the release.
+- Published release: https://github.com/dt418/volume-control/releases/tag/v0.1.2
+  with assets volumecontrol-0.1.2-windows.zip, -ubuntu.tar.gz, -macos.zip,
+  and SHA256SUMS.txt.
+- Records updated: feature_list.json vol-073, vol-074, vol-075 all marked
+  passing with hosted-run evidence (this entry is the claude-progress.md half).
+
 ## Session 075 (2026-08-16) - Release evidence assembly portable to macOS bash 3.2
 
 - Release run 31904687674 (tag v0.1.2) failed in the macOS validation job:
