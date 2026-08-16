@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow Warning Auditor"
+  short_description: "Audit GitHub Actions warnings safely"
+  default_prompt: "Use $workflow-warning-auditor to audit this GitHub Actions workflow and propose safe warning fixes."

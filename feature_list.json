@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T18:55",
+    "last_updated":  "2026-08-16T19:00",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -49,6 +49,8 @@
                                                "Pre-push review domain B (gate chain): fixed the PowerShell version check to reject strings AND doubles while accepting the parser's Int64 (3.0 was previously accepted by PS and rejected by bash), rejected the Sysnative bash shim too, made test-format-lint.sh fail-fast single-instance (absolute lock path; EXIT trap runs cleanup || true then releases), and added .exe fallbacks for PowerShell detection (the suite now runs the full PS battery locally).",
                                                "Pre-push review domain C (wiring/records): desktop-validation.yml E2E gates now opt into --virtual-audio (release path; new test-release-workflow assertion requires 3/3), vol-080 text corrected to the real-audio default, the 2026-08-16 session series renumbered 084-090 (collision with the 2026-08-15 series), CLAUDE.md updated to the Tauri-host architecture, workflow-warning-auditor mirrored into .claude/skills, ship.sh dry-run wording + phase counters fixed, and feature_list lone-comma formatting cleaned.",
                                                "Post-review battery: test-check-records, test-format-lint (with the PS battery executing), test-ship, test-release-workflow, both format-lint gates, the WSL Linux gate, and sh scripts/check-records.sh --branch origin/main all pass."
+                                               ,
+                                               "workflow-warning-auditor mirrored into .claude/skills and whitelisted in .gitignore (previously .agents-only); all project skills now byte-identical across both mirrors."
                                                "macOS/Linux runs are hosted-CI evidence (xvfb-run E2E + gtk_smoke on Ubuntu; appkit_smoke + sw_vers on macOS)."
                                            ],
                          "evidence":  [

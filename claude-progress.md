@@ -37,6 +37,10 @@
   and `sh scripts/check-records.sh --branch origin/main`.
 - Records: feature_list.json vol-080 verification extended with the review
   evidence; this entry is the claude-progress.md half.
+- Mirror completion (same Session 091): `workflow-warning-auditor` copied
+  into `.claude/skills` and whitelisted in `.gitignore` (it was previously
+  `.agents`-only — the Domain C LOW-5 asymmetry). All project skills are
+  now byte-identical across both mirrors.
 
 ## Session 090 (2026-08-16) - Webview render performance evaluation + optimization
 
