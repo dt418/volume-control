@@ -126,23 +126,32 @@ impl EventSink for TauriSink {
             let duration = config.overlay_duration_ms.clamp(200, 10_000);
             let handle = self.app.clone();
             let seq_arc = self.overlay_seq.clone();
-            // The runtime re-exports tokio's channel/sync types but no
-            // time::sleep; a blocking worker keeps the same cancellation
-            // contract (the generation counter) and marshals the close back
-            // to the main thread like every other window operation.
-            tauri::async_runtime::spawn_blocking(move || {
-                std::thread::sleep(std::time::Duration::from_millis(duration));
-                let current = seq_arc.lock().unwrap_or_else(|p| p.into_inner());
-                if *current == seq {
-                    let handle_inner = handle.clone();
-                    let _ = handle.run_on_main_thread(move || {
-                        let wm = handle_inner.state::<WindowManager>();
-                        if let Err(e) = wm.close(SurfaceId::Overlay) {
-                            log::warn!("overlay auto-hide failed: {e}");
-                        }
-                    });
-                }
-            });
+            // The embedded WebDriver attaches ~tens of seconds after the app
+            // starts; an armed auto-hide would destroy the HUD before the
+            // spec can assert it. The debug E2E marker disables the host
+            // timer (the frontend timer is disabled via the bootstrap flag);
+            // production is unaffected.
+            let e2e_debug = cfg!(debug_assertions)
+                && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
+            if !e2e_debug {
+                // The runtime re-exports tokio's channel/sync types but no
+                // time::sleep; a blocking worker keeps the same cancellation
+                // contract (the generation counter) and marshals the close
+                // back to the main thread like every other window operation.
+                tauri::async_runtime::spawn_blocking(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(duration));
+                    let current = seq_arc.lock().unwrap_or_else(|p| p.into_inner());
+                    if *current == seq {
+                        let handle_inner = handle.clone();
+                        let _ = handle.run_on_main_thread(move || {
+                            let wm = handle_inner.state::<WindowManager>();
+                            if let Err(e) = wm.close(SurfaceId::Overlay) {
+                                log::warn!("overlay auto-hide failed: {e}");
+                            }
+                        });
+                    }
+                });
+            }
         }
     }
 

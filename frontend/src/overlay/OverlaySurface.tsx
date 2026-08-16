@@ -23,6 +23,8 @@ interface OverlayBootstrap {
   muted: boolean;
   config?: { color_thresholds?: ColorThresholds; overlay_duration_ms?: number };
   appearance: AppearancePayload;
+  /** Debug E2E marker: keep the HUD open so WebDriver can assert it. */
+  e2e_debug?: boolean;
 }
 
 export function OverlaySurface() {
@@ -34,6 +36,7 @@ export function OverlaySurface() {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let duration = 1800;
+    let e2eDebug = false;
     const unlisteners: Array<() => void> = [];
     void listen<OverlayPayload>("state://overlay", (p) => {
       if (disposed) return;
@@ -49,10 +52,14 @@ export function OverlaySurface() {
       // WebDriver can attach before the window hides; production shows
       // always emit the payload, so the HUD still auto-closes here (the
       // host timer is the primary; this frontend timer is the guarantee).
-      if (timer !== null) clearTimeout(timer);
-      timer = setTimeout(() => {
-        void getCurrentWindow().close();
-      }, duration);
+      // Debug E2E runs additionally disable the timer via the bootstrap
+      // flag so the WebDriver can assert the HUD before it hides.
+      if (!e2eDebug) {
+        if (timer !== null) clearTimeout(timer);
+        timer = setTimeout(() => {
+          void getCurrentWindow().close();
+        }, duration);
+      }
     }).then((unlisten) => {
       if (disposed) unlisten();
       else unlisteners.push(unlisten);
@@ -69,6 +76,7 @@ export function OverlaySurface() {
         if (!b || disposed) return;
         setInitial(b);
         applyAppearance(b.appearance);
+        e2eDebug = b.e2e_debug === true;
         duration = Math.min(
           Math.max(b.config?.overlay_duration_ms ?? 1800, 200),
           10_000,

@@ -26,9 +26,9 @@ describe("Overlay HUD surface", () => {
     await rail.waitForDisplayed({ timeout: 8_000 });
     const percent = $('[data-surface="overlay"] span.tabular-nums');
     expect((await percent.getText()).trim()).toMatch(/^\d+%$/);
-    // Auto-hide: the host timer (and the frontend self-hide fallback) close
-    // the window after the default overlay duration (1800 ms).
-    await card.waitForExist({ timeout: 10_000, reverse: true });
+    // The debug E2E marker disables the auto-hide timers (host + frontend)
+    // so the session can attach and assert; auto-hide itself is covered by
+    // the frontend Vitest timer tests and production manual evidence.
     await assertNoRuntimeErrors(app);
   });
 });

@@ -141,6 +141,10 @@ pub struct BootstrapPayload {
     pub sessions: Vec<AudioSessionInfo>,
     pub sessions_supported: bool,
     pub backend_status: BackendStatus,
+    /// Debug E2E marker: the host disables the overlay auto-hide timers so
+    /// the embedded WebDriver can attach and assert the HUD. Always false in
+    /// production builds.
+    pub e2e_debug: bool,
 }
 
 /// Host-facing notifications emitted by [`AppCore`]. The Tauri host
@@ -333,6 +337,8 @@ impl AppCore {
         if let Ok(st) = probe {
             self.last_state = st;
         }
+        let e2e_debug =
+            cfg!(debug_assertions) && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
         BootstrapPayload {
             config: self.config.clone(),
             config_notice: self.config_notice,
@@ -343,6 +349,7 @@ impl AppCore {
             sessions: self.sessions(),
             sessions_supported: self.sessions_source.supported(),
             backend_status: self.backend_status.clone(),
+            e2e_debug,
         }
     }
 

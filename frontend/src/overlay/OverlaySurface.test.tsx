@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 
 import { OverlaySurface } from "./OverlaySurface";
+import * as ipc from "../lib/ipc";
 
 const listeners: Record<string, (payload: unknown) => void> = {};
 
@@ -101,6 +102,33 @@ describe("OverlaySurface", () => {
       });
       // The debug/E2E marker path mounts without state://overlay; the
       // window must stay open so WebDriver can attach.
+      expect(closeOverlayWindow).not.toHaveBeenCalled();
+    });
+
+    it("keeps the HUD open during debug E2E runs (e2e_debug flag)", async () => {
+      vi.mocked(ipc.invoke).mockImplementationOnce(async () => ({
+        ...bootstrap,
+        e2e_debug: true,
+      }));
+      render(<OverlaySurface />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      fire("state://overlay", {
+        text: null,
+        pct: 55,
+        muted: false,
+        green_up_to: 40,
+        blue_up_to: 75,
+        orange_up_to: 100,
+        theme_resolved: "dark",
+        material: "Auto",
+        motion: "Full",
+        accent: "System",
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
       expect(closeOverlayWindow).not.toHaveBeenCalled();
     });
 

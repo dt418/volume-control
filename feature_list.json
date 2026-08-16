@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T19:25",
+    "last_updated":  "2026-08-16T19:40",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -31,7 +31,7 @@
                          "evidence":  [
                                               "Session 090 (2026-08-16): performance evaluation — the webview delay sources are (1) per-surface cold webview boot on open, (2) get_bootstrap's synchronous session enumeration (WASAPI on Windows, Pulse on Linux; a no-Pulse machine previously stalled up to 3 s per mount), and (3) full-tree re-renders per state://volume event. Optimized (2) via connect backoff + shorter timeout and (3) via memoization; (1) is a documented design tradeoff (zero idle webviews) and bundle size (framer-motion/lucide ≈157 kB JS) is tracked as future work.",
                                               "Session 090 (2026-08-16): Linux backoff test + 29 mixer Vitest + full gates green; committed with records.",
-                                              "Session 091 (2026-08-16): hosted CI (PR #33 Ubuntu + macOS) caught a real E2E bug the local run could not — the frontend self-hide timer armed on the verify-marker mount destroyed the overlay window before the embedded WebDriver attached (No window could be found). Fixed by arming the timer only on state://overlay payloads; overlay Vitest 6/6 and the full frontend suite + build green."
+                                              "Session 091 (2026-08-16): hosted CI (PR #33 Ubuntu + macOS) caught a real E2E bug the local run could not — the frontend self-hide timer armed on the verify-marker mount destroyed the overlay window before the embedded WebDriver attached (No window could be found). Fixed by arming the timer only on state://overlay payloads; a second round showed the HOST timer then destroyed the HUD mid-spec, so the debug E2E marker now disables BOTH auto-hide timers (host env check + BootstrapPayload.e2e_debug for the frontend; release builds unaffected); the overlay spec asserts rendering only, auto-hide stays covered by Vitest 7/7 and production manual evidence. Frontend 101, tauri 16/16, Linux check clean."
                                        ],
                          "notes":  "Further optimization candidates (kept out of this change set): warm surface reuse (hide instead of destroy — trades idle RAM for open latency), lighter overlay bootstrap (no session enumeration), and bundle trimming."
                      },

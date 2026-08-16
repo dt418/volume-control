@@ -53,6 +53,16 @@
   spec triggers `adjust_volume`, which emits the payload. Vitest: overlay
   6/6 (new "no timer on marker mount" + payload-driven timer tests),
   frontend suite + build green.
+- Second hosted-CI round (same Session 091): after the first fix, Ubuntu +
+  macOS failed again — the HOST auto-hide timer (armed on the real
+  `state://overlay` payload the spec triggers) destroyed the HUD before the
+  spec's element queries. The debug E2E marker now disables BOTH auto-hide
+  timers: the host skips arming when `VOLUMECTL_E2E_DEBUG=1` (debug builds
+  only), and the frontend skips arming when `bootstrap.e2e_debug` is true
+  (new BootstrapPayload field, always false in release). The overlay spec
+  asserts rendering only; auto-hide stays covered by Vitest (7/7 incl. the
+  e2e_debug keep-open case) and production manual evidence. Frontend 101,
+  tauri 16/16, Linux check clean.
 
 ## Session 090 (2026-08-16) - Webview render performance evaluation + optimization
 
