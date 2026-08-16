@@ -19,18 +19,19 @@ const specsBySurface = {
   mixer: ["mixer.e2e.ts"],
   settings: ["settings.e2e.ts"],
   help: ["help.e2e.ts"],
+  overlay: ["overlay.e2e.ts"],
   runtime: ["runtime.e2e.ts"],
   recovery: ["recovery.e2e.ts"],
   windows: ["windows.e2e.ts"],
 };
 
 if (!(requestedSurface === "all" || requestedSurface in specsBySurface)) {
-  console.error("Usage: node run-debug-e2e.mjs [--surface mixer|runtime|windows|recovery|settings|help|all] [--spec path]");
+  console.error("Usage: node run-debug-e2e.mjs [--surface mixer|runtime|windows|recovery|settings|help|overlay|all] [--spec path]");
   process.exit(2);
 }
 
 function runSurface(surface, spec) {
-  const startupSurface = surface === "settings" || surface === "help" ? surface : "mixer";
+  const startupSurface = surface === "settings" || surface === "help" || surface === "overlay" ? surface : "mixer";
   const label = `window-${startupSurface}`;
   const specPath = resolve(packageRoot, "specs", spec);
   const child = spawn(
@@ -75,7 +76,7 @@ function runSurface(surface, spec) {
   });
 }
 
-const surfaces = requestedSurface === "all" ? ["mixer", "runtime", "windows", "recovery", "settings", "help"] : [requestedSurface];
+const surfaces = requestedSurface === "all" ? ["mixer", "runtime", "windows", "recovery", "settings", "help", "overlay"] : [requestedSurface];
 let exitCode = 0;
 for (const surface of surfaces) {
   const spec = requestedSpec ?? specsBySurface[surface][0];

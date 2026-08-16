@@ -1,8 +1,11 @@
-export type SurfaceName = "mixer" | "settings" | "help";
+export type SurfaceName = "mixer" | "settings" | "help" | "overlay";
 
 export const selectors = {
   surfaceRoot: (surface: SurfaceName) => `[data-surface="${surface}"]`,
-  surfaceTitle: (surface: SurfaceName) => `${selectors.surfaceRoot(surface)} h1`,
+  surfaceTitle: (surface: SurfaceName) =>
+    surface === "overlay"
+      ? '[data-surface="overlay"] [data-testid="overlay-card"]'
+      : `${selectors.surfaceRoot(surface)} h1`,
   header: (surface: SurfaceName) => `${selectors.surfaceRoot(surface)} [data-testid="surface-header"]`,
   content: (surface: SurfaceName) => `${selectors.surfaceRoot(surface)} [data-testid="surface-content"]`,
   footer: (surface: SurfaceName) => `${selectors.surfaceRoot(surface)} [data-testid="surface-footer"]`,

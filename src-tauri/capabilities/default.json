@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default-capability",
   "description": "Allow core commands for interactive surfaces",
-  "windows": ["window-mixer", "window-settings", "window-help"],
+  "windows": ["window-mixer", "window-settings", "window-help", "window-overlay"],
   "permissions": [
     "core:default",
     "core:app:allow-set-app-theme",

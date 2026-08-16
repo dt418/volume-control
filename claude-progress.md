@@ -143,6 +143,23 @@
 - Verification (vertical fill): overlay Vitest 4/4, frontend 16 files / 96,
   `npm run build --prefix frontend` clean; committed with the records in the
   same change set.
+- Overlay E2E wiring (Task 7, same Session 078 entry):
+  `e2e/tauri/specs/overlay.e2e.ts` — on Windows the spec asserts the
+  surface boots with the capability wiring and the WDIO bridge is live
+  (Windows routes overlay notifications to the native HUD, so content
+  assertions are macOS/Linux-only); on macOS/Linux it triggers
+  `adjust_volume`, asserts the HUD card + rail + percent render, then waits
+  for the auto-hide to destroy the window. `run-debug-e2e.mjs` gains the
+  overlay surface map + startup surface; `selectors.ts` gains the overlay
+  title selector (no h1 on the HUD); both verify-tauri-e2e wrappers gain
+  the surface; `window-overlay` was added to the production
+  (`src-tauri/capabilities/default.json`) and E2E
+  (`e2e/tauri/capabilities/e2e-wdio.json`) allowlists — without it the
+  overlay webview's core event listen/invoke would be denied.
+- Verification (Task 7): `npm test --prefix e2e/tauri` 18/18, typecheck
+  clean, `npm run test:e2e:debug --surface overlay` 1/1 passed on Windows,
+  and `scripts/verify-tauri-e2e.ps1 -Surface overlay` evidence gate
+  (JUnit + manifest + timings) exit 0.
 - Theme-sync fix (user-reported "render không đồng bộ", same Session 078
   entry): the overlay re-resolved `System` in the browser with
   `matchMedia(prefers-color-scheme)` while the mixer used

@@ -2,7 +2,7 @@
 param(
   [string]$Binary = (Join-Path $PSScriptRoot "..\target\debug\VolumeControl.exe"),
   [string]$OutputRoot = (Join-Path $PSScriptRoot "..\output\tauri-e2e"),
-  [ValidateSet("all", "mixer", "runtime", "windows", "recovery", "settings", "help")]
+  [ValidateSet("all", "mixer", "runtime", "windows", "recovery", "settings", "help", "overlay")]
   [string]$Surface = "all",
   [switch]$SkipBuild
 )
@@ -35,7 +35,7 @@ $runOutputRoot = (Resolve-Path (New-Item -ItemType Directory -Force -Path (Join-
 $env:TAURI_E2E_OUTPUT = $runOutputRoot
 $env:TAURI_E2E_RUN_ID = $runId
 $expectedSpecs = switch ($Surface) {
-  "all" { @("mixer.e2e.ts", "runtime.e2e.ts", "windows.e2e.ts", "recovery.e2e.ts", "settings.e2e.ts", "help.e2e.ts") }
+  "all" { @("mixer.e2e.ts", "runtime.e2e.ts", "windows.e2e.ts", "recovery.e2e.ts", "settings.e2e.ts", "help.e2e.ts", "overlay.e2e.ts") }
   default { @("$Surface.e2e.ts") }
 }
 # PowerShell unwraps a single-output switch into a scalar; splatting a scalar

@@ -18,7 +18,7 @@ while (($#)); do
     --output-root) output_root="$2"; shift 2 ;;
     --surface) surface="$2"; shift 2 ;;
     --skip-build) skip_build=1; shift ;;
-    *) echo "usage: $0 [--binary path] [--output-root dir] [--surface all|mixer|runtime|windows|recovery|settings|help] [--skip-build]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--binary path] [--output-root dir] [--surface all|mixer|runtime|windows|recovery|settings|help|overlay] [--skip-build]" >&2; exit 2 ;;
   esac
 done
 
@@ -41,8 +41,8 @@ run_output_root="$(mktemp -d "$output_root/run-XXXXXX")"
 run_id="$(basename "$run_output_root")"
 
 case "$surface" in
-  all) expected_specs=(mixer.e2e.ts runtime.e2e.ts windows.e2e.ts recovery.e2e.ts settings.e2e.ts help.e2e.ts) ;;
-  mixer|runtime|windows|recovery|settings|help) expected_specs=("$surface.e2e.ts") ;;
+  all) expected_specs=(mixer.e2e.ts runtime.e2e.ts windows.e2e.ts recovery.e2e.ts settings.e2e.ts help.e2e.ts overlay.e2e.ts) ;;
+  mixer|runtime|windows|recovery|settings|help|overlay) expected_specs=("$surface.e2e.ts") ;;
   *) echo "invalid surface: $surface" >&2; exit 2 ;;
 esac
 

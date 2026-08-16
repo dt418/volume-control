@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T13:53",
+    "last_updated":  "2026-08-16T14:05",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -69,6 +69,9 @@
                                                "cargo clippy --workspace --all-targets --no-default-features -- -D warnings clean; cargo fmt --all --check and git diff --check clean.",
                                                "OverlaySurface renders its initial state from get_bootstrap before markSurfaceReady (window never appears empty; the first state://overlay event cannot be lost), subscribes to state://volume for live updates, and the HUD card spans the full window width (w-full) so its right edge stays aligned with the mixer's shared right edge at any DPI/zoom.",
                                                "Overlay card fills the window on both axes (h-full w-full justify-center), so the visual card edges match the window edges exactly — the right edge shared with the mixer and the 16px vertical gap are preserved at any DPI/zoom."
+                                               ,
+                                               "E2E overlay spec passes on Windows (debug run with VOLUMECTL_VERIFY_SURFACE=window-overlay): the surface boots with the capability wiring (window-overlay added to default.json + e2e-wdio.json), the WDIO bridge is live, and the title/bridge assertions pass; the full HUD content + auto-hide assertions run on macOS/Linux where the webview overlay path is live (Windows routes overlay notifications to the native HUD).",
+                                               "npm test --prefix e2e/tauri 18/18, npm run typecheck --prefix e2e/tauri clean, npm run test:e2e:debug --surface overlay 1/1, and the verify-tauri-e2e.ps1 evidence gate (JUnit + manifest + timings) exit 0."
                                            ],
                          "evidence":  [
                                               "Session 077 (2026-08-16): TrayCommand + tray_icon_rgba moved to the cross-platform tray_common module; host_core::tray_command_to_action un-gated; Windows native tray unchanged.",
@@ -76,6 +79,7 @@
                                               "Session 077 (2026-08-16): TauriSink::volume and show_tray_menu refresh/route to the managed tray on non-Windows; Windows keeps its native tray and native_win32.rs is untouched.",
                                               "Session 078 (2026-08-16): user-reported \"overlay shows empty\" race fixed via bootstrap-first rendering (frontend/src/overlay/OverlaySurface.tsx + 4 Vitest tests, 96/96 frontend suite, commit e3153812); user-reported \"overlay misaligned with mixer\" fixed by making the HUD card w-full so the visual right edge matches the mixer's right edge regardless of DPI/zoom.",
                                               "Session 078 (2026-08-16): vertical fill added — the HUD card now spans h-full w-full with justify-center, so both visual axes match the window edges (right edge shared with the mixer; 16px gap to the mixer preserved) at any DPI/zoom.",
+                                              "Session 078 (2026-08-16): overlay E2E wiring — e2e/tauri/specs/overlay.e2e.ts (Windows asserts surface boot + WDIO bridge; macOS/Linux assert card/rail/percent + auto-hide), run-debug-e2e.mjs surface map + startup surface, selectors.ts SurfaceName + overlay title selector, both verify-tauri-e2e wrappers, and window-overlay added to the production + e2e capability allowlists.",
                                               "Session 077 (2026-08-16): hosted Ubuntu/macOS runs and a real menu-bar/appindicator desktop remain required before marking passing (creation is CI-verifiable; menu interaction is manual evidence)."
                                        ],
                          "notes":  "Windows keeps its native tray-icon/muda tray (no regression risk); the Tauri-managed tray is added only on macOS/Linux with the identical stable menu ids."

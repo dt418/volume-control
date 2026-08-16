@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "e2e-wdio",
   "description": "Debug-only WebdriverIO permissions; never ship this capability.",
-  "windows": ["window-mixer", "window-settings", "window-help"],
+  "windows": ["window-mixer", "window-settings", "window-help", "window-overlay"],
   "permissions": [
     "wdio:default",
     "wdio-webdriver:default"
