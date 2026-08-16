@@ -23,6 +23,13 @@ if (-not (Test-Path (Join-Path $e2e "node_modules\@wdio\cli\bin\wdio.js"))) {
   throw "E2E dependencies are missing; run npm install --prefix e2e/tauri"
 }
 
+# Zombie cleanup: a force-killed previous run (or a crashed app) can leave a
+# VolumeControl.exe holding the embedded WebDriver port 4445 and a stale HUD
+# on the desktop. Kill leftovers before the run so the app under test always
+# binds cleanly; the post-run cleanup below repeats it in the finally block.
+Get-Process -Name "VolumeControl" -ErrorAction SilentlyContinue |
+  Stop-Process -Force -ErrorAction SilentlyContinue
+
 if (-not $SkipBuild) {
   & node (Join-Path $e2e "prepare-debug-frontend.mjs") -- node (Join-Path $e2e "prepare-debug-capabilities.mjs") --provider wdio -- cargo build -p volumecontrol-tauri --no-default-features --features e2e-wdio
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -63,6 +70,8 @@ try {
     }
   }
 } finally {
+  Get-Process -Name "VolumeControl" -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
   Remove-Item Env:TAURI_E2E_BINARY -ErrorAction SilentlyContinue
   Remove-Item Env:TAURI_E2E_OUTPUT -ErrorAction SilentlyContinue
   Remove-Item Env:TAURI_E2E_RUN_ID -ErrorAction SilentlyContinue

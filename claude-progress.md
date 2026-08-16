@@ -1,5 +1,45 @@
 # Progress Log
 
+## Session 093 (2026-08-16) - E2E "No window could be found" flake root-caused and fixed
+
+- The Windows Tauri E2E matrix flaked intermittently (~30-50% of full-matrix
+  runs) with `WebDriverError: No window could be found` at session creation
+  or mid-spec (`execute/sync`), blocking the ship gate after the v0.1.3
+  release. Root-caused with temporary app-side instrumentation
+  (`webview_windows()` logged every second under the debug marker) plus a
+  parallel process/port monitor: the surface window was alive and correctly
+  registered, then vanished from the map 0.5 s after a `[Tauri:Frontend:0]
+  JSON error: invalid type: null, expected u32` IPC deserialization failure
+  exactly when the embedded WebDriver's direct-eval ran — and only after 4-5
+  consecutive app restarts sharing one WebView2 user-data folder. The monitor
+  also disproved the zombie-app theory (never two VolumeControl processes,
+  port 4445 freed between surfaces).
+- Fixes landed:
+  - `window_manager.rs` — the mixer's auto-close-on-blur (the only native
+    destroy path for a surface window) is now gated on the debug E2E marker
+    (`mixer_auto_close_on_focus_loss(e2e_debug)`), the same
+    `VOLUMECTL_E2E_DEBUG=1` + `cfg!(debug_assertions)` gate the overlay
+    auto-hide timers already use. TDD: unit test first (E0425 RED), helper
+    after (GREEN); tauri 17/17. This fixed the mixer session failures.
+  - `e2e/tauri/wdio.conf.ts` — on win32 the app now inherits
+    `WEBVIEW2_USER_DATA_FOLDER=<output>/webview2-<pid>`, isolating each
+    surface's WebView2 state so orphaned renderer processes from
+    force-killed runs cannot break the next app's webview mid-spec.
+  - `scripts/verify-tauri-e2e.ps1` — pre-run and post-run cleanup kill
+    leftover VolumeControl.exe processes; a crashed/force-killed run can no
+    longer hold the embedded WebDriver port 4445 or leave a stale native-HUD
+    ghost on the desktop (the user-visible "notification stuck" symptom
+    after my force-killed diagnostic runs).
+- Verification: the full real-audio all-matrix (mixer, runtime, windows,
+  recovery, settings, help) passed 9/9 consecutive runs with no leftover
+  processes; previously 4 failures across 11 runs (settings x3, help x1)
+  plus the original mixer session failures in the ship gate. cargo fmt,
+  diff --check, clippy -D warnings, workspace tests, and the Tauri
+  deadlock guard all clean.
+- Records: feature_list.json vol-083 added (testing, priority 83); this
+  entry is the claude-progress.md half. v0.1.3 remains the published release;
+  a v0.1.4 release carrying these E2E/harness fixes is prepared next.
+
 ## Session 092 (2026-08-16) - PR #33 merged + release v0.1.3 preparation
 
 - PR #33 (feat/linux-macos-feature-completion) merged at d0e9e40c after the
@@ -19,6 +59,16 @@
 - Records: feature_list.json vol-082 added (in_progress); this entry is the
   claude-progress.md half. Tag v0.1.3 + Release workflow dispatch + asset
   publishing remain pending the release PR merge.
+- Release published (same Session 092): PR #34 (release/v0.1.3) merged at
+  fe674d43, tag v0.1.3 pushed at that validated commit, and the SHA-bound
+  Release workflow run 31949276965 completed fully green — Validate release
+  tag, Validate desktop artifacts on ubuntu (12m49s), macos (9m57s), and
+  windows (16m22s), and Create GitHub release all passed. v0.1.3 is live at
+  https://github.com/dt418/volume-control/releases/tag/v0.1.3 with the four
+  published assets: volumecontrol-0.1.3-windows.zip, -ubuntu.tar.gz,
+  -macos.zip, and SHA256SUMS.txt. Records: feature_list.json vol-082 moved to
+  `passing` with the release evidence (run id + asset paths + timestamps);
+  this entry is the claude-progress.md half.
 
 ## Session 091 (2026-08-16) - Pre-push three-domain review + enforcement hardening
 
