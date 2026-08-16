@@ -12,6 +12,8 @@ use volumectl_lib::hotkeys::HotkeyRegResult;
 #[cfg(target_os = "windows")]
 use std::sync::Arc;
 
+#[cfg(not(target_os = "windows"))]
+use crate::tauri_tray::TauriTray;
 use crate::window_manager::{SurfaceId, WindowManager};
 
 /// Bridges [`volumectl_lib::host_core::AppCore`] notifications to the Tauri
@@ -39,6 +41,13 @@ impl EventSink for TauriSink {
             .try_state::<Arc<crate::native_win32::NativeWin32>>()
         {
             native.set_tray_volume(&VolumeState {
+                volume: pct as f32 / 100.0,
+                muted,
+            });
+        }
+        #[cfg(not(target_os = "windows"))]
+        if let Some(tray) = self.app.try_state::<TauriTray>() {
+            tray.set_volume(&VolumeState {
                 volume: pct as f32 / 100.0,
                 muted,
             });
@@ -77,7 +86,11 @@ impl EventSink for TauriSink {
             native.show_tray_menu();
         }
         #[cfg(not(target_os = "windows"))]
-        log::debug!("tray menu unavailable on this platform");
+        if let Some(tray) = self.app.try_state::<TauriTray>() {
+            tray.show_menu();
+        } else {
+            log::debug!("tray menu unavailable on this platform");
+        }
     }
 
     fn exit(&self) {

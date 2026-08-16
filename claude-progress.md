@@ -19,6 +19,34 @@
   `cargo test --workspace --no-default-features` passes 338 tests.
 - Records: feature_list.json vol-076 added (in_progress); this entry is the
   claude-progress.md half. Windows native tray behavior is unchanged.
+- Task 2 landed: `src-tauri/src/tauri_tray.rs` (compiled only on
+  non-Windows) creates the Tauri-managed tray for macOS/Linux — menu ids and
+  texts mirror the Windows native tray exactly (disabled live volume label
+  `volume`, Mute check `mute`, reset/mixer/settings/help/reload/edit, exit),
+  icon = the shared 32x32 RGBA glyph via `Image::new_owned` (returns
+  `Image<'static>`, not a Result), and menu events route through the new
+  shared `dispatch_tray_command`.
+- `dispatch_tray_command` (src-tauri/src/lib.rs) is the single tray
+  dispatch point: the Windows global menu handler now delegates to it
+  (behavior unchanged) and the TauriTray `on_menu_event` callback calls it
+  on macOS/Linux. The non-Windows setup block manages the tray after
+  WindowManager and before AppCore and treats creation failure as non-fatal;
+  `TauriSink::volume` refreshes the tray label/check/tooltip via
+  `TauriTray::set_volume`, and `show_tray_menu` routes to
+  `TauriTray::show_menu` — a documented log-only no-op because Tauri
+  2.11.5's `TrayIcon` exposes no `show_menu` API (verified in the registry
+  source; the inner tray-icon handle is not exposed).
+- Verification: workspace `cargo test --workspace --no-default-features`
+  passes 338 tests; `cargo clippy --workspace --all-targets
+  --no-default-features -- -D warnings`, `cargo fmt --all --check`, and
+  `git diff --check` are clean; the deliverable module compiled and its
+  `menu_ids_match_the_shared_tray_command_mapping` test ran green in a
+  scratch harness against the real Tauri 2.11.5 APIs (the module is cfg'd
+  out on Windows, so the test also runs on Linux/macOS CI); the linux-gnu
+  volumectl cross-check is clean via the pkg-config stub.
+- Records: feature_list.json vol-076 extended (in_progress); this entry is
+  the claude-progress.md half. `native_win32.rs` and the volumectl crates
+  are untouched.
 
 ## Session 076 (2026-08-16) - Release v0.1.2 published
 

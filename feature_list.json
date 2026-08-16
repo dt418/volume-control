@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-15T18:10",
+    "last_updated":  "2026-08-16T12:28",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -26,10 +26,15 @@
                                                "cargo test -p volumectl --lib tray --no-default-features passes 5/5 including the previously Windows-gated tray_command_to_action mapping now running on every platform.",
                                                "cargo test --workspace --no-default-features passes 338 tests (283 volumectl lib + 12 tauri + 4 win32 sessions + 23 host_core + 16 linux_host_core).",
                                                "TauriTray (src-tauri/src/tauri_tray.rs) builds the shared menu ids and generated icon; menu events route through one handler per platform (Windows global handler, macOS/Linux TrayIconBuilder callback) into the shared dispatch_tray_command.",
-                                               "cargo check -p volumectl --target x86_64-unknown-linux-gnu --no-default-features clean."
+                                               "cargo check -p volumectl --target x86_64-unknown-linux-gnu --no-default-features clean.",
+                                               "cargo test -p volumecontrol-tauri --no-default-features passes 12/12 with the TauriTray module wired (the module is cfg'd out on Windows; its menu-id contract test runs on Linux/macOS CI).",
+                                               "Deliverable src-tauri/src/tauri_tray.rs compiles against the real Tauri 2.11.5 menu/tray/image APIs (MenuItem::with_id, CheckMenuItem::with_id, PredefinedMenuItem::separator, Menu::with_items, TrayIconBuilder chain, Image::new_owned, set_text/set_checked/set_tooltip) and menu_ids_match_the_shared_tray_command_mapping passes in a scratch harness on the host target.",
+                                               "cargo clippy --workspace --all-targets --no-default-features -- -D warnings clean; cargo fmt --all --check and git diff --check clean."
                                            ],
                          "evidence":  [
                                               "Session 077 (2026-08-16): TrayCommand + tray_icon_rgba moved to the cross-platform tray_common module; host_core::tray_command_to_action un-gated; Windows native tray unchanged.",
+                                              "Session 077 (2026-08-16): TauriTray built on macOS/Linux via TrayIconBuilder::with_id(\"main\") with the exact Windows-native menu (disabled live volume label \"volume\", Mute check \"mute\", reset/mixer/settings/help/reload/edit, exit) and the shared 32x32 RGBA icon; dispatch_tray_command now shared by the Windows global menu handler and the tray callback; tray creation failure is non-fatal; set_volume refreshes label/check/tooltip and show_menu is a documented log-only no-op (Tauri 2.11.5 TrayIcon exposes no show_menu API).",
+                                              "Session 077 (2026-08-16): TauriSink::volume and show_tray_menu refresh/route to the managed tray on non-Windows; Windows keeps its native tray and native_win32.rs is untouched.",
                                               "Session 077 (2026-08-16): hosted Ubuntu/macOS runs and a real menu-bar/appindicator desktop remain required before marking passing (creation is CI-verifiable; menu interaction is manual evidence)."
                                        ],
                          "notes":  "Windows keeps its native tray-icon/muda tray (no regression risk); the Tauri-managed tray is added only on macOS/Linux with the identical stable menu ids."
