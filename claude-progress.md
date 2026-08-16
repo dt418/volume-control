@@ -1,5 +1,32 @@
 # Progress Log
 
+## Session 081 (2026-08-16) - Platform verification scripts + real device sync verification
+
+- User asked for platform-specific test scripts after Phase C, then reported
+  "Âm lượng đang không đồng bộ giữa app và thiết bị" while the platform
+  verification was running.
+- Root cause of the report (verified, not a production bug): the E2E step
+  launches real app windows using the DEBUG virtual audio backend
+  (`VOLUMECTL_E2E_AUDIO=virtual`), whose volume displays are simulated and
+  never touch the real device. The user saw those test windows next to the
+  real speaker state. No VolumeControl processes remained after the aborted
+  run.
+- Real-backend sync verification (Windows): debug app with real WASAPI +
+  `RUST_LOG=debug`; a COM probe (`IMMDeviceEnumerator` →
+  `IAudioEndpointVolume`, output/manual/overlay-test/volprobe.cs) read the
+  device at 100%; 5× Ctrl+Alt+Down via keybd_event moved the device to 98%
+  and the app published `state=98%%`; the reopened mixer displayed 98% —
+  app == device (screenshot mixer-real-sync2.png). No desync.
+- `scripts/verify-platform.ps1` (Windows) and `scripts/verify-platform.sh`
+  (macOS/Linux): fail-closed batteries — format-lint gate, frontend Vitest +
+  build, Tauri E2E evidence gate (Linux under xvfb-run), native probes
+  (Windows autostart + opt-in interactive hotkey latency; Linux GTK smoke +
+  Pulse presence SKIP-with-reason; macOS AppKit smoke + sw_vers + optional
+  codesign/plutil), and the enforcement self-tests. Both print the E2E
+  virtual-backend warning so a future report like today's cannot recur.
+- Records: feature_list.json vol-080 added (in_progress); this entry is the
+  claude-progress.md half.
+
 ## Session 080 (2026-08-16) - Phase C: Linux per-app audio (PulseAudio sink-inputs)
 
 - `crates/volumectl/src/audio_sessions_linux.rs` (new, Linux-only):

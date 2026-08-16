@@ -170,6 +170,13 @@ icon renders, left click opens the menu, volume label tracks live changes,
 and the Exit item terminates the process. CI only proves tray creation
 attempts without crashing; it cannot prove a tray-hosted menu.
 
+Linux per-app audio manual row: start a Pulse server (`pulseaudio --start`),
+play two streams from different apps (e.g. `paplay` + a browser), open the
+Mixer and record that both sink-inputs appear as sessions, adjust each
+slider and mute toggle, verify the list updates, and stop one stream to
+confirm the stale session disappears (the §9.6 stale-id path). Record the
+Pulse server version and whether PipeWire's Pulse compat layer was in use.
+
 ## 4. WSLg manual boundary
 
 WSLg can provide a real Wayland/X11 desktop for local investigation, but it is

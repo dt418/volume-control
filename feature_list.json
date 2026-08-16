@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T15:05",
+    "last_updated":  "2026-08-16T15:30",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,24 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-080",
+                         "priority":  80,
+                         "area":  "tooling",
+                         "title":  "Platform verification scripts (verify-platform.ps1 / .sh)",
+                         "user_visible_behavior":  "Developer-facing: one fail-closed command per platform runs the whole-app battery — format-lint gate, frontend suite + build, Tauri E2E evidence gate, native probes (Windows autostart + optional interactive hotkey latency; Linux GTK smoke under Xvfb + Pulse presence SKIP-with-reason; macOS AppKit smoke + OS/arch + optional codesign/plutil), and the enforcement self-tests. The scripts print an explicit warning that E2E windows use the debug virtual audio backend and never touch the real device.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "scripts/verify-platform.sh passes bash -n; scripts/verify-platform.ps1 parses clean.",
+                                               "Windows full run: scripts/verify-platform.ps1 -OutputRoot output/platform/windows — format-lint gate, frontend Vitest + build, verify-tauri-e2e.ps1 -Surface all (6/6), verify-autostart.ps1, and the three enforcement self-tests all exit 0 (evidence in the Session 081 entry).",
+                                               "macOS/Linux runs are hosted-CI evidence (xvfb-run E2E + gtk_smoke on Ubuntu; appkit_smoke + sw_vers on macOS)."
+                                           ],
+                         "evidence":  [
+                                              "Session 081 (2026-08-16): scripts added; the Windows full run executed end-to-end and the platform-summary line reported PASSED.",
+                                              "Session 081 (2026-08-16): the E2E virtual-backend warning was added after a user reported 'volume out of sync between app and device' caused by leftover E2E windows; a real-backend verification (debug app + RUST_LOG + COM endpoint probe) proved app 98% == device 98% after hotkey changes."
+                                       ],
+                         "notes":  "The interactive hotkey-latency probe stays opt-in (-Interactive) because it requires a real desktop session and sends global keys."
+                     },
                      {
                          "id":  "vol-078",
                          "priority":  78,

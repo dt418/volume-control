@@ -147,7 +147,7 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
 | Điều khiển âm lượng | ✅ WASAPI | ⚠️ CoreAudio host — manual | ⚠️ PulseAudio/PipeWire host — manual |
 | Phím tắt toàn cục | ✅ RegisterHotKey | ⚠️ global-hotkey host — manual | ⚠️ global-hotkey host — manual |
 | Overlay          | ✅ native Win32 | ⚠️ host — manual | ⚠️ host — manual |
-| Mixer            | ✅ Tauri + session WASAPI | ✅ Tauri / 🔜 audio từng app | ✅ Tauri / 🔜 audio từng app |
+| Mixer            | ✅ Tauri + session WASAPI | ✅ Tauri / ✖ audio từng app (không có public API) | ✅ Tauri + PulseAudio sink-inputs |
 | Cửa sổ Settings  | ✅ Tauri | ✅ Tauri | ✅ Tauri |
 | Khay hệ thống    | ✅ tray-icon | ✅ Tauri tray (menu-bar — manual) | ✅ Tauri tray (appindicator — manual) |
 | Cấu hình trực tiếp | ✅ | — | — |
