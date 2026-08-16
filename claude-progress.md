@@ -36,6 +36,19 @@
   plus the original mixer session failures in the ship gate. cargo fmt,
   diff --check, clippy -D warnings, workspace tests, and the Tauri
   deadlock guard all clean.
+- Pre-push three-domain review (same Session 093): Domain A (guard core)
+  PASS with no findings. Domain B (gate chain) found one MEDIUM: the
+  wrapper's pre-run zombie kill sat before the long cargo build, so a
+  user-launched instance could still race back onto the embedded WebDriver
+  port 4445 before the E2E launch — fixed by repeating the kill immediately
+  before the `npm test:e2e:debug` spawn (ps1 parse verified). Domain C
+  (wiring/records) found two LOWs: GUARDRAILS.md's ship description
+  understated the hard gates (missing the frontend build, Tauri WebDriver
+  E2E gate, and `tauri build --no-bundle`) — updated; pre-existing
+  `feature_list.json` priority inversions (e.g. vol-078 before vol-079)
+  noted as known drift and deliberately not reordered. Everything else in
+  Domain C checked out (records consistent, CI compatible, mirrors
+  byte-identical).
 - Records: feature_list.json vol-083 added (testing, priority 83); this
   entry is the claude-progress.md half. v0.1.3 remains the published release;
   a v0.1.4 release carrying these E2E/harness fixes is prepared next.

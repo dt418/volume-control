@@ -55,6 +55,11 @@ $evidenceCode = 0
 try {
   $e2eArgs = @("--surface", $Surface)
   if ($VirtualAudio) { $e2eArgs += "--virtual-audio" }
+  # Re-kill immediately before the app launches: a long pre-build above can
+  # race with a user-launched instance that would otherwise hold the embedded
+  # WebDriver port 4445 (or the shared WebView2 state) when WDIO starts.
+  Get-Process -Name "VolumeControl" -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
   & npm --prefix $e2e run test:e2e:debug -- @e2eArgs
   $code = $LASTEXITCODE
   if ($code -eq 0) {
