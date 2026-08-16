@@ -76,7 +76,13 @@ function runSurface(surface, spec) {
   });
 }
 
-const surfaces = requestedSurface === "all" ? ["mixer", "runtime", "windows", "recovery", "settings", "help", "overlay"] : [requestedSurface];
+// The webview overlay is macOS/Linux-only (Windows uses the native HUD and
+// never opens window-overlay), so the "all" matrix skips it on win32.
+const coreSurfaces = ["mixer", "runtime", "windows", "recovery", "settings", "help"];
+const surfaces =
+  requestedSurface === "all"
+    ? [...coreSurfaces, ...(process.platform === "win32" ? [] : ["overlay"])]
+    : [requestedSurface];
 let exitCode = 0;
 for (const surface of surfaces) {
   const spec = requestedSpec ?? specsBySurface[surface][0];

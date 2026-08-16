@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady } from "../lib/surface";
@@ -20,7 +21,7 @@ interface OverlayPayload {
 interface OverlayBootstrap {
   volume_pct: number;
   muted: boolean;
-  config?: { color_thresholds?: ColorThresholds };
+  config?: { color_thresholds?: ColorThresholds; overlay_duration_ms?: number };
   appearance: AppearancePayload;
 }
 
@@ -31,6 +32,7 @@ export function OverlaySurface() {
 
   useEffect(() => {
     let disposed = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const unlisteners: Array<() => void> = [];
     void listen<OverlayPayload>("state://overlay", (p) => {
       if (disposed) return;
@@ -57,6 +59,18 @@ export function OverlaySurface() {
         if (!b || disposed) return;
         setInitial(b);
         applyAppearance(b.appearance);
+        // Windows routes overlay notifications to the native HUD, so this
+        // webview has no host-side auto-hide timer there. Arm our own close
+        // to guarantee the window hides; on macOS/Linux the host timer also
+        // closes it (double-close is safe: close_impl tolerates a missing
+        // window).
+        const duration = Math.min(
+          Math.max(b.config?.overlay_duration_ms ?? 1800, 200),
+          10_000,
+        );
+        timer = setTimeout(() => {
+          void getCurrentWindow().close();
+        }, duration);
       })
       .catch(() => {
         // Backend unavailable: keep the overlay transparent; the host
@@ -70,6 +84,7 @@ export function OverlaySurface() {
 
     return () => {
       disposed = true;
+      if (timer !== null) clearTimeout(timer);
       unlisteners.forEach((un) => un());
     };
   }, []);

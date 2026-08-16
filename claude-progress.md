@@ -160,6 +160,31 @@
   clean, `npm run test:e2e:debug --surface overlay` 1/1 passed on Windows,
   and `scripts/verify-tauri-e2e.ps1 -Surface overlay` evidence gate
   (JUnit + manifest + timings) exit 0.
+- Platform decision (user-confirmed, same Session 078 entry): the webview
+  overlay is **macOS/Linux-only**. Windows keeps its native Win32 HUD and
+  never opens `window-overlay` — `WindowManager::open_impl` rejects
+  `SurfaceId::Overlay` on Windows (debug/E2E included), the overlay E2E spec
+  is macOS/Linux-only, `run-debug-e2e.mjs` excludes overlay from the Windows
+  all-matrix, and `verify-tauri-e2e.ps1` drops the overlay surface.
+- Frontend self-hide timer (same Session 078 entry): `OverlaySurface` arms
+  `getCurrentWindow().close()` after
+  `clamp(overlay_duration_ms ?? 1800, 200, 10_000)` from the bootstrap
+  config and clears it on unmount, so the macOS/Linux overlay always
+  auto-closes even if the host event/timer is missed (the host timer stays;
+  double-close is safe). Covered by a fake-timer Vitest test (5 overlay
+  tests, 97 frontend total).
+- Manual test (Windows host, same Session 078 entry): debug app + vite
+  preview with `VOLUMECTL_VERIFY_SURFACE=window-overlay`; PrintWindow
+  captures + GetWindowRect/GetClientRect evidence recorded under
+  `output/manual/overlay-test/` — overlay client 336x88 at
+  (2212,1265), mixer client 400x224 at (2148,1025) on a 2560x1392 work
+  area: shared right edge (2548) and exactly 16 px vertical gap; both
+  surfaces render dark theme with matching thresholds (100% → orange rail).
+- Verification (platform decision): frontend Vitest 97 (5 overlay incl.
+  self-hide timer), `npm run build --prefix frontend` clean, E2E support
+  18/18 + typecheck, workspace cargo 342, and the full Windows E2E matrix
+  `verify-tauri-e2e.ps1 -Surface all` passes 6/6 with the overlay surface
+  excluded.
 - Theme-sync fix (user-reported "render không đồng bộ", same Session 078
   entry): the overlay re-resolved `System` in the browser with
   `matchMedia(prefers-color-scheme)` while the mixer used

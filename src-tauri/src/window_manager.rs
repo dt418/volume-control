@@ -158,6 +158,16 @@ impl WindowManager {
     }
 
     fn open_impl(&self, surface: SurfaceId) -> Result<(), String> {
+        // The webview overlay is macOS/Linux-only by design: Windows routes
+        // overlay notifications to its native Win32 HUD (TauriSink::overlay
+        // Windows branch), so the webview surface must never exist there —
+        // debug/E2E runs included.
+        #[cfg(target_os = "windows")]
+        if surface == SurfaceId::Overlay {
+            return Err(
+                "webview overlay is macOS/Linux-only; Windows uses the native HUD".to_string(),
+            );
+        }
         if self.is_open(surface) {
             if let Some(window) = self.app.get_webview_window(surface.label()) {
                 if let Ok(Some(monitor)) = window.current_monitor() {

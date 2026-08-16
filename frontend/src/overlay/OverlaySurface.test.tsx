@@ -1,14 +1,23 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
 
 import { OverlaySurface } from "./OverlaySurface";
 
 const listeners: Record<string, (payload: unknown) => void> = {};
 
+const { closeOverlayWindow } = vi.hoisted(() => ({ closeOverlayWindow: vi.fn() }));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ close: closeOverlayWindow }),
+}));
+
 const bootstrap = {
   volume_pct: 55,
   muted: false,
-  config: { color_thresholds: { green_up_to: 40, blue_up_to: 75, orange_up_to: 100 } },
+  config: {
+    color_thresholds: { green_up_to: 40, blue_up_to: 75, orange_up_to: 100 },
+    overlay_duration_ms: 1800,
+  },
   appearance: { theme_resolved: "dark", material: "Auto", motion: "Full", accent: "System" },
 };
 
@@ -69,5 +78,32 @@ describe("OverlaySurface", () => {
     await screen.findByText("55%");
     fire("state://volume", { pct: 0, muted: true });
     expect(await screen.findByText("Muted")).toBeInTheDocument();
+  });
+
+  describe("auto-hide self-timer", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.clearAllMocks();
+    });
+
+    it("closes the window after the configured overlay duration", async () => {
+      render(<OverlaySurface />);
+
+      // Flush the async bootstrap (microtasks only) without firing the timer.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("55%")).toBeInTheDocument();
+      expect(closeOverlayWindow).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_800);
+      });
+      expect(closeOverlayWindow).toHaveBeenCalledTimes(1);
+    });
   });
 });
