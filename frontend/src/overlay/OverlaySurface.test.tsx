@@ -56,7 +56,7 @@ describe("OverlaySurface", () => {
       green_up_to: 40,
       blue_up_to: 75,
       orange_up_to: 100,
-      theme: "Dark",
+      theme_resolved: "dark",
       material: "Auto",
       motion: "Full",
       accent: "System",

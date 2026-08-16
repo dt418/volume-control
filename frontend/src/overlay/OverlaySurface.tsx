@@ -11,7 +11,7 @@ interface OverlayPayload {
   green_up_to: number;
   blue_up_to: number;
   orange_up_to: number;
-  theme: string;
+  theme_resolved: string;
   material: string;
   motion: string;
   accent: string;
@@ -22,12 +22,6 @@ interface OverlayBootstrap {
   muted: boolean;
   config?: { color_thresholds?: ColorThresholds };
   appearance: AppearancePayload;
-}
-
-function resolveTheme(theme: string): string {
-  if (theme === "Dark") return "dark";
-  if (theme === "Light") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 export function OverlaySurface() {
@@ -42,7 +36,7 @@ export function OverlaySurface() {
       if (disposed) return;
       setPayload(p);
       applyAppearance({
-        theme_resolved: resolveTheme(p.theme),
+        theme_resolved: p.theme_resolved,
         material: p.material,
         motion: p.motion,
         accent: p.accent,

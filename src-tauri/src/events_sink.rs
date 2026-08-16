@@ -34,7 +34,7 @@ fn overlay_payload(
         "green_up_to": config.color_thresholds.green_up_to,
         "blue_up_to": config.color_thresholds.blue_up_to,
         "orange_up_to": config.color_thresholds.orange_up_to,
-        "theme": format!("{:?}", config.appearance.theme),
+        "theme_resolved": volumectl_lib::host_core::resolved_theme_str(config.appearance.theme),
         "material": format!("{:?}", config.appearance.material),
         "motion": format!("{:?}", config.appearance.motion),
         "accent": format!("{:?}", config.appearance.accent),
@@ -213,7 +213,8 @@ mod tests {
             volume: 0.42,
             muted: true,
         };
-        let config = volumectl_lib::config::Config::default();
+        let mut config = volumectl_lib::config::Config::default();
+        config.appearance.theme = volumectl_lib::ui::ThemeMode::Dark;
         let payload = overlay_payload(None, &state, &config);
         assert_eq!(payload["pct"], 42);
         assert_eq!(payload["muted"], true);
@@ -223,6 +224,14 @@ mod tests {
         assert_eq!(
             payload["orange_up_to"],
             config.color_thresholds.orange_up_to
+        );
+        assert_eq!(
+            payload["theme_resolved"], "dark",
+            "the overlay payload must carry the Rust-resolved theme"
+        );
+        assert!(
+            payload.get("theme").is_none(),
+            "the raw config theme key must not leak into the payload"
         );
     }
 }

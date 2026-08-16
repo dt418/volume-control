@@ -134,6 +134,34 @@
 - Verification (alignment fix): `npm test --prefix frontend` 16 files / 96
   tests green; `npm run build --prefix frontend` clean; pre-commit hook
   (records guard, fmt, cached whitespace, clippy -D warnings) passed.
+- Theme-sync fix (user-reported "render không đồng bộ", same Session 078
+  entry): the overlay re-resolved `System` in the browser with
+  `matchMedia(prefers-color-scheme)` while the mixer used
+  `AppCore::appearance_payload`'s Rust resolution (`system_is_dark()` on
+  Windows, `None`→light elsewhere) — on macOS/Linux (and sometimes Windows)
+  the two resolutions disagreed. `host_core` now exposes exactly one public
+  resolution path, `resolved_theme_str(ThemeMode) -> "dark"/"light"`
+  (System folds the platform probe; unknown probes fall back to light), and
+  `appearance_payload()` delegates to it. The `state://overlay` payload now
+  carries `theme_resolved` produced by that same helper instead of the raw
+  `Debug` theme string, `OverlaySurface` applies
+  `applyAppearance({ theme_resolved: p.theme_resolved, material, motion,
+  accent })` directly, and the local `resolveTheme`/matchMedia helper is
+  deleted — the overlay renders with the mixer's exact resolution by
+  construction.
+- Verification (theme-sync fix):
+  `overlay_payload_carries_state_and_thresholds` asserts
+  `theme_resolved == "dark"` for `ThemeMode::Dark` (deterministic; System is
+  not tested because the Windows registry probe is machine-dependent) and
+  the old `theme` key is absent; `cargo test -p volumectl --lib host_core
+  --no-default-features` 4/4, `cargo test -p volumecontrol-tauri
+  --no-default-features` 16/16, `cargo test --workspace
+  --no-default-features` 342, `npm test --prefix frontend -- --run
+  src/overlay/OverlaySurface.test.tsx` 4/4, `npm test --prefix frontend`
+  16 files / 96, `npm run build --prefix frontend`, `cargo fmt --all
+  --check`, `git diff --check`, clippy `-D warnings`, and
+  `powershell -File scripts/check-tauri-deadlock.ps1` (10/10) all pass;
+  committed as "fix: sync overlay theme with mixer surface resolution".
 
 ## Session 077 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
 

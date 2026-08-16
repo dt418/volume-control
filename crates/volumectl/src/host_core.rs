@@ -898,24 +898,29 @@ impl AppCore {
     }
 
     fn appearance_payload(&self) -> AppearancePayload {
-        let theme_resolved = match self.config.appearance.theme {
-            ThemeMode::Dark => "dark",
-            ThemeMode::Light => "light",
-            ThemeMode::System => {
-                // Matches the native renderer's contract: unknown system
-                // theme falls back to the light palette.
-                if system_is_dark().unwrap_or(false) {
-                    "dark"
-                } else {
-                    "light"
-                }
-            }
-        };
+        let theme_resolved = resolved_theme_str(self.config.appearance.theme);
         AppearancePayload {
             theme_resolved: theme_resolved.to_string(),
             material: material_str(self.config.appearance.material).to_string(),
             motion: motion_str(self.config.appearance.motion).to_string(),
             accent: accent_str(self.config.appearance.accent).to_string(),
+        }
+    }
+}
+
+/// Resolve a configured theme mode to the concrete `"dark"`/`"light"`
+/// string, matching the mixer surface's resolution exactly (System folds
+/// the platform probe; unknown probes fall back to light).
+pub fn resolved_theme_str(theme: ThemeMode) -> &'static str {
+    match theme {
+        ThemeMode::Dark => "dark",
+        ThemeMode::Light => "light",
+        ThemeMode::System => {
+            if system_is_dark().unwrap_or(false) {
+                "dark"
+            } else {
+                "light"
+            }
         }
     }
 }
