@@ -64,8 +64,12 @@ capabilities and the guest bridge are gone after the run. The recovery surface
 uses the debug-only `VOLUMECTL_E2E_BOOTSTRAP_FAILURE=1` fault marker; release
 builds ignore it.
 
-Hosted runners do not guarantee a physical audio endpoint. The debug Tauri
-runner therefore sets `VOLUMECTL_E2E_AUDIO=virtual`; when combined with
-`VOLUMECTL_E2E_DEBUG=1`, the host uses an in-memory endpoint for deterministic
-IPC/event/UI volume and mute assertions. The endpoint is compiled out of
+Local E2E runs use **real audio by default**: the debug app drives the actual
+OS endpoint, so the mixer spec round-trips true device volume/mute and
+restores the captured initial device state afterwards (`before`/`after`
+hooks). Hosted runners do not guarantee a physical audio endpoint, so pass
+`--virtual-audio` (wrapper flags: `-VirtualAudio` /
+`--virtual-audio`): the runner then sets `VOLUMECTL_E2E_AUDIO=virtual` and,
+combined with `VOLUMECTL_E2E_DEBUG=1`, the host uses an in-memory endpoint
+for deterministic IPC/event/UI assertions. The endpoint is compiled out of
 release builds, so native backend behavior remains the production authority.

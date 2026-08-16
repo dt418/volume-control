@@ -3,9 +3,13 @@
 //! [`PulseSessions`] implements the shared [`SessionsSource`] contract for
 //! Linux: it enumerates PulseAudio sink-inputs (per-app playback streams) and
 //! maps them to [`AudioSessionInfo`]. The backend is a thin, direct
-//! `libpulse-sys` adapter (no third-party wrapper): a `pa_threaded_mainloop`
-//! connection to the default server, synchronous ops with a deadline, and a
-//! pure mapping helper that is unit-tested without a Pulse server.
+//! `libpulse-sys` adapter (no third-party wrapper): a plain (non-threaded)
+//! `pa_mainloop` connection to the default server, drained on the calling
+//! thread with `pa_mainloop_iterate`, synchronous ops with a deadline, and a
+//! pure mapping helper that is unit-tested without a Pulse server. The
+//! non-threaded mainloop matches Pulse's canonical pattern: callbacks run
+//! inline inside `iterate`, so teardown cannot race a callback or trip the
+//! library's deferred-connect assertions (the threaded mainloop did).
 //!
 //! Failure is never fatal: an absent/unreachable server degrades to an empty
 //! session list and `Err` from mutations (the host re-emits the fresh list,
@@ -56,7 +60,7 @@ pub fn build_session_info(
 }
 
 struct Connection {
-    mainloop: *mut pa::pa_threaded_mainloop,
+    mainloop: *mut pa::pa_mainloop,
     context: *mut pa::pa_context,
 }
 
@@ -69,13 +73,12 @@ unsafe impl Sync for Connection {}
 impl Drop for Connection {
     fn drop(&mut self) {
         unsafe {
-            if !self.context.is_null() {
+            if !self.mainloop.is_null() && !self.context.is_null() {
                 pa::pa_context_disconnect(self.context);
                 pa::pa_context_unref(self.context);
             }
             if !self.mainloop.is_null() {
-                pa::pa_threaded_mainloop_stop(self.mainloop);
-                pa::pa_threaded_mainloop_free(self.mainloop);
+                pa::pa_mainloop_free(self.mainloop);
             }
         }
     }
@@ -87,17 +90,8 @@ impl Connection {
     }
 }
 
-extern "C" fn state_cb(_context: *mut pa::pa_context, userdata: *mut c_void) {
-    unsafe {
-        let conn = &*(userdata as *const Connection);
-        pa::pa_threaded_mainloop_signal(conn.mainloop, 0);
-    }
-}
-
-/// Callback context for sink-input enumeration: the mainloop to signal plus
-/// the collection being filled.
+/// Callback context for sink-input enumeration: the collection being filled.
 struct ListCtx {
-    mainloop: *mut pa::pa_threaded_mainloop,
     sessions: *mut Vec<AudioSessionInfo>,
 }
 
@@ -111,8 +105,8 @@ extern "C" fn sink_input_info_cb(
         let ctx = &mut *(userdata as *mut ListCtx);
         if eol == 0 && !info.is_null() {
             let info = &*info;
-            let app_name = proplist_get(info.proplist, b"application.name\0");
-            let media_name = proplist_get(info.proplist, b"media.name\0");
+            let app_name = proplist_get(info.proplist, c"application.name".as_ptr());
+            let media_name = proplist_get(info.proplist, c"media.name".as_ptr());
             let stream_name = if info.name.is_null() {
                 None
             } else {
@@ -133,7 +127,6 @@ extern "C" fn sink_input_info_cb(
                 info.corked != 0,
             ));
         }
-        pa::pa_threaded_mainloop_signal(ctx.mainloop, 0);
     }
 }
 
@@ -144,27 +137,24 @@ extern "C" fn sink_input_mute_cb(
     userdata: *mut c_void,
 ) {
     unsafe {
-        let data = &mut *(userdata as *mut (*mut Connection, bool));
+        let muted = &mut *(userdata as *mut bool);
         if eol == 0 && !info.is_null() {
-            data.1 = (*info).mute != 0;
+            *muted = (*info).mute != 0;
         }
-        pa::pa_threaded_mainloop_signal((*data.0).mainloop, 0);
     }
 }
 
 extern "C" fn success_cb(_c: *mut pa::pa_context, success: i32, userdata: *mut c_void) {
     unsafe {
-        let data = &mut *(userdata as *mut (*mut Connection, bool));
-        data.1 = success != 0;
-        pa::pa_threaded_mainloop_signal((*data.0).mainloop, 0);
+        *(userdata as *mut bool) = success != 0;
     }
 }
 
-fn proplist_get(plist: *mut pa::pa_proplist, key: &[u8]) -> Option<String> {
+fn proplist_get(plist: *mut pa::pa_proplist, key: *const c_char) -> Option<String> {
     if plist.is_null() {
         return None;
     }
-    let ptr = unsafe { pa::pa_proplist_gets(plist, key.as_ptr() as *const c_char) };
+    let ptr = unsafe { pa::pa_proplist_gets(plist, key) };
     if ptr.is_null() {
         return None;
     }
@@ -175,67 +165,75 @@ fn proplist_get(plist: *mut pa::pa_proplist, key: &[u8]) -> Option<String> {
     )
 }
 
-/// Run one Pulse operation to completion (or deadline), signaling the
-/// mainloop from callbacks. Returns true when the operation finished.
+/// Drain the mainloop until `done()` returns true, the deadline passes, or
+/// the context stops being Ready. Callbacks run inline inside `iterate` on
+/// this thread; the 5 ms poll keeps the loop responsive without spinning.
+fn drain(
+    conn: &Connection,
+    deadline: Instant,
+    context_must_be_ready: bool,
+    done: impl Fn() -> bool,
+) -> bool {
+    loop {
+        if done() {
+            return true;
+        }
+        if context_must_be_ready
+            && unsafe { pa::pa_context_get_state(conn.context) } != pa::pa_context_state_t::Ready
+        {
+            return false;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        let mut retval = 0;
+        unsafe { pa::pa_mainloop_iterate(conn.mainloop, 0, &mut retval) };
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// Run one Pulse operation to completion (or deadline). Returns true when
+/// the operation finished.
 fn run_op(conn: &Connection, op: *mut pa::pa_operation) -> bool {
     if op.is_null() {
         return false;
     }
+    let done = || {
+        let state = unsafe { pa::pa_operation_get_state(op) };
+        matches!(
+            state,
+            pa::pa_operation_state_t::Done | pa::pa_operation_state_t::Cancelled
+        )
+    };
+    let ok = drain(conn, Instant::now() + OP_TIMEOUT, true, done);
+    let state = unsafe { pa::pa_operation_get_state(op) };
     unsafe {
-        pa::pa_threaded_mainloop_lock(conn.mainloop);
-        let deadline = Instant::now() + OP_TIMEOUT;
-        loop {
-            let state = pa::pa_operation_get_state(op);
-            match state {
-                pa::pa_operation_state_t::Done => {
-                    pa::pa_operation_unref(op);
-                    pa::pa_threaded_mainloop_unlock(conn.mainloop);
-                    return true;
-                }
-                pa::pa_operation_state_t::Cancelled => {
-                    pa::pa_operation_unref(op);
-                    pa::pa_threaded_mainloop_unlock(conn.mainloop);
-                    return false;
-                }
-                _ => {
-                    if Instant::now() >= deadline {
-                        pa::pa_operation_cancel(op);
-                        pa::pa_operation_unref(op);
-                        pa::pa_threaded_mainloop_unlock(conn.mainloop);
-                        return false;
-                    }
-                    pa::pa_threaded_mainloop_wait(conn.mainloop);
-                }
-            }
+        if state == pa::pa_operation_state_t::Running {
+            pa::pa_operation_cancel(op);
         }
+        pa::pa_operation_unref(op);
     }
+    ok && state == pa::pa_operation_state_t::Done
 }
 
-/// Open a threaded-mainloop connection to the default Pulse server. Returns
+/// Open a plain-mainloop connection to the default Pulse server. Returns
 /// None on failure (unreachable server, timeout) — never panics.
 fn open_connection() -> Option<Connection> {
     unsafe {
-        let mainloop = pa::pa_threaded_mainloop_new();
+        let mainloop = pa::pa_mainloop_new();
         if mainloop.is_null() {
             return None;
         }
-        if pa::pa_threaded_mainloop_start(mainloop) < 0 {
-            pa::pa_threaded_mainloop_free(mainloop);
-            return None;
-        }
-        let api = pa::pa_threaded_mainloop_get_api(mainloop);
-        let context = pa::pa_context_new(api, b"VolumeControl\0".as_ptr() as *const c_char);
+        let api = pa::pa_mainloop_get_api(mainloop);
+        let context = pa::pa_context_new(api, c"VolumeControl".as_ptr());
         if context.is_null() {
-            pa::pa_threaded_mainloop_stop(mainloop);
-            pa::pa_threaded_mainloop_free(mainloop);
+            pa::pa_mainloop_free(mainloop);
             return None;
         }
         let conn = Connection { mainloop, context };
-        pa::pa_context_set_state_callback(
-            context,
-            Some(state_cb),
-            &conn as *const _ as *mut c_void,
-        );
         pa::pa_context_connect(
             context,
             std::ptr::null(),
@@ -243,23 +241,21 @@ fn open_connection() -> Option<Connection> {
             std::ptr::null(),
         );
 
-        pa::pa_threaded_mainloop_lock(mainloop);
         let deadline = Instant::now() + CONNECT_TIMEOUT;
-        loop {
+        let connected = drain(&conn, deadline, false, || {
             let state = pa::pa_context_get_state(context);
-            if state == pa::pa_context_state_t::Ready {
-                pa::pa_threaded_mainloop_unlock(mainloop);
-                return Some(conn);
-            }
-            if matches!(
+            matches!(
                 state,
-                pa::pa_context_state_t::Failed | pa::pa_context_state_t::Terminated
-            ) || Instant::now() >= deadline
-            {
-                pa::pa_threaded_mainloop_unlock(mainloop);
-                return None; // conn dropped: disconnect + stop + free
-            }
-            pa::pa_threaded_mainloop_wait(mainloop);
+                pa::pa_context_state_t::Ready
+                    | pa::pa_context_state_t::Failed
+                    | pa::pa_context_state_t::Terminated
+            )
+        });
+        let state = pa::pa_context_get_state(context);
+        if connected && state == pa::pa_context_state_t::Ready {
+            Some(conn)
+        } else {
+            None // conn dropped: disconnect + unref + free
         }
     }
 }
@@ -296,6 +292,12 @@ impl PulseSessions {
     }
 }
 
+impl Default for PulseSessions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionsSource for PulseSessions {
     fn supported(&self) -> bool {
         true
@@ -308,7 +310,6 @@ impl SessionsSource for PulseSessions {
         };
         let mut sessions: Vec<AudioSessionInfo> = Vec::new();
         let mut ctx = ListCtx {
-            mainloop: conn.mainloop,
             sessions: &mut sessions,
         };
         let op = unsafe {
@@ -341,18 +342,18 @@ impl SessionsSource for PulseSessions {
         let norm = (pct as u32 * PA_VOLUME_NORM).min(PA_VOLUME_NORM * 100) / 100;
         unsafe {
             pa::pa_cvolume_set(&mut cvol, 1, norm);
-            let mut result = (&mut *conn as *mut Connection, false);
+            let mut success = false;
             let op = pa::pa_context_set_sink_input_volume(
                 conn.context,
                 index,
                 &cvol,
                 Some(success_cb),
-                &mut result as *mut _ as *mut c_void,
+                &mut success as *mut bool as *mut c_void,
             );
             if !run_op(conn, op) {
                 return Err(format!("session {id:?} no longer active"));
             }
-            if !result.1 {
+            if !success {
                 return Err(format!("session {id:?} no longer active"));
             }
         }
@@ -368,32 +369,32 @@ impl SessionsSource for PulseSessions {
             .parse()
             .map_err(|_| format!("session {id:?} is not a sink-input index"))?;
         // Read the current mute under the same connection, then flip it.
-        let mut data = (&mut *conn as *mut Connection, false);
+        let mut currently_muted = false;
         let op = unsafe {
             pa::pa_context_get_sink_input_info(
                 conn.context,
                 index,
                 Some(sink_input_mute_cb),
-                &mut data as *mut _ as *mut c_void,
+                &mut currently_muted as *mut bool as *mut c_void,
             )
         };
         if !run_op(conn, op) {
             return Err(format!("session {id:?} no longer active"));
         }
-        let mut result = (&mut *conn as *mut Connection, false);
+        let mut success = false;
         let op = unsafe {
             pa::pa_context_set_sink_input_mute(
                 conn.context,
                 index,
-                if data.1 { 0 } else { 1 },
+                if currently_muted { 0 } else { 1 },
                 Some(success_cb),
-                &mut result as *mut _ as *mut c_void,
+                &mut success as *mut bool as *mut c_void,
             )
         };
         if !run_op(conn, op) {
             return Err(format!("session {id:?} no longer active"));
         }
-        if !result.1 {
+        if !success {
             return Err(format!("session {id:?} no longer active"));
         }
         Ok(())

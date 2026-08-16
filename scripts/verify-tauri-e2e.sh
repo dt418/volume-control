@@ -6,6 +6,7 @@ binary="${TAURI_E2E_BINARY:-$repo/target/debug/VolumeControl}"
 output_root="${TAURI_E2E_OUTPUT:-$repo/output/tauri-e2e}"
 surface="all"
 skip_build=0
+virtual_audio=0
 provider_set_by_wrapper=0
 if [[ -z "${E2E_DRIVER_PROVIDER:-}" ]]; then
   export E2E_DRIVER_PROVIDER=embedded
@@ -18,7 +19,8 @@ while (($#)); do
     --output-root) output_root="$2"; shift 2 ;;
     --surface) surface="$2"; shift 2 ;;
     --skip-build) skip_build=1; shift ;;
-    *) echo "usage: $0 [--binary path] [--output-root dir] [--surface all|mixer|runtime|windows|recovery|settings|help|overlay] [--skip-build]" >&2; exit 2 ;;
+    --virtual-audio) virtual_audio=1; shift ;;
+    *) echo "usage: $0 [--binary path] [--output-root dir] [--surface all|mixer|runtime|windows|recovery|settings|help|overlay] [--skip-build] [--virtual-audio]" >&2; exit 2 ;;
   esac
 done
 
@@ -50,7 +52,11 @@ export TAURI_E2E_BINARY="$binary"
 export TAURI_E2E_OUTPUT="$run_output_root"
 export TAURI_E2E_RUN_ID="$run_id"
 set +e
-npm --prefix "$repo/e2e/tauri" run test:e2e:debug -- --surface "$surface"
+if [[ "$virtual_audio" -eq 1 ]]; then
+  npm --prefix "$repo/e2e/tauri" run test:e2e:debug -- --surface "$surface" --virtual-audio
+else
+  npm --prefix "$repo/e2e/tauri" run test:e2e:debug -- --surface "$surface"
+fi
 code=$?
 set -e
 if [[ "$code" -eq 0 ]]; then

@@ -361,12 +361,24 @@ fn volume_actions_cover_small_large_reset_clamping_and_mute() {
 fn session_commands_follow_the_platform_contract() {
     let sink = Arc::new(RecordingSink::default());
     let mut core = core_with(sink.clone());
-    if cfg!(target_os = "windows") {
+    #[cfg(target_os = "windows")]
+    {
         // Task 2b: the WASAPI source is live on Windows; a stale id must be
         // rejected (the command layer then re-emits state://sessions).
         assert!(core.set_session_volume("stale-id", 40).is_err());
         assert!(core.mute_session("stale-id").is_err());
-    } else {
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // PulseSessions: enumeration degrades to an empty list without a
+        // server, and any set/mute errors (non-numeric id, unreachable
+        // server) so the command layer re-emits the fresh list.
+        assert_eq!(core.sessions(), vec![]);
+        assert!(core.set_session_volume("stale-id", 40).is_err());
+        assert!(core.mute_session("stale-id").is_err());
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
         // No per-app sessions on other platforms: no-op Ok contract.
         assert_eq!(core.sessions(), vec![]);
         assert!(core.set_session_volume("stale-id", 40).is_ok());
@@ -380,8 +392,12 @@ fn bootstrap_reports_default_step_and_session_support() {
     let mut core = core_with(sink.clone());
     let payload = core.bootstrap();
     assert_eq!(payload.config.volume_step, 1);
-    // Windows wires the WASAPI source; other platforms report unsupported.
-    assert_eq!(payload.sessions_supported, cfg!(target_os = "windows"));
+    // Windows wires the WASAPI source and Linux wires PulseAudio sink-inputs;
+    // other platforms report unsupported.
+    assert_eq!(
+        payload.sessions_supported,
+        cfg!(any(target_os = "windows", target_os = "linux"))
+    );
     assert_eq!(payload.hotkey_status.len(), 8);
 }
 

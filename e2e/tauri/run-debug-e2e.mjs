@@ -14,6 +14,10 @@ const surfaceIndex = args.indexOf("--surface");
 const requestedSurface = surfaceIndex >= 0 ? args[surfaceIndex + 1] : "all";
 const specIndex = args.indexOf("--spec");
 const requestedSpec = specIndex >= 0 ? args[specIndex + 1] : undefined;
+// Real audio by default: the app talks to the actual OS endpoint, so local
+// runs exercise the true backend. Hosted CI (and machines without a default
+// endpoint) pass --virtual-audio for deterministic assertions.
+const virtualAudio = args.includes("--virtual-audio");
 
 const specsBySurface = {
   mixer: ["mixer.e2e.ts"],
@@ -26,7 +30,7 @@ const specsBySurface = {
 };
 
 if (!(requestedSurface === "all" || requestedSurface in specsBySurface)) {
-  console.error("Usage: node run-debug-e2e.mjs [--surface mixer|runtime|windows|recovery|settings|help|overlay|all] [--spec path]");
+  console.error("Usage: node run-debug-e2e.mjs [--surface mixer|runtime|windows|recovery|settings|help|overlay|all] [--spec path] [--virtual-audio]");
   process.exit(2);
 }
 
@@ -60,10 +64,10 @@ function runSurface(surface, spec) {
         ...process.env,
         VOLUMECTL_VERIFY_SURFACE: label,
         VOLUMECTL_E2E_REQUESTED_SURFACE: surface,
-        // Hosted CI runners do not guarantee a physical default output. The
-        // debug-only backend keeps IPC/event/UI assertions deterministic;
-        // native backends remain covered by the Rust host tests.
-        VOLUMECTL_E2E_AUDIO: "virtual",
+        // Opt-in virtual backend: hosted CI runners do not guarantee a
+        // physical default output. Local runs use the REAL audio backend so
+        // the E2E exercises actual device volume/mute round-trips.
+        ...(virtualAudio ? { VOLUMECTL_E2E_AUDIO: "virtual" } : {}),
         ...(surface === "recovery" ? { VOLUMECTL_E2E_BOOTSTRAP_FAILURE: "1" } : {}),
       },
       stdio: "inherit",

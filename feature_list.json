@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T15:30",
+    "last_updated":  "2026-08-16T16:20",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -42,14 +42,17 @@
                          "status":  "in_progress",
                          "verification":  [
                                                "audio_sessions_linux.rs: build_session_info pure mapping (application.name → media.name → stream name → 'Unknown app', PA_VOLUME_NORM percentage math, corked → inactive) covered by 3 unit tests; PulseSessions::new().supported() true.",
+                                               "Connection rewritten to a plain (non-threaded) pa_mainloop drained on the caller thread (pa_mainloop_iterate + 5 ms poll + deadlines): the original threaded-mainloop teardown tripped Pulse's internal deferred-connect assertion (socket-client.c connect_defer_cb) under WSL and could dereference a moved Connection in the state callback — both crash classes eliminated; callbacks now run inline inside iterate.",
                                                "unreachable_pulse_server_degrades_to_empty_list: PULSE_SERVER=tcp:127.0.0.1:1 returns an empty list within 5 s (hermetic, no server needed); tests run on Linux CI.",
                                                "host_core integration: linux_core_uses_a_supported_sessions_source (Linux-gated) — bootstrap reports sessions_supported true with an empty list on an unreachable server.",
-                                               "cargo check -p volumectl --target x86_64-unknown-linux-gnu --no-default-features clean (FFI verified against libpulse-sys 1.23 bindings: threaded mainloop, get/set sink-input info/volume/mute, success-flag capture).",
-                                               "Frontend copy: 'Per-app audio isn't available on this platform.' replaces the Windows-only notice (Vitest + E2E mixer spec updated); cargo workspace 344, frontend suite + build, Windows E2E mixer 3/3 pass."
+                                               "cargo check -p volumectl --target x86_64-unknown-linux-gnu --no-default-features clean; full Linux gate (WSL) passes: cargo clippy --workspace --all-targets --no-default-features -- -D warnings + workspace tests 222 (163 volumectl lib incl. the Pulse mapping/no-server tests + 26 host_core + 17 tauri + 16 linux_host_core).",
+                                               "Frontend copy: 'Per-app audio isn't available on this platform.' replaces the Windows-only notice (Vitest + E2E mixer spec updated); cargo workspace 344 (Windows) / 222 (Linux), frontend suite + build, Windows E2E mixer 3/3 pass.",
+                                               "E2E now uses REAL audio by default (--virtual-audio opt-in for hosted CI): the mixer spec captures the initial device state and restores it in after hooks; verified on Windows — device 98% before == 98% after the run. CI jobs pass --virtual-audio (hosted runners lack endpoints)."
                                            ],
                          "evidence":  [
                                               "Session 080 (2026-08-16): PulseSessions implemented with a direct libpulse-sys threaded-mainloop connection, synchronous ops with 2 s deadline, 3 s connect timeout, reconnect-on-not-ready, and success-flag capture for the stale-id contract (Err → host re-emits the fresh list).",
-                                              "Session 080 (2026-08-16): macOS stays NoopSessions with honest copy; live sink-input round-trips on a real Pulse server remain manual/hosted evidence."
+                                              "Session 080 (2026-08-16): macOS stays NoopSessions with honest copy; live sink-input round-trips on a real Pulse server remain manual/hosted evidence.",
+                                              "Session 082 (2026-08-16): WSL Linux gate exposed a real crash (Pulse assertion abort + SIGSEGV in host_core) from the threaded-mainloop teardown; rewritten to the canonical plain-mainloop pattern and re-verified — full Linux gate green. E2E switched to real audio with device-state restore; platform scripts fixed (bash path, autostart -Binary, hashtable splat, --virtual-audio) and the Windows battery re-run."
                                        ],
                          "notes":  "Hosted Ubuntu CI (with and without a Pulse server) and a real Pulse sink-input round-trip remain before marking passing."
                      },

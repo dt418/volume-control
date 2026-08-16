@@ -1,5 +1,42 @@
 # Progress Log
 
+## Session 082 (2026-08-16) - Linux gate crash fix + real-audio E2E + platform script hardening
+
+- The WSL Linux gate (`bash scripts/format-lint.sh`) exposed REAL defects the
+  Windows-only checks could never see:
+  1. `tauri_tray.rs` test lint (`MenuId::new(id.to_string())` →
+     `MenuId::new(id)`) — the test only compiles on non-Windows.
+  2. `events_sink.rs` non-Windows branch used the nonexistent
+     `tauri::async_runtime::sleep` (E0425 on Linux); rewritten with
+     `async_runtime::spawn_blocking` + `run_on_main_thread` (both verified in
+     the Tauri 2.11.5 source).
+  3. `audio_sessions_linux.rs` crashed on Linux: the threaded-mainloop
+     teardown tripped Pulse's internal deferred-connect assertion
+     (`socket-client.c connect_defer_cb`) and the state callback could
+     dereference the moved `Connection` stack address. Rewritten to the
+     canonical **plain (non-threaded) `pa_mainloop`** pattern: callbacks run
+     inline inside `pa_mainloop_iterate` on the caller thread with 5 ms
+     polling and deadlines — no locks, no cross-thread teardown, no
+     dangling callbacks. Ops fail fast when the context stops being Ready.
+  4. Two pre-existing tests asserted the old platform contract
+     (`sessions_supported == cfg!(windows)` and no-op Ok on non-Windows);
+     updated for the new Linux PulseSessions contract (enumeration → [],
+     set/mute → Err on a non-numeric id or unreachable server).
+- Verified: full Linux gate green in WSL (clippy -D warnings + workspace
+  tests 222: 163 volumectl lib incl. Pulse mapping/no-server tests + 26
+  host_core + 17 tauri + 16 linux_host_core); Windows workspace 344.
+- E2E now uses **REAL audio by default** (user request): `--virtual-audio`
+  is opt-in for hosted CI (all three CI desktop jobs pass it); the mixer
+  spec captures the initial device state and restores it in `before`/`after`
+  hooks — verified on Windows: device 98% before == 98% after the run.
+- Platform scripts hardened: `verify-platform.ps1` bash-path fix
+  (relative + Push-Location), autostart `-Binary` (release exe, SKIP with
+  reason when missing), hashtable splat for the E2E step, `-VirtualAudio`
+  passthrough; `verify-platform.sh` gains `--virtual-audio`. Both print the
+  real-audio E2E warning.
+- Records: feature_list.json vol-078/vol-080 extended (in_progress); this
+  entry is the claude-progress.md half.
+
 ## Session 081 (2026-08-16) - Platform verification scripts + real device sync verification
 
 - User asked for platform-specific test scripts after Phase C, then reported

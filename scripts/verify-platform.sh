@@ -17,7 +17,8 @@
 #
 # Usage:
 #   bash scripts/verify-platform.sh [--platform linux|macos|auto]
-#                                   [--skip-e2e] [--skip-native] [--output-root DIR]
+#                                   [--skip-e2e] [--skip-native]
+#                                   [--virtual-audio] [--output-root DIR]
 #
 # Exit 0 only when every required step passed.
 
@@ -27,6 +28,7 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 platform="auto"
 skip_e2e=0
 skip_native=0
+virtual_audio=0
 output_root="$repo/output/platform"
 
 while (($#)); do
@@ -34,8 +36,9 @@ while (($#)); do
     --platform) platform="$2"; shift 2 ;;
     --skip-e2e) skip_e2e=1; shift ;;
     --skip-native) skip_native=1; shift ;;
+    --virtual-audio) virtual_audio=1; shift ;;
     --output-root) output_root="$2"; shift 2 ;;
-    *) echo "usage: $0 [--platform linux|macos|auto] [--skip-e2e] [--skip-native] [--output-root dir]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--platform linux|macos|auto] [--skip-e2e] [--skip-native] [--virtual-audio] [--output-root dir]" >&2; exit 2 ;;
   esac
 done
 
@@ -50,9 +53,10 @@ fi
 mkdir -p "$output_root"
 failures=()
 
-echo "NOTE: the E2E step launches real app windows using the DEBUG virtual"
-echo "audio backend (VOLUMECTL_E2E_AUDIO=virtual). Their volume displays are"
-echo "simulated and NEVER change the real device; ignore them."
+echo "NOTE: the E2E step uses REAL audio by default — the app drives the actual"
+echo "OS endpoint (volume/mute round-trips affect the device and are restored"
+echo "afterwards). Pass --virtual-audio for hosted-CI-style simulated audio,"
+echo "whose displays never touch the real device."
 
 step() {
   local name="$1"; shift
@@ -74,16 +78,16 @@ step "frontend Vitest + production build" bash -c "
   npm run build --prefix '$repo/frontend'"
 
 if [ "$skip_e2e" -eq 0 ]; then
+  e2e_flags="--surface all --output-root '$output_root/tauri-e2e'"
+  [ "$virtual_audio" -eq 1 ] && e2e_flags="$e2e_flags --virtual-audio"
   if [ "$platform" = "linux" ]; then
     step "Tauri E2E evidence gate (all surfaces, Xvfb)" bash -c "
       cd '$repo' &&
-      xvfb-run -a bash scripts/verify-tauri-e2e.sh \
-        --surface all --output-root '$output_root/tauri-e2e'"
+      xvfb-run -a bash scripts/verify-tauri-e2e.sh $e2e_flags"
   else
     step "Tauri E2E evidence gate (all surfaces)" bash -c "
       cd '$repo' &&
-      bash scripts/verify-tauri-e2e.sh \
-        --surface all --output-root '$output_root/tauri-e2e'"
+      bash scripts/verify-tauri-e2e.sh $e2e_flags"
   fi
 else
   echo "SKIP: Tauri E2E evidence gate (--skip-e2e)"

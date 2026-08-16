@@ -1,13 +1,43 @@
 import { browser, $, expect } from "@wdio/globals";
+import { after, before } from "mocha";
 import { saveE2eArtifacts } from "../support/artifacts.ts";
-import { openSurface, waitForSurface, type E2eBrowser } from "../support/commands.ts";
+import {
+  invokeForTest,
+  openSurface,
+  waitForSurface,
+  type E2eBrowser,
+} from "../support/commands.ts";
 import { selectors } from "../support/selectors.ts";
 
 const app = browser as unknown as E2eBrowser;
 
+// Real-audio runs mutate the actual OS endpoint; capture the initial state
+// and restore it after the suite so the device is never left at 50%/muted.
+const initialAudio = { volume_pct: 0, muted: false };
+
 describe("Mixer surface", () => {
+  before(async () => {
+    const bootstrap = (await invokeForTest(app, "get_bootstrap", {})) as {
+      volume_pct?: number;
+      muted?: boolean;
+    };
+    initialAudio.volume_pct = bootstrap.volume_pct ?? 50;
+    initialAudio.muted = bootstrap.muted ?? false;
+  });
+
   beforeEach(async () => {
     await openSurface(app, "mixer");
+  });
+
+  after(async () => {
+    // Restore the device state captured before the suite.
+    await invokeForTest(app, "set_volume", { percent: initialAudio.volume_pct });
+    const current = (await invokeForTest(app, "get_bootstrap", {})) as {
+      muted?: boolean;
+    };
+    if ((current.muted ?? false) !== initialAudio.muted) {
+      await invokeForTest(app, "toggle_mute", {});
+    }
   });
 
   afterEach(async function (this: { currentTest?: { state?: string; title?: string } }) {

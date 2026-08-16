@@ -163,7 +163,7 @@ jobs:
         shell: pwsh
         env:
           E2E_DRIVER_PROVIDER: embedded
-        run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/ci-windows
+        run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/ci-windows -VirtualAudio
       - name: Upload Windows Tauri E2E artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -225,7 +225,7 @@ jobs:
         shell: bash
         env:
           E2E_DRIVER_PROVIDER: embedded
-        run: bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-macos
+        run: bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-macos --virtual-audio
       - name: Upload macOS Tauri E2E artifacts
         if: always()
         uses: actions/upload-artifact@v7
@@ -308,7 +308,7 @@ jobs:
       - name: Run Linux Tauri WebDriver E2E under Xvfb
         env:
           E2E_DRIVER_PROVIDER: embedded
-        run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-linux
+        run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-linux --virtual-audio
       - name: Upload Linux Tauri E2E artifacts
         if: always()
         uses: actions/upload-artifact@v7

@@ -126,14 +126,21 @@ impl EventSink for TauriSink {
             let duration = config.overlay_duration_ms.clamp(200, 10_000);
             let handle = self.app.clone();
             let seq_arc = self.overlay_seq.clone();
-            tauri::async_runtime::spawn(async move {
-                tauri::async_runtime::sleep(std::time::Duration::from_millis(duration)).await;
+            // The runtime re-exports tokio's channel/sync types but no
+            // time::sleep; a blocking worker keeps the same cancellation
+            // contract (the generation counter) and marshals the close back
+            // to the main thread like every other window operation.
+            tauri::async_runtime::spawn_blocking(move || {
+                std::thread::sleep(std::time::Duration::from_millis(duration));
                 let current = seq_arc.lock().unwrap_or_else(|p| p.into_inner());
                 if *current == seq {
-                    let wm = handle.state::<WindowManager>();
-                    if let Err(e) = wm.close(SurfaceId::Overlay) {
-                        log::warn!("overlay auto-hide failed: {e}");
-                    }
+                    let handle_inner = handle.clone();
+                    let _ = handle.run_on_main_thread(move || {
+                        let wm = handle_inner.state::<WindowManager>();
+                        if let Err(e) = wm.close(SurfaceId::Overlay) {
+                            log::warn!("overlay auto-hide failed: {e}");
+                        }
+                    });
                 }
             });
         }

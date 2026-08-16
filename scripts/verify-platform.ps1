@@ -27,10 +27,14 @@
   required; sends the configured shortcut and waits for the mixer).
 .PARAMETER OutputRoot
   Where E2E/probe evidence is written. Defaults to output/platform/.
+.PARAMETER VirtualAudio
+  Use the debug virtual audio backend for the E2E step (hosted-CI style).
+  Default is REAL audio: the E2E drives the actual OS endpoint.
 #>
 param(
   [switch]$SkipE2e,
   [switch]$Interactive,
+  [switch]$VirtualAudio,
   [string]$OutputRoot = (Join-Path (Split-Path $PSScriptRoot -Parent) "output\platform")
 )
 
@@ -38,9 +42,10 @@ $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot -Parent
 $failures = @()
 
-Write-Host "NOTE: the E2E step launches real app windows using the DEBUG" -ForegroundColor Yellow
-Write-Host "virtual audio backend (VOLUMECTL_E2E_AUDIO=virtual). Their volume" -ForegroundColor Yellow
-Write-Host "displays are simulated and NEVER change the real device; ignore them." -ForegroundColor Yellow
+Write-Host "NOTE: the E2E step uses REAL audio by default — the app drives the" -ForegroundColor Yellow
+Write-Host "actual OS endpoint (volume/mute round-trips affect the device and are" -ForegroundColor Yellow
+Write-Host "restored afterwards). Pass -VirtualAudio for hosted-CI-style simulated" -ForegroundColor Yellow
+Write-Host "audio, whose displays never touch the real device." -ForegroundColor Yellow
 
 function Invoke-Step {
   param([string]$Name, [scriptblock]$Body)
@@ -54,9 +59,19 @@ function Invoke-Step {
   }
 }
 
+function Invoke-RepoBash {
+  param([string]$Script)
+  Push-Location $repo
+  try {
+    bash $Script
+    if ($LASTEXITCODE -ne 0) { throw "$Script exited $LASTEXITCODE" }
+  } finally {
+    Pop-Location
+  }
+}
+
 Invoke-Step "format-lint gate (fmt, clippy -D warnings, workspace tests)" {
-  bash (Join-Path $repo "scripts\format-lint.sh")
-  if ($LASTEXITCODE -ne 0) { throw "format-lint.sh exited $LASTEXITCODE" }
+  Invoke-RepoBash "scripts/format-lint.sh"
 }
 
 Invoke-Step "frontend Vitest + production build" {
@@ -68,17 +83,26 @@ Invoke-Step "frontend Vitest + production build" {
 
 if (-not $SkipE2e) {
   Invoke-Step "Tauri E2E evidence gate (all surfaces)" {
-    & (Join-Path $PSScriptRoot "verify-tauri-e2e.ps1") `
-      -Surface all -OutputRoot (Join-Path $OutputRoot "tauri-e2e")
+    $e2eParams = @{
+      Surface = "all"
+      OutputRoot = (Join-Path $OutputRoot "tauri-e2e")
+      VirtualAudio = [bool]$VirtualAudio
+    }
+    & (Join-Path $PSScriptRoot "verify-tauri-e2e.ps1") @e2eParams
     if ($LASTEXITCODE -ne 0) { throw "E2E gate exited $LASTEXITCODE" }
   }
 } else {
   Write-Host "SKIP: Tauri E2E evidence gate (-SkipE2e)" -ForegroundColor Yellow
 }
 
-Invoke-Step "Windows autostart registry verifier" {
-  & (Join-Path $PSScriptRoot "verify-autostart.ps1")
-  if ($LASTEXITCODE -ne 0) { throw "autostart verifier exited $LASTEXITCODE" }
+$releaseExe = Join-Path $repo "target\release\VolumeControl.exe"
+if (Test-Path $releaseExe) {
+  Invoke-Step "Windows autostart registry verifier" {
+    & (Join-Path $PSScriptRoot "verify-autostart.ps1") -Binary $releaseExe
+    if ($LASTEXITCODE -ne 0) { throw "autostart verifier exited $LASTEXITCODE" }
+  }
+} else {
+  Write-Host "SKIP: autostart verifier (release binary missing: $releaseExe)" -ForegroundColor Yellow
 }
 
 if ($Interactive) {
@@ -92,12 +116,9 @@ if ($Interactive) {
 }
 
 Invoke-Step "enforcement self-tests" {
-  bash (Join-Path $repo "scripts\test-check-records.sh")
-  if ($LASTEXITCODE -ne 0) { throw "test-check-records exited $LASTEXITCODE" }
-  bash (Join-Path $repo "scripts\test-format-lint.sh")
-  if ($LASTEXITCODE -ne 0) { throw "test-format-lint exited $LASTEXITCODE" }
-  bash (Join-Path $repo "scripts\test-ship.sh")
-  if ($LASTEXITCODE -ne 0) { throw "test-ship exited $LASTEXITCODE" }
+  Invoke-RepoBash "scripts/test-check-records.sh"
+  Invoke-RepoBash "scripts/test-format-lint.sh"
+  Invoke-RepoBash "scripts/test-ship.sh"
 }
 
 if ($failures.Count -gt 0) {

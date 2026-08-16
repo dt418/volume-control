@@ -125,7 +125,7 @@ mod tests {
                 TrayCommand::from_menu_id(id).is_some(),
                 "tray menu id {id:?} must map to a TrayCommand"
             );
-            let _ = MenuId::new(id.to_string());
+            let _ = MenuId::new(id);
         }
     }
 }
