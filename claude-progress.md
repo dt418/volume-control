@@ -1,5 +1,37 @@
 # Progress Log
 
+## Session 083 (2026-08-16) - Webview render performance evaluation + optimization
+
+- User report: "Phần render của webview bị delay và chậm quá" — evaluate and
+  optimize.
+- Measurement (Windows): cold app start → mixer window visible = 1378 ms;
+  warm-host mixer reopen (window handle) = 92 ms; the E2E bootstrap-to-ready
+  budget is 3000 ms p95.
+- Delay sources identified:
+  1. Per-surface cold webview boot (the host destroys surfaces on close by
+     design — zero idle webviews).
+  2. `get_bootstrap` runs session enumeration synchronously on every surface
+     mount; on a machine without Pulse the old connect could stall up to 3 s
+     (the overlay shows on every volume change, so this hit every HUD).
+  3. Every `state://volume` event re-rendered the whole mixer tree
+     (session sort ran on every render; every SessionRow re-rendered).
+- Optimizations landed:
+  - Pulse connect timeout 3 s → 800 ms + 10 s failure backoff in
+    `PulseSessions::connection()`: a no-Pulse machine's list() returns
+    instantly after the first failed probe (Linux test
+    `failed_connect_backs_off_so_surface_mounts_do_not_stall` asserts
+    <300 ms on the second call).
+  - `SessionRow` wrapped in `React.memo` and `sortSessions` cached with
+    `useMemo` in sessionStore — per-app rows skip re-renders when only the
+    system volume/mute changed.
+- Kept out of this change set (documented in vol-081 notes): warm surface
+  reuse (RAM tradeoff), a lighter overlay bootstrap, and bundle trimming
+  (framer-motion/lucide ≈157 kB JS).
+- Verification: mixer Vitest 29/29, full frontend suite + build, Windows
+  workspace 344, full Linux gate green.
+- Records: feature_list.json vol-081 added (in_progress); this entry is the
+  claude-progress.md half.
+
 ## Session 082 (2026-08-16) - Linux gate crash fix + real-audio E2E + platform script hardening
 
 - The WSL Linux gate (`bash scripts/format-lint.sh`) exposed REAL defects the

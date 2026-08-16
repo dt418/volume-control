@@ -1,4 +1,5 @@
 import { Volume2, VolumeX } from "lucide-react";
+import { memo } from "react";
 
 import { AppSlider } from "./AppSlider";
 import type { AudioSession } from "./sessionStore";
@@ -9,7 +10,11 @@ interface SessionRowProps {
   onVolumeError: (id: string, error: string) => void;
 }
 
-export function SessionRow({ session, onMute, onVolumeError }: SessionRowProps) {
+export const SessionRow = memo(function SessionRow({
+  session,
+  onMute,
+  onVolumeError,
+}: SessionRowProps) {
   const MuteIcon = session.muted ? VolumeX : Volume2;
   return (
     <div
@@ -36,4 +41,4 @@ export function SessionRow({ session, onMute, onVolumeError }: SessionRowProps) 
       </button>
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
@@ -142,9 +142,13 @@ export function useSessions() {
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }, []);
   const retry = useCallback(() => setBootstrapAttempt((attempt) => attempt + 1), []);
+  // Sorting is O(n log n) on every render; only re-sort when the list
+  // actually changed (perf: state://volume events re-render the surface
+  // frequently).
+  const sortedSessions = useMemo(() => sortSessions(sessions), [sessions]);
 
   return {
-    sessions: sortSessions(sessions),
+    sessions: sortedSessions,
     volumePct,
     muted,
     thresholds,

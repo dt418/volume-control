@@ -29,8 +29,13 @@ const PA_VOLUME_NORM: u32 = 0x10000;
 /// so this only triggers when the server stops responding).
 const OP_TIMEOUT: Duration = Duration::from_secs(2);
 /// Upper bound for connecting to the server (a dead PULSE_SERVER fails
-/// fast; a black-holed socket still cannot hang the app).
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+/// fast; a black-holed socket still cannot hang the app). Kept short so a
+/// machine without Pulse never stalls the mixer/overlay bootstrap.
+const CONNECT_TIMEOUT: Duration = Duration::from_millis(800);
+/// After a failed connect, skip reconnecting for this long so every surface
+/// mount (bootstrap → sessions) returns instantly instead of retrying a dead
+/// socket.
+const CONNECT_BACKOFF: Duration = Duration::from_secs(10);
 
 /// Pure mapping from a Pulse sink-input snapshot to the shared session
 /// contract. Kept dependency-free so the name fallback chain, percentage
@@ -263,6 +268,7 @@ fn open_connection() -> Option<Connection> {
 /// Linux per-app session source (PulseAudio sink-inputs).
 pub struct PulseSessions {
     inner: Mutex<Option<Connection>>,
+    last_failure: Mutex<Option<Instant>>,
 }
 
 unsafe impl Send for PulseSessions {}
@@ -272,6 +278,7 @@ impl PulseSessions {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(None),
+            last_failure: Mutex::new(None),
         }
     }
 
@@ -286,7 +293,22 @@ impl PulseSessions {
             None => true,
         };
         if needs_reconnect {
+            let mut failure = self
+                .last_failure
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let backed_off = failure
+                .map(|t| t.elapsed() < CONNECT_BACKOFF)
+                .unwrap_or(false);
+            if backed_off {
+                return inner;
+            }
             *inner = open_connection();
+            if inner.is_none() {
+                *failure = Some(Instant::now());
+            } else {
+                *failure = None;
+            }
         }
         inner
     }
@@ -482,5 +504,30 @@ mod tests {
             result.is_ok(),
             "unreachable-server degradation test panicked"
         );
+    }
+
+    #[test]
+    fn failed_connect_backs_off_so_surface_mounts_do_not_stall() {
+        // A machine without Pulse must not stall every surface mount: the
+        // first failed connect records a timestamp and later calls return
+        // instantly during the backoff window.
+        let old = std::env::var_os("PULSE_SERVER");
+        std::env::set_var("PULSE_SERVER", "tcp:127.0.0.1:1");
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let sessions = PulseSessions::new();
+            assert!(sessions.list().is_empty());
+            let start = Instant::now();
+            assert!(sessions.list().is_empty());
+            assert!(
+                start.elapsed() < Duration::from_millis(300),
+                "backed-off list() took {:?}",
+                start.elapsed()
+            );
+        }));
+        match old {
+            Some(v) => std::env::set_var("PULSE_SERVER", v),
+            None => std::env::remove_var("PULSE_SERVER"),
+        }
+        assert!(result.is_ok(), "backoff test panicked");
     }
 }

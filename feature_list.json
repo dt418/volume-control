@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T16:45",
+    "last_updated":  "2026-08-16T17:30",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,25 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-081",
+                         "priority":  81,
+                         "area":  "performance",
+                         "title":  "Webview render performance: Pulse connect backoff + memoized mixer rows",
+                         "user_visible_behavior":  "Surface mounts never stall on machines without Pulse (the first failed connect records a timestamp and later list() calls return instantly during the 10 s backoff; the connect timeout dropped 3 s → 800 ms), and the mixer re-renders far less per state://volume event: SessionRow is memoized and session sorting is cached, so per-app rows only re-render when their own data changes.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "Linux: failed_connect_backs_off_so_surface_mounts_do_not_stall — second list() after a failed connect returns empty in <300 ms (5/5 audio_sessions_linux tests).",
+                                               "Frontend: mixer Vitest 29/29 (SessionRow memo + sortedSessions useMemo keep all existing behavior); full frontend suite + production build clean.",
+                                               "Windows workspace 344, full Linux gate green (clippy -D warnings + 222 tests).",
+                                               "Measured baseline (Windows): cold app start → mixer window 1378 ms; warm-host mixer reopen (window handle) 92 ms; E2E bootstrap-to-ready budget remains 3000 ms p95."
+                                           ],
+                         "evidence":  [
+                                              "Session 083 (2026-08-16): performance evaluation — the webview delay sources are (1) per-surface cold webview boot on open, (2) get_bootstrap's synchronous session enumeration (WASAPI on Windows, Pulse on Linux; a no-Pulse machine previously stalled up to 3 s per mount), and (3) full-tree re-renders per state://volume event. Optimized (2) via connect backoff + shorter timeout and (3) via memoization; (1) is a documented design tradeoff (zero idle webviews) and bundle size (framer-motion/lucide ≈157 kB JS) is tracked as future work.",
+                                              "Session 083 (2026-08-16): Linux backoff test + 29 mixer Vitest + full gates green; committed with records."
+                                       ],
+                         "notes":  "Further optimization candidates (kept out of this change set): warm surface reuse (hide instead of destroy — trades idle RAM for open latency), lighter overlay bootstrap (no session enumeration), and bundle trimming."
+                     },
                      {
                          "id":  "vol-080",
                          "priority":  80,
