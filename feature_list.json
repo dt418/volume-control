@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T19:40",
+    "last_updated":  "2026-08-16T20:05",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,24 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-082",
+                         "priority":  82,
+                         "area":  "release",
+                         "title":  "Release v0.1.3 preparation",
+                         "user_visible_behavior":  "The packaged app reports version 0.1.3 and the changelog documents the Linux/macOS feature completion set; the release tag v0.1.3 will be bound to the validated commit per the release workflow preflight.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "Version bumped to 0.1.3 in workspace.package, crates/volumectl, volumecontrol-tauri, Cargo.lock (cargo check regenerated), tauri.conf.json, frontend package.json and package-lock.json.",
+                                               "CHANGELOG.md promoted the accumulated Unreleased work into [0.1.3] with a fresh Unreleased heading.",
+                                               "cargo check --workspace --no-default-features clean after the bump."
+                                           ],
+                         "evidence":  [
+                                              "Session 092 (2026-08-16): PR #33 (feat/linux-macos-feature-completion) merged at d0e9e40c after the full CI matrix passed on all three platforms including the Release gate; the release/v0.1.3 branch carries the version bump + changelog.",
+                                              "Session 092 (2026-08-16): tag v0.1.3 + Release workflow dispatch + published assets remain pending the release PR merge."
+                                       ],
+                         "notes":  "Follows the vol-073 release pattern: version files aligned to the tag, tag pushed at the validated commit, then the SHA-bound release workflow runs."
+                     },
                      {
                          "id":  "vol-081",
                          "priority":  81,
