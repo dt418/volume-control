@@ -164,6 +164,12 @@ PulseAudio hardware, global hotkeys, and real display geometry. Xvfb does not
 prove a Wayland compositor, layer-shell protocol behavior, hardware audio, or
 multi-monitor behavior.
 
+Linux tray manual row: on a real desktop with a StatusNotifier host (GNOME
+Shell/KDE/XDG desktop), record the desktop session and appindicator behavior:
+icon renders, left click opens the menu, volume label tracks live changes,
+and the Exit item terminates the process. CI only proves tray creation
+attempts without crashing; it cannot prove a tray-hosted menu.
+
 ## 4. WSLg manual boundary
 
 WSLg can provide a real Wayland/X11 desktop for local investigation, but it is
@@ -248,6 +254,12 @@ signature state. Hosted macOS does **not** prove TCC/Accessibility approval,
 menu-bar behavior, hardware CoreAudio routing, Retina or multi-monitor
 geometry, or Gatekeeper acceptance. Those are **Partial/manual** checks and
 must be exercised on a real macOS desktop when they matter for a release.
+
+macOS menu-bar tray manual row: on a real macOS desktop, record that the menu
+bar extra renders, the menu opens on click, the live volume label tracks
+changes, and the Exit item quits the app. The OpenMenu hotkey popup is
+documented as unavailable on macOS/Linux (Tauri's `TrayIcon` exposes no
+programmatic popup API); the menu opens on click only.
 
 The repository currently creates an ad-hoc signature (`codesign --sign -`) for
 validation. It is not a public distribution signature and does not include a

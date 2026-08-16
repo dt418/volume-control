@@ -149,7 +149,7 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
 | Overlay          | ✅ native Win32 | ⚠️ host — manual | ⚠️ host — manual |
 | Mixer            | ✅ Tauri + session WASAPI | ✅ Tauri / 🔜 audio từng app | ✅ Tauri / 🔜 audio từng app |
 | Cửa sổ Settings  | ✅ Tauri | ✅ Tauri | ✅ Tauri |
-| Khay hệ thống    | ✅ tray-icon | ⚠️ menu-bar — manual | ⚠️ tray — manual |
+| Khay hệ thống    | ✅ tray-icon | ✅ Tauri tray (menu-bar — manual) | ✅ Tauri tray (appindicator — manual) |
 | Cấu hình trực tiếp | ✅ | — | — |
 | Renderer UI thích ứng | ✅ native Win32 | ✅ AppKit (surface + smoke test) | ✅ GTK4/libadwaita (surface, CI test dưới Xvfb) |
 

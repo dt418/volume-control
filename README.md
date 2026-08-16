@@ -182,7 +182,7 @@ path, the resolved modifier, and the permission state — useful for debugging.
 | Overlay                | ✅ native Win32 | 🔜 host integration | 🔜 host integration |
 | Mixer                  | ✅ Tauri + WASAPI sessions | ✅ Tauri surface / 🔜 per-app audio | ✅ Tauri surface / 🔜 per-app audio |
 | Settings window        | ✅ Tauri | ✅ Tauri | ✅ Tauri |
-| System tray            | ✅ tray-icon | 🔜 | 🔜 |
+| System tray            | ✅ tray-icon | ✅ Tauri tray (menu-bar — manual) | ✅ Tauri tray (appindicator — manual) |
 | Live config reload     | ✅ | ✅ core | ✅ core |
 | Adaptive UI renderer   | ✅ native Win32 | ✅ AppKit (surfaces + smoke-tested) | ✅ GTK4/libadwaita (surfaces, CI-tested under Xvfb) |
 
