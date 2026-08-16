@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T20:32",
+    "last_updated":  "2026-08-17T00:10",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,24 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-084",
+                         "priority":  84,
+                         "area":  "release",
+                         "title":  "Release v0.1.4 preparation",
+                         "user_visible_behavior":  "The packaged app reports version 0.1.4 and the changelog documents the E2E stability fixes; the release tag v0.1.4 will be bound to the validated commit per the release workflow preflight.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "Version bumped to 0.1.4 in workspace.package, crates/volumectl, volumecontrol-tauri, tauri.conf.json, frontend package.json and package-lock.json.",
+                                               "CHANGELOG.md promoted the E2E stability fixes into [0.1.4] with a fresh Unreleased heading.",
+                                               "PR #35 (feat/e2e-window-loss-flake) merged at e4039472 after the full CI matrix passed on all three platforms including the required Release gate."
+                                           ],
+                         "evidence":  [
+                                              "Session 094 (2026-08-17): PR #35 merged at e4039472 (checks: Windows 10m25s, Ubuntu 15m18s, macOS 3m22s, Release gate, Socket Security, format gate all pass); the release/v0.1.4 branch carries the version bump + changelog.",
+                                              "Session 094 (2026-08-17): tag v0.1.4 + Release workflow dispatch + published assets remain pending the release PR merge."
+                                       ],
+                         "notes":  "Follows the vol-082 pattern: version files aligned to the tag, tag pushed at the validated commit, then the SHA-bound release workflow runs."
+                     },
                      {
                          "id":  "vol-083",
                          "priority":  83,

@@ -1,5 +1,22 @@
 # Progress Log
 
+## Session 094 (2026-08-17) - PR #35 merged + release v0.1.4 preparation
+
+- PR #35 (feat/e2e-window-loss-flake) merged at e4039472 after the full CI
+  matrix passed on all three platforms (Windows 10m25s, Ubuntu 24.04
+  15m18s, macOS 3m22s) plus the required Release gate, Socket Security, and
+  the format gate. The branch carried the E2E window-loss flake fixes
+  (mixer focus guard, per-surface WebView2 isolation, wrapper zombie
+  cleanup) and the mandatory three-domain pre-push review findings.
+- Release v0.1.4 preparation on `release/v0.1.4`: version bumped to 0.1.4
+  across workspace.package, crates/volumectl, volumecontrol-tauri,
+  tauri.conf.json, frontend package.json and package-lock.json; CHANGELOG
+  promoted the E2E stability fixes into [0.1.4] with a fresh Unreleased
+  heading.
+- Records: feature_list.json vol-084 added (in_progress); this entry is the
+  claude-progress.md half. Tag v0.1.4 + Release workflow dispatch + asset
+  publishing remain pending the release PR merge.
+
 ## Session 093 (2026-08-16) - E2E "No window could be found" flake root-caused and fixed
 
 - The Windows Tauri E2E matrix flaked intermittently (~30-50% of full-matrix
