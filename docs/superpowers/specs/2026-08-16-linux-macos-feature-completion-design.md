@@ -99,9 +99,13 @@ behavior — rejected for regression risk.
 - **Icon:** move the generated speaker RGBA helper (`tray_icon_rgba` in
   `crates/volumectl/src/tray.rs`) to a shared pub fn so both the native
   Windows tray and the Tauri tray use it (`tauri::image::Image::new_owned`).
-- **Menu events:** `install_menu_event_handler` becomes cross-platform; the
-  callback is unchanged and dispatches through
-  `tray_command_to_action(TrayCommand::from_menu_id(...))`.
+- **Menu events:** one handler per platform, never two. Windows keeps the
+  existing global `Builder::on_menu_event` (delegating to a shared
+  `dispatch_tray_command`); macOS/Linux register the Tauri tray's own
+  `TrayIconBuilder::on_menu_event` callback, which calls the same
+  `dispatch_tray_command(TrayCommand::from_menu_id(...))` helper. This
+  avoids any double-dispatch risk between the global and tray-specific
+  handlers.
 - **Shared mapping:** remove the `#[cfg(target_os = "windows")]` gates from
   `TrayCommand::from_menu_id` and `host_core::tray_command_to_action`
   (both are pure mappings; unit tests already cover them).

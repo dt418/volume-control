@@ -35,6 +35,10 @@ Vitest, WebdriverIO/Tauri E2E, libpulse-sys 1.23.
 - The repository gate stays: `cargo fmt --all --check`, `git diff --check`,
   `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`,
   `cargo test --workspace --no-default-features`, records guard.
+- The records guard requires `feature_list.json` + `claude-progress.md`
+  updates in the **same commit** as every code change (the pre-commit hook
+  runs `check-records.sh --staged`); Tasks 3/8/11 are docs-only commits
+  (README/checklist are records-exempt).
 
 ---
 
@@ -148,9 +152,14 @@ running on every platform.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/volumectl/src/tray_common.rs crates/volumectl/src/tray.rs crates/volumectl/src/lib.rs crates/volumectl/src/host_core.rs
+git add crates/volumectl/src/tray_common.rs crates/volumectl/src/tray.rs crates/volumectl/src/lib.rs crates/volumectl/src/host_core.rs feature_list.json claude-progress.md
 git commit -m "refactor: share tray commands and icon cross-platform"
 ```
+
+The records update in this commit: `feature_list.json` gets the `vol-076`
+entry (status `in_progress`, verification = the tests above, evidence =
+local run output) and `claude-progress.md` gets the session entry — the
+guard's required pair for every code change.
 
 ---
 
@@ -341,11 +350,14 @@ fn dispatch_tray_command(app: &tauri::AppHandle, command: TrayCommand) {
 }
 ```
 
-Replace the `install_menu_event_handler` Windows body with a call to
-`dispatch_tray_command(app, command)` (the Windows closure keeps its current
-shape — `TrayCommand::from_menu_id(event.id().as_ref())` — but delegates the
-dispatch instead of inlining it). In `run()` setup, after
-`app.manage(WindowManager...)`, add:
+Leave `install_menu_event_handler` **Windows-only and unchanged in behavior**
+(its closure now delegates to `dispatch_tray_command(app, command)` after
+`TrayCommand::from_menu_id(event.id().as_ref())`). macOS/Linux do NOT install
+the global handler: their tray menu events arrive at the
+`TrayIconBuilder::on_menu_event` callback registered in `TauriTray::create`
+(Task 2 Step 3), which calls the same `dispatch_tray_command` — one handler
+per platform, so menu events can never dispatch twice. In `run()` setup,
+after `app.manage(WindowManager...)`, add:
 
 ```rust
 #[cfg(not(target_os = "windows"))]
@@ -411,46 +423,40 @@ hosted CI (needs WebKitGTK).
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src-tauri/src/tauri_tray.rs src-tauri/src/lib.rs src-tauri/src/events_sink.rs
+git add src-tauri/src/tauri_tray.rs src-tauri/src/lib.rs src-tauri/src/events_sink.rs feature_list.json claude-progress.md
 git commit -m "feat: Tauri tray on macOS and Linux"
 ```
 
+Extend the `vol-076` entry with the TauriTray wiring evidence in the same
+change set.
+
 ---
 
-### Task 3: Phase A records and docs
+### Task 3: Phase A docs (README + checklist)
 
 **Files:**
-- Modify: `feature_list.json`, `claude-progress.md`
 - Modify: `README.md`, `README.vi.md`
 - Modify: `docs/testing/cross-platform-release-checklist.md`
 
-- [ ] **Step 1: Record vol-076**
-
-Add `vol-076` (priority 76, area `tray`, title "Tauri tray on macOS and
-Linux") as `in_progress` with verification: local build/test evidence from
-Tasks 1–2 and a note that hosted Ubuntu/macOS runs plus a real
-menu-bar/appindicator desktop are required before `passing`. Add the matching
-`claude-progress.md` session entry with the exact commands and results.
-
-- [ ] **Step 2: Update the platform table**
+- [ ] **Step 1: Update the platform table**
 
 `README.md`/`README.vi.md` System tray row: macOS → `✅ Tauri tray
 (menu-bar — manual)`, Linux → `✅ Tauri tray (appindicator — manual)`. Keep
 the checklist's Strong/Partial labels honest: creation is CI-verified;
 menu interaction is manual.
 
-- [ ] **Step 3: Extend the checklist**
+- [ ] **Step 2: Extend the checklist**
 
 In `docs/testing/cross-platform-release-checklist.md`, add a macOS
 "menu-bar tray" manual row and a Linux "StatusNotifier/appindicator tray"
 manual row with the evidence fields required (OS version, desktop session,
 click-through behavior, screenshots).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add feature_list.json claude-progress.md README.md README.vi.md docs/testing/cross-platform-release-checklist.md
-git commit -m "docs: record Linux/macOS tray feature"
+git add README.md README.vi.md docs/testing/cross-platform-release-checklist.md
+git commit -m "docs: platform table and checklist for Linux/macOS tray"
 ```
 
 ---
@@ -569,7 +575,12 @@ and after `build()` succeeds, for Overlay:
 if surface == SurfaceId::Overlay {
     let _ = window.set_focusable(false);
     #[cfg(target_os = "macos")]
-    let _ = window.set_ignore_cursor_events(true);
+    {
+        // `set_ignore_cursor_events` lives on the underlying tao window; use
+        // it via `window.as_ref().window()` if `WebviewWindow` does not
+        // forward it directly.
+        let _ = window.set_ignore_cursor_events(true);
+    }
 }
 ```
 
@@ -588,9 +599,13 @@ geometry tests and the updated parser test.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src-tauri/src/window_manager.rs src-tauri/src/lib.rs
+git add src-tauri/src/window_manager.rs src-tauri/src/lib.rs feature_list.json claude-progress.md
 git commit -m "feat: add overlay webview surface"
 ```
+
+Records in the same change set: `vol-077` entry (status `in_progress`,
+geometry/parser test evidence) + the matching `claude-progress.md` session
+entry.
 
 ---
 
@@ -738,9 +753,12 @@ Expected: payload test passes; Windows build unaffected.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src-tauri/Cargo.toml src-tauri/tauri.conf.json src-tauri/src/events_sink.rs
+git add src-tauri/Cargo.toml src-tauri/tauri.conf.json src-tauri/src/events_sink.rs feature_list.json claude-progress.md
 git commit -m "feat: cross-platform overlay HUD via EventSink"
 ```
+
+Extend the `vol-077` entry with the payload/auto-hide evidence in the same
+change set.
 
 ---
 
@@ -776,6 +794,10 @@ vi.mock("../lib/ipc", () => ({
     listeners[event] = cb;
     return Promise.resolve(() => {});
   },
+}));
+
+vi.mock("../lib/surface", () => ({
+  markSurfaceReady: () => Promise.resolve(),
 }));
 
 function fire(event: string, payload: unknown) {
@@ -856,6 +878,7 @@ Expected: FAIL — module not found.
 import { useEffect, useState } from "react";
 import { applyAppearance } from "../lib/appearance";
 import { listen } from "../lib/ipc";
+import { markSurfaceReady } from "../lib/surface";
 import {
   DEFAULT_THRESHOLDS,
   SignalRail,
@@ -879,11 +902,22 @@ export function OverlaySurface() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
 
   useEffect(() => {
+    // The host creates the HUD hidden (`visible(false)`); the window only
+    // becomes visible after `surface_ready` (same contract as the mixer).
+    void markSurfaceReady();
     const unlisteners: Array<() => void> = [];
     void listen<OverlayPayload>("state://overlay", (p) => {
       setPayload(p);
+      const resolved =
+        p.theme === "Dark"
+          ? "dark"
+          : p.theme === "Light"
+            ? "light"
+            : window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
       applyAppearance({
-        theme_resolved: p.theme === "Dark" ? "dark" : "light",
+        theme_resolved: resolved,
         material: p.material,
         motion: p.motion,
         accent: p.accent,
@@ -901,8 +935,14 @@ export function OverlaySurface() {
   };
 
   return (
-    <div className="pointer-events-none flex h-screen w-screen items-center justify-center bg-transparent">
-      <div className="overlay-card flex w-[336px] flex-col gap-2 rounded-xl border border-border/60 bg-background/88 px-4 py-3 shadow-lg backdrop-blur-md">
+    <div
+      data-surface="overlay"
+      className="pointer-events-none flex h-screen w-screen items-center justify-center bg-transparent"
+    >
+      <div
+        data-testid="overlay-card"
+        className="flex w-[336px] flex-col gap-2 rounded-xl border border-border/60 bg-background/88 px-4 py-3 shadow-lg backdrop-blur-md"
+      >
         {payload.text ? (
           <p className="text-center text-sm font-medium text-foreground">
             {payload.text}
@@ -958,9 +998,12 @@ Expected: new tests pass, full frontend suite green, build emits
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/vite.config.ts frontend/src/overlay
+git add frontend/vite.config.ts frontend/src/overlay feature_list.json claude-progress.md
 git commit -m "feat: overlay HUD webview surface"
 ```
+
+Extend the `vol-077` entry with the Vitest/build evidence in the same change
+set.
 
 ---
 
@@ -969,8 +1012,9 @@ git commit -m "feat: overlay HUD webview surface"
 **Files:**
 - Create: `e2e/tauri/specs/overlay.e2e.ts`
 - Modify: `scripts/verify-tauri-e2e.ps1`, `scripts/verify-tauri-e2e.sh`
-- Modify if present: `e2e/tauri/wdio.conf.ts` surface list / package.json
-  `test:e2e:debug` mapping
+- Modify: `e2e/tauri/run-debug-e2e.mjs` (surface map + startup surface +
+  all list)
+- Modify: `e2e/tauri/support/selectors.ts` (SurfaceName + overlay selectors)
 
 - [ ] **Step 1: Write the failing spec**
 
@@ -981,26 +1025,35 @@ assertions) with these assertions for the overlay:
 describe("overlay surface", () => {
   it("opens via the debug marker, renders the HUD, and auto-hides", async () => {
     const browser = await getBrowser();
-    const window = await browser.getWindow("window-overlay");
-    await window.waitForExist(10_000);
-    const volume = await window.$("text=Volume");
-    await volume.waitForExist(10_000);
-    // Auto-hide: default overlay duration (config default) must close it.
-    await window.waitForNotExist(12_000);
+    await browser.tauri?.switchWindow?.("window-overlay");
+    const root = await browser.$('[data-surface="overlay"]');
+    await root.waitForDisplayed({ timeout: 10_000 });
+    const card = await browser.$('[data-surface="overlay"] [data-testid="overlay-card"]');
+    await card.waitForDisplayed({ timeout: 10_000 });
+    // Auto-hide: the default overlay duration (config default 1800 ms) must
+    // destroy the window; the debug run needs no interaction.
+    await root.waitForExist({ timeout: 12_000, reverse: true });
   });
 });
 ```
 
-Adjust to the exact helper API of `e2e/tauri/support` (read
-`help.e2e.ts` first and reuse its browser/window helpers verbatim).
+Adjust to the exact helper API of `e2e/tauri/support` (read `help.e2e.ts`
+first and reuse its browser/`switchWindow` helpers verbatim; the overlay is
+the startup surface for this spec, so `openSurface` is not called).
 
 - [ ] **Step 2: Wire the wrappers**
 
 `scripts/verify-tauri-e2e.ps1`: `[ValidateSet(...)]` gains `overlay`;
 the `all` expected-spec array gains `"overlay.e2e.ts"`. Same in
-`scripts/verify-tauri-e2e.sh` (`all` list and the single-surface case). If
-`e2e/tauri` maps `--surface all` to a fixed spec list in `wdio.conf.ts` or
-`package.json`, add `overlay.e2e.ts` there too.
+`scripts/verify-tauri-e2e.sh` (`all` list and the single-surface case).
+`e2e/tauri/run-debug-e2e.mjs`: add `overlay: ["overlay.e2e.ts"]` to
+`specsBySurface`, include `"overlay"` in the `all` surfaces list, and extend
+the startup-surface rule to `["settings", "help", "overlay"]` so
+`VOLUMECTL_VERIFY_SURFACE=window-overlay` starts the HUD.
+`e2e/tauri/support/selectors.ts`: `SurfaceName` gains `"overlay"`;
+`surfaceTitle("overlay")` returns
+`'[data-surface="overlay"] [data-testid="overlay-card"]'` (the overlay has
+no `h1`).
 
 - [ ] **Step 3: Run the E2E contract locally (Windows)**
 
@@ -1027,37 +1080,30 @@ Expected: JUnit + manifest + timings evidence written and asserted (exit 0).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add e2e/tauri/specs/overlay.e2e.ts scripts/verify-tauri-e2e.ps1 scripts/verify-tauri-e2e.sh
+git add e2e/tauri/specs/overlay.e2e.ts e2e/tauri/run-debug-e2e.mjs e2e/tauri/support/selectors.ts scripts/verify-tauri-e2e.ps1 scripts/verify-tauri-e2e.sh feature_list.json claude-progress.md
 git commit -m "test: overlay surface E2E coverage"
 ```
 
+Extend the `vol-077` entry with the E2E evidence in the same change set.
+
 ---
 
-### Task 8: Phase B records and docs
+### Task 8: Phase B docs (README)
 
 **Files:**
-- Modify: `feature_list.json`, `claude-progress.md`
 - Modify: `README.md`, `README.vi.md`
 
-- [ ] **Step 1: Record vol-077**
-
-Add `vol-077` (priority 77, area `overlay`, title "Overlay HUD on macOS and
-Linux") as `in_progress` with the local evidence (geometry tests, payload
-test, Vitest suite, E2E overlay run) and the honest boundary: Linux
-click-through and macOS real-compositor transparency are manual evidence;
-hosted CI runs pending. Session entry in `claude-progress.md`.
-
-- [ ] **Step 2: Update the platform table**
+- [ ] **Step 1: Update the platform table**
 
 Overlay rows: macOS → `✅ webview HUD (click-through — manual)`, Linux →
 `✅ webview HUD (auto-hide; click-through n/a)`. Keep the renderer row
 unchanged.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 2: Commit**
 
 ```bash
-git add feature_list.json claude-progress.md README.md README.vi.md
-git commit -m "docs: record Linux/macOS overlay feature"
+git add README.md README.vi.md
+git commit -m "docs: platform table for Linux/macOS overlay"
 ```
 
 ---
@@ -1069,6 +1115,7 @@ git commit -m "docs: record Linux/macOS overlay feature"
 **Files:**
 - Create: `crates/volumectl/src/audio_sessions_linux.rs`
 - Modify: `crates/volumectl/src/lib.rs` (gate the module to Linux)
+- Modify: `crates/volumectl/Cargo.toml` (add `libc` for `timeval`)
 
 **Interfaces:**
 - Consumes: `crate::host_core::{AudioSessionInfo, SessionsSource}`.
@@ -1130,6 +1177,17 @@ Run: `cargo test -p volumectl --lib audio_sessions_linux --no-default-features`
 Expected: FAIL — module not found (add `#[cfg(target_os = "linux")] pub(crate)
 mod audio_sessions_linux;` to `lib.rs` first, then the failure is the missing
 functions).
+
+- [ ] **Step 3: Add the libc dependency**
+
+`crates/volumectl/Cargo.toml`, inside
+`[target.'cfg(target_os = "linux")'.dependencies]`:
+
+```toml
+libc = "0.2"
+```
+
+(`pa_threaded_mainloop_wait_until` takes a `*const libc::timeval`.)
 
 - [ ] **Step 3: Implement the mapping + connection**
 
@@ -1428,11 +1486,11 @@ unsafe extern "C" fn success_cb(
     let _ = success;
 }
 
-fn proplist_get(plist: *mut pa::pa_proplist, key: *const libc::c_char) -> Option<String> {
+fn proplist_get(plist: *mut pa::pa_proplist, key: &[u8]) -> Option<String> {
     if plist.is_null() {
         return None;
     }
-    let ptr = unsafe { pa::pa_proplist_gets(plist, key) };
+    let ptr = unsafe { pa::pa_proplist_gets(plist, key.as_ptr() as *const libc::c_char) };
     if ptr.is_null() {
         return None;
     }
@@ -1482,7 +1540,11 @@ so the loop terminates). If `c"..."` literals need Rust 1.77+, use
 `b"VolumeControl\0".as_ptr() as *const libc::c_char`. Confirm enum constant
 names (`PA_CONTEXT_READY`, `PA_OPERATION_DONE`) against the crate; libpulse-sys
 exposes them as `pa_context_state_t::PA_CONTEXT_READY` style or plain `u32`
-constants — use whichever the crate exports.
+constants — use whichever the crate exports. `PA_PROP_APPLICATION_NAME` and
+`PA_PROP_MEDIA_NAME` are byte-string constants in bindgen output — they are
+passed to `proplist_get(plist, pa::PA_PROP_APPLICATION_NAME)` directly thanks
+to the `&[u8]` key parameter. If `PA_CHANNELS_MAX` is not exported, use the
+literal `64` (the PulseAudio channel hard cap).
 
 - [ ] **Step 4: Run the mapping tests**
 
@@ -1504,25 +1566,33 @@ fn no_pulse_server_degrades_to_empty_list() {
     std::env::set_var("PULSE_SERVER", "tcp:127.0.0.1:1");
     let sessions = PulseSessions::new();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    let listed = sessions.list();
-    assert!(
-        std::time::Instant::now() < deadline,
-        "list() must return quickly when Pulse is unreachable"
-    );
-    assert!(listed.is_empty(), "unreachable Pulse must yield no sessions");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let listed = sessions.list();
+        assert!(
+            std::time::Instant::now() < deadline,
+            "list() must return quickly when Pulse is unreachable"
+        );
+        assert!(listed.is_empty(), "unreachable Pulse must yield no sessions");
+    }));
     match old {
         Some(v) => std::env::set_var("PULSE_SERVER", v),
         None => std::env::remove_var("PULSE_SERVER"),
     }
+    assert!(result.is_ok(), "no-server degradation test panicked");
 }
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/volumectl/src/audio_sessions_linux.rs crates/volumectl/src/lib.rs
+git add crates/volumectl/src/audio_sessions_linux.rs crates/volumectl/src/lib.rs crates/volumectl/Cargo.toml Cargo.lock feature_list.json claude-progress.md
 git commit -m "feat: Linux PulseAudio per-app sessions"
 ```
+
+Records in the same change set: `vol-078` entry (status `in_progress`,
+mapping + no-server degradation test evidence) + the matching
+`claude-progress.md` session entry. `Cargo.lock` changes from the `libc`
+addition belong in this commit too.
 
 ---
 
@@ -1535,29 +1605,23 @@ git commit -m "feat: Linux PulseAudio per-app sessions"
 
 - [ ] **Step 1: Write the failing wiring test**
 
-In `host_core.rs` tests, add a Linux-gated test that the default session
-source reports supported on Linux:
+In `crates/volumectl/tests/host_core.rs` (integration target; the file
+already defines `StubAudio`, `RecordingSink`, and `core_with`), add a
+Linux-gated test that the default session source reports supported on Linux:
 
 ```rust
 #[cfg(target_os = "linux")]
 #[test]
 fn linux_core_uses_a_supported_sessions_source() {
-    let core = crate::host_core::AppCore::new_without_native_hotkeys(
-        Box::new(crate::audio::E2eAudio::new()),
-        crate::config::Config::default(),
-        crate::config::HotkeyModifier::CtrlAlt,
-        std::sync::Arc::new(TestSink),
-        None,
-    )
-    .unwrap();
+    let mut core = core_with(Arc::new(RecordingSink::default()));
     // Bootstrap reports per-app sessions as supported on Linux.
     let payload = core.bootstrap();
     assert!(payload.sessions_supported);
 }
 ```
 
-`TestSink` is the existing test sink used by `host_core.rs` integration
-tests — reuse its definition (it implements `EventSink`).
+`core_with`, `StubAudio`, and `RecordingSink` already exist in that file —
+reuse them verbatim.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -1603,44 +1667,38 @@ Expected: all green, including the new Linux-gated wiring test.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/volumectl/src/host_core.rs frontend/src/mixer/MixerSurface.tsx frontend/src/mixer/MixerSurface.test.tsx
+git add crates/volumectl/src/host_core.rs crates/volumectl/tests/host_core.rs frontend/src/mixer/MixerSurface.tsx frontend/src/mixer/MixerSurface.test.tsx feature_list.json claude-progress.md
 git commit -m "feat: enable PulseAudio sessions on Linux"
 ```
 
+Extend the `vol-078` entry with the host-core wiring + frontend copy evidence
+in the same change set.
+
 ---
 
-### Task 11: Phase C records and docs
+### Task 11: Phase C docs (README + checklist)
 
 **Files:**
-- Modify: `feature_list.json`, `claude-progress.md`
 - Modify: `README.md`, `README.vi.md`
 - Modify: `docs/testing/cross-platform-release-checklist.md`
 
-- [ ] **Step 1: Record vol-078**
-
-Add `vol-078` (priority 78, area `audio-controls`, title "Linux PulseAudio
-per-app mixer sessions") as `in_progress` with local evidence (mapping tests,
-no-server degradation test, host-core wiring test, frontend suite) and the
-boundary: live sink-input round-trip on a real Pulse server is manual/hosted
-evidence. macOS row documented as unsupported.
-
-- [ ] **Step 2: Update the platform table**
+- [ ] **Step 1: Update the platform table**
 
 Mixer rows: Linux → `✅ Tauri + PulseAudio sink-inputs`; macOS →
 `✅ Tauri surface / ✖ per-app audio (no public API)`. Update the
 `README.vi.md` row identically.
 
-- [ ] **Step 3: Extend the checklist**
+- [ ] **Step 2: Extend the checklist**
 
 Add the Linux manual row: start a Pulse server (`pulseaudio --start`), play
 two streams, open the mixer, adjust each sink-input slider, verify the mixer
 list updates and survives stream restarts (stale-id path).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add feature_list.json claude-progress.md README.md README.vi.md docs/testing/cross-platform-release-checklist.md
-git commit -m "docs: record Linux per-app audio feature"
+git add README.md README.vi.md docs/testing/cross-platform-release-checklist.md
+git commit -m "docs: platform table and checklist for Linux per-app audio"
 ```
 
 ---
@@ -1701,11 +1759,13 @@ the remaining manual rows.
 ## Self-review against the spec
 
 - Phase A tray: Tasks 1–3 (shared `TrayCommand`, `TauriTray`, non-fatal
-  creation, host lifecycle, records).
+  creation, host lifecycle, docs; records ride in the Task 1/2 commits).
 - Phase B overlay: Tasks 4–8 (surface + geometry, macOS private API +
-  `EventSink` auto-hide, frontend HUD, E2E, records).
+  `EventSink` auto-hide, frontend HUD, E2E, docs; records ride in the
+  Task 4–7 commits).
 - Phase C per-app audio: Tasks 9–11 (Pulse sink-inputs, host-core wiring,
-  truthful macOS boundary + frontend copy, records).
+  truthful macOS boundary + frontend copy, docs; records ride in the
+  Task 9/10 commits).
 - Boundaries: Windows untouched (all edits cfg-gated or additive); macOS
   per-app audio explicitly not implemented; checklist manual rows cover tray
   hosts, overlay click-through, and real Pulse round-trips.
