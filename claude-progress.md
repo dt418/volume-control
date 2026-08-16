@@ -1,5 +1,25 @@
 # Progress Log
 
+## Session 092 (2026-08-16) - PR #33 merged + release v0.1.3 preparation
+
+- PR #33 (feat/linux-macos-feature-completion) merged at d0e9e40c after the
+  full CI matrix passed on Windows, Ubuntu 24.04 (GTK4/libadwaita +
+  layer-shell, including the overlay E2E), macOS, Socket Security, and the
+  required Release gate. The hosted runs provided the missing cross-platform
+  evidence and caught (and fixed via two follow-up commits) the overlay E2E
+  auto-hide race on macOS/Linux: the debug E2E marker now disables BOTH the
+  host and frontend overlay auto-hide timers (`VOLUMECTL_E2E_DEBUG` +
+  `BootstrapPayload.e2e_debug`, release builds unaffected), so the WebDriver
+  session can attach and assert the HUD.
+- Release v0.1.3 preparation on `release/v0.1.3`: version bumped to 0.1.3
+  across workspace.package, crates/volumectl, volumecontrol-tauri,
+  Cargo.lock (regenerated via cargo check), tauri.conf.json, frontend
+  package.json and package-lock.json; CHANGELOG promoted the accumulated
+  Unreleased work into [0.1.3] with a fresh Unreleased heading.
+- Records: feature_list.json vol-082 added (in_progress); this entry is the
+  claude-progress.md half. Tag v0.1.3 + Release workflow dispatch + asset
+  publishing remain pending the release PR merge.
+
 ## Session 091 (2026-08-16) - Pre-push three-domain review + enforcement hardening
 
 - Mandatory pre-push review dispatched three parallel adversarial reviewers

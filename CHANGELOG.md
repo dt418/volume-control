@@ -4,6 +4,47 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-16
+
+### Added
+
+- System tray on macOS and Linux: Tauri-managed tray with the same stable
+  menu ids as the Windows native tray (mute, reset, mixer, settings, help,
+  reload, open config, exit), a shared cross-platform `TrayCommand` mapping,
+  and non-fatal tray creation so the host stays alive without a tray host.
+- Overlay HUD on macOS and Linux: transparent always-on-top webview HUD
+  (336×88, legacy bottom-right margins) with bootstrap-first rendering (the
+  window never appears empty), a cancellable auto-hide plus a frontend
+  self-hide guarantee, Rust-resolved theme shared with the mixer, and
+  click-through on macOS. Windows keeps its native Win32 HUD.
+- Linux per-app audio in the Mixer: PulseAudio sink-input enumeration with
+  per-session volume and mute through the shared session commands; an
+  unreachable Pulse server degrades to an empty list instantly (800 ms
+  connect timeout + 10 s backoff) instead of stalling the UI. macOS per-app
+  audio is documented as not supported (no public API).
+- Platform verification scripts (`verify-platform.ps1` / `.sh`): one
+  fail-closed command per platform runs the whole-app battery with per-step
+  logs; E2E uses real audio by default and restores the device state.
+
+### Changed
+
+- FE–BE connection stability: the host poll threads no longer queue IPC
+  commands behind audio probes (`try_lock`), and backend failures publish a
+  one-shot `state://backend` Ready↔Degraded status so the Mixer shows a live
+  notice instead of freezing silently.
+- Webview performance: Pulse connect backoff eliminates multi-second mount
+  stalls on machines without Pulse; Mixer session rows are memoized and
+  session sorting is cached, so per-app rows only re-render when their data
+  changes.
+- The E2E debug runner defaults to the real OS audio endpoint (device state
+  restored after the run); hosted CI opts into the deterministic virtual
+  backend.
+- Enforcement hardening from the three-domain pre-push review: CRLF-safe
+  records `--check`, `core.quotepath=true` on all guard git captures,
+  PowerShell/version parity in the format-lint gates, a fail-fast
+  single-instance lock for the format-lint smoke suite, and the release
+  workflow E2E gates pinned to the virtual backend.
+
 ## [0.1.2] - 2026-08-16
 
 ### Added
