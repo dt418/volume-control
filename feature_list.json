@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T12:28",
+    "last_updated":  "2026-08-16T12:37",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,25 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-077",
+                         "priority":  77,
+                         "area":  "overlay",
+                         "title":  "Overlay HUD on macOS and Linux",
+                         "user_visible_behavior":  "A bottom-right, always-on-top, non-focusable overlay webview surface (336x88 logical at the legacy 20px/40px physical work-area margins) hosts the future HUD on macOS and Linux; Windows mixer/settings/help surface behavior is unchanged.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "TDD RED: cargo test -p volumecontrol-tauri --no-default-features fails with E0599 SurfaceId::Overlay not found (9 errors) before implementation.",
+                                               "cargo test -p volumecontrol-tauri --no-default-features passes 15/15 after implementation (3 new overlay geometry tests; updated surface_labels_and_entries_are_stable, from_label_round_trips, all_covers_every_surface; and the window-overlay parser test).",
+                                               "cargo test --workspace --no-default-features passes 341 tests (283 volumectl lib + 15 tauri + 4 win32 sessions + 23 host_core + 16 linux_host_core).",
+                                               "cargo fmt --all --check and git diff --check clean; cargo clippy --workspace --all-targets --no-default-features -- -D warnings clean; scripts/check-tauri-deadlock.ps1 passes (10/10 ok)."
+                                           ],
+                         "evidence":  [
+                                              "Session 078 (2026-08-16): SurfaceId::Overlay added (label window-overlay, title VolumeControl Overlay, entry src/overlay/index.html); all() returns 4 surfaces with overlay last; OVERLAY_SIZE = (336.0, 88.0); place_surface puts it bottom-right at OVERLAY_MARGIN_X/Y (20/40) physical px; open_impl creates it decorations(false)/transparent(true)/always_on_top(true)/skip_taskbar(true)/resizable(false), then set_focusable(false) and macOS set_ignore_cursor_events(true) — verified in the Tauri 2.11.5 registry source (webview_window.rs:2133) that set_ignore_cursor_events is a direct WebviewWindow method; neither the already-open branch nor surface_ready_impl focuses the overlay; mixer Focused(false) auto-close and Windows surface behavior unchanged.",
+                                              "Session 078 (2026-08-16): commands.rs command_surface_names_round_trip updated (test-only, outside the stated 4-file scope but required for a green workspace suite) — it now round-trips SurfaceId::Overlay and rejects window-nope instead of asserting window-overlay is unknown."
+                                       ],
+                         "notes":  "Hosted CI (macOS/Linux webview builds) and manual compositor transparency/click-through evidence are still pending before vol-077 can move past in_progress."
+                     },
                      {
                          "id":  "vol-076",
                          "priority":  76,

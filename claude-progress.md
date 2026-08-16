@@ -1,5 +1,55 @@
 # Progress Log
 
+## Session 078 (2026-08-16) - Overlay surface: WindowManager (Phase B Task 4)
+
+- Goal: add the `SurfaceId::Overlay` webview surface (label
+  `window-overlay`, title `VolumeControl Overlay`, entry
+  `src/overlay/index.html`) that hosts the future HUD on macOS/Linux without
+  changing Windows mixer/settings/help behavior.
+- TDD RED: wrote the failing tests first — 3 new overlay geometry tests
+  (`overlay_places_bottom_right_at_legacy_margins`,
+  `overlay_scales_with_dpi`, `overlay_handles_negative_origin_work_area`),
+  updated `surface_labels_and_entries_are_stable`,
+  `from_label_round_trips`, `all_covers_every_surface`, and the
+  `verify_surface_parser_accepts_only_webview_labels` parser test.
+  `cargo test -p volumecontrol-tauri --no-default-features` failed with
+  E0599 `SurfaceId::Overlay` not found (9 errors) — the expected
+  feature-missing failure.
+- Implementation (src-tauri/src/window_manager.rs): `Overlay` added to the
+  enum plus `label`/`title`/`entry`; `all()` now returns 4 surfaces (overlay
+  last, module doc updated from "three" to "four" webview surface windows);
+  `OVERLAY_SIZE = (336.0, 88.0)` next to the other size constants;
+  `place_surface` places the overlay bottom-right at the legacy 20px/40px
+  physical margins (arm before Mixer); `open_impl` sizes it from
+  `OVERLAY_SIZE`, builds it `decorations(false)` / `transparent(true)` /
+  `always_on_top(true)` / `skip_taskbar(true)` / `resizable(false)`, then
+  `set_focusable(false)` and, on macOS, `set_ignore_cursor_events(true)`.
+- Tauri API verification: in the 2.11.5 registry source,
+  `set_ignore_cursor_events` is a direct `WebviewWindow` method
+  (webview_window.rs:2133, forwarding to `self.window`), so it is called
+  straight on the window handle — no accessor dance needed.
+- Focus behavior: neither the already-open branch (reposition + show) nor
+  `surface_ready_impl` calls `set_focus` for the overlay; the mixer
+  `Focused(false)` auto-close handler is unchanged.
+- Deviation (test-only, required for a green suite): `commands.rs`'s
+  `command_surface_names_round_trip` asserted `from_label("window-overlay")
+  == None`; it now round-trips `SurfaceId::Overlay` and the negative case
+  uses `window-nope`. This is the only file beyond the stated four that
+  changed; `events_sink.rs`, Cargo.toml, tauri.conf.json, frontend, e2e, and
+  the volumectl crates are untouched.
+- GREEN: `cargo test -p volumecontrol-tauri --no-default-features` passes
+  15/15; `cargo test --workspace --no-default-features` passes 341 tests
+  (283 volumectl lib + 15 tauri + 4 win32 sessions + 23 host_core + 16
+  linux_host_core).
+- Gate: `cargo fmt --all --check` and `git diff --check` clean; `cargo
+  clippy --workspace --all-targets --no-default-features -- -D warnings`
+  clean; `powershell -File scripts/check-tauri-deadlock.ps1` passes (10/10
+  ok).
+- Records: feature_list.json vol-077 added (in_progress; verification =
+  geometry/parser tests + workspace suite; evidence = Session 078; notes =
+  hosted CI + manual compositor transparency evidence still pending); this
+  entry is the claude-progress.md half.
+
 ## Session 077 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
 
 - Goal context: complete the remaining platform-table gaps on macOS/Linux

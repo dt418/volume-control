@@ -392,8 +392,8 @@ mod tests {
             Some(SurfaceId::Help)
         );
         assert_eq!(
-            super::parse_verify_surface("window-overlay"),
-            Err("unknown surface".to_string())
+            super::parse_verify_surface("window-overlay").unwrap(),
+            Some(SurfaceId::Overlay)
         );
         assert_eq!(super::parse_verify_surface(""), Ok(None));
     }
