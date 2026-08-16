@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T14:50",
+    "last_updated":  "2026-08-16T15:05",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,26 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-078",
+                         "priority":  78,
+                         "area":  "audio-controls",
+                         "title":  "Linux PulseAudio per-app mixer sessions",
+                         "user_visible_behavior":  "On Linux, the Mixer enumerates PulseAudio sink-inputs (per-app playback streams) as controllable sessions — volume and mute per app via the shared session commands; an unreachable Pulse server degrades to an empty list without hanging. macOS reports per-app audio as not supported (no public API), with truthful copy in the Mixer.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "audio_sessions_linux.rs: build_session_info pure mapping (application.name → media.name → stream name → 'Unknown app', PA_VOLUME_NORM percentage math, corked → inactive) covered by 3 unit tests; PulseSessions::new().supported() true.",
+                                               "unreachable_pulse_server_degrades_to_empty_list: PULSE_SERVER=tcp:127.0.0.1:1 returns an empty list within 5 s (hermetic, no server needed); tests run on Linux CI.",
+                                               "host_core integration: linux_core_uses_a_supported_sessions_source (Linux-gated) — bootstrap reports sessions_supported true with an empty list on an unreachable server.",
+                                               "cargo check -p volumectl --target x86_64-unknown-linux-gnu --no-default-features clean (FFI verified against libpulse-sys 1.23 bindings: threaded mainloop, get/set sink-input info/volume/mute, success-flag capture).",
+                                               "Frontend copy: 'Per-app audio isn't available on this platform.' replaces the Windows-only notice (Vitest + E2E mixer spec updated); cargo workspace 344, frontend suite + build, Windows E2E mixer 3/3 pass."
+                                           ],
+                         "evidence":  [
+                                              "Session 080 (2026-08-16): PulseSessions implemented with a direct libpulse-sys threaded-mainloop connection, synchronous ops with 2 s deadline, 3 s connect timeout, reconnect-on-not-ready, and success-flag capture for the stale-id contract (Err → host re-emits the fresh list).",
+                                              "Session 080 (2026-08-16): macOS stays NoopSessions with honest copy; live sink-input round-trips on a real Pulse server remain manual/hosted evidence."
+                                       ],
+                         "notes":  "Hosted Ubuntu CI (with and without a Pulse server) and a real Pulse sink-input round-trip remain before marking passing."
+                     },
                      {
                          "id":  "vol-079",
                          "priority":  79,

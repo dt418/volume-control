@@ -130,7 +130,7 @@ describe("MixerSurface", () => {
     expect(await screen.findByText("No audio sessions")).toBeInTheDocument();
   });
 
-  it("shows the Windows-only notice when sessions are unsupported", async () => {
+  it("shows the unsupported-platform notice when sessions are unsupported", async () => {
     vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_bootstrap") {
         return { ...bootstrap, sessions: [], sessions_supported: false };
@@ -139,7 +139,7 @@ describe("MixerSurface", () => {
     });
     render(<MixerSurface />);
     expect(
-      await screen.findByText("Per-app mixing is Windows-only"),
+      await screen.findByText("Per-app audio isn't available on this platform."),
     ).toBeInTheDocument();
   });
 

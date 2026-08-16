@@ -36,7 +36,7 @@ describe("Mixer surface", () => {
     // Native session support is Windows-only, while the empty filtered state
     // is also valid on Windows when no sessions are present. Keep this check
     // platform-agnostic so Linux/macOS validate their intentional fallback.
-    expect(["No matching apps", "No audio sessions", "Per-app mixing is Windows-only"]).toContain(
+    expect(["No matching apps", "No audio sessions", "Per-app audio isn't available on this platform."]).toContain(
       await emptyMessage.getText(),
     );
     await search.clearValue();

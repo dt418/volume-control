@@ -137,7 +137,7 @@ export function MixerSurface() {
           </div>
         ) : !sessionsSupported ? (
           <p className="py-8 text-center text-xs text-foreground/70">
-            Per-app mixing is Windows-only
+            Per-app audio isn't available on this platform.
           </p>
         ) : filtered.length === 0 ? (
           <p className="py-8 text-center text-xs text-foreground/70">

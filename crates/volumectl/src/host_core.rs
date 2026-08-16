@@ -294,7 +294,10 @@ impl AppCore {
         #[cfg(target_os = "windows")]
         let sessions_source: Box<dyn SessionsSource> =
             Box::new(crate::audio_sessions_win32::WindowsSessions);
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(target_os = "linux")]
+        let sessions_source: Box<dyn SessionsSource> =
+            Box::new(crate::audio_sessions_linux::PulseSessions::new());
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
         let sessions_source: Box<dyn SessionsSource> = Box::new(NoopSessions);
         let core = Self {
             audio,

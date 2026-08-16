@@ -231,6 +231,29 @@ fn core_with(sink: Arc<RecordingSink>) -> AppCore {
     .unwrap()
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_core_uses_a_supported_sessions_source() {
+    // Point Pulse at a dead socket so the test is hermetic and fast even on
+    // runners without a Pulse server; restore afterwards.
+    let old = std::env::var_os("PULSE_SERVER");
+    std::env::set_var("PULSE_SERVER", "tcp:127.0.0.1:1");
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut core = core_with(Arc::new(RecordingSink::default()));
+        // The Linux host wires PulseSessions: bootstrap reports per-app
+        // sessions as supported even when the server is unreachable
+        // (macOS/other targets intentionally report false).
+        let payload = core.bootstrap();
+        assert!(payload.sessions_supported);
+        assert!(payload.sessions.is_empty());
+    }));
+    match old {
+        Some(v) => std::env::set_var("PULSE_SERVER", v),
+        None => std::env::remove_var("PULSE_SERVER"),
+    }
+    assert!(result.is_ok(), "linux sessions wiring test panicked");
+}
+
 #[test]
 fn bootstrap_exposes_config_load_notice_without_changing_config_shape() {
     let sink = Arc::new(RecordingSink::default());

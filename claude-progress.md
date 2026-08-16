@@ -1,5 +1,37 @@
 # Progress Log
 
+## Session 080 (2026-08-16) - Phase C: Linux per-app audio (PulseAudio sink-inputs)
+
+- `crates/volumectl/src/audio_sessions_linux.rs` (new, Linux-only):
+  `PulseSessions` implements `SessionsSource` over a direct
+  `libpulse-sys` 1.23 threaded-mainloop connection — no third-party wrapper.
+  - `build_session_info` pure mapping: application.name → media.name →
+    stream name → "Unknown app"; `pa_cvolume_avg` / PA_VOLUME_NORM → pct
+    (clamped); `corked` → inactive.
+  - `list()` enumerates sink-inputs; `set_volume`/`mute` write per index and
+    capture the success flag so a stale/missing session returns Err (the
+    §9.6 contract — the host re-emits the fresh list).
+  - Failure is never fatal: unreachable server (PULSE_SERVER dead socket)
+    degrades to an empty list within the 3 s connect / 2 s op deadlines;
+    reconnects when the context is not Ready.
+  - FFI verified against the real bindings: no `wait_until` exists →
+    `pa_threaded_mainloop_wait` + deadline loop; `pa_operation_state_t` has
+    no Failed variant → success-flag capture; `PA_PROP_*` are `&str` →
+    NUL-terminated byte literals; callbacks are safe `extern "C" fn`.
+- Wiring: `host_core::new_inner` selects `PulseSessions` on Linux
+  (`NoopSessions` stays for macOS/other); integration test
+  `linux_core_uses_a_supported_sessions_source` (Linux-gated, hermetic via a
+  dead PULSE_SERVER).
+- Frontend: the mixer's unsupported notice is now platform-neutral
+  ("Per-app audio isn't available on this platform."); the Vitest suite and
+  the E2E mixer spec assert the new copy.
+- Verification: `cargo check -p volumectl --target x86_64-unknown-linux-gnu
+  --no-default-features` clean; cargo workspace 344; frontend suite + build
+  green; Windows E2E mixer 3/3.
+- Records: feature_list.json vol-078 added (in_progress); this entry is the
+  claude-progress.md half. Live Pulse sink-input round-trips and hosted
+  Ubuntu CI remain before marking passing.
+
 ## Session 079 (2026-08-16) - FE-BE connection stability (non-blocking polls + backend health)
 
 - User report: "Đôi khi FE,BE mất kết nối" — surfaces intermittently froze
