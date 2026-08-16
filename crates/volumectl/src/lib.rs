@@ -42,6 +42,7 @@ pub mod overlay;
 pub mod settings;
 #[cfg(target_os = "windows")]
 pub mod tray;
+pub mod tray_common;
 #[cfg(target_os = "windows")]
 pub mod wheel_win32;
 

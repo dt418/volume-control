@@ -1,5 +1,25 @@
 # Progress Log
 
+## Session 077 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
+
+- Goal context: complete the remaining platform-table gaps on macOS/Linux
+  (system tray, overlay HUD, per-app audio). Spec
+  `docs/superpowers/specs/2026-08-16-linux-macos-feature-completion-design.md`
+  and plan `docs/superpowers/plans/2026-08-16-linux-macos-feature-completion.md`
+  were written, reviewed against the real code (double-dispatch risk,
+  markSurfaceReady contract, E2E surface plumbing, libpulse FFI details,
+  records-in-same-commit), and committed (e618ab50, 3692c82, 123f38d).
+- Task 1 landed: `TrayCommand` + `from_menu_id` + the generated 32x32 speaker
+  icon moved from the Windows-only `tray.rs` into the new cross-platform
+  `crates/volumectl/src/tray_common.rs`; `host_core::tray_command_to_action`
+  and its unit test are no longer Windows-gated; `app.rs` and `src-tauri`
+  import `TrayCommand` from `tray_common`.
+- Verification: `cargo test -p volumectl --lib tray --no-default-features`
+  passes 5/5 (2 new tray_common tests + the un-gated mapping test);
+  `cargo test --workspace --no-default-features` passes 338 tests.
+- Records: feature_list.json vol-076 added (in_progress); this entry is the
+  claude-progress.md half. Windows native tray behavior is unchanged.
+
 ## Session 076 (2026-08-16) - Release v0.1.2 published
 
 - The final Release workflow run for tag v0.1.2 completed green: all three

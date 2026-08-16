@@ -11,7 +11,7 @@ use volumectl_lib::audio::{AudioBackend, UnavailableAudio};
 use volumectl_lib::host_core::tray_command_to_action;
 use volumectl_lib::host_core::AppCore;
 #[cfg(target_os = "windows")]
-use volumectl_lib::tray::TrayCommand;
+use volumectl_lib::tray_common::TrayCommand;
 
 use commands::{
     adjust_volume, close_surface, config_path, get_audio_sessions, get_autostart, get_bootstrap,

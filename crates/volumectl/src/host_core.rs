@@ -1280,10 +1280,10 @@ pub fn config_mtime() -> Option<std::time::SystemTime> {
 }
 
 /// Map a tray menu command to the shared action contract (no blacklist gate,
-/// matching the pre-Tauri host). Windows-only: the tray exists only there.
-#[cfg(target_os = "windows")]
-pub fn tray_command_to_action(cmd: crate::tray::TrayCommand) -> AppAction {
-    use crate::tray::TrayCommand as C;
+/// matching the pre-Tauri host). Every platform host (native Windows tray
+/// and the macOS/Linux Tauri tray) dispatches through this mapping.
+pub fn tray_command_to_action(cmd: crate::tray_common::TrayCommand) -> AppAction {
+    use crate::tray_common::TrayCommand as C;
     use SurfaceId as S;
     match cmd {
         C::ToggleMute => AppAction::ToggleMute,
@@ -1354,10 +1354,9 @@ mod tests {
         );
     }
 
-    #[cfg(target_os = "windows")]
     #[test]
     fn tray_command_to_action_maps_all_commands() {
-        use crate::tray::TrayCommand as C;
+        use crate::tray_common::TrayCommand as C;
         assert_eq!(tray_command_to_action(C::ToggleMute), AppAction::ToggleMute);
         assert_eq!(tray_command_to_action(C::Reset50), AppAction::ResetVolume);
         assert_eq!(
