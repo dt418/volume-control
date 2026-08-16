@@ -230,10 +230,15 @@ mod tests {
     /// surfaces and the AppCore sink pass in.
     #[test]
     fn command_surface_names_round_trip() {
-        for surface in [SurfaceId::Mixer, SurfaceId::Settings, SurfaceId::Help] {
+        for surface in [
+            SurfaceId::Mixer,
+            SurfaceId::Settings,
+            SurfaceId::Help,
+            SurfaceId::Overlay,
+        ] {
             let label = surface.label();
             assert_eq!(SurfaceId::from_label(label), Some(surface));
         }
-        assert_eq!(SurfaceId::from_label("window-overlay"), None);
+        assert_eq!(SurfaceId::from_label("window-nope"), None);
     }
 }

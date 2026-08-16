@@ -4,7 +4,8 @@ param(
   [string]$OutputRoot = (Join-Path $PSScriptRoot "..\output\tauri-e2e"),
   [ValidateSet("all", "mixer", "runtime", "windows", "recovery", "settings", "help")]
   [string]$Surface = "all",
-  [switch]$SkipBuild
+  [switch]$SkipBuild,
+  [switch]$VirtualAudio
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,7 +46,9 @@ $expectedSpecs = @($expectedSpecs)
 $code = 1
 $evidenceCode = 0
 try {
-  & npm --prefix $e2e run test:e2e:debug -- --surface $Surface
+  $e2eArgs = @("--surface", $Surface)
+  if ($VirtualAudio) { $e2eArgs += "--virtual-audio" }
+  & npm --prefix $e2e run test:e2e:debug -- @e2eArgs
   $code = $LASTEXITCODE
   if ($code -eq 0) {
     # Resolve tsx from the isolated E2E installation. The CI runner does not

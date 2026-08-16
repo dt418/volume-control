@@ -139,7 +139,10 @@ src-tauri/gen
 !.agents/skills/windows-host/
 !.claude/skills/windows-host/
 !.agents/skills/workflow-warning-auditor/
+!.claude/skills/workflow-warning-auditor/
 !.agents/skills/writing-plans/
 !.claude/skills/writing-plans/
 !.agents/skills/writing-skills/
 !.claude/skills/writing-skills/
+
+scripts/.test-format-lint.lock

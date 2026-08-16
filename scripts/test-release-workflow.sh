@@ -29,6 +29,17 @@ else
   report FAIL 'release caller invokes the reusable desktop validation workflow'
 fi
 
+# The E2E default is REAL audio; hosted runners do not guarantee an
+# endpoint, so every release-path E2E gate must explicitly opt into the
+# deterministic virtual backend. A future default flip must not silently
+# change the release evidence path.
+e2e_virtual_count="$(grep -Eci 'verify-tauri-e2e\.(ps1|sh).*virtual' "$validation" || true)"
+if [ "$e2e_virtual_count" -eq 3 ]; then
+  report ok 'desktop validation E2E gates opt into --virtual-audio (3/3)'
+else
+  report FAIL "desktop validation E2E gates opt into --virtual-audio" "found $e2e_virtual_count/3"
+fi
+
 preflight_line="$(grep -n '^  preflight:' "$release" | head -n 1 | cut -d: -f1 || true)"
 validate_line="$(grep -n '^  validate:' "$release" | head -n 1 | cut -d: -f1 || true)"
 if [[ -n "$preflight_line" && -n "$validate_line" && "$preflight_line" -lt "$validate_line" ]] && \

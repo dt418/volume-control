@@ -15,6 +15,7 @@ export default defineConfig({
         mixer: resolve(import.meta.dirname, "src/mixer/index.html"),
         settings: resolve(import.meta.dirname, "src/settings/index.html"),
         help: resolve(import.meta.dirname, "src/help/index.html"),
+        overlay: resolve(import.meta.dirname, "src/overlay/index.html"),
       },
     },
   },

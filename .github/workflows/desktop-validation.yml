@@ -73,19 +73,19 @@ jobs:
         shell: pwsh
         env:
           E2E_DRIVER_PROVIDER: embedded
-        run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/release-windows
+        run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/release-windows -VirtualAudio
       - name: Run macOS E2E gate
         if: matrix.platform == 'macos'
         shell: bash
         env:
           E2E_DRIVER_PROVIDER: embedded
-        run: bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/release-macos
+        run: bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/release-macos --virtual-audio
       - name: Run Ubuntu E2E gate under Xvfb
         if: matrix.platform == 'ubuntu'
         shell: bash
         env:
           E2E_DRIVER_PROVIDER: embedded
-        run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/release-ubuntu
+        run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/release-ubuntu --virtual-audio
       - name: Run platform core checks
         shell: bash
         run: cargo test --workspace --no-default-features

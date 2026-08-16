@@ -9,6 +9,8 @@ pub mod audio;
 pub mod audio_linux;
 #[cfg(target_os = "macos")]
 pub mod audio_macos;
+#[cfg(target_os = "linux")]
+pub mod audio_sessions_linux;
 pub mod autostart;
 #[cfg(target_os = "windows")]
 pub mod com_guard;
@@ -42,6 +44,7 @@ pub mod overlay;
 pub mod settings;
 #[cfg(target_os = "windows")]
 pub mod tray;
+pub mod tray_common;
 #[cfg(target_os = "windows")]
 pub mod wheel_win32;
 

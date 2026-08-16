@@ -6,11 +6,18 @@ import { MixerSurface } from "./MixerSurface";
 
 vi.mock("../lib/ipc", () => ({
   invoke: vi.fn(),
-  listen: vi.fn(async () => () => {}),
+  listen: vi.fn(async (event: string, cb: (payload: unknown) => void) => {
+    listeners[event] = cb;
+    return () => {};
+  }),
 }));
 
 // Captured `listen` handlers keyed by event name (reset in beforeEach).
 const listeners: Record<string, (payload: unknown) => void> = {};
+
+function fire(event: string, payload: unknown) {
+  listeners[event]?.(payload);
+}
 
 const bootstrap = {
   volume_pct: 55,
@@ -123,7 +130,7 @@ describe("MixerSurface", () => {
     expect(await screen.findByText("No audio sessions")).toBeInTheDocument();
   });
 
-  it("shows the Windows-only notice when sessions are unsupported", async () => {
+  it("shows the unsupported-platform notice when sessions are unsupported", async () => {
     vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_bootstrap") {
         return { ...bootstrap, sessions: [], sessions_supported: false };
@@ -132,7 +139,7 @@ describe("MixerSurface", () => {
     });
     render(<MixerSurface />);
     expect(
-      await screen.findByText("Per-app mixing is Windows-only"),
+      await screen.findByText("Per-app audio isn't available on this platform."),
     ).toBeInTheDocument();
   });
 
@@ -245,6 +252,41 @@ describe("MixerSurface", () => {
       );
     });
     expect(screen.getByTestId("system-output-value")).toHaveTextContent("55%");
+  });
+
+  it("shows a live degraded notice from state://backend and clears it on ready", async () => {
+    await renderSurface();
+    await screen.findByText("55%");
+
+    fire("state://backend", {
+      status: "degraded",
+      error: "audio device stopped responding",
+    });
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Audio backend temporarily unavailable: audio device stopped responding",
+    );
+
+    fire("state://backend", { status: "ready" });
+    await waitFor(() =>
+      expect(screen.queryByRole("status")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("shows the degraded notice immediately from a degraded bootstrap", async () => {
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") {
+        return {
+          ...bootstrap,
+          backend_status: { status: "degraded", error: "no audio endpoint" },
+        };
+      }
+      return {};
+    });
+
+    await renderSurface();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Audio backend temporarily unavailable: no audio endpoint",
+    );
   });
 
   it("renders the glass-surface class on the root for transparent-window readability", async () => {

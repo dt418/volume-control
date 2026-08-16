@@ -129,6 +129,7 @@ noisy_bin="$tmpdir/noisy-git"
 mkdir -p "$noisy_bin"
 printf '%s\n' \
     '#!/usr/bin/env sh' \
+    'if [ "${1:-}" = -c ]; then shift 2; fi' \
     'if [ "${1:-}" = diff ] || [ "${1:-}" = ls-files ]; then printf "%s\\n" "warning: synthetic git warning" >&2; fi' \
     'if [ "${CHECK_RECORDS_FAIL_DIFF:-0}" = 1 ] && [ "${1:-}" = diff ] && [ "${2:-}" = --name-only ] && [ "${3:-}" = HEAD ]; then' \
     '    printf "%s\\n" "fatal: synthetic git failure" >&2' \

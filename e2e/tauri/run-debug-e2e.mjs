@@ -14,23 +14,28 @@ const surfaceIndex = args.indexOf("--surface");
 const requestedSurface = surfaceIndex >= 0 ? args[surfaceIndex + 1] : "all";
 const specIndex = args.indexOf("--spec");
 const requestedSpec = specIndex >= 0 ? args[specIndex + 1] : undefined;
+// Real audio by default: the app talks to the actual OS endpoint, so local
+// runs exercise the true backend. Hosted CI (and machines without a default
+// endpoint) pass --virtual-audio for deterministic assertions.
+const virtualAudio = args.includes("--virtual-audio");
 
 const specsBySurface = {
   mixer: ["mixer.e2e.ts"],
   settings: ["settings.e2e.ts"],
   help: ["help.e2e.ts"],
+  overlay: ["overlay.e2e.ts"],
   runtime: ["runtime.e2e.ts"],
   recovery: ["recovery.e2e.ts"],
   windows: ["windows.e2e.ts"],
 };
 
 if (!(requestedSurface === "all" || requestedSurface in specsBySurface)) {
-  console.error("Usage: node run-debug-e2e.mjs [--surface mixer|runtime|windows|recovery|settings|help|all] [--spec path]");
+  console.error("Usage: node run-debug-e2e.mjs [--surface mixer|runtime|windows|recovery|settings|help|overlay|all] [--spec path] [--virtual-audio]");
   process.exit(2);
 }
 
 function runSurface(surface, spec) {
-  const startupSurface = surface === "settings" || surface === "help" ? surface : "mixer";
+  const startupSurface = surface === "settings" || surface === "help" || surface === "overlay" ? surface : "mixer";
   const label = `window-${startupSurface}`;
   const specPath = resolve(packageRoot, "specs", spec);
   const child = spawn(
@@ -59,10 +64,10 @@ function runSurface(surface, spec) {
         ...process.env,
         VOLUMECTL_VERIFY_SURFACE: label,
         VOLUMECTL_E2E_REQUESTED_SURFACE: surface,
-        // Hosted CI runners do not guarantee a physical default output. The
-        // debug-only backend keeps IPC/event/UI assertions deterministic;
-        // native backends remain covered by the Rust host tests.
-        VOLUMECTL_E2E_AUDIO: "virtual",
+        // Opt-in virtual backend: hosted CI runners do not guarantee a
+        // physical default output. Local runs use the REAL audio backend so
+        // the E2E exercises actual device volume/mute round-trips.
+        ...(virtualAudio ? { VOLUMECTL_E2E_AUDIO: "virtual" } : {}),
         ...(surface === "recovery" ? { VOLUMECTL_E2E_BOOTSTRAP_FAILURE: "1" } : {}),
       },
       stdio: "inherit",
@@ -75,7 +80,13 @@ function runSurface(surface, spec) {
   });
 }
 
-const surfaces = requestedSurface === "all" ? ["mixer", "runtime", "windows", "recovery", "settings", "help"] : [requestedSurface];
+// The webview overlay is macOS/Linux-only (Windows uses the native HUD and
+// never opens window-overlay), so the "all" matrix skips it on win32.
+const coreSurfaces = ["mixer", "runtime", "windows", "recovery", "settings", "help"];
+const surfaces =
+  requestedSurface === "all"
+    ? [...coreSurfaces, ...(process.platform === "win32" ? [] : ["overlay"])]
+    : [requestedSurface];
 let exitCode = 0;
 for (const surface of surfaces) {
   const spec = requestedSpec ?? specsBySurface[surface][0];

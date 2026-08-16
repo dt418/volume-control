@@ -1,6 +1,6 @@
-﻿{
+{
     "project":  "volume-control",
-    "last_updated":  "2026-08-15T18:10",
+    "last_updated":  "2026-08-16T19:40",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,161 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-081",
+                         "priority":  81,
+                         "area":  "performance",
+                         "title":  "Webview render performance: Pulse connect backoff + memoized mixer rows",
+                         "user_visible_behavior":  "Surface mounts never stall on machines without Pulse (the first failed connect records a timestamp and later list() calls return instantly during the 10 s backoff; the connect timeout dropped 3 s → 800 ms), and the mixer re-renders far less per state://volume event: SessionRow is memoized and session sorting is cached, so per-app rows only re-render when their own data changes.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "Linux: failed_connect_backs_off_so_surface_mounts_do_not_stall — second list() after a failed connect returns empty in <300 ms (5/5 audio_sessions_linux tests).",
+                                               "Frontend: mixer Vitest 29/29 (SessionRow memo + sortedSessions useMemo keep all existing behavior); full frontend suite + production build clean.",
+                                               "Windows workspace 344, full Linux gate green (clippy -D warnings + 222 tests).",
+                                               "Measured baseline (Windows): cold app start → mixer window 1378 ms; warm-host mixer reopen (window handle) 92 ms; E2E bootstrap-to-ready budget remains 3000 ms p95."
+                                           ],
+                         "evidence":  [
+                                              "Session 090 (2026-08-16): performance evaluation — the webview delay sources are (1) per-surface cold webview boot on open, (2) get_bootstrap's synchronous session enumeration (WASAPI on Windows, Pulse on Linux; a no-Pulse machine previously stalled up to 3 s per mount), and (3) full-tree re-renders per state://volume event. Optimized (2) via connect backoff + shorter timeout and (3) via memoization; (1) is a documented design tradeoff (zero idle webviews) and bundle size (framer-motion/lucide ≈157 kB JS) is tracked as future work.",
+                                              "Session 090 (2026-08-16): Linux backoff test + 29 mixer Vitest + full gates green; committed with records.",
+                                              "Session 091 (2026-08-16): hosted CI (PR #33 Ubuntu + macOS) caught a real E2E bug the local run could not — the frontend self-hide timer armed on the verify-marker mount destroyed the overlay window before the embedded WebDriver attached (No window could be found). Fixed by arming the timer only on state://overlay payloads; a second round showed the HOST timer then destroyed the HUD mid-spec, so the debug E2E marker now disables BOTH auto-hide timers (host env check + BootstrapPayload.e2e_debug for the frontend; release builds unaffected); the overlay spec asserts rendering only, auto-hide stays covered by Vitest 7/7 and production manual evidence. Frontend 101, tauri 16/16, Linux check clean."
+                                       ],
+                         "notes":  "Further optimization candidates (kept out of this change set): warm surface reuse (hide instead of destroy — trades idle RAM for open latency), lighter overlay bootstrap (no session enumeration), and bundle trimming."
+                     },
+                     {
+                         "id":  "vol-080",
+                         "priority":  80,
+                         "area":  "tooling",
+                         "title":  "Platform verification scripts (verify-platform.ps1 / .sh)",
+                         "user_visible_behavior":  "Developer-facing: one fail-closed command per platform runs the whole-app battery — format-lint gate, frontend suite + build, Tauri E2E evidence gate (REAL audio by default, with per-step logs), native probes (Windows autostart + optional interactive hotkey latency; Linux GTK smoke under Xvfb + Pulse presence SKIP-with-reason; macOS AppKit smoke + OS/arch + optional codesign/plutil), and the enforcement self-tests. The scripts print an explicit warning that E2E windows drive the real OS endpoint (restored afterwards) and that only the opt-in --virtual-audio mode simulates volume without touching the device.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "scripts/verify-platform.sh passes bash -n; scripts/verify-platform.ps1 parses clean.",
+                                               "Windows full run: scripts/verify-platform.ps1 -OutputRoot output/platform/windows3 — format-lint gate, frontend Vitest + build, verify-tauri-e2e.ps1 -Surface all (6/6, real audio with device-state restore), verify-autostart.ps1, and the three enforcement self-tests all exit 0 (PLATFORM VERIFICATION PASSED).",
+                                               "Invoke-Step now tees per-step logs under $OutputRoot and prints the tail on failure; $OutputRoot is created up front (missing-dir failures were masking step results).",
+                                               "Pre-push three-domain review (2026-08-16): domain A (guard core) found no HIGH/MEDIUM; fixed LOW CRLF-input normalization in --check (tr -d '\\r' via captured variable so LIST survives the subshell) and hardened every git capture with -c core.quotepath=true (fake-git shim updated to skip the -c prefix).",
+                                               "Pre-push review domain B (gate chain): fixed the PowerShell version check to reject strings AND doubles while accepting the parser's Int64 (3.0 was previously accepted by PS and rejected by bash), rejected the Sysnative bash shim too, made test-format-lint.sh fail-fast single-instance (absolute lock path; EXIT trap runs cleanup || true then releases), and added .exe fallbacks for PowerShell detection (the suite now runs the full PS battery locally).",
+                                               "Pre-push review domain C (wiring/records): desktop-validation.yml E2E gates now opt into --virtual-audio (release path; new test-release-workflow assertion requires 3/3), vol-080 text corrected to the real-audio default, the 2026-08-16 session series renumbered 084-090 (collision with the 2026-08-15 series), CLAUDE.md updated to the Tauri-host architecture, workflow-warning-auditor mirrored into .claude/skills, ship.sh dry-run wording + phase counters fixed, and feature_list lone-comma formatting cleaned.",
+                                               "Post-review battery: test-check-records, test-format-lint (with the PS battery executing), test-ship, test-release-workflow, both format-lint gates, the WSL Linux gate, and sh scripts/check-records.sh --branch origin/main all pass.",
+                                               "workflow-warning-auditor mirrored into .claude/skills and whitelisted in .gitignore (previously .agents-only); all project skills now byte-identical across both mirrors.",
+                                               "macOS/Linux runs are hosted-CI evidence (xvfb-run E2E + gtk_smoke on Ubuntu; appkit_smoke + sw_vers on macOS)."
+                                           ],
+                         "evidence":  [
+                                              "Session 088 (2026-08-16): scripts added; the Windows full run executed end-to-end and the platform-summary line reported PASSED.",
+                                              "Session 088 (2026-08-16): the E2E virtual-backend warning was added after a user reported 'volume out of sync between app and device' caused by leftover E2E windows; a real-backend verification (debug app + RUST_LOG + COM endpoint probe) proved app 98% == device 98% after hotkey changes."
+                                       ],
+                         "notes":  "The interactive hotkey-latency probe stays opt-in (-Interactive) because it requires a real desktop session and sends global keys."
+                     },
+                     {
+                         "id":  "vol-078",
+                         "priority":  78,
+                         "area":  "audio-controls",
+                         "title":  "Linux PulseAudio per-app mixer sessions",
+                         "user_visible_behavior":  "On Linux, the Mixer enumerates PulseAudio sink-inputs (per-app playback streams) as controllable sessions — volume and mute per app via the shared session commands; an unreachable Pulse server degrades to an empty list without hanging. macOS reports per-app audio as not supported (no public API), with truthful copy in the Mixer.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "audio_sessions_linux.rs: build_session_info pure mapping (application.name → media.name → stream name → 'Unknown app', PA_VOLUME_NORM percentage math, corked → inactive) covered by 3 unit tests; PulseSessions::new().supported() true.",
+                                               "Connection rewritten to a plain (non-threaded) pa_mainloop drained on the caller thread (pa_mainloop_iterate + 5 ms poll + deadlines): the original threaded-mainloop teardown tripped Pulse's internal deferred-connect assertion (socket-client.c connect_defer_cb) under WSL and could dereference a moved Connection in the state callback — both crash classes eliminated; callbacks now run inline inside iterate.",
+                                               "unreachable_pulse_server_degrades_to_empty_list: PULSE_SERVER=tcp:127.0.0.1:1 returns an empty list within 5 s (hermetic, no server needed); tests run on Linux CI.",
+                                               "host_core integration: linux_core_uses_a_supported_sessions_source (Linux-gated) — bootstrap reports sessions_supported true with an empty list on an unreachable server.",
+                                               "cargo check -p volumectl --target x86_64-unknown-linux-gnu --no-default-features clean; full Linux gate (WSL) passes: cargo clippy --workspace --all-targets --no-default-features -- -D warnings + workspace tests 222 (163 volumectl lib incl. the Pulse mapping/no-server tests + 26 host_core + 17 tauri + 16 linux_host_core).",
+                                               "Frontend copy: 'Per-app audio isn't available on this platform.' replaces the Windows-only notice (Vitest + E2E mixer spec updated); cargo workspace 344 (Windows) / 222 (Linux), frontend suite + build, Windows E2E mixer 3/3 pass.",
+                                               "E2E now uses REAL audio by default (--virtual-audio opt-in for hosted CI): the mixer spec captures the initial device state and restores it in after hooks; verified on Windows — device 98% before == 98% after the run. CI jobs pass --virtual-audio (hosted runners lack endpoints)."
+                                           ],
+                         "evidence":  [
+                                              "Session 087 (2026-08-16): PulseSessions implemented with a direct libpulse-sys threaded-mainloop connection, synchronous ops with 2 s deadline, 3 s connect timeout, reconnect-on-not-ready, and success-flag capture for the stale-id contract (Err → host re-emits the fresh list).",
+                                              "Session 087 (2026-08-16): macOS stays NoopSessions with honest copy; live sink-input round-trips on a real Pulse server remain manual/hosted evidence.",
+                                              "Session 089 (2026-08-16): WSL Linux gate exposed a real crash (Pulse assertion abort + SIGSEGV in host_core) from the threaded-mainloop teardown; rewritten to the canonical plain-mainloop pattern and re-verified — full Linux gate green. E2E switched to real audio with device-state restore; platform scripts fixed (bash path, autostart -Binary, hashtable splat, --virtual-audio) and the Windows battery re-run."
+                                       ],
+                         "notes":  "Hosted Ubuntu CI (with and without a Pulse server) and a real Pulse sink-input round-trip remain before marking passing."
+                     },
+                     {
+                         "id":  "vol-079",
+                         "priority":  79,
+                         "area":  "audio-controls",
+                         "title":  "FE-BE connection stability: non-blocking polls and backend health events",
+                         "user_visible_behavior":  "Webview surfaces never freeze or appear disconnected when the audio backend hiccups: IPC commands are never queued behind the host poll threads (they skip a cycle instead of blocking on the AppCore mutex), and backend failures publish a one-shot Ready ↔ Degraded status so the mixer shows a live 'Audio backend temporarily unavailable' notice instead of silently freezing on stale values; recovery publishes Ready and resumes live updates.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "host_core integration: backend_degradation_publishes_one_shot_status_and_recovers — a failing probe emits exactly one backend:degraded event, no fabricated volume event, repeat probes stay silent, recovery emits backend:ready and resumes publishing (25/25 host_core tests).",
+                                               "host_core integration: bootstrap_reports_degraded_backend_when_the_probe_fails — BootstrapPayload.backend_status reflects the initial probe.",
+                                               "src-tauri polls use try_lock: the 20 ms hotkey poll and the 150 ms config/audio poll skip their cycle when a command holds AppCore, so commands never wait behind a possibly-blocking get_state (PulseAudio/CoreAudio/WASAPI).",
+                                               "TauriSink::backend emits state://backend; the mixer listens and renders the notice from live events and from a degraded bootstrap (2 new Vitest tests; frontend 99/99).",
+                                               "cargo test --workspace --no-default-features 344 (283 volumectl lib + 16 tauri + 4 win32 sessions + 25 host_core + 16 linux_host_core); npm test --prefix frontend 99; npm run build clean."
+                                           ],
+                         "evidence":  [
+                                              "Session 086 (2026-08-16): user-reported 'Đôi khi FE,BE mất kết nối' — root causes: (1) the fast/slow poll threads blocked on Mutex<AppCore> while calling audio.get_state(), queueing every invoke behind a possibly-slow backend probe; (2) publish_confirmed_state/sync_external_state silently dropped publishes on get_state errors, so state://volume stopped and surfaces froze on stale values with no explanation.",
+                                              "Session 086 (2026-08-16): BackendStatus (Ready | Degraded{error}) added to host_core with a default no-op EventSink::backend, one-shot transitions in note_backend_result, bootstrap carries backend_status, and the mixer surfaces the notice (role=status) with automatic clearing on Ready."
+                                       ],
+                         "notes":  "Hosted CI evidence and a long-run soak (backend loss/recovery on real devices) remain before marking passing."
+                     },
+                     {
+                         "id":  "vol-077",
+                         "priority":  77,
+                         "area":  "overlay",
+                         "title":  "Overlay HUD on macOS and Linux",
+                         "user_visible_behavior":  "A bottom-right, always-on-top, non-focusable overlay webview surface (336x88 logical at the legacy 20px/40px physical work-area margins) hosts the future HUD on macOS and Linux; Windows mixer/settings/help surface behavior is unchanged.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "TDD RED: cargo test -p volumecontrol-tauri --no-default-features fails with E0599 SurfaceId::Overlay not found (9 errors) before implementation.",
+                                               "cargo test -p volumecontrol-tauri --no-default-features passes 15/15 after implementation (3 new overlay geometry tests; updated surface_labels_and_entries_are_stable, from_label_round_trips, all_covers_every_surface; and the window-overlay parser test); 16/16 after Task 5.",
+                                               "cargo test --workspace --no-default-features passes 341 tests (283 volumectl lib + 15 tauri + 4 win32 sessions + 23 host_core + 16 linux_host_core); 342 after Task 5 (283 + 16 + 4 + 23 + 16).",
+                                               "cargo fmt --all --check and git diff --check clean; cargo clippy --workspace --all-targets --no-default-features -- -D warnings clean; scripts/check-tauri-deadlock.ps1 passes (10/10 ok).",
+                                               "TDD RED (Task 5): cargo test -p volumecontrol-tauri --no-default-features overlay_payload fails with E0432 (unresolved import super::overlay_payload) before implementation.",
+                                               "cargo test -p volumecontrol-tauri --no-default-features overlay_payload passes 1/1 (GREEN); overlay_payload_carries_state_and_thresholds asserts pct=42, muted=true, text=null, and green/blue/orange thresholds equal config.color_thresholds.*.",
+                                               "Config field-name verification: crates/volumectl/src/config.rs confirms Config.color_thresholds.green_up_to/blue_up_to/orange_up_to (u8), Config.appearance.theme/material/motion/accent (ThemeMode/MaterialMode/MotionMode/AccentMode), Config::default(), and overlay_duration_ms (u64); VolumeState::percent() = (volume.clamp(0.0,1.0)*100.0).round() as u8.",
+                                               "Feature/config evidence: tauri 2 features += macos-private-api compiles on the Windows host; tauri.conf.json app.macOSPrivateApi=true is accepted by tauri-build (config schema 2) during the test build.",
+                                               "TDD RED (Task 6): npm test --prefix frontend -- --run src/overlay/OverlaySurface.test.tsx fails with \"Failed to resolve import ./OverlaySurface\" (module missing) before implementation.",
+                                               "npm test --prefix frontend -- --run src/overlay/OverlaySurface.test.tsx passes 3/3 after implementation (SignalRail + 42% from state://overlay, text card, Muted label); npm test --prefix frontend passes 16 files / 95 tests.",
+                                               "npm run build --prefix frontend (tsc --noEmit + vite build) clean; emits frontend/dist/src/overlay/index.html and assets/overlay-*.js.",
+                                               "Sync-fix Vitest evidence: npm test --prefix frontend -- --run src/overlay/OverlaySurface.test.tsx passes 4/4 after the rewrite (bootstrap-first render 55% + signal rail, live state://volume update to 62%, text card from state://overlay, Muted from the live volume event); npm test --prefix frontend passes 16 files / 96 tests; npm run build --prefix frontend (tsc --noEmit + vite build) clean.",
+                                               "Resolved-theme sync evidence: crates/volumectl/src/host_core.rs exposes exactly one public theme-resolution path — resolved_theme_str(ThemeMode) -> \"dark\"/\"light\" (System folds system_is_dark(); unknown probes fall back to light) — and appearance_payload() delegates to it; the state://overlay payload now carries theme_resolved from that same helper instead of the raw Debug theme string; overlay_payload_carries_state_and_thresholds asserts theme_resolved == \"dark\" for ThemeMode::Dark (deterministic; System is not tested because the Windows registry probe is machine-dependent) and the old theme key is absent; OverlaySurface consumes theme_resolved directly (resolveTheme/matchMedia deleted). Verified: cargo test -p volumectl --lib host_core 4/4, cargo test -p volumecontrol-tauri 16/16, cargo test --workspace 342, overlay Vitest 4/4, frontend 16 files / 96, npm run build, cargo fmt --all --check, git diff --check, clippy -D warnings, and check-tauri-deadlock.ps1 10/10 all pass."
+                                           ],
+                         "evidence":  [
+                                              "Session 085 (2026-08-16): SurfaceId::Overlay added (label window-overlay, title VolumeControl Overlay, entry src/overlay/index.html); all() returns 4 surfaces with overlay last; OVERLAY_SIZE = (336.0, 88.0); place_surface puts it bottom-right at OVERLAY_MARGIN_X/Y (20/40) physical px; open_impl creates it decorations(false)/transparent(true)/always_on_top(true)/skip_taskbar(true)/resizable(false), then set_focusable(false) and macOS set_ignore_cursor_events(true) — verified in the Tauri 2.11.5 registry source (webview_window.rs:2133) that set_ignore_cursor_events is a direct WebviewWindow method; neither the already-open branch nor surface_ready_impl focuses the overlay; mixer Focused(false) auto-close and Windows surface behavior unchanged.",
+                                               "Session 085 (2026-08-16): commands.rs command_surface_names_round_trip updated (test-only, outside the stated 4-file scope but required for a green workspace suite) — it now round-trips SurfaceId::Overlay and rejects window-nope instead of asserting window-overlay is unknown.",
+                                               "Session 085 (2026-08-16): TauriSink::overlay on macOS/Linux opens the window-overlay surface via WindowManager, emits the state://overlay payload (text/pct/muted/color thresholds + Debug appearance strings), and arms a cancellable auto-hide — overlay_seq generation counter + async_runtime::sleep(overlay_duration_ms.clamp(200, 10_000)) that closes the surface only while the generation is current; the Windows native overlay branch is byte-identical.",
+                                               "Session 085 (2026-08-16): Deviation from the plan snippet, required by the Windows -D warnings clippy gate (un-gated code warns dead_code on Windows where the webview overlay path is compiled out): overlay_payload is #[cfg(any(not(target_os = \"windows\"), test))] and TauriSink.overlay_seq (+ its new() init) is #[cfg(not(target_os = \"windows\"))]; no #[allow] hiding, and the payload-shape test still runs on Windows.",
+                                               "Session 085 (2026-08-16): frontend overlay entry — vite.config.ts rollup input gains overlay: src/overlay/index.html; index.html mirrors help (same theme preload script, title VolumeControl Overlay, module ./overlay.tsx); overlay.tsx mirrors help.tsx (StrictMode + createRoot + ../styles.css, whose shared body rule is background: transparent); OverlaySurface marks the surface ready on mount, subscribes to state://overlay, maps theme Dark/Light/auto via prefers-color-scheme into applyAppearance's exact AppearancePayload { theme_resolved, material, motion, accent }, and renders data-surface=overlay + data-testid=overlay-card with either payload.text or SignalRail + percent using the config color thresholds; the root is pointer-events-none/bg-transparent so the HUD body is transparent and non-interactive.",
+                                               "Session 085 (2026-08-16): user-reported race fix — the overlay opened out of sync with its content: markSurfaceReady() ran on mount and the state://overlay listener registered after the host had already emitted, so the window became visible before content existed and the first event was lost (empty/transparent flicker or stale content). OverlaySurface now subscribes to state://overlay + state://volume first, renders the get_bootstrap snapshot (volume_pct/muted/color_thresholds/appearance) and calls markSurfaceReady() only in the bootstrap .finally(), mirroring sessionStore's ordering; live state://overlay (full payload incl. text-card mode) and state://volume ({pct, muted}) override the snapshot.",
+                                               "Session 085 (2026-08-16): overlay now consumes the same Rust-resolved theme string as the mixer — resolved_theme_str() is the single theme-resolution implementation in host_core (appearance_payload delegates to it), the state://overlay payload's theme_resolved is produced by that same helper, and OverlaySurface applies it directly with no matchMedia re-resolution; the payload-shape test asserts Dark -> \"dark\" and the raw theme key is gone."
+                                           ],
+                         "notes":  "Hosted CI (macOS/Linux webview builds) and manual compositor transparency/click-through evidence are still pending before vol-077 can move past in_progress."
+                     },
+                     {
+                         "id":  "vol-076",
+                         "priority":  76,
+                         "area":  "tray",
+                         "title":  "Tauri tray on macOS and Linux",
+                         "user_visible_behavior":  "macOS and Linux builds get the same resident tray icon and menu as Windows: live volume label, mute check, reset, mixer/settings/help, reload, open config, and Exit; the tray host stays alive when all webview surfaces close, and a failing tray backend degrades gracefully instead of killing the app.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "cargo test -p volumectl --lib tray --no-default-features passes 5/5 including the previously Windows-gated tray_command_to_action mapping now running on every platform.",
+                                               "cargo test --workspace --no-default-features passes 338 tests (283 volumectl lib + 12 tauri + 4 win32 sessions + 23 host_core + 16 linux_host_core).",
+                                               "TauriTray (src-tauri/src/tauri_tray.rs) builds the shared menu ids and generated icon; menu events route through one handler per platform (Windows global handler, macOS/Linux TrayIconBuilder callback) into the shared dispatch_tray_command.",
+                                               "cargo check -p volumectl --target x86_64-unknown-linux-gnu --no-default-features clean.",
+                                               "cargo test -p volumecontrol-tauri --no-default-features passes 12/12 with the TauriTray module wired (the module is cfg'd out on Windows; its menu-id contract test runs on Linux/macOS CI).",
+                                               "Deliverable src-tauri/src/tauri_tray.rs compiles against the real Tauri 2.11.5 menu/tray/image APIs (MenuItem::with_id, CheckMenuItem::with_id, PredefinedMenuItem::separator, Menu::with_items, TrayIconBuilder chain, Image::new_owned, set_text/set_checked/set_tooltip) and menu_ids_match_the_shared_tray_command_mapping passes in a scratch harness on the host target.",
+                                               "cargo clippy --workspace --all-targets --no-default-features -- -D warnings clean; cargo fmt --all --check and git diff --check clean.",
+                                               "OverlaySurface renders its initial state from get_bootstrap before markSurfaceReady (window never appears empty; the first state://overlay event cannot be lost), subscribes to state://volume for live updates, and the HUD card spans the full window width (w-full) so its right edge stays aligned with the mixer's shared right edge at any DPI/zoom.",
+                                               "Overlay card fills the window on both axes (h-full w-full justify-center), so the visual card edges match the window edges exactly — the right edge shared with the mixer and the 16px vertical gap are preserved at any DPI/zoom.",
+                                               "E2E overlay spec passes on Windows (debug run with VOLUMECTL_VERIFY_SURFACE=window-overlay): the surface boots with the capability wiring (window-overlay added to default.json + e2e-wdio.json), the WDIO bridge is live, and the title/bridge assertions pass; the full HUD content + auto-hide assertions run on macOS/Linux where the webview overlay path is live (Windows routes overlay notifications to the native HUD).",
+                                               "npm test --prefix e2e/tauri 18/18, npm run typecheck --prefix e2e/tauri clean, npm run test:e2e:debug --surface overlay 1/1, and the verify-tauri-e2e.ps1 evidence gate (JUnit + manifest + timings) exit 0.",
+                                               "The webview overlay is macOS/Linux-only: WindowManager::open_impl rejects SurfaceId::Overlay on Windows (native HUD stays), run-debug-e2e.mjs excludes overlay from the Windows all-matrix, verify-tauri-e2e.ps1 drops the overlay surface, and the overlay E2E spec is macOS/Linux-only.",
+                                               "Frontend self-hide timer: OverlaySurface arms getCurrentWindow().close() after clamp(overlay_duration_ms ?? 1800, 200, 10000) ONLY when a real state://overlay payload arrives (production shows always emit it), and clears it on unmount — the macOS/Linux overlay always auto-closes even if the host event/timer is missed (double-close with the host timer is safe).",
+                                               "Windows full E2E matrix passes 6/6 (mixer, runtime, windows, recovery, settings, help) with the overlay surface excluded; frontend Vitest 97 (5 overlay incl. the self-hide timer test); workspace cargo 342."
+                                           ],
+                         "evidence":  [
+                                              "Session 084 (2026-08-16): TrayCommand + tray_icon_rgba moved to the cross-platform tray_common module; host_core::tray_command_to_action un-gated; Windows native tray unchanged.",
+                                              "Session 084 (2026-08-16): TauriTray built on macOS/Linux via TrayIconBuilder::with_id(\"main\") with the exact Windows-native menu (disabled live volume label \"volume\", Mute check \"mute\", reset/mixer/settings/help/reload/edit, exit) and the shared 32x32 RGBA icon; dispatch_tray_command now shared by the Windows global menu handler and the tray callback; tray creation failure is non-fatal; set_volume refreshes label/check/tooltip and show_menu is a documented log-only no-op (Tauri 2.11.5 TrayIcon exposes no show_menu API).",
+                                              "Session 084 (2026-08-16): TauriSink::volume and show_tray_menu refresh/route to the managed tray on non-Windows; Windows keeps its native tray and native_win32.rs is untouched.",
+                                              "Session 085 (2026-08-16): user-reported \"overlay shows empty\" race fixed via bootstrap-first rendering (frontend/src/overlay/OverlaySurface.tsx + 4 Vitest tests, 96/96 frontend suite, commit e3153812); user-reported \"overlay misaligned with mixer\" fixed by making the HUD card w-full so the visual right edge matches the mixer's right edge regardless of DPI/zoom.",
+                                              "Session 085 (2026-08-16): vertical fill added — the HUD card now spans h-full w-full with justify-center, so both visual axes match the window edges (right edge shared with the mixer; 16px gap to the mixer preserved) at any DPI/zoom.",
+                                              "Session 085 (2026-08-16): overlay E2E wiring — e2e/tauri/specs/overlay.e2e.ts (Windows asserts surface boot + WDIO bridge; macOS/Linux assert card/rail/percent + auto-hide), run-debug-e2e.mjs surface map + startup surface, selectors.ts SurfaceName + overlay title selector, both verify-tauri-e2e wrappers, and window-overlay added to the production + e2e capability allowlists.",
+                                              "Session 085 (2026-08-16): platform decision (user-confirmed) — the webview overlay is macOS/Linux-only; Windows never opens window-overlay (open_impl guard, native HUD untouched) and its E2E matrix excludes the overlay; the overlay E2E spec is macOS/Linux-only; the frontend self-hide timer guarantees auto-close on macOS/Linux.",
+                                              "Session 084 (2026-08-16): hosted Ubuntu/macOS runs and a real menu-bar/appindicator desktop remain required before marking passing (creation is CI-verifiable; menu interaction is manual evidence)."
+                                       ],
+                         "notes":  "Windows keeps its native tray-icon/muda tray (no regression risk); the Tauri-managed tray is added only on macOS/Linux with the identical stable menu ids."
+                     },
                      {
                          "id":  "vol-075",
                          "priority":  75,

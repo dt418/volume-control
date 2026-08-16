@@ -7,11 +7,9 @@ use tauri::Manager;
 #[cfg(debug_assertions)]
 use volumectl_lib::audio::E2eAudio;
 use volumectl_lib::audio::{AudioBackend, UnavailableAudio};
-#[cfg(target_os = "windows")]
 use volumectl_lib::host_core::tray_command_to_action;
 use volumectl_lib::host_core::AppCore;
-#[cfg(target_os = "windows")]
-use volumectl_lib::tray::TrayCommand;
+use volumectl_lib::tray_common::TrayCommand;
 
 use commands::{
     adjust_volume, close_surface, config_path, get_audio_sessions, get_autostart, get_bootstrap,
@@ -29,6 +27,8 @@ mod native_win32;
 
 mod commands;
 mod events_sink;
+#[cfg(not(target_os = "windows"))]
+mod tauri_tray;
 mod window_manager;
 
 pub fn builder() -> tauri::Builder<tauri::Wry> {
@@ -70,18 +70,7 @@ fn install_menu_event_handler(builder: tauri::Builder<tauri::Wry>) -> tauri::Bui
             let Some(command) = TrayCommand::from_menu_id(event.id().as_ref()) else {
                 return;
             };
-            let Some(shared) = app.try_state::<Arc<Mutex<AppCore>>>() else {
-                log::warn!(
-                    "tray command {:?} received before AppCore was managed",
-                    command
-                );
-                return;
-            };
-            log::debug!("tray command: {command:?}");
-            let mut core = shared
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            core.handle_action(tray_command_to_action(command));
+            dispatch_tray_command(app, command);
         })
     }
 
@@ -89,6 +78,23 @@ fn install_menu_event_handler(builder: tauri::Builder<tauri::Wry>) -> tauri::Bui
     {
         builder
     }
+}
+
+/// Shared tray-command dispatch (Windows global handler and the macOS/Linux
+/// tray callback both route here).
+fn dispatch_tray_command(app: &tauri::AppHandle, command: TrayCommand) {
+    let Some(shared) = app.try_state::<Arc<Mutex<AppCore>>>() else {
+        log::warn!(
+            "tray command {:?} received before AppCore was managed",
+            command
+        );
+        return;
+    };
+    log::debug!("tray command: {command:?}");
+    let mut core = shared
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    core.handle_action(tray_command_to_action(command));
 }
 
 /// Enable test-only automation plugins only for an explicitly marked debug run.
@@ -192,6 +198,17 @@ pub fn run() -> tauri::Result<()> {
             let handle = app.handle().clone();
             app.manage(WindowManager::new(handle.clone()));
 
+            // Tauri-managed tray (macOS/Linux only). Creation failure is
+            // non-fatal: keep the host alive with the webview surfaces.
+            #[cfg(not(target_os = "windows"))]
+            match tauri_tray::TauriTray::create(&handle) {
+                Ok(tray) => {
+                    app.manage(tray);
+                    log::info!("tray created");
+                }
+                Err(error) => log::warn!("tray unavailable; keeping host alive: {error}"),
+            }
+
             // Native surfaces. Windows: HUD overlay + tray + wheel bridge.
             // Linux/macOS: none (the headless host is AppCore alone).
             #[cfg(target_os = "windows")]
@@ -242,9 +259,14 @@ pub fn run() -> tauri::Result<()> {
             #[cfg(target_os = "windows")]
             let fast_native = native.clone();
             std::thread::spawn(move || loop {
-                let mut core = fast_shared
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                // Never queue an IPC command behind a poll: when a command
+                // holds the core (volume slider, bootstrap, tray action),
+                // skip this cycle instead of blocking. Commands are the
+                // interactive path — polls are best-effort by design.
+                let Ok(mut core) = fast_shared.try_lock() else {
+                    std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
+                    continue;
+                };
                 core.poll_hotkeys();
                 #[cfg(target_os = "windows")]
                 while let Some(action) = fast_native.try_recv_wheel() {
@@ -260,9 +282,14 @@ pub fn run() -> tauri::Result<()> {
             // commands through `on_menu_event` on the runtime event loop.
             let slow_shared = shared.clone();
             std::thread::spawn(move || loop {
-                let mut core = slow_shared
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                // Same non-blocking contract as the fast poll: the audio
+                // probe (PulseAudio/CoreAudio/WASAPI get_state) can block on
+                // a slow or lost device, and the 150 ms cadence must never
+                // stall an in-flight command.
+                let Ok(mut core) = slow_shared.try_lock() else {
+                    std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
+                    continue;
+                };
                 core.reload_config_if_changed();
                 // External audio-state sync: volume changed outside the
                 // app (media keys, other apps) — keeps the tray tooltip
@@ -375,8 +402,8 @@ mod tests {
             Some(SurfaceId::Help)
         );
         assert_eq!(
-            super::parse_verify_surface("window-overlay"),
-            Err("unknown surface".to_string())
+            super::parse_verify_surface("window-overlay").unwrap(),
+            Some(SurfaceId::Overlay)
         );
         assert_eq!(super::parse_verify_surface(""), Ok(None));
     }

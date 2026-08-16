@@ -140,6 +140,11 @@ pub struct BootstrapPayload {
     pub appearance: AppearancePayload,
     pub sessions: Vec<AudioSessionInfo>,
     pub sessions_supported: bool,
+    pub backend_status: BackendStatus,
+    /// Debug E2E marker: the host disables the overlay auto-hide timers so
+    /// the embedded WebDriver can attach and assert the HUD. Always false in
+    /// production builds.
+    pub e2e_debug: bool,
 }
 
 /// Host-facing notifications emitted by [`AppCore`]. The Tauri host
@@ -153,6 +158,11 @@ pub trait EventSink: Send + Sync {
     fn hotkeys(&self, status: &[HotkeyRegResult]);
     /// The audio-session list changed.
     fn sessions(&self, sessions: &[AudioSessionInfo]);
+    /// The audio backend health changed (ready ↔ degraded). Default no-op so
+    /// existing sinks keep compiling; the Tauri host emits `state://backend`
+    /// so surfaces can show a live degraded state instead of freezing
+    /// silently when the backend hiccups.
+    fn backend(&self, _status: &BackendStatus) {}
     /// The host should open the surface with `label` (e.g. `"window-mixer"`).
     fn open_surface(&self, _label: &str) {}
     /// The host should close/destroy the surface with `label`.
@@ -175,6 +185,20 @@ pub trait EventSink: Send + Sync {
     fn exit(&self) {}
 }
 
+/// Backend health published to hosts and surfaces.
+///
+/// `publish_confirmed_state`/`sync_external_state` used to drop the publish
+/// silently on `get_state` errors, so open webviews froze on stale values
+/// with no explanation ("FE/BE connection lost"). The host now emits the
+/// Ready ↔ Degraded transition exactly once per change so surfaces can
+/// surface the failure and recover.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "status", rename_all = "lowercase")]
+pub enum BackendStatus {
+    Ready,
+    Degraded { error: String },
+}
+
 /// Cross-platform application state. One instance per app, owned by the host
 /// (managed as `Mutex<AppCore>` so commands can mutate it).
 pub struct AppCore {
@@ -190,6 +214,9 @@ pub struct AppCore {
     /// zeroing the scalar guarantees audible output is actually silent on
     /// devices/drivers that report a mute bit without attenuating playback.
     mute_restore_volume: Option<f32>,
+    /// Last published backend health (Ready initially; degraded on the first
+    /// failed probe). Drives the one-shot `state://backend` transitions.
+    backend_status: BackendStatus,
     last_config_mtime: Option<std::time::SystemTime>,
     config_notice: Option<crate::config::ConfigLoadNotice>,
 }
@@ -256,15 +283,25 @@ impl AppCore {
         // store — safe regardless of when install_wheel_hook runs.
         #[cfg(target_os = "windows")]
         crate::wheel_win32::set_modifier(_modifier);
-        let last_state = audio.get_state().unwrap_or(VolumeState {
+        let initial_probe = audio.get_state();
+        let last_state = initial_probe.clone().unwrap_or(VolumeState {
             volume: 0.5,
             muted: false,
         });
+        let backend_status = match &initial_probe {
+            Ok(_) => BackendStatus::Ready,
+            Err(error) => BackendStatus::Degraded {
+                error: error.to_string(),
+            },
+        };
         let hotkey_status = hotkeys.status();
         #[cfg(target_os = "windows")]
         let sessions_source: Box<dyn SessionsSource> =
             Box::new(crate::audio_sessions_win32::WindowsSessions);
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(target_os = "linux")]
+        let sessions_source: Box<dyn SessionsSource> =
+            Box::new(crate::audio_sessions_linux::PulseSessions::new());
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
         let sessions_source: Box<dyn SessionsSource> = Box::new(NoopSessions);
         let core = Self {
             audio,
@@ -275,6 +312,7 @@ impl AppCore {
             sink,
             sessions_source,
             mute_restore_volume: None,
+            backend_status,
             last_config_mtime: config_mtime(),
             config_notice,
         };
@@ -285,15 +323,22 @@ impl AppCore {
         // `VolumeControl — --` until the first volume mutation.
         core.sink
             .volume(core.last_state.percent(), core.last_state.muted);
+        if core.backend_status != BackendStatus::Ready {
+            core.sink.backend(&core.backend_status);
+        }
         Ok(core)
     }
 
     /// Snapshot for a webview mount: current config, confirmed state,
     /// hotkey status, resolved appearance and the session list.
     pub fn bootstrap(&mut self) -> BootstrapPayload {
-        if let Ok(st) = self.audio.get_state() {
+        let probe = self.audio.get_state();
+        self.note_backend_result(&probe);
+        if let Ok(st) = probe {
             self.last_state = st;
         }
+        let e2e_debug =
+            cfg!(debug_assertions) && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
         BootstrapPayload {
             config: self.config.clone(),
             config_notice: self.config_notice,
@@ -303,6 +348,8 @@ impl AppCore {
             appearance: self.appearance_payload(),
             sessions: self.sessions(),
             sessions_supported: self.sessions_source.supported(),
+            backend_status: self.backend_status.clone(),
+            e2e_debug,
         }
     }
 
@@ -779,9 +826,11 @@ impl AppCore {
     /// overlay/tray renderers are host concerns and are driven through the
     /// sink's `overlay`/`volume` notifications.
     pub fn publish_confirmed_state(&mut self, show_overlay: bool) {
-        let Ok(st) = self.audio.get_state() else {
+        let probe = self.audio.get_state();
+        if !self.note_backend_result(&probe) {
             return;
-        };
+        }
+        let st = probe.expect("note_backend_result accepted Ok");
         self.publish_state(st, show_overlay);
     }
 
@@ -801,13 +850,43 @@ impl AppCore {
     /// stays authoritative (mirrors the legacy 150 ms host timer, which only
     /// re-showed the HUD when the config had just reloaded).
     pub fn sync_external_state(&mut self) {
-        let Ok(st) = self.audio.get_state() else {
+        let probe = self.audio.get_state();
+        if !self.note_backend_result(&probe) {
             return;
-        };
+        }
+        let st = probe.expect("note_backend_result accepted Ok");
         if st != self.last_state {
             log::debug!("ext change: {}% muted={}", st.percent(), st.muted);
             self.last_state = st;
             self.sink.volume(st.percent(), st.muted);
+        }
+    }
+
+    /// Track backend health across probes and emit the Ready ↔ Degraded
+    /// transition exactly once per change. Returns true when the probe
+    /// succeeded (caller continues publishing).
+    fn note_backend_result(
+        &mut self,
+        probe: &Result<VolumeState, crate::audio::AudioError>,
+    ) -> bool {
+        match probe {
+            Ok(_) => {
+                if self.backend_status != BackendStatus::Ready {
+                    self.backend_status = BackendStatus::Ready;
+                    self.sink.backend(&self.backend_status);
+                }
+                true
+            }
+            Err(error) => {
+                let status = BackendStatus::Degraded {
+                    error: error.to_string(),
+                };
+                if self.backend_status != status {
+                    self.backend_status = status;
+                    self.sink.backend(&self.backend_status);
+                }
+                false
+            }
         }
     }
 
@@ -898,24 +977,29 @@ impl AppCore {
     }
 
     fn appearance_payload(&self) -> AppearancePayload {
-        let theme_resolved = match self.config.appearance.theme {
-            ThemeMode::Dark => "dark",
-            ThemeMode::Light => "light",
-            ThemeMode::System => {
-                // Matches the native renderer's contract: unknown system
-                // theme falls back to the light palette.
-                if system_is_dark().unwrap_or(false) {
-                    "dark"
-                } else {
-                    "light"
-                }
-            }
-        };
+        let theme_resolved = resolved_theme_str(self.config.appearance.theme);
         AppearancePayload {
             theme_resolved: theme_resolved.to_string(),
             material: material_str(self.config.appearance.material).to_string(),
             motion: motion_str(self.config.appearance.motion).to_string(),
             accent: accent_str(self.config.appearance.accent).to_string(),
+        }
+    }
+}
+
+/// Resolve a configured theme mode to the concrete `"dark"`/`"light"`
+/// string, matching the mixer surface's resolution exactly (System folds
+/// the platform probe; unknown probes fall back to light).
+pub fn resolved_theme_str(theme: ThemeMode) -> &'static str {
+    match theme {
+        ThemeMode::Dark => "dark",
+        ThemeMode::Light => "light",
+        ThemeMode::System => {
+            if system_is_dark().unwrap_or(false) {
+                "dark"
+            } else {
+                "light"
+            }
         }
     }
 }
@@ -1280,10 +1364,10 @@ pub fn config_mtime() -> Option<std::time::SystemTime> {
 }
 
 /// Map a tray menu command to the shared action contract (no blacklist gate,
-/// matching the pre-Tauri host). Windows-only: the tray exists only there.
-#[cfg(target_os = "windows")]
-pub fn tray_command_to_action(cmd: crate::tray::TrayCommand) -> AppAction {
-    use crate::tray::TrayCommand as C;
+/// matching the pre-Tauri host). Every platform host (native Windows tray
+/// and the macOS/Linux Tauri tray) dispatches through this mapping.
+pub fn tray_command_to_action(cmd: crate::tray_common::TrayCommand) -> AppAction {
+    use crate::tray_common::TrayCommand as C;
     use SurfaceId as S;
     match cmd {
         C::ToggleMute => AppAction::ToggleMute,
@@ -1354,10 +1438,9 @@ mod tests {
         );
     }
 
-    #[cfg(target_os = "windows")]
     #[test]
     fn tray_command_to_action_maps_all_commands() {
-        use crate::tray::TrayCommand as C;
+        use crate::tray_common::TrayCommand as C;
         assert_eq!(tray_command_to_action(C::ToggleMute), AppAction::ToggleMute);
         assert_eq!(tray_command_to_action(C::Reset50), AppAction::ResetVolume);
         assert_eq!(

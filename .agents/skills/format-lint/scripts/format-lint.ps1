@@ -120,9 +120,14 @@ function Get-Bash {
         # (e.g. /usr/bin/bash), which is the correct tool there.
         $sysRoot = $env:SystemRoot
         if ($sysRoot) {
-            $wslShim = Join-Path $sysRoot 'System32\bash.exe'
-            if ($fromPath.Source -eq $wslShim) {
-                return $null
+            # Both spellings of the WSL shim must be rejected: a 32-bit
+            # PowerShell on 64-bit Windows resolves C:\Windows\Sysnative\
+            # instead of System32 for the same shim binary.
+            foreach ($shimPath in @('System32\bash.exe', 'Sysnative\bash.exe')) {
+                $wslShim = Join-Path $sysRoot $shimPath
+                if ($fromPath.Source -eq $wslShim) {
+                    return $null
+                }
             }
         }
         return $fromPath.Source
@@ -166,11 +171,12 @@ if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "step manifest not found at $manifestPath"
 }
 $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-# Fail-closed on a QUOTED version: ConvertFrom-Json yields a string for
-# "3" and PowerShell's `-ne 3` would coerce it to pass, while the bash
-# gate's sed `"version": ([0-9]+)` already rejects it. Reject strings so
-# both parsers agree the manifest version must be a JSON number.
-if ($manifest.version -is [string] -or $manifest.version -ne 3) {
+# Fail-closed on a NON-INTEGER version: ConvertFrom-Json yields a string for
+# "3" and a double for 3.0; PowerShell's `-ne 3` would coerce both to pass,
+# while the bash gate's sed `"version": ([0-9]+)` already rejects them.
+# Reject strings and doubles, and accept any integral JSON number (the
+# parser yields Int64 for plain integers).
+if ($manifest.version -is [string] -or $manifest.version -is [double] -or $manifest.version -ne 3) {
     throw "unsupported manifest version $($manifest.version) (expected numeric 3)"
 }
 $steps = @($manifest.steps)

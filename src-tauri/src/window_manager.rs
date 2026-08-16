@@ -11,6 +11,7 @@ pub enum SurfaceId {
     Mixer,
     Settings,
     Help,
+    Overlay,
 }
 
 impl SurfaceId {
@@ -19,6 +20,7 @@ impl SurfaceId {
             Self::Mixer => "window-mixer",
             Self::Settings => "window-settings",
             Self::Help => "window-help",
+            Self::Overlay => "window-overlay",
         }
     }
 
@@ -27,6 +29,7 @@ impl SurfaceId {
             Self::Mixer => "Volume Mixer",
             Self::Settings => "VolumeControl Settings",
             Self::Help => "VolumeControl Help",
+            Self::Overlay => "VolumeControl Overlay",
         }
     }
 
@@ -37,11 +40,12 @@ impl SurfaceId {
             Self::Mixer => "src/mixer/index.html",
             Self::Settings => "src/settings/index.html",
             Self::Help => "src/help/index.html",
+            Self::Overlay => "src/overlay/index.html",
         }
     }
 
-    pub fn all() -> [SurfaceId; 3] {
-        [Self::Mixer, Self::Settings, Self::Help]
+    pub fn all() -> [SurfaceId; 4] {
+        [Self::Mixer, Self::Settings, Self::Help, Self::Overlay]
     }
 
     pub fn from_label(label: &str) -> Option<Self> {
@@ -55,6 +59,7 @@ pub const MIXER_SIZE: (f64, f64) = (400.0, 224.0);
 pub const SETTINGS_SIZE: (f64, f64) = (760.0, 620.0);
 pub const SETTINGS_MIN_SIZE: (f64, f64) = (620.0, 520.0);
 pub const HELP_SIZE: (f64, f64) = (520.0, 500.0);
+pub const OVERLAY_SIZE: (f64, f64) = (336.0, 88.0);
 
 /// Placement constants mirrored from the legacy native surfaces:
 /// - the volume overlay is 88px tall at a 20px/40px margin from the
@@ -83,6 +88,13 @@ pub fn place_surface(
     let wa_h = work_area.size.height as f64;
 
     let (left, top, width, height) = match surface {
+        SurfaceId::Overlay => {
+            let w = OVERLAY_SIZE.0 * scale;
+            let h = OVERLAY_SIZE.1 * scale;
+            let left = wa_x + wa_w - OVERLAY_MARGIN_X - w;
+            let top = wa_y + wa_h - OVERLAY_MARGIN_Y - h;
+            (left, top, w, h)
+        }
         SurfaceId::Mixer => {
             let w = MIXER_SIZE.0 * scale;
             let h = MIXER_SIZE.1 * scale;
@@ -116,7 +128,7 @@ pub fn place_surface(
     }
 }
 
-/// Owns the lazy lifecycle of the three webview surface windows. Windows are
+/// Owns the lazy lifecycle of the four webview surface windows. Windows are
 /// created on demand (`open`), destroyed on `close`, and never created in the
 /// Tauri builder (the app starts with zero webviews to protect idle RAM).
 pub struct WindowManager {
@@ -146,6 +158,16 @@ impl WindowManager {
     }
 
     fn open_impl(&self, surface: SurfaceId) -> Result<(), String> {
+        // The webview overlay is macOS/Linux-only by design: Windows routes
+        // overlay notifications to its native Win32 HUD (TauriSink::overlay
+        // Windows branch), so the webview surface must never exist there —
+        // debug/E2E runs included.
+        #[cfg(target_os = "windows")]
+        if surface == SurfaceId::Overlay {
+            return Err(
+                "webview overlay is macOS/Linux-only; Windows uses the native HUD".to_string(),
+            );
+        }
         if self.is_open(surface) {
             if let Some(window) = self.app.get_webview_window(surface.label()) {
                 if let Ok(Some(monitor)) = window.current_monitor() {
@@ -154,7 +176,9 @@ impl WindowManager {
                     apply_placement(&window, surface, &monitor);
                 }
                 window.show().map_err(|e| e.to_string())?;
-                let _ = window.set_focus();
+                if surface != SurfaceId::Overlay {
+                    let _ = window.set_focus();
+                }
                 return Ok(());
             }
             // The surface is marked active but its window is gone (a
@@ -181,6 +205,7 @@ impl WindowManager {
             builder = builder.initialization_script(script);
         }
         let (w, h) = match surface {
+            SurfaceId::Overlay => OVERLAY_SIZE,
             SurfaceId::Mixer => MIXER_SIZE,
             SurfaceId::Settings => SETTINGS_SIZE,
             SurfaceId::Help => HELP_SIZE,
@@ -190,6 +215,14 @@ impl WindowManager {
             .inner_size(w, h)
             .visible(false);
         match surface {
+            SurfaceId::Overlay => {
+                builder = builder
+                    .decorations(false)
+                    .transparent(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .resizable(false);
+            }
             SurfaceId::Mixer => {
                 builder = builder.decorations(false);
                 // Tauri's transparent window builder API is not available on
@@ -214,6 +247,15 @@ impl WindowManager {
             }
         }
         let window = builder.build().map_err(|e| e.to_string())?;
+        if surface == SurfaceId::Overlay {
+            let _ = window.set_focusable(false);
+            // Click-through for the HUD overlay on macOS; on Windows/Linux
+            // the overlay stays interactive while unfocused.
+            #[cfg(target_os = "macos")]
+            {
+                let _ = window.set_ignore_cursor_events(true);
+            }
+        }
         log::debug!(
             "window_manager: created {} url={:?}",
             surface.label(),
@@ -290,7 +332,9 @@ impl WindowManager {
             log::warn!("window_manager: show {surface:?} failed: {e}");
             e.to_string()
         })?;
-        let _ = window.set_focus();
+        if surface != SurfaceId::Overlay {
+            let _ = window.set_focus();
+        }
         log::debug!("window_manager: open_impl {surface:?} done");
         Ok(())
     }
@@ -411,6 +455,8 @@ mod tests {
         assert_eq!(SurfaceId::Settings.entry(), "src/settings/index.html");
         assert_eq!(SurfaceId::Help.label(), "window-help");
         assert_eq!(SurfaceId::Help.entry(), "src/help/index.html");
+        assert_eq!(SurfaceId::Overlay.label(), "window-overlay");
+        assert_eq!(SurfaceId::Overlay.entry(), "src/overlay/index.html");
     }
 
     #[test]
@@ -424,15 +470,20 @@ mod tests {
             Some(SurfaceId::Settings)
         );
         assert_eq!(SurfaceId::from_label("window-help"), Some(SurfaceId::Help));
+        assert_eq!(
+            SurfaceId::from_label("window-overlay"),
+            Some(SurfaceId::Overlay)
+        );
         assert_eq!(SurfaceId::from_label("nope"), None);
     }
 
     #[test]
     fn all_covers_every_surface() {
-        assert_eq!(SurfaceId::all().len(), 3);
+        assert_eq!(SurfaceId::all().len(), 4);
         assert!(SurfaceId::all().contains(&SurfaceId::Mixer));
         assert!(SurfaceId::all().contains(&SurfaceId::Settings));
         assert!(SurfaceId::all().contains(&SurfaceId::Help));
+        assert!(SurfaceId::all().contains(&SurfaceId::Overlay));
     }
 
     /// Mixer: bottom-right of the work area, sharing the overlay's right edge
@@ -487,6 +538,41 @@ mod tests {
         let rect = place_surface(SurfaceId::Help, wa(0, 0, 2560, 1400), 1.0);
         assert_eq!(rect.size, PhysicalSize::new(520, 500));
         assert_eq!(rect.position, PhysicalPosition::new(2016, 852));
+    }
+
+    /// Overlay: bottom-right of the work area at the legacy 20px/40px
+    /// physical margins, 336x88 logical.
+    #[test]
+    fn overlay_places_bottom_right_at_legacy_margins() {
+        let rect = place_surface(SurfaceId::Overlay, wa(0, 0, 2560, 1400), 1.0);
+        assert_eq!(rect.size, PhysicalSize::new(336, 88));
+        assert_eq!(
+            rect.position,
+            PhysicalPosition::new(2560 - 20 - 336, 1400 - 40 - 88)
+        );
+    }
+
+    /// Overlay at 150% DPI: size and margins scale with `scale`, margins stay
+    /// physical px.
+    #[test]
+    fn overlay_scales_with_dpi() {
+        let rect = place_surface(SurfaceId::Overlay, wa(0, 0, 3840, 2100), 1.5);
+        assert_eq!(rect.size, PhysicalSize::new(504, 132));
+        assert_eq!(
+            rect.position,
+            PhysicalPosition::new(3840 - 20 - 504, 2100 - 40 - 132)
+        );
+    }
+
+    /// Negative-origin work areas (multi-monitor left of primary).
+    #[test]
+    fn overlay_handles_negative_origin_work_area() {
+        let work = wa(-1920, 0, 1920, 1080);
+        let rect = place_surface(SurfaceId::Overlay, work, 1.0);
+        assert_eq!(
+            rect.position,
+            PhysicalPosition::new(-20 - 336, 1080 - 40 - 88)
+        );
     }
 
     /// Negative-origin work areas (multi-monitor left of primary).

@@ -42,7 +42,8 @@ use crate::settings::{
     Settings, SettingsAppearance, WM_APP_SETTINGS_APPLY, WM_APP_SETTINGS_CANCEL,
     WM_APP_SETTINGS_OPEN_CONFIG, WM_APP_SETTINGS_RESET,
 };
-use crate::tray::{Tray, TrayCommand};
+use crate::tray::Tray;
+use crate::tray_common::TrayCommand;
 use crate::ui::{AppAction, SurfaceId, SurfaceVisibility};
 use crate::wheel_win32::{
     install_wheel_hook, set_modifier as set_wheel_modifier, uninstall_wheel_hook, WM_APP_WHEEL,

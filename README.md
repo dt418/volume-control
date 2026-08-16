@@ -180,9 +180,9 @@ path, the resolved modifier, and the permission state — useful for debugging.
 | Volume control         | ✅ WASAPI | ✅ CoreAudio | ✅ PulseAudio |
 | Global hotkeys         | ✅ global-hotkey | ✅ global-hotkey | ✅ global-hotkey (X11) |
 | Overlay                | ✅ native Win32 | 🔜 host integration | 🔜 host integration |
-| Mixer                  | ✅ Tauri + WASAPI sessions | ✅ Tauri surface / 🔜 per-app audio | ✅ Tauri surface / 🔜 per-app audio |
+| Mixer                  | ✅ Tauri + WASAPI sessions | ✅ Tauri surface / ✖ per-app audio (no public API) | ✅ Tauri + PulseAudio sink-inputs |
 | Settings window        | ✅ Tauri | ✅ Tauri | ✅ Tauri |
-| System tray            | ✅ tray-icon | 🔜 | 🔜 |
+| System tray            | ✅ tray-icon | ✅ Tauri tray (menu-bar — manual) | ✅ Tauri tray (appindicator — manual) |
 | Live config reload     | ✅ | ✅ core | ✅ core |
 | Adaptive UI renderer   | ✅ native Win32 | ✅ AppKit (surfaces + smoke-tested) | ✅ GTK4/libadwaita (surfaces, CI-tested under Xvfb) |
 

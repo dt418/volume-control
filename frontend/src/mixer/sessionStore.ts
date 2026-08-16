@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
@@ -21,11 +21,21 @@ export interface BootstrapPayload {
   appearance: AppearancePayload;
   sessions: AudioSession[];
   sessions_supported: boolean;
+  /** Backend health at mount ("ready" | "degraded"); lets the surface show
+   *  a live degraded notice even when the transition event predates the
+   *  webview. */
+  backend_status?: BackendStatusEvent;
 }
 
 export interface VolumeEvent {
   pct: number;
   muted: boolean;
+}
+
+/** Host-published backend health (`state://backend`). */
+export interface BackendStatusEvent {
+  status: "ready" | "degraded";
+  error?: string;
 }
 
 /** Active sessions first, then by volume descending. */
@@ -70,6 +80,17 @@ export function useSessions() {
           setMuted(payload.muted);
         }
       }),
+      listen<BackendStatusEvent>("state://backend", (payload) => {
+        if (!disposed) {
+          if (payload.status === "degraded") {
+            setNotice(
+              `Audio backend temporarily unavailable${payload.error ? `: ${payload.error}` : ""}`,
+            );
+          } else {
+            setNotice(null);
+          }
+        }
+      }),
     ]);
 
     void listenersReady
@@ -86,6 +107,11 @@ export function useSessions() {
         setError(null);
         applyAppearance(b.appearance);
         setSessions(b.sessions ?? []);
+        if (b.backend_status?.status === "degraded") {
+          setNotice(
+            `Audio backend temporarily unavailable${b.backend_status.error ? `: ${b.backend_status.error}` : ""}`,
+          );
+        }
         // A command can complete while bootstrap is in flight. In that case
         // the backend event is newer than the bootstrap snapshot and must win.
         if (volumeEventRevision.current === bootstrapVolumeRevision) {
@@ -116,9 +142,13 @@ export function useSessions() {
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }, []);
   const retry = useCallback(() => setBootstrapAttempt((attempt) => attempt + 1), []);
+  // Sorting is O(n log n) on every render; only re-sort when the list
+  // actually changed (perf: state://volume events re-render the surface
+  // frequently).
+  const sortedSessions = useMemo(() => sortSessions(sessions), [sessions]);
 
   return {
-    sessions: sortSessions(sessions),
+    sessions: sortedSessions,
     volumePct,
     muted,
     thresholds,
