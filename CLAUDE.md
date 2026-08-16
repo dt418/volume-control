@@ -9,9 +9,12 @@ VolumeControl is a Rust 2021 Cargo workspace (`rust-version = 1.82`) containing 
 with global hotkeys, native audio backends, host-owned confirmed state, and platform
 renderers. Windows has the complete Win32 tray/overlay host. macOS has CoreAudio,
 global-hotkey, and an AppKit host/renderer. Linux has PulseAudio, global-hotkey, a platform-neutral
-host reducer, and an optional GTK4/libadwaita host/renderer. Non-Windows tray/menu,
-full surface interaction, settings persistence actions, and blacklist actions remain
-follow-on work.
+host reducer, and an optional GTK4/libadwaita host/renderer. The released app is a
+Tauri webview host (mixer/settings/help/overlay surfaces); macOS/Linux run a
+Tauri-managed tray (menu ids shared with the Windows native tray via
+`crates/volumectl/src/tray_common.rs`), the webview HUD overlay is macOS/Linux-only
+(Windows keeps its native Win32 HUD), and Linux mixer sessions come from
+PulseAudio sink-inputs (`audio_sessions_linux.rs`).
 
 Use `#[cfg(target_os = "...")]` for platform-specific code. Keep `init.sh` unchanged;
 the abandoned `init.ps1` bootstrap task must not be restored.

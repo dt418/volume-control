@@ -34,7 +34,7 @@
 # Usage:
 #   ./scripts/ship.sh                 # verify, stage, commit (no push)
 #   ./scripts/ship.sh --push          # verify, stage, commit, push
-#   ./scripts/ship.sh --dry-run       # run every hard check, change nothing
+#   ./scripts/ship.sh --dry-run       # verify the phase-1-4 hard checks, change nothing
 #   ./scripts/ship.sh --force         # relax soft preconditions (hygiene only)
 #   ./scripts/ship.sh --message "..." # commit message (default below)
 #
@@ -52,7 +52,7 @@ usage() {
     echo "  --push        also push after the verified commit"
     echo "  --force       relax soft preconditions (git hygiene) only;"
     echo "                the hard checks (records, gates, self-tests) always run"
-    echo "  --dry-run     run every hard check, change nothing"
+    echo "  --dry-run     verify phase-1-4 hard checks (records, gate, self-tests), change nothing"
     echo "  --message MSG commit message (default: '$message')"
     echo
     echo "There are NO bypass flags: records, format-lint (with tests), and"
@@ -152,7 +152,7 @@ do_push() {
     fi
 }
 
-echo "[1/6] records guard (branch change set vs origin/main)"
+echo "[1/7] records guard (branch change set vs origin/main)"
 if "$GIT_BIN" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
     if ! "$SH_BIN" "$repo_root/scripts/check-records.sh" --branch origin/main; then
         fail "the change set misses feature_list.json and/or claude-progress.md (see templates above)"
@@ -163,13 +163,13 @@ else
 fi
 
 # ---- Phase 2: full format-lint gate (tests included) -----------------------
-echo "[2/6] format-lint gate (full, tests included)"
+echo "[2/7] format-lint gate (full, tests included)"
 if ! bash "$repo_root/scripts/format-lint.sh"; then
     fail "the format-lint gate reported failures above"
 fi
 
 # ---- Phase 3: records-guard self-test ---------------------------------------
-echo "[3/6] records-guard self-test"
+echo "[3/7] records-guard self-test"
 if ! bash "$repo_root/scripts/test-check-records.sh"; then
     fail "the records-guard self-test reported failures above"
 fi
@@ -181,7 +181,7 @@ if ! "$GIT_BIN" diff --cached --quiet; then
     echo "note: the index already has staged changes; test-format-lint.sh requires" >&2
     echo "      a clean index. If it fails below, run 'git reset' first, then re-run ship." >&2
 fi
-echo "[4/6] format-lint smoke test"
+echo "[4/7] format-lint smoke test"
 if ! bash "$repo_root/scripts/test-format-lint.sh"; then
     fail "the format-lint smoke test reported failures above"
 fi

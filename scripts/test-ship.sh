@@ -56,7 +56,7 @@ invokes scripts/ship.sh 'check-records[.]sh.*--branch origin/main' \
     'ship.sh: runs the branch records guard vs origin/main'
 # The branch guard runs before the explicit staging phase, so check-records.sh
 # must include ordinary working-tree changes rather than only HEAD ancestry.
-if grep -q 'git diff --name-only HEAD' scripts/check-records.sh; then
+if grep -Eq 'git (-c core\.quotepath=true )?diff --name-only HEAD' scripts/check-records.sh; then
     report ok 'check-records.sh: branch mode includes working-tree changes for ship preflight'
 else
     report FAIL 'check-records.sh: branch mode includes working-tree changes for ship preflight'

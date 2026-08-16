@@ -1,6 +1,44 @@
 # Progress Log
 
-## Session 083 (2026-08-16) - Webview render performance evaluation + optimization
+## Session 091 (2026-08-16) - Pre-push three-domain review + enforcement hardening
+
+- Mandatory pre-push review dispatched three parallel adversarial reviewers
+  (guard core / gate chain / wiring-records). Verdict: no HIGH findings; the
+  genuine defects found were fixed with live negative verification:
+  - Guard core (domain A): CRLF stdin in `--check` spuriously failed;
+    normalized with `tr -d '\r'` via a captured variable (a pipe would run
+    `collect_list` in a subshell and lose LIST under `set -u`). Every git
+    capture hardened with `-c core.quotepath=true`; the fake-git self-test
+    shim now skips the `-c` prefix (this is the live-negative proof).
+  - Gate chain (domain B): PowerShell accepted manifest version `3.0` while
+    bash rejected it — the check now rejects strings AND doubles and accepts
+    the parser's Int64 integers. `Get-Bash` also rejects the `Sysnative`
+    shim spelling. `test-format-lint.sh` got a fail-fast single-instance
+    lock (absolute path — the script chdirs to the repo root, which made the
+    original relative rmdir fail and leave the lock) and PowerShell
+    detection falls back to `.exe` spellings, so the full PS battery now
+    runs in this environment. The suggested `$LASTEXITCODE = $null` reset in
+    `Invoke-Step` was tried and REVERTED: it made the clippy step report
+    `FAILED (exit )` (the reviewer's finding was latent/fail-closed).
+  - Wiring/records (domain C): `desktop-validation.yml` E2E gates now opt
+    into `--virtual-audio` (the wrapper default flip to real audio would
+    otherwise make tag releases run real-audio on endpoint-less hosted
+    runners); `test-release-workflow.sh` asserts 3/3 opt-ins. `vol-080`
+    text corrected (it described the pre-flip virtual warning). The
+    2026-08-16 session series was renumbered 084-090 to remove the collision
+    with the 2026-08-15 series. CLAUDE.md now describes the Tauri webview
+    host + macOS/Linux tray + Linux Pulse sessions. `workflow-warning-auditor`
+    mirrored into `.claude/skills` (43/43 project skills now byte-identical).
+    ship.sh dry-run wording + phase counters fixed; feature_list lone-comma
+    formatting cleaned.
+- Post-review battery, all green: `test-check-records.sh`, `test-format-lint.sh`
+  (PS battery executing, lock released on exit), `test-ship.sh`,
+  `test-release-workflow.sh`, both format-lint gates, the WSL Linux gate,
+  and `sh scripts/check-records.sh --branch origin/main`.
+- Records: feature_list.json vol-080 verification extended with the review
+  evidence; this entry is the claude-progress.md half.
+
+## Session 090 (2026-08-16) - Webview render performance evaluation + optimization
 
 - User report: "Phần render của webview bị delay và chậm quá" — evaluate and
   optimize.
@@ -32,7 +70,7 @@
 - Records: feature_list.json vol-081 added (in_progress); this entry is the
   claude-progress.md half.
 
-## Session 082 (2026-08-16) - Linux gate crash fix + real-audio E2E + platform script hardening
+## Session 089 (2026-08-16) - Linux gate crash fix + real-audio E2E + platform script hardening
 
 - The WSL Linux gate (`bash scripts/format-lint.sh`) exposed REAL defects the
   Windows-only checks could never see:
@@ -78,7 +116,7 @@
   all-surfaces evidence gate, autostart verifier, and the three enforcement
   self-tests.
 
-## Session 081 (2026-08-16) - Platform verification scripts + real device sync verification
+## Session 088 (2026-08-16) - Platform verification scripts + real device sync verification
 
 - User asked for platform-specific test scripts after Phase C, then reported
   "Âm lượng đang không đồng bộ giữa app và thiết bị" while the platform
@@ -105,7 +143,7 @@
 - Records: feature_list.json vol-080 added (in_progress); this entry is the
   claude-progress.md half.
 
-## Session 080 (2026-08-16) - Phase C: Linux per-app audio (PulseAudio sink-inputs)
+## Session 087 (2026-08-16) - Phase C: Linux per-app audio (PulseAudio sink-inputs)
 
 - `crates/volumectl/src/audio_sessions_linux.rs` (new, Linux-only):
   `PulseSessions` implements `SessionsSource` over a direct
@@ -137,7 +175,7 @@
   claude-progress.md half. Live Pulse sink-input round-trips and hosted
   Ubuntu CI remain before marking passing.
 
-## Session 079 (2026-08-16) - FE-BE connection stability (non-blocking polls + backend health)
+## Session 086 (2026-08-16) - FE-BE connection stability (non-blocking polls + backend health)
 
 - User report: "Đôi khi FE,BE mất kết nối" — surfaces intermittently froze
   or seemed disconnected from the backend.
@@ -170,7 +208,7 @@
   claude-progress.md half. Hosted CI + a real-device loss/recovery soak
   remain before marking passing.
 
-## Session 078 (2026-08-16) - Overlay surface: WindowManager (Phase B Task 4)
+## Session 085 (2026-08-16) - Overlay surface: WindowManager (Phase B Task 4)
 
 - Goal: add the `SurfaceId::Overlay` webview surface (label
   `window-overlay`, title `VolumeControl Overlay`, entry
@@ -384,7 +422,7 @@
   `powershell -File scripts/check-tauri-deadlock.ps1` (10/10) all pass;
   committed as "fix: sync overlay theme with mixer surface resolution".
 
-## Session 077 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
+## Session 084 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
 
 - Goal context: complete the remaining platform-table gaps on macOS/Linux
   (system tray, overlay HUD, per-app audio). Spec

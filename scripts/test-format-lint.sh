@@ -38,6 +38,20 @@
 # The records step reads the staged set, so the smoke test requires a clean
 # index up front (see the precondition below).
 #
+# The suite mutates shared repo state, so it refuses to run concurrently
+# with itself: the pre-push flow dispatches reviewers in parallel and then
+# re-runs this battery — an overlapping second invocation would corrupt the
+# index precondition mid-run.
+# Absolute path: the script chdirs to the repository root later, so a
+# relative lock path would make the EXIT-trap cleanup target the wrong dir.
+lock_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.test-format-lint.lock"
+if ! mkdir "$lock_dir" 2>/dev/null; then
+    echo "test-format-lint.sh is already running (lock: $lock_dir)" >&2
+    exit 1
+fi
+release_lock() {
+    rmdir "$lock_dir" 2>/dev/null || true
+}
 # Usage: bash scripts/test-format-lint.sh
 # Exit: 0 = all checks passed; 1 = at least one check failed.
 set -uo pipefail
@@ -92,7 +106,7 @@ cleanup() {
     rm -f "$backup"
     rm -rf "$tmpdir"
 }
-trap cleanup EXIT
+trap 'cleanup || true; release_lock' EXIT
 
 report() { # <ok|FAIL> <description> [detail]
     local status="$1" desc="$2" detail="${3:-}"
@@ -118,7 +132,13 @@ else
 fi
 
 # --- success path: PowerShell gate (when available) ---------------------------
-ps="$(command -v powershell 2>/dev/null || command -v pwsh 2>/dev/null || true)"
+# Some environments resolve `command -v powershell` with rc=0 but an EMPTY
+# path (e.g. a WSL-flavored bash where the Windows executable only resolves
+# with its .exe suffix). Require a non-empty result, with .exe fallbacks.
+ps="$(command -v powershell 2>/dev/null || true)"
+[ -n "$ps" ] || ps="$(command -v powershell.exe 2>/dev/null || true)"
+[ -n "$ps" ] || ps="$(command -v pwsh 2>/dev/null || true)"
+[ -n "$ps" ] || ps="$(command -v pwsh.exe 2>/dev/null || true)"
 if [ -z "$ps" ]; then
     echo "skip - PowerShell not found; PowerShell gate checks skipped"
 else

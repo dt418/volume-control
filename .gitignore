@@ -143,3 +143,5 @@ src-tauri/gen
 !.claude/skills/writing-plans/
 !.agents/skills/writing-skills/
 !.claude/skills/writing-skills/
+
+scripts/.test-format-lint.lock

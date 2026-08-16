@@ -150,7 +150,15 @@ report() { # <fail_header_line1> [fail_header_line2]
 check_stdin() {
     deleted_feature=0
     deleted_progress=0
-    collect_list
+    # Normalize CRLF input (e.g. a Windows-created list): a trailing \r would
+    # otherwise fragment the records classification and spuriously fail the
+    # check. `tr` is POSIX and handles the escape portably; the result is
+    # captured first so collect_list still runs in the parent shell (a pipe
+    # would run it in a subshell and lose LIST under `set -u`).
+    stdin_list="$(tr -d '\r')"
+    collect_list <<EOF
+$stdin_list
+EOF
     decide
     report "substantive change requires record updates"
 }
@@ -161,18 +169,18 @@ check_staged() {
     # while exiting 0, and any such text must not become an "unclassified
     # path" in decide() (that would spuriously fail the check). The error
     # branch re-runs with stderr merged so the real diagnostic still shows.
-    staged_list="$(git diff --cached --name-only 2>/dev/null)"
+    staged_list="$(git -c core.quotepath=true diff --cached --name-only 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff --cached failed (exit $rc):" >&2
-        git diff --cached --name-only 2>&1 | sed 's/^/      /' >&2
+        git -c core.quotepath=true diff --cached --name-only 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
-    deleted_list="$(git diff --cached --diff-filter=D --name-only 2>/dev/null)"
+    deleted_list="$(git -c core.quotepath=true diff --cached --diff-filter=D --name-only 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff --cached deletion check failed (exit $rc):" >&2
-        git diff --cached --diff-filter=D --name-only 2>&1 | sed 's/^/      /' >&2
+        git -c core.quotepath=true diff --cached --diff-filter=D --name-only 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
     deleted_feature=0
@@ -202,39 +210,39 @@ check_branch() {
     fi
     # Same stderr discipline as check_staged: warnings must not pollute the
     # path list; failures re-run with stderr merged for the diagnostic.
-    branch_list="$(git diff --name-only "$base...HEAD" 2>/dev/null)"
+    branch_list="$(git -c core.quotepath=true diff --name-only "$base...HEAD" 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff vs '$base' failed (exit $rc):" >&2
-        git diff --name-only "$base...HEAD" 2>&1 | sed 's/^/      /' >&2
+        git -c core.quotepath=true diff --name-only "$base...HEAD" 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
-    branch_deleted="$(git diff --diff-filter=D --name-only "$base...HEAD" 2>/dev/null)"
+    branch_deleted="$(git -c core.quotepath=true diff --diff-filter=D --name-only "$base...HEAD" 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff deletion check vs '$base' failed (exit $rc):" >&2
-        git diff --diff-filter=D --name-only "$base...HEAD" 2>&1 | sed 's/^/      /' >&2
+        git -c core.quotepath=true diff --diff-filter=D --name-only "$base...HEAD" 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
-    working_list="$(git diff --name-only HEAD 2>/dev/null)"
+    working_list="$(git -c core.quotepath=true diff --name-only HEAD 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff of the working tree failed (exit $rc):" >&2
-        git diff --name-only HEAD 2>&1 | sed 's/^/      /' >&2
+        git -c core.quotepath=true diff --name-only HEAD 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
-    working_deleted="$(git diff --diff-filter=D --name-only HEAD 2>/dev/null)"
+    working_deleted="$(git -c core.quotepath=true diff --diff-filter=D --name-only HEAD 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git diff working-tree deletion check failed (exit $rc):" >&2
-        git diff --diff-filter=D --name-only HEAD 2>&1 | sed 's/^/      /' >&2
+        git -c core.quotepath=true diff --diff-filter=D --name-only HEAD 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
-    untracked_list="$(git ls-files --others --exclude-standard 2>/dev/null)"
+    untracked_list="$(git -c core.quotepath=true ls-files --others --exclude-standard 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL - git ls-files failed (exit $rc):" >&2
-        git ls-files --others --exclude-standard 2>&1 | sed 's/^/      /' >&2
+        git -c core.quotepath=true ls-files --others --exclude-standard 2>&1 | sed 's/^/      /' >&2
         return 1
     fi
     deleted_feature=0
