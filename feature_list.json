@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T19:00",
+    "last_updated":  "2026-08-16T19:25",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -30,7 +30,8 @@
                                            ],
                          "evidence":  [
                                               "Session 090 (2026-08-16): performance evaluation — the webview delay sources are (1) per-surface cold webview boot on open, (2) get_bootstrap's synchronous session enumeration (WASAPI on Windows, Pulse on Linux; a no-Pulse machine previously stalled up to 3 s per mount), and (3) full-tree re-renders per state://volume event. Optimized (2) via connect backoff + shorter timeout and (3) via memoization; (1) is a documented design tradeoff (zero idle webviews) and bundle size (framer-motion/lucide ≈157 kB JS) is tracked as future work.",
-                                              "Session 090 (2026-08-16): Linux backoff test + 29 mixer Vitest + full gates green; committed with records."
+                                              "Session 090 (2026-08-16): Linux backoff test + 29 mixer Vitest + full gates green; committed with records.",
+                                              "Session 091 (2026-08-16): hosted CI (PR #33 Ubuntu + macOS) caught a real E2E bug the local run could not — the frontend self-hide timer armed on the verify-marker mount destroyed the overlay window before the embedded WebDriver attached (No window could be found). Fixed by arming the timer only on state://overlay payloads; overlay Vitest 6/6 and the full frontend suite + build green."
                                        ],
                          "notes":  "Further optimization candidates (kept out of this change set): warm surface reuse (hide instead of destroy — trades idle RAM for open latency), lighter overlay bootstrap (no session enumeration), and bundle trimming."
                      },
@@ -48,9 +49,8 @@
                                                "Pre-push three-domain review (2026-08-16): domain A (guard core) found no HIGH/MEDIUM; fixed LOW CRLF-input normalization in --check (tr -d '\\r' via captured variable so LIST survives the subshell) and hardened every git capture with -c core.quotepath=true (fake-git shim updated to skip the -c prefix).",
                                                "Pre-push review domain B (gate chain): fixed the PowerShell version check to reject strings AND doubles while accepting the parser's Int64 (3.0 was previously accepted by PS and rejected by bash), rejected the Sysnative bash shim too, made test-format-lint.sh fail-fast single-instance (absolute lock path; EXIT trap runs cleanup || true then releases), and added .exe fallbacks for PowerShell detection (the suite now runs the full PS battery locally).",
                                                "Pre-push review domain C (wiring/records): desktop-validation.yml E2E gates now opt into --virtual-audio (release path; new test-release-workflow assertion requires 3/3), vol-080 text corrected to the real-audio default, the 2026-08-16 session series renumbered 084-090 (collision with the 2026-08-15 series), CLAUDE.md updated to the Tauri-host architecture, workflow-warning-auditor mirrored into .claude/skills, ship.sh dry-run wording + phase counters fixed, and feature_list lone-comma formatting cleaned.",
-                                               "Post-review battery: test-check-records, test-format-lint (with the PS battery executing), test-ship, test-release-workflow, both format-lint gates, the WSL Linux gate, and sh scripts/check-records.sh --branch origin/main all pass."
-                                               ,
-                                               "workflow-warning-auditor mirrored into .claude/skills and whitelisted in .gitignore (previously .agents-only); all project skills now byte-identical across both mirrors."
+                                               "Post-review battery: test-check-records, test-format-lint (with the PS battery executing), test-ship, test-release-workflow, both format-lint gates, the WSL Linux gate, and sh scripts/check-records.sh --branch origin/main all pass.",
+                                               "workflow-warning-auditor mirrored into .claude/skills and whitelisted in .gitignore (previously .agents-only); all project skills now byte-identical across both mirrors.",
                                                "macOS/Linux runs are hosted-CI evidence (xvfb-run E2E + gtk_smoke on Ubuntu; appkit_smoke + sw_vers on macOS)."
                                            ],
                          "evidence":  [
@@ -155,7 +155,7 @@
                                                "E2E overlay spec passes on Windows (debug run with VOLUMECTL_VERIFY_SURFACE=window-overlay): the surface boots with the capability wiring (window-overlay added to default.json + e2e-wdio.json), the WDIO bridge is live, and the title/bridge assertions pass; the full HUD content + auto-hide assertions run on macOS/Linux where the webview overlay path is live (Windows routes overlay notifications to the native HUD).",
                                                "npm test --prefix e2e/tauri 18/18, npm run typecheck --prefix e2e/tauri clean, npm run test:e2e:debug --surface overlay 1/1, and the verify-tauri-e2e.ps1 evidence gate (JUnit + manifest + timings) exit 0.",
                                                "The webview overlay is macOS/Linux-only: WindowManager::open_impl rejects SurfaceId::Overlay on Windows (native HUD stays), run-debug-e2e.mjs excludes overlay from the Windows all-matrix, verify-tauri-e2e.ps1 drops the overlay surface, and the overlay E2E spec is macOS/Linux-only.",
-                                               "Frontend self-hide timer: OverlaySurface arms getCurrentWindow().close() after clamp(overlay_duration_ms ?? 1800, 200, 10000) from the bootstrap config and clears it on unmount — the macOS/Linux overlay always auto-closes even if the host event/timer is missed (double-close with the host timer is safe).",
+                                               "Frontend self-hide timer: OverlaySurface arms getCurrentWindow().close() after clamp(overlay_duration_ms ?? 1800, 200, 10000) ONLY when a real state://overlay payload arrives (production shows always emit it), and clears it on unmount — the macOS/Linux overlay always auto-closes even if the host event/timer is missed (double-close with the host timer is safe).",
                                                "Windows full E2E matrix passes 6/6 (mixer, runtime, windows, recovery, settings, help) with the overlay surface excluded; frontend Vitest 97 (5 overlay incl. the self-hide timer test); workspace cargo 342."
                                            ],
                          "evidence":  [

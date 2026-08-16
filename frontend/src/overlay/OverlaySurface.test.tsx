@@ -90,7 +90,21 @@ describe("OverlaySurface", () => {
       vi.clearAllMocks();
     });
 
-    it("closes the window after the configured overlay duration", async () => {
+    it("does NOT arm the timer on the verify-marker mount (no payload)", async () => {
+      render(<OverlaySurface />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText("55%")).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      // The debug/E2E marker path mounts without state://overlay; the
+      // window must stay open so WebDriver can attach.
+      expect(closeOverlayWindow).not.toHaveBeenCalled();
+    });
+
+    it("closes the window after the configured duration once a payload arrives", async () => {
       render(<OverlaySurface />);
 
       // Flush the async bootstrap (microtasks only) without firing the timer.
@@ -100,6 +114,18 @@ describe("OverlaySurface", () => {
       expect(screen.getByText("55%")).toBeInTheDocument();
       expect(closeOverlayWindow).not.toHaveBeenCalled();
 
+      fire("state://overlay", {
+        text: null,
+        pct: 55,
+        muted: false,
+        green_up_to: 40,
+        blue_up_to: 75,
+        orange_up_to: 100,
+        theme_resolved: "dark",
+        material: "Auto",
+        motion: "Full",
+        accent: "System",
+      });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1_800);
       });

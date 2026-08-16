@@ -41,6 +41,18 @@
   into `.claude/skills` and whitelisted in `.gitignore` (it was previously
   `.agents`-only — the Domain C LOW-5 asymmetry). All project skills are
   now byte-identical across both mirrors.
+- Hosted CI finding (same Session 091): PR #33's Ubuntu and macOS E2E jobs
+  failed on `overlay.e2e.ts` with "No window could be found" — the overlay
+  window WAS created and the frontend loaded, but the frontend self-hide
+  timer (1800 ms) destroyed the window BEFORE the embedded WebDriver
+  attached (~40 s later). Root cause: the timer armed on the plain
+  verify-marker mount. Fix: the frontend self-hide timer now arms ONLY when
+  a real `state://overlay` payload arrives (production shows always emit
+  it, so the HUD still auto-closes; the marker path stays open for
+  WebDriver). The E2E spec's auto-hide assertion still holds because the
+  spec triggers `adjust_volume`, which emits the payload. Vitest: overlay
+  6/6 (new "no timer on marker mount" + payload-driven timer tests),
+  frontend suite + build green.
 
 ## Session 090 (2026-08-16) - Webview render performance evaluation + optimization
 

@@ -33,6 +33,7 @@ export function OverlaySurface() {
   useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let duration = 1800;
     const unlisteners: Array<() => void> = [];
     void listen<OverlayPayload>("state://overlay", (p) => {
       if (disposed) return;
@@ -43,6 +44,15 @@ export function OverlaySurface() {
         motion: p.motion,
         accent: p.accent,
       });
+      // A REAL host show (payload) arms the auto-hide. The debug/E2E
+      // verify-marker path mounts the surface WITHOUT a payload so the
+      // WebDriver can attach before the window hides; production shows
+      // always emit the payload, so the HUD still auto-closes here (the
+      // host timer is the primary; this frontend timer is the guarantee).
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        void getCurrentWindow().close();
+      }, duration);
     }).then((unlisten) => {
       if (disposed) unlisten();
       else unlisteners.push(unlisten);
@@ -59,18 +69,10 @@ export function OverlaySurface() {
         if (!b || disposed) return;
         setInitial(b);
         applyAppearance(b.appearance);
-        // Windows routes overlay notifications to the native HUD, so this
-        // webview has no host-side auto-hide timer there. Arm our own close
-        // to guarantee the window hides; on macOS/Linux the host timer also
-        // closes it (double-close is safe: close_impl tolerates a missing
-        // window).
-        const duration = Math.min(
+        duration = Math.min(
           Math.max(b.config?.overlay_duration_ms ?? 1800, 200),
           10_000,
         );
-        timer = setTimeout(() => {
-          void getCurrentWindow().close();
-        }, duration);
       })
       .catch(() => {
         // Backend unavailable: keep the overlay transparent; the host
