@@ -134,6 +134,15 @@
 - Verification (alignment fix): `npm test --prefix frontend` 16 files / 96
   tests green; `npm run build --prefix frontend` clean; pre-commit hook
   (records guard, fmt, cached whitespace, clippy -D warnings) passed.
+- Vertical fill (user-requested completion of the alignment fix, same
+  Session 078 entry): the HUD card now spans `h-full w-full` with
+  `justify-center`, so both visual axes match the window edges exactly — the
+  right edge shared with the mixer AND the 16 px gap above it are preserved
+  at any DPI/zoom (previously only the width was filled; a taller viewport
+  centered the card vertically and stretched the visual gap).
+- Verification (vertical fill): overlay Vitest 4/4, frontend 16 files / 96,
+  `npm run build --prefix frontend` clean; committed with the records in the
+  same change set.
 - Theme-sync fix (user-reported "render không đồng bộ", same Session 078
   entry): the overlay re-resolved `System` in the browser with
   `matchMedia(prefers-color-scheme)` while the mixer used
