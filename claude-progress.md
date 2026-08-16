@@ -49,6 +49,33 @@
   geometry/parser tests + workspace suite; evidence = Session 078; notes =
   hosted CI + manual compositor transparency evidence still pending); this
   entry is the claude-progress.md half.
+- Task 5 (overlay sink + macOS transparency) landed in the same Session 078
+  entry: `tauri` features += `macos-private-api`; `tauri.conf.json` gains
+  `app.macOSPrivateApi: true` (accepted by tauri-build, config schema 2); the
+  pure `overlay_payload` helper builds the `state://overlay` payload
+  (text/pct/muted/color thresholds + `{:?}` appearance strings) from
+  `Config`/`VolumeState`; `TauriSink::overlay` on macOS/Linux now opens
+  `SurfaceId::Overlay` via `WindowManager`, emits the payload, and arms a
+  cancellable auto-hide — an `overlay_seq` generation counter plus
+  `async_runtime::sleep(overlay_duration_ms.clamp(200, 10_000))` that closes
+  the surface only while the generation is current. The Windows native
+  overlay branch is byte-identical.
+- TDD: `overlay_payload_carries_state_and_thresholds` failed first with
+  E0432 (`unresolved import super::overlay_payload`), then passed after the
+  helper landed; `cargo test -p volumecontrol-tauri --no-default-features`
+  16/16 and the workspace suite 342 (283 volumectl lib + 16 tauri + 4 win32
+  sessions + 23 host_core + 16 linux_host_core).
+- Deviation (Windows clippy-gate driven): `overlay_payload` is
+  `#[cfg(any(not(target_os = "windows"), test))]` and `overlay_seq` plus its
+  `new()` init are `#[cfg(not(target_os = "windows"))]`, because the webview
+  overlay path is compiled out on Windows and un-gated code warned
+  `dead_code` under `-D warnings`; nothing is hidden with `#[allow]`, and
+  the payload-shape test still runs on Windows.
+- Gate (Task 5): `cargo fmt --all --check` + `git diff --check` clean;
+  `cargo clippy --workspace --all-targets --no-default-features -- -D
+  warnings` clean; `powershell -File scripts/check-tauri-deadlock.ps1` 10/10
+  ok (open/close still marshal via `WindowManager::on_main` from the async
+  auto-hide task).
 
 ## Session 077 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
 

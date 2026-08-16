@@ -16,15 +16,46 @@ use std::sync::Arc;
 use crate::tauri_tray::TauriTray;
 use crate::window_manager::{SurfaceId, WindowManager};
 
+/// Build the `state://overlay` payload shared by every webview HUD consumer.
+///
+/// Pure function (no app handle) so the payload shape is unit-testable.
+/// Compiled on Windows only under `cfg(test)` because the webview overlay
+/// path itself is non-Windows; the payload-shape test still runs everywhere.
+#[cfg(any(not(target_os = "windows"), test))]
+fn overlay_payload(
+    text: Option<String>,
+    state: &VolumeState,
+    config: &Config,
+) -> serde_json::Value {
+    serde_json::json!({
+        "text": text,
+        "pct": state.percent(),
+        "muted": state.muted,
+        "green_up_to": config.color_thresholds.green_up_to,
+        "blue_up_to": config.color_thresholds.blue_up_to,
+        "orange_up_to": config.color_thresholds.orange_up_to,
+        "theme": format!("{:?}", config.appearance.theme),
+        "material": format!("{:?}", config.appearance.material),
+        "motion": format!("{:?}", config.appearance.motion),
+        "accent": format!("{:?}", config.appearance.accent),
+    })
+}
+
 /// Bridges [`volumectl_lib::host_core::AppCore`] notifications to the Tauri
 /// runtime. Constructed in the builder setup with the app handle.
 pub struct TauriSink {
     app: AppHandle,
+    #[cfg(not(target_os = "windows"))]
+    overlay_seq: std::sync::Arc<std::sync::Mutex<u64>>,
 }
 
 impl TauriSink {
     pub fn new(app: AppHandle) -> Self {
-        Self { app }
+        Self {
+            app,
+            #[cfg(not(target_os = "windows"))]
+            overlay_seq: std::sync::Arc::new(std::sync::Mutex::new(0)),
+        }
     }
 }
 
@@ -74,7 +105,34 @@ impl EventSink for TauriSink {
             }
         }
         #[cfg(not(target_os = "windows"))]
-        let _ = (text, state, config); // no native overlay on Linux/macOS
+        {
+            let wm = self.app.state::<WindowManager>();
+            if let Err(e) = wm.open(SurfaceId::Overlay) {
+                log::warn!("overlay open failed: {e}");
+                return;
+            }
+            let _ = self
+                .app
+                .emit("state://overlay", overlay_payload(text, &state, &config));
+            let seq = {
+                let mut s = self.overlay_seq.lock().unwrap_or_else(|p| p.into_inner());
+                *s += 1;
+                *s
+            };
+            let duration = config.overlay_duration_ms.clamp(200, 10_000);
+            let handle = self.app.clone();
+            let seq_arc = self.overlay_seq.clone();
+            tauri::async_runtime::spawn(async move {
+                tauri::async_runtime::sleep(std::time::Duration::from_millis(duration)).await;
+                let current = seq_arc.lock().unwrap_or_else(|p| p.into_inner());
+                if *current == seq {
+                    let wm = handle.state::<WindowManager>();
+                    if let Err(e) = wm.close(SurfaceId::Overlay) {
+                        log::warn!("overlay auto-hide failed: {e}");
+                    }
+                }
+            });
+        }
     }
 
     fn show_tray_menu(&self) {
@@ -142,5 +200,29 @@ impl EventSink for TauriSink {
                 log::warn!("toggle_surface {label} failed: {e}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::overlay_payload;
+
+    #[test]
+    fn overlay_payload_carries_state_and_thresholds() {
+        let state = volumectl_lib::audio::VolumeState {
+            volume: 0.42,
+            muted: true,
+        };
+        let config = volumectl_lib::config::Config::default();
+        let payload = overlay_payload(None, &state, &config);
+        assert_eq!(payload["pct"], 42);
+        assert_eq!(payload["muted"], true);
+        assert_eq!(payload["text"], serde_json::Value::Null);
+        assert_eq!(payload["green_up_to"], config.color_thresholds.green_up_to);
+        assert_eq!(payload["blue_up_to"], config.color_thresholds.blue_up_to);
+        assert_eq!(
+            payload["orange_up_to"],
+            config.color_thresholds.orange_up_to
+        );
     }
 }
