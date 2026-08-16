@@ -32,6 +32,14 @@ const runId = process.env.TAURI_E2E_RUN_ID ?? ["wdio", Date.now(), Math.random()
 await mkdir(outputRoot, { recursive: true });
 await mkdir(join(outputRoot, "junit"), { recursive: true });
 await mkdir(join(outputRoot, "logs"), { recursive: true });
+// Isolate WebView2 user data per surface run. The embedded service spawns a
+// fresh app per surface; without isolation, orphaned WebView2 renderer
+// processes from force-killed previous runs lock the shared user-data folder
+// and the next app's webview breaks mid-spec ("No window could be found" on
+// execute/sync, flaky only after several consecutive app restarts).
+if (process.platform === "win32") {
+  process.env.WEBVIEW2_USER_DATA_FOLDER = join(outputRoot, `webview2-${process.pid}`);
+}
 process.env.VOLUMECTL_E2E_DEBUG = "1";
 process.env.VOLUMECTL_CONFIG_DIR = fixture.configDir;
 process.env.VOLUMECTL_VERIFY_SURFACE = verifySurface;

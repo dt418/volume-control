@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T20:05",
+    "last_updated":  "2026-08-16T20:32",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -16,20 +16,44 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-083",
+                         "priority":  83,
+                         "area":  "testing",
+                         "title":  "E2E stability: mixer focus guard + WebView2 isolation + zombie cleanup",
+                         "user_visible_behavior":  "The Windows Tauri E2E matrix stops flaking with \"No window could be found\" after consecutive app restarts: the mixer keeps its window open under the debug marker (auto-close-on-blur is production-only), each surface app gets an isolated WebView2 user-data folder so orphaned renderer processes from force-killed runs cannot corrupt the next webview, and the E2E wrapper kills leftover app instances before and after every run — which also removes the stale native-HUD ghost a killed E2E app can leave on the desktop.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "TDD RED: mixer_auto_close_on_focus_loss_is_disabled_under_the_e2e_marker fails with E0425 (function missing) before implementation; GREEN after the helper lands (tauri 17/17).",
+                                               "window_manager.rs: the Focused(false) auto-close is now gated on mixer_auto_close_on_focus_loss(e2e_debug) with e2e_debug = cfg!(debug_assertions) && VOLUMECTL_E2E_DEBUG=1 — the same marker that gates the overlay auto-hide timers; release builds behave exactly as before.",
+                                               "e2e/tauri/wdio.conf.ts: on win32 the app inherits WEBVIEW2_USER_DATA_FOLDER=<output>/webview2-<pid>, one folder per surface process.",
+                                               "scripts/verify-tauri-e2e.ps1: pre-run and post-run cleanup kill leftover VolumeControl.exe processes (crashed/force-killed runs can no longer hold the embedded WebDriver port 4445 or leave a stuck HUD).",
+                                               "Regression: the full all-matrix (mixer, runtime, windows, recovery, settings, help) passed 9/9 consecutive runs after the fixes (previously ~30-50% flake rate; the failure mode was a webview dying mid-spec 0.5 s after a tauri IPC JSON deserialization error, only after 4-5 app restarts in one run).",
+                                               "cargo fmt --all --check, git diff --check, clippy -D warnings, cargo test --workspace --no-default-features, and scripts/check-tauri-deadlock.ps1 all clean."
+                                           ],
+                         "evidence":  [
+                                              "Session 093 (2026-08-16): the flake was root-caused with temporary app-side instrumentation — webview_windows() showed the surface window alive, then empty 0.5 s after a [Tauri:Frontend:0] 'JSON error: invalid type: null, expected u32' IPC failure, exactly when the embedded WebDriver's execute/sync ran; a parallel process/port monitor proved no zombie app held port 4445, so the breakage was inside the WebView2 stack after repeated same-folder restarts. The mixer auto-close-on-blur was also a confirmed destroy path for mixer runs (the app spawns backgrounded and can lose focus before the session attaches).",
+                                               "Session 093 (2026-08-16): 9/9 consecutive full-matrix Windows E2E runs green with no leftover VolumeControl processes; the earlier failure cadence was 4 failures across 11 runs (settings x3, help x1) plus the original mixer session failures in the ship gate.",
+                                               "Session 093 (2026-08-16): mandatory three-domain pre-push review — Domain A PASS; Domain B MEDIUM (pre-run kill raced with the long cargo build; the kill is now repeated immediately before the npm E2E spawn, verified live) and fixed with ps1 parse check; Domain C LOW (GUARDRAILS.md ship description updated to include the frontend build, Tauri WebDriver E2E gate, and tauri build --no-bundle; pre-existing feature_list priority inversions noted as known drift, not reordered)."
+                                       ],
+                         "notes":  "Harness-level fix; no production behavior changed (the mixer focus guard is debug-marker-only). Hosted CI keeps --virtual-audio; the local real-audio matrix is now stable enough to be the pre-ship gate."
+                     },
+                     {
                          "id":  "vol-082",
                          "priority":  82,
                          "area":  "release",
                          "title":  "Release v0.1.3 preparation",
-                         "user_visible_behavior":  "The packaged app reports version 0.1.3 and the changelog documents the Linux/macOS feature completion set; the release tag v0.1.3 will be bound to the validated commit per the release workflow preflight.",
-                         "status":  "in_progress",
+                         "user_visible_behavior":  "The packaged app reports version 0.1.3 and the changelog documents the Linux/macOS feature completion set; the release tag v0.1.3 is bound to the validated commit and the published GitHub release carries the four platform assets.",
+                         "status":  "passing",
                          "verification":  [
                                                "Version bumped to 0.1.3 in workspace.package, crates/volumectl, volumecontrol-tauri, Cargo.lock (cargo check regenerated), tauri.conf.json, frontend package.json and package-lock.json.",
                                                "CHANGELOG.md promoted the accumulated Unreleased work into [0.1.3] with a fresh Unreleased heading.",
-                                               "cargo check --workspace --no-default-features clean after the bump."
+                                               "cargo check --workspace --no-default-features clean after the bump.",
+                                               "Release workflow run 31949276965 completed green: Validate release tag, Validate desktop artifacts on ubuntu (12m49s), macos (9m57s), and windows (16m22s), and Create GitHub release all passed.",
+                                               "gh release view v0.1.3 confirms the published (non-draft, non-prerelease) release with all four assets: volumecontrol-0.1.3-windows.zip (2,777,260 B), volumecontrol-0.1.3-ubuntu.tar.gz (2,698,788 B), volumecontrol-0.1.3-macos.zip (2,538,787 B), and SHA256SUMS.txt (483 B); published 2026-08-16T13:29:30Z."
                                            ],
                          "evidence":  [
                                               "Session 092 (2026-08-16): PR #33 (feat/linux-macos-feature-completion) merged at d0e9e40c after the full CI matrix passed on all three platforms including the Release gate; the release/v0.1.3 branch carries the version bump + changelog.",
-                                              "Session 092 (2026-08-16): tag v0.1.3 + Release workflow dispatch + published assets remain pending the release PR merge."
+                                              "Session 092 (2026-08-16): PR #34 (release/v0.1.3) merged at fe674d43, tag v0.1.3 pushed at that validated commit, and the SHA-bound Release workflow (run 31949276965) completed with all validation jobs and the publish job green; v0.1.3 is live at https://github.com/dt418/volume-control/releases/tag/v0.1.3 with the four assets listed in verification."
                                        ],
                          "notes":  "Follows the vol-073 release pattern: version files aligned to the tag, tag pushed at the validated commit, then the SHA-bound release workflow runs."
                      },

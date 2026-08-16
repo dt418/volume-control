@@ -286,12 +286,19 @@ impl WindowManager {
             apply_placement(&window, surface, &monitor);
         }
 
+        // Mixer auto-close on focus loss is production behavior (§9.3).
+        // Under the debug E2E marker the window must stay open even when
+        // the spawned app never holds OS focus, otherwise the embedded
+        // WebDriver session finds an empty window set ("No window could be
+        // found") before it can attach.
+        let e2e_debug =
+            cfg!(debug_assertions) && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
         let app_handle = self.app.clone();
         window.on_window_event(move |event| {
             // Mixer auto-closes on losing focus. Rust-level focus events are
             // reliable on Win32 and Wayland; JS blur is not (spec §9.3).
             if let tauri::WindowEvent::Focused(false) = event {
-                if surface == SurfaceId::Mixer {
+                if surface == SurfaceId::Mixer && mixer_auto_close_on_focus_loss(e2e_debug) {
                     let _ = app_handle.emit("close_mixer_request", ());
                 }
             }
@@ -436,6 +443,14 @@ fn apply_placement(window: &tauri::WebviewWindow, surface: SurfaceId, monitor: &
     let _ = window.set_position(Position::Physical(rect.position));
 }
 
+/// Whether the mixer may auto-close when the window loses focus.
+///
+/// Returns `false` under the debug E2E marker so a WebDriver-attached
+/// surface survives the focus churn of an app spawned from a test runner.
+fn mixer_auto_close_on_focus_loss(e2e_debug: bool) -> bool {
+    !e2e_debug
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -457,6 +472,17 @@ mod tests {
         assert_eq!(SurfaceId::Help.entry(), "src/help/index.html");
         assert_eq!(SurfaceId::Overlay.label(), "window-overlay");
         assert_eq!(SurfaceId::Overlay.entry(), "src/overlay/index.html");
+    }
+
+    #[test]
+    fn mixer_auto_close_on_focus_loss_is_disabled_under_the_e2e_marker() {
+        // Production behavior: the mixer closes when it loses focus (§9.3).
+        assert!(mixer_auto_close_on_focus_loss(false));
+        // The debug E2E marker keeps the window open so the embedded
+        // WebDriver session can attach even when the spawned app never
+        // holds OS focus (observed Windows flake: "No window could be
+        // found" because the mixer auto-closed before the session POST).
+        assert!(!mixer_auto_close_on_focus_loss(true));
     }
 
     #[test]

@@ -33,8 +33,9 @@ Hard rules that must not be bypassed without explicit user approval.
 
 - The supported path to commit + push is `scripts/ship.sh` (or
   `scripts/ship.ps1` on Windows). It runs the records guard (branch +
-  staged), the full format-lint gate with tests, and both self-tests before
-  committing; none of those can be skipped by any flag. `--force` only
-  relaxes git-hygiene warnings, and `--dry-run` verifies without changing
-  anything.
+  staged), the full format-lint gate with tests, both self-tests, the
+  frontend build, the Tauri WebDriver E2E gate, and `tauri build
+  --no-bundle` before committing; none of those can be skipped by any flag.
+  `--force` only relaxes git-hygiene warnings, and `--dry-run` verifies
+  without changing anything.
 - Do not bypass ship with `--no-verify` without explicit user approval.
