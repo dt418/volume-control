@@ -76,6 +76,30 @@
   warnings` clean; `powershell -File scripts/check-tauri-deadlock.ps1` 10/10
   ok (open/close still marshal via `WindowManager::on_main` from the async
   auto-hide task).
+- Task 6 (frontend overlay entry) landed in the same Session 078 entry:
+  `frontend/vite.config.ts` registers the `overlay` rollup input
+  (`src/overlay/index.html`); the new `frontend/src/overlay/` entry mirrors
+  the help surface (same theme preload script, title `VolumeControl
+  Overlay`, module `./overlay.tsx`, StrictMode + createRoot +
+  `../styles.css`, whose shared body rule is `background: transparent`).
+  `OverlaySurface` calls `markSurfaceReady()` on mount (the host creates the
+  window hidden and only shows it after `surface_ready`), subscribes to
+  `state://overlay`, resolves the theme to dark/light (Dark/Light config
+  values, otherwise `prefers-color-scheme`), and pushes
+  `applyAppearance({ theme_resolved, material, motion, accent })` — the
+  exact `AppearancePayload` shape in appearance.ts. The root div carries
+  `data-surface="overlay"` plus `pointer-events-none`/`bg-transparent` (the
+  HUD body stays transparent and non-interactive), and the
+  `data-testid="overlay-card"` renders either the `payload.text` notice or
+  the `SignalRail` + percent using the config color thresholds.
+- TDD (Task 6): the 3-test `OverlaySurface.test.tsx` (listen-mocking pattern
+  from MixerSurface.test.tsx) failed first with `Failed to resolve import
+  "./OverlaySurface"` (module missing), then passed 3/3 — rail + 42%, text
+  card, and the rail's `Muted` label.
+- Gate (Task 6): `npm test --prefix frontend` passes 16 files / 95 tests;
+  `npm run build --prefix frontend` (tsc --noEmit + vite build) clean and
+  emits `frontend/dist/src/overlay/index.html` + `assets/overlay-*.js`;
+  frontend/package.json defines no typecheck script (build covers tsc).
 
 ## Session 077 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
 

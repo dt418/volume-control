@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T12:48",
+    "last_updated":  "2026-08-16T12:57",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -31,12 +31,18 @@
                                                "cargo test -p volumecontrol-tauri --no-default-features overlay_payload passes 1/1 (GREEN); overlay_payload_carries_state_and_thresholds asserts pct=42, muted=true, text=null, and green/blue/orange thresholds equal config.color_thresholds.*.",
                                                "Config field-name verification: crates/volumectl/src/config.rs confirms Config.color_thresholds.green_up_to/blue_up_to/orange_up_to (u8), Config.appearance.theme/material/motion/accent (ThemeMode/MaterialMode/MotionMode/AccentMode), Config::default(), and overlay_duration_ms (u64); VolumeState::percent() = (volume.clamp(0.0,1.0)*100.0).round() as u8.",
                                                "Feature/config evidence: tauri 2 features += macos-private-api compiles on the Windows host; tauri.conf.json app.macOSPrivateApi=true is accepted by tauri-build (config schema 2) during the test build."
+                                               ,
+                                               "TDD RED (Task 6): npm test --prefix frontend -- --run src/overlay/OverlaySurface.test.tsx fails with \"Failed to resolve import ./OverlaySurface\" (module missing) before implementation.",
+                                               "npm test --prefix frontend -- --run src/overlay/OverlaySurface.test.tsx passes 3/3 after implementation (SignalRail + 42% from state://overlay, text card, Muted label); npm test --prefix frontend passes 16 files / 95 tests.",
+                                               "npm run build --prefix frontend (tsc --noEmit + vite build) clean; emits frontend/dist/src/overlay/index.html and assets/overlay-*.js."
                                            ],
                          "evidence":  [
                                               "Session 078 (2026-08-16): SurfaceId::Overlay added (label window-overlay, title VolumeControl Overlay, entry src/overlay/index.html); all() returns 4 surfaces with overlay last; OVERLAY_SIZE = (336.0, 88.0); place_surface puts it bottom-right at OVERLAY_MARGIN_X/Y (20/40) physical px; open_impl creates it decorations(false)/transparent(true)/always_on_top(true)/skip_taskbar(true)/resizable(false), then set_focusable(false) and macOS set_ignore_cursor_events(true) — verified in the Tauri 2.11.5 registry source (webview_window.rs:2133) that set_ignore_cursor_events is a direct WebviewWindow method; neither the already-open branch nor surface_ready_impl focuses the overlay; mixer Focused(false) auto-close and Windows surface behavior unchanged.",
                                                "Session 078 (2026-08-16): commands.rs command_surface_names_round_trip updated (test-only, outside the stated 4-file scope but required for a green workspace suite) — it now round-trips SurfaceId::Overlay and rejects window-nope instead of asserting window-overlay is unknown.",
                                                "Session 078 (2026-08-16): TauriSink::overlay on macOS/Linux opens the window-overlay surface via WindowManager, emits the state://overlay payload (text/pct/muted/color thresholds + Debug appearance strings), and arms a cancellable auto-hide — overlay_seq generation counter + async_runtime::sleep(overlay_duration_ms.clamp(200, 10_000)) that closes the surface only while the generation is current; the Windows native overlay branch is byte-identical.",
                                                "Session 078 (2026-08-16): Deviation from the plan snippet, required by the Windows -D warnings clippy gate (un-gated code warns dead_code on Windows where the webview overlay path is compiled out): overlay_payload is #[cfg(any(not(target_os = \"windows\"), test))] and TauriSink.overlay_seq (+ its new() init) is #[cfg(not(target_os = \"windows\"))]; no #[allow] hiding, and the payload-shape test still runs on Windows."
+                                               ,
+                                               "Session 078 (2026-08-16): frontend overlay entry — vite.config.ts rollup input gains overlay: src/overlay/index.html; index.html mirrors help (same theme preload script, title VolumeControl Overlay, module ./overlay.tsx); overlay.tsx mirrors help.tsx (StrictMode + createRoot + ../styles.css, whose shared body rule is background: transparent); OverlaySurface marks the surface ready on mount, subscribes to state://overlay, maps theme Dark/Light/auto via prefers-color-scheme into applyAppearance's exact AppearancePayload { theme_resolved, material, motion, accent }, and renders data-surface=overlay + data-testid=overlay-card with either payload.text or SignalRail + percent using the config color thresholds; the root is pointer-events-none/bg-transparent so the HUD body is transparent and non-interactive."
                                         ],
                          "notes":  "Hosted CI (macOS/Linux webview builds) and manual compositor transparency/click-through evidence are still pending before vol-077 can move past in_progress."
                      },
