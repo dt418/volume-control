@@ -4,6 +4,19 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-17
+
+### Fixed
+
+- Windows Tauri E2E "No window could be found" flake: the mixer no longer
+  auto-closes on focus loss under the debug E2E marker (production behavior
+  unchanged), each E2E surface app gets an isolated WebView2 user-data
+  folder so orphaned renderer processes from force-killed runs cannot break
+  the next webview, and the E2E wrapper kills leftover app instances before
+  the build, immediately before launch, and after the run — a crashed run
+  can no longer hold the embedded WebDriver port or leave a stale HUD ghost
+  on the desktop.
+
 ## [0.1.3] - 2026-08-16
 
 ### Added

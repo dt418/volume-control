@@ -1,6 +1,6 @@
 [package]
 name = "volumectl"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 description = "Native multiplatform volume controller with global hotkeys and overlay"
 license = "MIT"
