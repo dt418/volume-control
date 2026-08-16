@@ -123,6 +123,17 @@
   src/overlay/OverlaySurface.test.tsx` passes 4/4; `npm test --prefix
   frontend` passes 16 files / 96 tests; `npm run build --prefix frontend`
   (tsc --noEmit + vite build) clean.
+- Alignment fix (user-reported "overlay lệch so với mixer", same Session
+  078 entry): the HUD card was fixed-width `w-[336px]`; when the webview
+  viewport does not match the intended CSS width (DPI/zoom variance), the
+  card centered inside the window with transparent margins, so its visual
+  right edge drifted away from the mixer's shared right edge. The card now
+  spans `w-full`, so its right edge always equals the window's right edge —
+  the same edge the mixer placement shares (both at work-area right − 20
+  physical px) — at any DPI/zoom.
+- Verification (alignment fix): `npm test --prefix frontend` 16 files / 96
+  tests green; `npm run build --prefix frontend` clean; pre-commit hook
+  (records guard, fmt, cached whitespace, clippy -D warnings) passed.
 
 ## Session 077 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
 

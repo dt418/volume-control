@@ -100,7 +100,7 @@ export function OverlaySurface() {
     >
       <div
         data-testid="overlay-card"
-        className="flex w-[336px] flex-col gap-2 rounded-xl border border-border/60 bg-background/88 px-4 py-3 shadow-lg backdrop-blur-md"
+        className="flex w-full flex-col gap-2 rounded-xl border border-border/60 bg-background/88 px-4 py-3 shadow-lg backdrop-blur-md"
       >
         {payload?.text ? (
           <p className="text-center text-sm font-medium text-foreground">

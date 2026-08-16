@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T13:27",
+    "last_updated":  "2026-08-16T13:35",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -63,12 +63,14 @@
                                                "cargo check -p volumectl --target x86_64-unknown-linux-gnu --no-default-features clean.",
                                                "cargo test -p volumecontrol-tauri --no-default-features passes 12/12 with the TauriTray module wired (the module is cfg'd out on Windows; its menu-id contract test runs on Linux/macOS CI).",
                                                "Deliverable src-tauri/src/tauri_tray.rs compiles against the real Tauri 2.11.5 menu/tray/image APIs (MenuItem::with_id, CheckMenuItem::with_id, PredefinedMenuItem::separator, Menu::with_items, TrayIconBuilder chain, Image::new_owned, set_text/set_checked/set_tooltip) and menu_ids_match_the_shared_tray_command_mapping passes in a scratch harness on the host target.",
-                                               "cargo clippy --workspace --all-targets --no-default-features -- -D warnings clean; cargo fmt --all --check and git diff --check clean."
+                                               "cargo clippy --workspace --all-targets --no-default-features -- -D warnings clean; cargo fmt --all --check and git diff --check clean.",
+                                               "OverlaySurface renders its initial state from get_bootstrap before markSurfaceReady (window never appears empty; the first state://overlay event cannot be lost), subscribes to state://volume for live updates, and the HUD card spans the full window width (w-full) so its right edge stays aligned with the mixer's shared right edge at any DPI/zoom."
                                            ],
                          "evidence":  [
                                               "Session 077 (2026-08-16): TrayCommand + tray_icon_rgba moved to the cross-platform tray_common module; host_core::tray_command_to_action un-gated; Windows native tray unchanged.",
                                               "Session 077 (2026-08-16): TauriTray built on macOS/Linux via TrayIconBuilder::with_id(\"main\") with the exact Windows-native menu (disabled live volume label \"volume\", Mute check \"mute\", reset/mixer/settings/help/reload/edit, exit) and the shared 32x32 RGBA icon; dispatch_tray_command now shared by the Windows global menu handler and the tray callback; tray creation failure is non-fatal; set_volume refreshes label/check/tooltip and show_menu is a documented log-only no-op (Tauri 2.11.5 TrayIcon exposes no show_menu API).",
                                               "Session 077 (2026-08-16): TauriSink::volume and show_tray_menu refresh/route to the managed tray on non-Windows; Windows keeps its native tray and native_win32.rs is untouched.",
+                                              "Session 078 (2026-08-16): user-reported \"overlay shows empty\" race fixed via bootstrap-first rendering (frontend/src/overlay/OverlaySurface.tsx + 4 Vitest tests, 96/96 frontend suite, commit e3153812); user-reported \"overlay misaligned with mixer\" fixed by making the HUD card w-full so the visual right edge matches the mixer's right edge regardless of DPI/zoom.",
                                               "Session 077 (2026-08-16): hosted Ubuntu/macOS runs and a real menu-bar/appindicator desktop remain required before marking passing (creation is CI-verifiable; menu interaction is manual evidence)."
                                        ],
                          "notes":  "Windows keeps its native tray-icon/muda tray (no regression risk); the Tauri-managed tray is added only on macOS/Linux with the identical stable menu ids."
