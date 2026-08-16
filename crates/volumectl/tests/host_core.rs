@@ -75,6 +75,139 @@ impl EventSink for RecordingSink {
     fn toggle_surface(&self, label: &str) {
         self.events.lock().unwrap().push(format!("toggle:{label}"));
     }
+    fn backend(&self, status: &volumectl_lib::host_core::BackendStatus) {
+        use volumectl_lib::host_core::BackendStatus;
+        let text = match status {
+            BackendStatus::Ready => "backend:ready".to_string(),
+            BackendStatus::Degraded { error } => {
+                format!("backend:degraded:{error}")
+            }
+        };
+        self.events.lock().unwrap().push(text);
+    }
+}
+
+/// [`StubAudio`] with a controllable failure flag for degradation tests.
+struct FlakyAudio {
+    state: Arc<Mutex<VolumeState>>,
+    failing: Arc<Mutex<bool>>,
+}
+
+impl AudioBackend for FlakyAudio {
+    fn get_state(&self) -> Result<VolumeState, AudioError> {
+        if *self.failing.lock().unwrap() {
+            Err(AudioError::DeviceLost)
+        } else {
+            Ok(*self.state.lock().unwrap())
+        }
+    }
+    fn set_volume(&self, volume: f32) -> Result<(), AudioError> {
+        if *self.failing.lock().unwrap() {
+            Err(AudioError::DeviceLost)
+        } else {
+            self.state.lock().unwrap().volume = volume;
+            Ok(())
+        }
+    }
+    fn toggle_mute(&self) -> Result<VolumeState, AudioError> {
+        let mut state = self.state.lock().unwrap();
+        state.muted = !state.muted;
+        Ok(*state)
+    }
+    fn set_mute(&self, muted: bool) -> Result<(), AudioError> {
+        self.state.lock().unwrap().muted = muted;
+        Ok(())
+    }
+}
+
+fn flaky_core(sink: Arc<RecordingSink>) -> (AppCore, Arc<Mutex<bool>>, Arc<Mutex<VolumeState>>) {
+    let failing = Arc::new(Mutex::new(false));
+    let state = Arc::new(Mutex::new(VolumeState {
+        volume: 0.5,
+        muted: false,
+    }));
+    let audio = FlakyAudio {
+        state: state.clone(),
+        failing: failing.clone(),
+    };
+    let core = AppCore::new_without_native_hotkeys(
+        Box::new(audio),
+        Config::default(),
+        HotkeyModifier::CtrlAlt,
+        sink,
+        None,
+    )
+    .unwrap();
+    (core, failing, state)
+}
+
+#[test]
+fn backend_degradation_publishes_one_shot_status_and_recovers() {
+    let sink = Arc::new(RecordingSink::default());
+    let (mut core, failing, state) = flaky_core(sink.clone());
+
+    // Healthy: no degraded event on the initial publish.
+    assert!(!sink
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|e| e.starts_with("backend:")));
+
+    // Fail the backend: the next probe emits exactly one degraded event and
+    // does not publish a volume event (no fake values).
+    *failing.lock().unwrap() = true;
+    core.sync_external_state();
+    let events = sink.events.lock().unwrap().clone();
+    assert_eq!(
+        events
+            .iter()
+            .filter(|e| e.starts_with("backend:"))
+            .collect::<Vec<_>>(),
+        vec!["backend:degraded:audio device stopped responding"]
+    );
+    // Only the constructor's startup publish exists; the degraded probe
+    // must not fabricate a volume event.
+    assert_eq!(
+        events.iter().filter(|e| e.starts_with("volume:")).count(),
+        1
+    );
+
+    // Repeat probes stay silent (one-shot transition), no spam.
+    core.sync_external_state();
+    core.publish_confirmed_state(true);
+    let events = sink.events.lock().unwrap().clone();
+    assert_eq!(
+        events.iter().filter(|e| e.starts_with("backend:")).count(),
+        1
+    );
+
+    // Recovery emits ready once and resumes publishing live values.
+    *failing.lock().unwrap() = false;
+    *state.lock().unwrap() = VolumeState {
+        volume: 0.6,
+        muted: false,
+    };
+    core.sync_external_state();
+    let events = sink.events.lock().unwrap().clone();
+    assert!(events.iter().any(|e| e == "backend:ready"));
+    assert!(events.iter().any(|e| e == "volume:60:false"));
+}
+
+#[test]
+fn bootstrap_reports_degraded_backend_when_the_probe_fails() {
+    let sink = Arc::new(RecordingSink::default());
+    let (mut core, failing, _state) = flaky_core(sink.clone());
+    *failing.lock().unwrap() = true;
+
+    let payload = core.bootstrap();
+    use volumectl_lib::host_core::BackendStatus;
+    assert_eq!(
+        payload.backend_status,
+        BackendStatus::Degraded {
+            error: "audio device stopped responding".to_string()
+        }
+    );
 }
 
 fn core_with(sink: Arc<RecordingSink>) -> AppCore {

@@ -6,7 +6,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use volumectl_lib::audio::VolumeState;
 use volumectl_lib::config::Config;
-use volumectl_lib::host_core::{AudioSessionInfo, EventSink};
+use volumectl_lib::host_core::{AudioSessionInfo, BackendStatus, EventSink};
 use volumectl_lib::hotkeys::HotkeyRegResult;
 
 #[cfg(target_os = "windows")]
@@ -91,6 +91,10 @@ impl EventSink for TauriSink {
 
     fn sessions(&self, sessions: &[AudioSessionInfo]) {
         let _ = self.app.emit("state://sessions", sessions);
+    }
+
+    fn backend(&self, status: &BackendStatus) {
+        let _ = self.app.emit("state://backend", status);
     }
 
     fn overlay(&self, text: Option<String>, state: VolumeState, config: Config) {

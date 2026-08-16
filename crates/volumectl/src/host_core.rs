@@ -140,6 +140,7 @@ pub struct BootstrapPayload {
     pub appearance: AppearancePayload,
     pub sessions: Vec<AudioSessionInfo>,
     pub sessions_supported: bool,
+    pub backend_status: BackendStatus,
 }
 
 /// Host-facing notifications emitted by [`AppCore`]. The Tauri host
@@ -153,6 +154,11 @@ pub trait EventSink: Send + Sync {
     fn hotkeys(&self, status: &[HotkeyRegResult]);
     /// The audio-session list changed.
     fn sessions(&self, sessions: &[AudioSessionInfo]);
+    /// The audio backend health changed (ready ↔ degraded). Default no-op so
+    /// existing sinks keep compiling; the Tauri host emits `state://backend`
+    /// so surfaces can show a live degraded state instead of freezing
+    /// silently when the backend hiccups.
+    fn backend(&self, _status: &BackendStatus) {}
     /// The host should open the surface with `label` (e.g. `"window-mixer"`).
     fn open_surface(&self, _label: &str) {}
     /// The host should close/destroy the surface with `label`.
@@ -175,6 +181,20 @@ pub trait EventSink: Send + Sync {
     fn exit(&self) {}
 }
 
+/// Backend health published to hosts and surfaces.
+///
+/// `publish_confirmed_state`/`sync_external_state` used to drop the publish
+/// silently on `get_state` errors, so open webviews froze on stale values
+/// with no explanation ("FE/BE connection lost"). The host now emits the
+/// Ready ↔ Degraded transition exactly once per change so surfaces can
+/// surface the failure and recover.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "status", rename_all = "lowercase")]
+pub enum BackendStatus {
+    Ready,
+    Degraded { error: String },
+}
+
 /// Cross-platform application state. One instance per app, owned by the host
 /// (managed as `Mutex<AppCore>` so commands can mutate it).
 pub struct AppCore {
@@ -190,6 +210,9 @@ pub struct AppCore {
     /// zeroing the scalar guarantees audible output is actually silent on
     /// devices/drivers that report a mute bit without attenuating playback.
     mute_restore_volume: Option<f32>,
+    /// Last published backend health (Ready initially; degraded on the first
+    /// failed probe). Drives the one-shot `state://backend` transitions.
+    backend_status: BackendStatus,
     last_config_mtime: Option<std::time::SystemTime>,
     config_notice: Option<crate::config::ConfigLoadNotice>,
 }
@@ -256,10 +279,17 @@ impl AppCore {
         // store — safe regardless of when install_wheel_hook runs.
         #[cfg(target_os = "windows")]
         crate::wheel_win32::set_modifier(_modifier);
-        let last_state = audio.get_state().unwrap_or(VolumeState {
+        let initial_probe = audio.get_state();
+        let last_state = initial_probe.clone().unwrap_or(VolumeState {
             volume: 0.5,
             muted: false,
         });
+        let backend_status = match &initial_probe {
+            Ok(_) => BackendStatus::Ready,
+            Err(error) => BackendStatus::Degraded {
+                error: error.to_string(),
+            },
+        };
         let hotkey_status = hotkeys.status();
         #[cfg(target_os = "windows")]
         let sessions_source: Box<dyn SessionsSource> =
@@ -275,6 +305,7 @@ impl AppCore {
             sink,
             sessions_source,
             mute_restore_volume: None,
+            backend_status,
             last_config_mtime: config_mtime(),
             config_notice,
         };
@@ -285,13 +316,18 @@ impl AppCore {
         // `VolumeControl — --` until the first volume mutation.
         core.sink
             .volume(core.last_state.percent(), core.last_state.muted);
+        if core.backend_status != BackendStatus::Ready {
+            core.sink.backend(&core.backend_status);
+        }
         Ok(core)
     }
 
     /// Snapshot for a webview mount: current config, confirmed state,
     /// hotkey status, resolved appearance and the session list.
     pub fn bootstrap(&mut self) -> BootstrapPayload {
-        if let Ok(st) = self.audio.get_state() {
+        let probe = self.audio.get_state();
+        self.note_backend_result(&probe);
+        if let Ok(st) = probe {
             self.last_state = st;
         }
         BootstrapPayload {
@@ -303,6 +339,7 @@ impl AppCore {
             appearance: self.appearance_payload(),
             sessions: self.sessions(),
             sessions_supported: self.sessions_source.supported(),
+            backend_status: self.backend_status.clone(),
         }
     }
 
@@ -779,9 +816,11 @@ impl AppCore {
     /// overlay/tray renderers are host concerns and are driven through the
     /// sink's `overlay`/`volume` notifications.
     pub fn publish_confirmed_state(&mut self, show_overlay: bool) {
-        let Ok(st) = self.audio.get_state() else {
+        let probe = self.audio.get_state();
+        if !self.note_backend_result(&probe) {
             return;
-        };
+        }
+        let st = probe.expect("note_backend_result accepted Ok");
         self.publish_state(st, show_overlay);
     }
 
@@ -801,13 +840,43 @@ impl AppCore {
     /// stays authoritative (mirrors the legacy 150 ms host timer, which only
     /// re-showed the HUD when the config had just reloaded).
     pub fn sync_external_state(&mut self) {
-        let Ok(st) = self.audio.get_state() else {
+        let probe = self.audio.get_state();
+        if !self.note_backend_result(&probe) {
             return;
-        };
+        }
+        let st = probe.expect("note_backend_result accepted Ok");
         if st != self.last_state {
             log::debug!("ext change: {}% muted={}", st.percent(), st.muted);
             self.last_state = st;
             self.sink.volume(st.percent(), st.muted);
+        }
+    }
+
+    /// Track backend health across probes and emit the Ready ↔ Degraded
+    /// transition exactly once per change. Returns true when the probe
+    /// succeeded (caller continues publishing).
+    fn note_backend_result(
+        &mut self,
+        probe: &Result<VolumeState, crate::audio::AudioError>,
+    ) -> bool {
+        match probe {
+            Ok(_) => {
+                if self.backend_status != BackendStatus::Ready {
+                    self.backend_status = BackendStatus::Ready;
+                    self.sink.backend(&self.backend_status);
+                }
+                true
+            }
+            Err(error) => {
+                let status = BackendStatus::Degraded {
+                    error: error.to_string(),
+                };
+                if self.backend_status != status {
+                    self.backend_status = status;
+                    self.sink.backend(&self.backend_status);
+                }
+                false
+            }
         }
     }
 

@@ -259,9 +259,14 @@ pub fn run() -> tauri::Result<()> {
             #[cfg(target_os = "windows")]
             let fast_native = native.clone();
             std::thread::spawn(move || loop {
-                let mut core = fast_shared
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                // Never queue an IPC command behind a poll: when a command
+                // holds the core (volume slider, bootstrap, tray action),
+                // skip this cycle instead of blocking. Commands are the
+                // interactive path — polls are best-effort by design.
+                let Ok(mut core) = fast_shared.try_lock() else {
+                    std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
+                    continue;
+                };
                 core.poll_hotkeys();
                 #[cfg(target_os = "windows")]
                 while let Some(action) = fast_native.try_recv_wheel() {
@@ -277,9 +282,14 @@ pub fn run() -> tauri::Result<()> {
             // commands through `on_menu_event` on the runtime event loop.
             let slow_shared = shared.clone();
             std::thread::spawn(move || loop {
-                let mut core = slow_shared
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                // Same non-blocking contract as the fast poll: the audio
+                // probe (PulseAudio/CoreAudio/WASAPI get_state) can block on
+                // a slow or lost device, and the 150 ms cadence must never
+                // stall an in-flight command.
+                let Ok(mut core) = slow_shared.try_lock() else {
+                    std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
+                    continue;
+                };
                 core.reload_config_if_changed();
                 // External audio-state sync: volume changed outside the
                 // app (media keys, other apps) — keeps the tray tooltip

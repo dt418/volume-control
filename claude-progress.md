@@ -1,5 +1,38 @@
 # Progress Log
 
+## Session 079 (2026-08-16) - FE-BE connection stability (non-blocking polls + backend health)
+
+- User report: "Đôi khi FE,BE mất kết nối" — surfaces intermittently froze
+  or seemed disconnected from the backend.
+- Root cause 1 (latency/queueing): the Tauri host's fast poll (20 ms) and
+  slow poll (150 ms) used `Mutex<AppCore>.lock()` while calling
+  `audio.get_state()` — a probe that can block on PulseAudio/CoreAudio/WASAPI
+  (COM init per call on Windows). Every IPC command (`set_volume`,
+  `toggle_mute`, `get_bootstrap`, …) then queued behind the poll, so a slow
+  or lost device stalled the interactive path. Fix: both polls now use
+  `try_lock()` and skip their cycle when a command holds the core — polls
+  are best-effort by design, commands are never queued behind them.
+- Root cause 2 (silent event stop): `publish_confirmed_state` and
+  `sync_external_state` silently `return`ed when `get_state` errored, so
+  `state://volume` stopped and open surfaces froze on stale values with no
+  explanation (the Session 074 "connection lost" symptom class). Fix:
+  `BackendStatus` (`Ready | Degraded{error}`) in host_core with a default
+  no-op `EventSink::backend`; `note_backend_result` publishes the Ready ↔
+  Degraded transition exactly once per change; `BootstrapPayload` carries
+  `backend_status` so a webview that mounts after the transition still shows
+  the notice; `TauriSink::backend` emits `state://backend`.
+- Frontend: the mixer sessionStore subscribes to `state://backend` and reads
+  `backend_status` from bootstrap, rendering the existing `role="status"`
+  notice ("Audio backend temporarily unavailable: …") and clearing it on
+  Ready — no more silent freeze.
+- Tests: 2 new host_core integration tests (one-shot degraded + no fabricated
+  volume event + recovery; degraded bootstrap) and 2 new mixer Vitest tests
+  (live degraded notice + clear on ready; degraded bootstrap notice). Full
+  suite: cargo workspace 344, frontend 99, build clean.
+- Records: feature_list.json vol-079 added (in_progress); this entry is the
+  claude-progress.md half. Hosted CI + a real-device loss/recovery soak
+  remain before marking passing.
+
 ## Session 078 (2026-08-16) - Overlay surface: WindowManager (Phase B Task 4)
 
 - Goal: add the `SurfaceId::Overlay` webview surface (label

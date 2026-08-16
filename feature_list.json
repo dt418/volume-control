@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T14:45",
+    "last_updated":  "2026-08-16T14:50",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,26 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-079",
+                         "priority":  79,
+                         "area":  "audio-controls",
+                         "title":  "FE-BE connection stability: non-blocking polls and backend health events",
+                         "user_visible_behavior":  "Webview surfaces never freeze or appear disconnected when the audio backend hiccups: IPC commands are never queued behind the host poll threads (they skip a cycle instead of blocking on the AppCore mutex), and backend failures publish a one-shot Ready ↔ Degraded status so the mixer shows a live 'Audio backend temporarily unavailable' notice instead of silently freezing on stale values; recovery publishes Ready and resumes live updates.",
+                         "status":  "in_progress",
+                         "verification":  [
+                                               "host_core integration: backend_degradation_publishes_one_shot_status_and_recovers — a failing probe emits exactly one backend:degraded event, no fabricated volume event, repeat probes stay silent, recovery emits backend:ready and resumes publishing (25/25 host_core tests).",
+                                               "host_core integration: bootstrap_reports_degraded_backend_when_the_probe_fails — BootstrapPayload.backend_status reflects the initial probe.",
+                                               "src-tauri polls use try_lock: the 20 ms hotkey poll and the 150 ms config/audio poll skip their cycle when a command holds AppCore, so commands never wait behind a possibly-blocking get_state (PulseAudio/CoreAudio/WASAPI).",
+                                               "TauriSink::backend emits state://backend; the mixer listens and renders the notice from live events and from a degraded bootstrap (2 new Vitest tests; frontend 99/99).",
+                                               "cargo test --workspace --no-default-features 344 (283 volumectl lib + 16 tauri + 4 win32 sessions + 25 host_core + 16 linux_host_core); npm test --prefix frontend 99; npm run build clean."
+                                           ],
+                         "evidence":  [
+                                              "Session 079 (2026-08-16): user-reported 'Đôi khi FE,BE mất kết nối' — root causes: (1) the fast/slow poll threads blocked on Mutex<AppCore> while calling audio.get_state(), queueing every invoke behind a possibly-slow backend probe; (2) publish_confirmed_state/sync_external_state silently dropped publishes on get_state errors, so state://volume stopped and surfaces froze on stale values with no explanation.",
+                                              "Session 079 (2026-08-16): BackendStatus (Ready | Degraded{error}) added to host_core with a default no-op EventSink::backend, one-shot transitions in note_backend_result, bootstrap carries backend_status, and the mixer surfaces the notice (role=status) with automatic clearing on Ready."
+                                       ],
+                         "notes":  "Hosted CI evidence and a long-run soak (backend loss/recovery on real devices) remain before marking passing."
+                     },
                      {
                          "id":  "vol-077",
                          "priority":  77,
