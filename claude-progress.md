@@ -36,6 +36,15 @@
   real-audio E2E warning.
 - Records: feature_list.json vol-078/vol-080 extended (in_progress); this
   entry is the claude-progress.md half.
+- Platform script fix (same Session 082): `Invoke-Step` now tees per-step
+  logs under `$OutputRoot` and prints the tail on failure, and the script
+  creates `$OutputRoot` up front — the missing-directory failure was
+  masking step results. Final Windows battery
+  (`scripts/verify-platform.ps1 -OutputRoot output/platform/windows3`)
+  reports **PLATFORM VERIFICATION PASSED (Windows)** end-to-end: format-lint
+  gate (incl. the WSL Linux gate), frontend Vitest + build, real-audio E2E
+  all-surfaces evidence gate, autostart verifier, and the three enforcement
+  self-tests.
 
 ## Session 081 (2026-08-16) - Platform verification scripts + real device sync verification
 

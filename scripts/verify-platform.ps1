@@ -41,6 +41,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = Split-Path $PSScriptRoot -Parent
 $failures = @()
+New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
 
 Write-Host "NOTE: the E2E step uses REAL audio by default — the app drives the" -ForegroundColor Yellow
 Write-Host "actual OS endpoint (volume/mute round-trips affect the device and are" -ForegroundColor Yellow
@@ -50,11 +51,17 @@ Write-Host "audio, whose displays never touch the real device." -ForegroundColor
 function Invoke-Step {
   param([string]$Name, [scriptblock]$Body)
   Write-Host "`n=== $Name ===" -ForegroundColor Cyan
+  $stepLog = Join-Path $OutputRoot "step-$($Name -replace '[^A-Za-z0-9]+','-').log"
   try {
-    & $Body
+    & $Body *>&1 | Tee-Object -FilePath $stepLog
+    if ($LASTEXITCODE -ne 0) { throw "step exited $LASTEXITCODE" }
     Write-Host "PASS: $Name" -ForegroundColor Green
   } catch {
     Write-Host "FAIL: $Name -- $($_.Exception.Message)" -ForegroundColor Red
+    if (Test-Path $stepLog) {
+      Write-Host "--- last 15 lines of $stepLog ---" -ForegroundColor Yellow
+      Get-Content $stepLog -Tail 15 | ForEach-Object { Write-Host $_ -ForegroundColor Gray }
+    }
     $script:failures += $Name
   }
 }

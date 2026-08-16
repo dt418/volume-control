@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T16:20",
+    "last_updated":  "2026-08-16T16:45",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -24,7 +24,8 @@
                          "status":  "in_progress",
                          "verification":  [
                                                "scripts/verify-platform.sh passes bash -n; scripts/verify-platform.ps1 parses clean.",
-                                               "Windows full run: scripts/verify-platform.ps1 -OutputRoot output/platform/windows — format-lint gate, frontend Vitest + build, verify-tauri-e2e.ps1 -Surface all (6/6), verify-autostart.ps1, and the three enforcement self-tests all exit 0 (evidence in the Session 081 entry).",
+                                               "Windows full run: scripts/verify-platform.ps1 -OutputRoot output/platform/windows3 — format-lint gate, frontend Vitest + build, verify-tauri-e2e.ps1 -Surface all (6/6, real audio with device-state restore), verify-autostart.ps1, and the three enforcement self-tests all exit 0 (PLATFORM VERIFICATION PASSED).",
+                                               "Invoke-Step now tees per-step logs under $OutputRoot and prints the tail on failure; $OutputRoot is created up front (missing-dir failures were masking step results).",
                                                "macOS/Linux runs are hosted-CI evidence (xvfb-run E2E + gtk_smoke on Ubuntu; appkit_smoke + sw_vers on macOS)."
                                            ],
                          "evidence":  [
