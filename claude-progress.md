@@ -100,6 +100,29 @@
   `npm run build --prefix frontend` (tsc --noEmit + vite build) clean and
   emits `frontend/dist/src/overlay/index.html` + `assets/overlay-*.js`;
   frontend/package.json defines no typecheck script (build covers tsc).
+- Sync fix (user-reported race, same Session 078 entry): the overlay could
+  open out of sync with its content. The old code called `markSurfaceReady()`
+  on mount and subscribed to `state://overlay` only after the host had already
+  emitted the payload, so the window became visible before any content existed
+  and the first state event was lost — an empty/transparent card flickered or
+  stale content showed. `OverlaySurface` now mirrors the mixer's
+  `sessionStore` ordering: it subscribes to `state://overlay` (full payload
+  incl. text-card mode + thresholds) and `state://volume` ({pct, muted})
+  first, invokes `get_bootstrap` and renders that initial snapshot
+  (volume_pct/muted/color_thresholds/appearance), and only calls
+  `markSurfaceReady()` in the bootstrap `.finally()`, so the host never shows
+  the window before content is ready. Live events override the snapshot;
+  a failed bootstrap keeps the overlay transparent and the host auto-hide
+  still closes it.
+- TDD (sync fix): `OverlaySurface.test.tsx` rewritten with the real
+  MixerSurface.test.tsx mocking pattern (invoke resolves the bootstrap);
+  passes 4/4 — bootstrap-first render (55% + signal rail), live
+  `state://volume` update to 62%, text card from `state://overlay`, and
+  `Muted` from the live volume event.
+- Gate (sync fix): `npm test --prefix frontend -- --run
+  src/overlay/OverlaySurface.test.tsx` passes 4/4; `npm test --prefix
+  frontend` passes 16 files / 96 tests; `npm run build --prefix frontend`
+  (tsc --noEmit + vite build) clean.
 
 ## Session 077 (2026-08-16) - Linux/macOS feature completion: Phase A Task 1 (shared tray contracts)
 

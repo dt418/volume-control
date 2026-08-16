@@ -5,8 +5,15 @@ import { OverlaySurface } from "./OverlaySurface";
 
 const listeners: Record<string, (payload: unknown) => void> = {};
 
+const bootstrap = {
+  volume_pct: 55,
+  muted: false,
+  config: { color_thresholds: { green_up_to: 40, blue_up_to: 75, orange_up_to: 100 } },
+  appearance: { theme_resolved: "dark", material: "Auto", motion: "Full", accent: "System" },
+};
+
 vi.mock("../lib/ipc", () => ({
-  invoke: vi.fn(),
+  invoke: vi.fn(async () => bootstrap),
   listen: vi.fn(async (event: string, cb: (p: unknown) => void) => {
     listeners[event] = cb;
     return () => {};
@@ -25,36 +32,42 @@ function fire(event: string, payload: unknown) {
   listeners[event]?.(payload);
 }
 
-const basePayload = {
-  text: null,
-  pct: 42,
-  muted: false,
-  green_up_to: 40,
-  blue_up_to: 75,
-  orange_up_to: 100,
-  theme: "Dark",
-  material: "Auto",
-  motion: "Full",
-  accent: "System",
-};
-
 describe("OverlaySurface", () => {
-  it("renders the volume rail and percent from state://overlay", async () => {
+  it("renders the bootstrap state as soon as it mounts (sync fix)", async () => {
     render(<OverlaySurface />);
-    fire("state://overlay", basePayload);
-    expect(await screen.findByText("42%")).toBeInTheDocument();
+    expect(await screen.findByText("55%")).toBeInTheDocument();
     expect(screen.getByTestId("signal-rail")).toBeInTheDocument();
   });
 
-  it("renders a text card instead of the rail when text is present", async () => {
+  it("updates live from state://volume", async () => {
     render(<OverlaySurface />);
-    fire("state://overlay", { ...basePayload, text: "Config reloaded" });
+    await screen.findByText("55%");
+    fire("state://volume", { pct: 62, muted: false });
+    expect(await screen.findByText("62%")).toBeInTheDocument();
+  });
+
+  it("renders a text card from state://overlay", async () => {
+    render(<OverlaySurface />);
+    await screen.findByText("55%");
+    fire("state://overlay", {
+      text: "Config reloaded",
+      pct: 50,
+      muted: false,
+      green_up_to: 40,
+      blue_up_to: 75,
+      orange_up_to: 100,
+      theme: "Dark",
+      material: "Auto",
+      motion: "Full",
+      accent: "System",
+    });
     expect(await screen.findByText("Config reloaded")).toBeInTheDocument();
   });
 
-  it("renders Muted state from the rail", async () => {
+  it("renders Muted from the live volume event", async () => {
     render(<OverlaySurface />);
-    fire("state://overlay", { ...basePayload, pct: 0, muted: true });
+    await screen.findByText("55%");
+    fire("state://volume", { pct: 0, muted: true });
     expect(await screen.findByText("Muted")).toBeInTheDocument();
   });
 });

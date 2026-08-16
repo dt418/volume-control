@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
-import { applyAppearance } from "../lib/appearance";
-import { listen } from "../lib/ipc";
+import { applyAppearance, type AppearancePayload } from "../lib/appearance";
+import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady } from "../lib/surface";
-import {
-  DEFAULT_THRESHOLDS,
-  SignalRail,
-  type ColorThresholds,
-} from "../mixer/SignalRail";
+import { DEFAULT_THRESHOLDS, SignalRail, type ColorThresholds } from "../mixer/SignalRail";
 
 interface OverlayPayload {
   text: string | null;
@@ -21,28 +17,32 @@ interface OverlayPayload {
   accent: string;
 }
 
+interface OverlayBootstrap {
+  volume_pct: number;
+  muted: boolean;
+  config?: { color_thresholds?: ColorThresholds };
+  appearance: AppearancePayload;
+}
+
+function resolveTheme(theme: string): string {
+  if (theme === "Dark") return "dark";
+  if (theme === "Light") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 export function OverlaySurface() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
+  const [initial, setInitial] = useState<OverlayBootstrap | null>(null);
+  const [live, setLive] = useState<{ pct: number; muted: boolean } | null>(null);
 
   useEffect(() => {
-    // The host creates the HUD hidden (`visible(false)`); the window only
-    // becomes visible after `surface_ready` (same contract as the mixer).
-    void markSurfaceReady();
     let disposed = false;
     const unlisteners: Array<() => void> = [];
     void listen<OverlayPayload>("state://overlay", (p) => {
       if (disposed) return;
       setPayload(p);
-      const resolved =
-        p.theme === "Dark"
-          ? "dark"
-          : p.theme === "Light"
-            ? "light"
-            : window.matchMedia("(prefers-color-scheme: dark)").matches
-              ? "dark"
-              : "light";
       applyAppearance({
-        theme_resolved: resolved,
+        theme_resolved: resolveTheme(p.theme),
         material: p.material,
         motion: p.motion,
         accent: p.accent,
@@ -51,19 +51,47 @@ export function OverlaySurface() {
       if (disposed) unlisten();
       else unlisteners.push(unlisten);
     });
+    void listen<{ pct: number; muted: boolean }>("state://volume", (v) => {
+      if (!disposed) setLive(v);
+    }).then((unlisten) => {
+      if (disposed) unlisten();
+      else unlisteners.push(unlisten);
+    });
+
+    void invoke<OverlayBootstrap>("get_bootstrap")
+      .then((b) => {
+        if (!b || disposed) return;
+        setInitial(b);
+        applyAppearance(b.appearance);
+      })
+      .catch(() => {
+        // Backend unavailable: keep the overlay transparent; the host
+        // auto-hide still closes it.
+      })
+      .finally(() => {
+        // Show the window only after the initial content is ready so the
+        // overlay never appears empty (sync fix).
+        void markSurfaceReady();
+      });
+
     return () => {
       disposed = true;
       unlisteners.forEach((un) => un());
     };
   }, []);
 
-  if (!payload) return null;
+  const pct = live?.pct ?? payload?.pct ?? initial?.volume_pct ?? 0;
+  const muted = live?.muted ?? payload?.muted ?? initial?.muted ?? false;
+  const thresholds: ColorThresholds =
+    payload && payload.green_up_to !== undefined
+      ? {
+          green_up_to: payload.green_up_to,
+          blue_up_to: payload.blue_up_to,
+          orange_up_to: payload.orange_up_to,
+        }
+      : initial?.config?.color_thresholds ?? DEFAULT_THRESHOLDS;
 
-  const thresholds: ColorThresholds = {
-    green_up_to: payload.green_up_to,
-    blue_up_to: payload.blue_up_to,
-    orange_up_to: payload.orange_up_to,
-  };
+  if (!payload && !initial) return null;
 
   return (
     <div
@@ -74,7 +102,7 @@ export function OverlaySurface() {
         data-testid="overlay-card"
         className="flex w-[336px] flex-col gap-2 rounded-xl border border-border/60 bg-background/88 px-4 py-3 shadow-lg backdrop-blur-md"
       >
-        {payload.text ? (
+        {payload?.text ? (
           <p className="text-center text-sm font-medium text-foreground">
             {payload.text}
           </p>
@@ -85,14 +113,10 @@ export function OverlaySurface() {
                 Volume
               </span>
               <span className="text-2xl font-semibold tabular-nums text-foreground">
-                {payload.pct}%
+                {pct}%
               </span>
             </div>
-            <SignalRail
-              value={payload.pct}
-              muted={payload.muted}
-              thresholds={thresholds}
-            />
+            <SignalRail value={pct} muted={muted} thresholds={thresholds} />
           </>
         )}
       </div>

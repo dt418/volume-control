@@ -1,6 +1,6 @@
 ﻿{
     "project":  "volume-control",
-    "last_updated":  "2026-08-16T12:57",
+    "last_updated":  "2026-08-16T13:27",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -34,7 +34,8 @@
                                                ,
                                                "TDD RED (Task 6): npm test --prefix frontend -- --run src/overlay/OverlaySurface.test.tsx fails with \"Failed to resolve import ./OverlaySurface\" (module missing) before implementation.",
                                                "npm test --prefix frontend -- --run src/overlay/OverlaySurface.test.tsx passes 3/3 after implementation (SignalRail + 42% from state://overlay, text card, Muted label); npm test --prefix frontend passes 16 files / 95 tests.",
-                                               "npm run build --prefix frontend (tsc --noEmit + vite build) clean; emits frontend/dist/src/overlay/index.html and assets/overlay-*.js."
+                                               "npm run build --prefix frontend (tsc --noEmit + vite build) clean; emits frontend/dist/src/overlay/index.html and assets/overlay-*.js.",
+                                               "Sync-fix Vitest evidence: npm test --prefix frontend -- --run src/overlay/OverlaySurface.test.tsx passes 4/4 after the rewrite (bootstrap-first render 55% + signal rail, live state://volume update to 62%, text card from state://overlay, Muted from the live volume event); npm test --prefix frontend passes 16 files / 96 tests; npm run build --prefix frontend (tsc --noEmit + vite build) clean."
                                            ],
                          "evidence":  [
                                               "Session 078 (2026-08-16): SurfaceId::Overlay added (label window-overlay, title VolumeControl Overlay, entry src/overlay/index.html); all() returns 4 surfaces with overlay last; OVERLAY_SIZE = (336.0, 88.0); place_surface puts it bottom-right at OVERLAY_MARGIN_X/Y (20/40) physical px; open_impl creates it decorations(false)/transparent(true)/always_on_top(true)/skip_taskbar(true)/resizable(false), then set_focusable(false) and macOS set_ignore_cursor_events(true) — verified in the Tauri 2.11.5 registry source (webview_window.rs:2133) that set_ignore_cursor_events is a direct WebviewWindow method; neither the already-open branch nor surface_ready_impl focuses the overlay; mixer Focused(false) auto-close and Windows surface behavior unchanged.",
@@ -43,7 +44,9 @@
                                                "Session 078 (2026-08-16): Deviation from the plan snippet, required by the Windows -D warnings clippy gate (un-gated code warns dead_code on Windows where the webview overlay path is compiled out): overlay_payload is #[cfg(any(not(target_os = \"windows\"), test))] and TauriSink.overlay_seq (+ its new() init) is #[cfg(not(target_os = \"windows\"))]; no #[allow] hiding, and the payload-shape test still runs on Windows."
                                                ,
                                                "Session 078 (2026-08-16): frontend overlay entry — vite.config.ts rollup input gains overlay: src/overlay/index.html; index.html mirrors help (same theme preload script, title VolumeControl Overlay, module ./overlay.tsx); overlay.tsx mirrors help.tsx (StrictMode + createRoot + ../styles.css, whose shared body rule is background: transparent); OverlaySurface marks the surface ready on mount, subscribes to state://overlay, maps theme Dark/Light/auto via prefers-color-scheme into applyAppearance's exact AppearancePayload { theme_resolved, material, motion, accent }, and renders data-surface=overlay + data-testid=overlay-card with either payload.text or SignalRail + percent using the config color thresholds; the root is pointer-events-none/bg-transparent so the HUD body is transparent and non-interactive."
-                                        ],
+                                               ,
+                                               "Session 078 (2026-08-16): user-reported race fix — the overlay opened out of sync with its content: markSurfaceReady() ran on mount and the state://overlay listener registered after the host had already emitted, so the window became visible before content existed and the first event was lost (empty/transparent flicker or stale content). OverlaySurface now subscribes to state://overlay + state://volume first, renders the get_bootstrap snapshot (volume_pct/muted/color_thresholds/appearance) and calls markSurfaceReady() only in the bootstrap .finally(), mirroring sessionStore's ordering; live state://overlay (full payload incl. text-card mode) and state://volume ({pct, muted}) override the snapshot."
+                                       ],
                          "notes":  "Hosted CI (macOS/Linux webview builds) and manual compositor transparency/click-through evidence are still pending before vol-077 can move past in_progress."
                      },
                      {
