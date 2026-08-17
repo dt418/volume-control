@@ -39,45 +39,65 @@ only for the Mixer, Settings, and Help panels.
 - **System tray**: live volume label, mute toggle, reset, exit.
 - **Settings-first configuration**: common options, appearance, blacklist,
   feedback, storage, and shortcuts can be changed directly in Settings. The
-  JSON file remains available for automation and advanced edits.
-- **Live config reload**: edits to `config.json` are detected and applied
+  canonical on-disk format is the human-readable `config.ini`; the legacy
+  `config.json` is retained only as a migration/recovery backup.
+- **Live config reload**: edits to `config.ini` are detected and applied
   within ~150 ms — no restart needed.
 - **External sync**: volume changed by media keys, other apps, or Bluetooth
   updates the tray label immediately.
 
 ## Configuration
 
-On first run the app writes a default config to:
+On first run the app writes a default `config.ini` to:
 
 | OS      | Path |
 |---------|------|
-| Windows | `%APPDATA%\volume-control\config.json` |
-| macOS   | `~/Library/Application Support/volume-control/config.json` |
-| Linux   | `~/.config/volume-control/config.json` |
+| Windows | `%APPDATA%\volume-control\config.ini` |
+| macOS   | `~/Library/Application Support/volume-control/config.ini` |
+| Linux   | `~/.config/volume-control/config.ini` |
 
-```jsonc
-{
-  "volume_step": 1,           // small step, percent (1-50)
-  "volume_step_large": 10,    // Shift step, must be > volume_step
-  "overlay_duration_ms": 1800, // overlay visibility (200-10000)
-  "modifier": "CtrlAlt",      // CtrlAlt | CapsLock | Alt | Ctrl
-  "blacklist": [],            // executable names excluded from hotkeys
-  "color_thresholds": { "green_up_to": 40, "blue_up_to": 75, "orange_up_to": 100 },
-  "hotkeys": {
-    "volume_up": "Ctrl+Alt+ArrowUp",
-    "volume_down": "Ctrl+Alt+ArrowDown",
-    "volume_up_large": "Ctrl+Alt+Shift+ArrowUp",
-    "volume_down_large": "Ctrl+Alt+Shift+ArrowDown",
-    "toggle_mute": "Ctrl+Alt+KeyM",
-    "reset_50": "Ctrl+Alt+KeyR",
-    "open_mixer": "Ctrl+Alt+KeyV",
-    "open_menu": "Ctrl+Alt+Shift+KeyM"
-  }
-}
+```ini
+[general]
+volume_step=1
+volume_step_large=10
+overlay_duration_ms=1800
+modifier=CtrlAlt
+autostart=false
+
+[hotkeys]
+volume_up=Ctrl+Alt+ArrowUp
+volume_down=Ctrl+Alt+ArrowDown
+volume_up_large=Ctrl+Alt+Shift+ArrowUp
+volume_down_large=Ctrl+Alt+Shift+ArrowDown
+toggle_mute=Ctrl+Alt+KeyM
+reset_50=Ctrl+Alt+KeyR
+open_mixer=Ctrl+Alt+KeyV
+open_menu=Ctrl+Alt+Shift+KeyM
+
+[appearance]
+theme=System
+material=Auto
+motion=Full
+accent=System
+
+[feedback]
+enabled=true
+blocked_freq=400
+blocked_duration_ms=80
+limit_freq=600
+limit_duration_ms=60
+
+[color_thresholds]
+green_up_to=40
+blue_up_to=75
+orange_up_to=100
+
+[blacklist]
+# item.0=example.exe
 ```
 
-An empty value in `hotkeys` disables only that action. Existing configs without
-the `hotkeys` object migrate to the selected modifier preset automatically.
+An empty value in `hotkeys` disables only that action. Existing legacy JSON
+configs are migrated to `config.ini` automatically and kept as a backup.
 
 ## Building
 
@@ -253,7 +273,7 @@ crates/volumectl/
 │   ├── overlay         GDI-painted native popup (click-through, auto-hide)
 │   ├── tray            tray-icon + muda context menu
 │   ├── linux_app       GTK4 host (Linux, gtk-renderer feature)
-│   ├── config          JSON config, mtime live reload
+│   ├── config          INI config with legacy JSON migration, mtime live reload
 │   ├── core            shared volume/clamp/threshold logic (+ unit tests)
 │   ├── ui/             shared adaptive UI contract (model, theme, capabilities,
 │   │                   surface, settings) + platform renderer seams
