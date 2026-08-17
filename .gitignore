@@ -126,6 +126,8 @@ src-tauri/gen
 !.claude/skills/systematic-debugging/
 !.agents/skills/tauri-deadlock-guard/
 !.claude/skills/tauri-deadlock-guard/
+!.agents/skills/tauri-windows-host-surfaces/
+!.claude/skills/tauri-windows-host-surfaces/
 !.agents/skills/test-driven-development/
 !.claude/skills/test-driven-development/
 !.agents/skills/using-git-worktrees/
