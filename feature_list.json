@@ -16,6 +16,24 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-085",
+                         "priority":  85,
+                         "area":  "tooling",
+                         "title":  "Agent skill set for the Tauri surface stack + project-authored surface skill",
+                         "user_visible_behavior":  "Agents working on volume-control get ecosystem Tauri v2 skills (architecture, IPC, calling frontend from Rust, testing Tauri apps incl. WebDriverIO, system tray, window customization) installed in .agents/skills and .claude/skills (npx-installable, not versioned), plus a versioned project-authored skill tauri-windows-host-surfaces that documents the lazy per-surface webview lifecycle, the macOS/Linux-only webview-overlay rule, the E2E debug markers, and WebView2 isolation so future surface changes do not regress them.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "Installed 6 third-party Tauri skills (dchuk/claude-code-tauri-skills): understanding-tauri-architecture, understanding-tauri-ipc, calling-frontend-from-tauri-rust, testing-tauri-apps, adding-tauri-system-tray, customizing-tauri-windows - present in both .agents/skills and .claude/skills, verified in the live skill catalog, and gitignored per repo policy (third-party npx skills are not versioned; skills-lock.json already records the full-stack-skills/tauri-skills source set).",
+                                               "Created project-authored skill .agents/skills/tauri-windows-host-surfaces/SKILL.md and mirrored it byte-identical to .claude/skills/tauri-windows-host-surfaces/SKILL.md (SHA-256 match verified); whitelisted both trees in .gitignore so they are versioned, and git status now shows them as tracked candidates.",
+                                               "Skill content verified against the codebase: SurfaceId label/title/entry round-trip (unit test surface_labels_and_entries_are_stable), open_impl rejects SurfaceId::Overlay on Windows (native Win32 HUD path in TauriSink::overlay), mixer_auto_close_on_focus_loss(e2e_debug), WEBVIEW2_USER_DATA_FOLDER per surface in e2e/tauri/wdio.conf.ts, and verify-tauri-e2e.ps1 pre/post zombie cleanup."
+                                            ],
+                         "evidence":  [
+                                               "Session 094 (2026-08-17): discovery found skills-lock.json already records 52 Tauri skills from full-stack-skills/tauri-skills (not yet materialized); confirmed repo policy that third-party skills are gitignored (only skills-lock.json is versioned) and only project-authored skills are whitelisted - so the six dchuk skills are installed as environment/catalog skills while the new surface skill is the versioned deliverable.",
+                                               "Session 094 (2026-08-17): RED baseline attempted with a subagent (add a new webview surface plan) but the harness subagent runtime failed; the skill's invariants were instead derived directly from reading the full src-tauri surface stack (window_manager.rs, commands.rs, events_sink.rs, lib.rs) and the E2E harness (wdio.conf.ts, verify-tauri-e2e.ps1)."
+                                        ],
+                         "notes":  "The versioned deliverable of this task is the project-authored surface skill; the six ecosystem Tauri skills live on disk (gitignored) for immediate agent use and can be restored via npx skills add from the recorded source."
+                     },
+                     {
                          "id":  "vol-084",
                          "priority":  84,
                          "area":  "release",

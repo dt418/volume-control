@@ -1,5 +1,36 @@
 # Progress Log
 
+## Session 095 (2026-08-18) - Tauri surface skill set installed + project-authored surface skill
+
+- Installed six ecosystem Tauri v2 skills from `dchuk/claude-code-tauri-skills`
+  into `.agents/skills/` and `.claude/skills/` (both trees, verified in the
+  live agent-skill catalog): `understanding-tauri-architecture`,
+  `understanding-tauri-ipc`, `calling-frontend-from-tauri-rust`,
+  `testing-tauri-apps`, `adding-tauri-system-tray`,
+  `customizing-tauri-windows`. These are third-party npx-installable skills
+  and are therefore gitignored per repo policy (only `skills-lock.json` is
+  versioned); they are immediately usable by the harness catalog.
+- Created a versioned project-authored skill
+  `tauri-windows-host-surfaces` (`.agents/skills/` + `.claude/skills/`,
+  byte-identical SHA-256 verified) that encodes the surface-stack invariants
+  read directly from the code: the lazy per-surface Webview2 lifecycle,
+  `SurfaceId` label/title/entry round-trip, the macOS/Linux-only webview
+  overlay rule (Windows uses the native Win32 HUD), the E2E debug markers
+  (`VOLUMECTL_E2E_DEBUG` disabling overlay auto-hide and mixer
+  focus-loss auto-close), WebView2 isolation
+  (`WEBVIEW2_USER_DATA_FOLDER=<output>/webview2-<pid>`), and a "add a new
+  surface" checklist. Whitelisted both trees in `.gitignore` so the skill is
+  committed.
+- Discovery from this session: `skills-lock.json` already records 52 Tauri
+  skills from `full-stack-skills/tauri-skills` that are not yet materialized
+  on disk; the repo policy is that third-party skills are restored via
+  `npx skills add` / `npx skills experimental_install`, not committed.
+- TDD note: the RED baseline for the new skill used a subagent task, but the
+  harness subagent runtime failed in this session; skill invariants were
+  derived from reading the full surface stack instead.
+- Records: feature_list.json vol-085 added (passing); this entry is the
+  claude-progress.md half. Skill-only change; no production code touched.
+
 ## Session 094 (2026-08-17) - PR #35 merged + release v0.1.4 preparation
 
 - PR #35 (feat/e2e-window-loss-flake) merged at e4039472 after the full CI
