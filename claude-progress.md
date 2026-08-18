@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 096 (2026-08-19) - Confirm v0.1.4 release completion
+
+- Continued the outstanding release follow-up from Session 094. Verified that
+  tag `v0.1.4` points to validated commit `4d4e39fe` (the merged release
+  PR #36 commit).
+- Verified release workflow runs `31961771354` and `31961765318` completed
+  successfully for the v0.1.4 tag.
+- Verified GitHub release `v0.1.4` is public, Latest, non-draft,
+  non-prerelease, and contains all four published assets:
+  `volumecontrol-0.1.4-windows.zip`, `volumecontrol-0.1.4-ubuntu.tar.gz`,
+  `volumecontrol-0.1.4-macos.zip`, and `SHA256SUMS.txt`.
+- Updated `feature_list.json` vol-084 from `in_progress` to `passing`
+  with the tag, workflow, release, and asset evidence. No production code
+  changed.
+
 ## Session 095 (2026-08-18) - Tauri surface skill set installed + project-authored surface skill
 
 - Installed six ecosystem Tauri v2 skills from `dchuk/claude-code-tauri-skills`

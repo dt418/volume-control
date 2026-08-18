@@ -38,18 +38,19 @@
                          "priority":  84,
                          "area":  "release",
                          "title":  "Release v0.1.4 preparation",
-                         "user_visible_behavior":  "The packaged app reports version 0.1.4 and the changelog documents the E2E stability fixes; the release tag v0.1.4 will be bound to the validated commit per the release workflow preflight.",
-                         "status":  "in_progress",
+                         "user_visible_behavior":  "The packaged app reports version 0.1.4 and the changelog documents the E2E stability fixes; the release tag v0.1.4 is bound to the validated commit per the release workflow preflight.",
+                         "status":  "passing",
                          "verification":  [
                                                "Version bumped to 0.1.4 in workspace.package, crates/volumectl, volumecontrol-tauri, tauri.conf.json, frontend package.json and package-lock.json.",
                                                "CHANGELOG.md promoted the E2E stability fixes into [0.1.4] with a fresh Unreleased heading.",
-                                               "PR #35 (feat/e2e-window-loss-flake) merged at e4039472 after the full CI matrix passed on all three platforms including the required Release gate."
+                                               "PR #35 (feat/e2e-window-loss-flake) merged at e4039472 after the full CI matrix passed on all three platforms including the required Release gate.",
+                                               "Release tag v0.1.4 points to validated commit 4d4e39fe (PR #36 release/v0.1.4 merge)."
                                            ],
                          "evidence":  [
                                               "Session 094 (2026-08-17): PR #35 merged at e4039472 (checks: Windows 10m25s, Ubuntu 15m18s, macOS 3m22s, Release gate, Socket Security, format gate all pass); the release/v0.1.4 branch carries the version bump + changelog.",
-                                              "Session 094 (2026-08-17): tag v0.1.4 + Release workflow dispatch + published assets remain pending the release PR merge."
+                                              "Release workflow runs 31961771354 and 31961765318 completed successfully for v0.1.4; GitHub release v0.1.4 is public, Latest, non-draft/non-prerelease, with volumecontrol-0.1.4-windows.zip, volumecontrol-0.1.4-ubuntu.tar.gz, volumecontrol-0.1.4-macos.zip, and SHA256SUMS.txt."
                                        ],
-                         "notes":  "Follows the vol-082 pattern: version files aligned to the tag, tag pushed at the validated commit, then the SHA-bound release workflow runs."
+                         "notes":  "Release v0.1.4 is complete: tag binding, SHA-bound workflow validation, GitHub release publication, and all four platform/checksum assets are verified."
                      },
                      {
                          "id":  "vol-083",
