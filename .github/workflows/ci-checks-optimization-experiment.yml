@@ -1,0 +1,79 @@
+name: CI checks optimization experiment
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  optimized-checks:
+    name: Optimized checks (throwaway experiment)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Validate Codex coordinator contract
+        run: python scripts/test-codex-config.py
+
+      - name: Smoke-test agent safe-flow hook
+        run: bash scripts/test-agent-safe-flow.sh
+
+      # rustfmt is still required, but this experiment intentionally avoids
+      # the Rust build cache and all native Tauri/WebKit package installation.
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend build + tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npm test
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Diff hygiene (whitespace + forbidden paths)
+        run: bash scripts/ci-diff-check.sh
+
+      - name: Tauri deadlock guard
+        run: bash scripts/check-tauri-deadlock.sh
+
+      - name: Smoke-test record-keeping guard
+        run: bash scripts/test-check-records.sh
+
+      - name: Smoke-test ship-flow wiring
+        run: bash scripts/test-ship.sh
+
+      # PR #41 is already known to be missing the repository's required
+      # feature/progress record updates. Run the real branch guard so its
+      # behavior is visible, but do not let that unrelated policy state mask
+      # whether the lightweight checks path itself works without native deps.
+      - name: Record-keeping guard (observe current PR policy state)
+        id: records
+        continue-on-error: true
+        run: bash scripts/check-records.sh --branch
+
+      - name: Report experiment contract
+        if: always()
+        shell: bash
+        run: |
+          echo "Native apt/Tauri dependency install: intentionally omitted"
+          echo "Rust cache restore/save: intentionally omitted"
+          echo "Workspace clippy/build/test: intentionally omitted from this job"
+          echo "format-lint smoke test: intentionally omitted from this job"
+          echo "Record guard outcome: ${{ steps.records.outcome }}"
+          echo "Rust compile/test coverage remains in the normal platform jobs for this PR event."
