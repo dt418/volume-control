@@ -1,6 +1,6 @@
 import { browser, $, expect } from "@wdio/globals";
 import { saveE2eArtifacts, recordTiming } from "../support/artifacts.ts";
-import { openSurface, waitForSurface, type E2eBrowser } from "../support/commands.ts";
+import { openSurface, waitForSurface, waitForWindow, type E2eBrowser } from "../support/commands.ts";
 import { selectors } from "../support/selectors.ts";
 
 const app = browser as unknown as E2eBrowser;
@@ -45,6 +45,7 @@ describe("Help surface", () => {
     // stay alive and the Settings surface must become visible.
     await expect($(selectors.help.settings)).toBeDisplayed();
     await $(selectors.help.settings).click();
+    await waitForWindow(app, "window-settings");
     await app.tauri?.switchWindow?.("window-settings");
     await waitForSurface(app, "settings");
     await expect($(selectors.settings.save)).toBeDisplayed();

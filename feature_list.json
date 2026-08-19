@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-08-17T00:10",
+    "last_updated":  "2026-08-19T00:10",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -1145,7 +1145,8 @@
                                               "Negative handoff fixture rejects an ORCHESTRATOR.md containing only the words coordinator and handoff; the required Handoff contract section and coordinator ownership/final handoff text are enforced.",
                                               "Task 2 evidence contracts pass: npm test --prefix e2e/tauri (11/11), npm run typecheck --prefix e2e/tauri, npm run test:contract --prefix e2e/tauri, and npm run test:production-exclusion --prefix e2e/tauri. Missing JUnit, missing manifest result, and unexpected frontend runtime errors fail with category-specific diagnostics.",
                                               "Task 2 freshness fix passes: each wrapper writes to a unique run directory and checks the manifest run ID, exact Mixer/Runtime/Windows/Recovery/Settings/Help spec-surface pairs, current JUnit files, and parseable timings JSON; backend ERROR/SEVERE/PANIC lines are collected from configured and WDIO output log directories with a concrete [Tauri:Backend:0] support test.",
-                                              "Task 4 scheduling contract passes: Windows remains unconditional on pull requests; Linux/macOS skip only pull_request events; all three desktop E2E uploads use if-no-files-found: error; release remains gated by reusable desktop validation. bash scripts/test-ship.sh and PyYAML parsing pass."
+                                              "Task 4 scheduling contract passes: Windows remains unconditional on pull requests; Linux/macOS skip only pull_request events; all three desktop E2E uploads use if-no-files-found: error; release remains gated by reusable desktop validation. bash scripts/test-ship.sh and PyYAML parsing pass.",
+                                              "Window-creation race regression: waitForWindow polls browser.tauri.listWindows() before the Help→Settings switch; e2e/tauri typecheck passes, support tests pass 20/20, and the Windows Help E2E surface passes 3/3 including Help→Settings."
                                           ],
                          "evidence":  [
                                           "Context7 Tauri docs confirm @wdio/tauri-service with embedded provider; npm registry pins @wdio/tauri-service 1.3.0 and WebdriverIO runner/reporter packages 9.30.1.",
@@ -1158,7 +1159,8 @@
                                            "Session 054 (2026-08-15): Hardened the coordinator contract to require the Handoff contract section plus coordinator ownership and final handoff text; focused negative coverage rejects substring-only documentation.",
                                            "Session 055 (2026-08-15): WDIO now pins @wdio/junit-reporter 9.30.1, writes per-surface JUnit/manifest/timing evidence, asserts zero unexpected runtime errors with unavailable-audio/degraded-hotkey allowlists, verifies evidence in both wrappers, and uploads JUnit/manifest/timings/screenshots/snapshots/logs with if-no-files-found: error.",
                                            "Session 056 (2026-08-15): fix round adds unique wrapper run roots and run-ID freshness checks, exact six-surface manifest coverage, parseable timing validation, and backend log-directory ERROR evidence; 13/13 focused E2E support tests pass.",
-                                           "Session 058 (2026-08-15): Explicit E2E provider selection is wired through wrappers and all desktop CI jobs; embedded-provider, missing-driver, unknown-provider, and environment-immutability contracts pass. Windows hotkey latency remains real-host/manual evidence only; hosted Linux/macOS do not claim native shortcut delivery."
+                                           "Session 058 (2026-08-15): Explicit E2E provider selection is wired through wrappers and all desktop CI jobs; embedded-provider, missing-driver, unknown-provider, and environment-immutability contracts pass. Windows hotkey latency remains real-host/manual evidence only; hosted Linux/macOS do not claim native shortcut delivery.",
+                                           "Session 097 (2026-08-19): macOS Help→Settings E2E failure traced to switching before the asynchronous open_surface command created window-settings; waitForWindow now polls the WDIO list_windows API and reports the last observed labels on timeout. Windows targeted Help E2E reproduced the path at 3/3 passing."
                                       ],
                          "notes":  "WDIO foundation, Windows-first surface coverage, recovery, owned-window timing checks, live Windows Pilot scenarios, CI matrix wiring, and fail-closed ship gate are implemented. Hosted cross-platform CI and final release review remain before marking vol-031 complete. Production remains excluded by Cargo features, capabilities, frontend dependency boundaries, debug fault marker, and withGlobalTauri contract."
                      }

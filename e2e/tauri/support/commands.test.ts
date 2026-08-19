@@ -7,6 +7,7 @@ import {
   assertNoRuntimeErrors,
   collectRuntimeErrors,
   invokeForTest,
+  waitForWindow,
   startE2eApp,
   waitForSurface,
   type E2eBrowser,
@@ -31,6 +32,34 @@ test("waits for a stable surface root and title without fixed sleeps", async () 
     '[data-surface="mixer"]',
     '[data-surface="mixer"] h1',
   ]);
+});
+
+test("waits for an asynchronously created native window", async () => {
+  let attempts = 0;
+  const { browser } = fakeBrowser();
+  browser.tauri = {
+    execute: async () => undefined,
+    listWindows: async () => {
+      attempts += 1;
+      return attempts < 3 ? ["window-help"] : ["window-help", "window-settings"];
+    },
+  };
+
+  await waitForWindow(browser, "window-settings", 1_000, 1);
+  assert.equal(attempts, 3);
+});
+
+test("reports the last observed windows when creation times out", async () => {
+  const { browser } = fakeBrowser();
+  browser.tauri = {
+    execute: async () => undefined,
+    listWindows: async () => ["window-help"],
+  };
+
+  await assert.rejects(
+    waitForWindow(browser, "window-settings", 5, 1),
+    /Window label "window-settings" did not appear within 5ms\. Available windows: window-help\./,
+  );
 });
 
 test("invokes deterministic backend setup through browser.tauri.execute", async () => {
