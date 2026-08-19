@@ -92,7 +92,6 @@ jobs:
       - name: Build release Tauri host
         shell: bash
         run: |
-          npm --prefix frontend run build
           frontend/node_modules/.bin/tauri build --no-bundle --ci
       - name: Package release artifact
         shell: bash

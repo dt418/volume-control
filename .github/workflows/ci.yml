@@ -193,7 +193,6 @@ jobs:
       - name: Build release Tauri host and validate artifact
         shell: bash
         run: |
-          npm --prefix frontend run build
           frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl.exe && echo "VolumeControl.exe present and non-empty"
           ls -la target/release/VolumeControl.exe
@@ -246,7 +245,6 @@ jobs:
       - name: Build release Tauri host and validate artifact
         shell: bash
         run: |
-          npm --prefix frontend run build
           frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
@@ -340,7 +338,6 @@ jobs:
       - name: Build release Tauri host and validate artifact (FE + BE)
         shell: bash
         run: |
-          npm --prefix frontend run build
           frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
