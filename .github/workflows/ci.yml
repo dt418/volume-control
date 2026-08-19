@@ -7,7 +7,9 @@
 #   libadwaita renderer build and smoke tests under Xvfb, and the optional
 #   Wayland layer-shell build when the system library is available.
 #
-# A shared "checks" job runs formatting, whitespace, and forbidden-diff gates.
+# A shared "checks" job runs fast frontend, formatting, whitespace, and policy
+# gates without installing native Tauri/WebKit packages. Rust compilation,
+# clippy, E2E, and release-host validation stay on the desktop platform jobs.
 # Pull requests that only touch docs/tooling keep the hosted Linux/macOS cost
 # bounded; code, UI, E2E, workflow, and release changes still exercise all
 # desktop platforms before merge. Pushes to main always run the full matrix.
@@ -84,7 +86,7 @@ jobs:
           echo "platform_required=$platform_required ($reason; changed_files=$changed_file_count)"
 
   checks:
-    name: Format, lint, diff gate, CLI fallback
+    name: Fast checks (frontend, format, policy)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -98,20 +100,11 @@ jobs:
       - name: Smoke-test agent safe-flow hook
         run: bash scripts/test-agent-safe-flow.sh
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install Linux & Tauri dependencies (webview surfaces)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev build-essential curl wget file \
-            libxdo-dev libssl-dev libayatana-appindicator3-dev \
-            librsvg2-dev pkg-config libx11-dev libasound2-dev \
-            libpulse-dev libxi-dev libxtst-dev
       - name: Frontend build + tests
         working-directory: frontend
         run: |
@@ -120,16 +113,8 @@ jobs:
           npm test
       - name: Format
         run: cargo fmt --all --check
-      - name: Lint (clippy, no GTK features)
-        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
       - name: Diff hygiene (whitespace + forbidden paths)
         run: bash scripts/ci-diff-check.sh
-      - name: Build (no GTK features — CLI fallback)
-        run: cargo build
-      - name: Test (no GTK features)
-        run: cargo test
-      - name: Smoke-test format-lint gates
-        run: bash scripts/test-format-lint.sh
       - name: Tauri deadlock guard
         run: bash scripts/check-tauri-deadlock.sh
       - name: Record-keeping guard (branch change set)
@@ -193,7 +178,6 @@ jobs:
       - name: Build release Tauri host and validate artifact
         shell: bash
         run: |
-          npm --prefix frontend run build
           frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl.exe && echo "VolumeControl.exe present and non-empty"
           ls -la target/release/VolumeControl.exe
@@ -246,7 +230,6 @@ jobs:
       - name: Build release Tauri host and validate artifact
         shell: bash
         run: |
-          npm --prefix frontend run build
           frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
@@ -302,6 +285,8 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Lint (clippy, workspace)
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
       - name: Install isolated Tauri E2E dependencies
         working-directory: e2e/tauri
         run: npm ci
@@ -340,7 +325,6 @@ jobs:
       - name: Build release Tauri host and validate artifact (FE + BE)
         shell: bash
         run: |
-          npm --prefix frontend run build
           frontend/node_modules/.bin/tauri build --no-bundle --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
