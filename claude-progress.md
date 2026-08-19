@@ -1,5 +1,29 @@
 # Progress Log
 
+## Session 098 (2026-08-19) - Fix PR #41 CI record guard
+
+- Root cause: PR #41 changed `.github/workflows/ci.yml` and
+  `.github/workflows/desktop-validation.yml` without updating the mandatory
+  `feature_list.json` + `claude-progress.md` record pair, so the shared CI
+  job failed at `bash scripts/check-records.sh --branch` even though the
+  workflow, frontend, format, deadlock, Windows, and macOS checks passed.
+- What landed: recorded the CI shared-checks cost optimization and the exact
+  failure/fix evidence; workflow behavior remains unchanged from the PR
+  branch (duplicate frontend release builds are removed, platform jobs retain
+  their own build before Tauri packaging).
+- Automation decision: keep the guard fail-closed and human-authored. A
+  future scaffold/comment helper may suggest record templates, but CI should
+  not invent feature intent or verification evidence and commit it silently.
+- Verification: `bash scripts/test-check-records.sh` (all checks passed),
+  `bash scripts/test-format-lint.sh` (all checks passed),
+  `bash scripts/test-ship.sh` (all checks passed),
+  `bash scripts/format-lint.sh` (Gate passed), PowerShell format-lint gate
+  (Gate passed), `cargo test --workspace --no-default-features` (345 passed),
+  frontend tests (101 passed) + build, clippy `-D warnings`,
+  `git diff --check`, branch records guard, and Tauri deadlock guard all pass.
+- Mandatory pre-push review: guard core PASS, gate chain PASS, and
+  wiring/records PASS; no review findings required code changes.
+
 ## Session 097 (2026-08-19) - Fix macOS Help→Settings E2E window-creation race
 
 - Root cause: the Help footer invokes `open_surface` asynchronously and the

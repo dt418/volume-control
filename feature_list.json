@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-08-19T00:10",
+    "last_updated":  "2026-08-20T00:02",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,25 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                     {
+                         "id":  "vol-086",
+                         "priority":  86,
+                         "area":  "tooling",
+                         "title":  "CI shared-checks cost optimization",
+                         "user_visible_behavior":  "Pull requests keep the same frontend, formatting, policy, platform-build, test, E2E, and release-artifact coverage while avoiding duplicate frontend release builds and keeping native desktop dependencies on the platform jobs that need them.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "Local full gate: scripts/format-lint.sh and .agents/skills/format-lint/scripts/format-lint.ps1 both report Gate passed, including cargo fmt, diff hygiene, records, clippy, and workspace tests.",
+                                               "Local verification: frontend Vitest 16 files/101 tests and production build pass; cargo test --workspace --no-default-features passes 345 tests; cargo clippy -D warnings, Tauri deadlock guard, records guard, format-lint smoke, and ship-flow smoke all pass.",
+                                               "The workflow diff removes only duplicate frontend build invocations from release-host steps; the platform jobs retain their own frontend build before Tauri packaging."
+                                           ],
+                         "evidence":  [
+                                              "Session 098 (2026-08-20): PR #41 initially failed only at Record-keeping guard (branch change set); the workflow, frontend, format, deadlock, Windows, and macOS steps completed successfully. The missing records were added in this change set.",
+                                              "Mandatory pre-push review: Domain A guard core PASS, Domain B gate chain PASS, and Domain C wiring/records PASS; no guard, gate, or wiring defects were found.",
+                                              "The shared checks job remains frontend/format/diff/deadlock/records focused, while clippy and native Tauri validation remain on the Ubuntu/Windows/macOS jobs; release-gate still requires the selected matrix to succeed."
+                                       ],
+                         "notes":  "The record pair is intentionally human-authored: CI may detect and explain missing evidence, but it must not fabricate feature intent or verification results."
+                     },
                      {
                          "id":  "vol-085",
                          "priority":  85,
