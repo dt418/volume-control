@@ -218,6 +218,46 @@ export async function listOwnedWindows(browser: E2eBrowser): Promise<string[]> {
   return labels.filter((label) => /^window-(mixer|settings|help)$/.test(label));
 }
 
+/** Wait for a surface window created by an asynchronous open_surface command.
+ * The frontend intentionally does not await the IPC call, so a direct
+ * switchWindow immediately after a click can race native window creation —
+ * especially on WebKit/macOS. Poll the service's authoritative window list
+ * and include the last observed labels in the timeout error. */
+export async function waitForWindow(
+  browser: E2eBrowser,
+  label: string,
+  timeout = 10_000,
+  pollInterval = 100,
+): Promise<void> {
+  const deadline = Date.now() + timeout;
+  let lastLabels: string[] = [];
+  let lastError: unknown;
+
+  while (Date.now() <= deadline) {
+    try {
+      const labels = await browser.tauri?.listWindows?.();
+      if (!labels) {
+        throw new Error("Tauri WDIO window API is unavailable; run with e2e-wdio");
+      }
+      lastLabels = labels;
+      if (labels.includes(label)) return;
+    } catch (error) {
+      // The service can briefly reject list_windows while a new native window
+      // is being attached. Keep polling and report the final error if it never
+      // becomes available.
+      lastError = error;
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
+  }
+
+  const available = lastLabels.length > 0 ? lastLabels.join(", ") : "none";
+  const detail = lastError instanceof Error ? ` Last error: ${lastError.message}` : "";
+  throw new Error(`Window label "${label}" did not appear within ${timeout}ms. Available windows: ${available}.${detail}`);
+}
+
 export async function openSurface(browser: E2eBrowser, surface: SurfaceName): Promise<SurfaceElement> {
   const label = `window-${surface}`;
   if (process.env.VOLUMECTL_VERIFY_SURFACE === label) {

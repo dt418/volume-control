@@ -1,5 +1,27 @@
 # Progress Log
 
+## Session 097 (2026-08-19) - Fix macOS Help→Settings E2E window-creation race
+
+- Root cause: the Help footer invokes `open_surface` asynchronously and the
+  test immediately called `switchWindow("window-settings")`; the WDIO Tauri
+  service therefore observed only `window-help` on macOS/WebKit and failed with
+  `Window label "window-settings" not found`. Ubuntu was cancelled by the
+  cross-platform release gate after macOS failed.
+- Fix: added `waitForWindow` to `e2e/tauri/support/commands.ts`, polling the
+  service's authoritative `browser.tauri.listWindows()` API before switching
+  and including the last observed labels (plus the final IPC error, if any) in
+  timeout diagnostics. `help.e2e.ts` now waits for `window-settings` after the
+  footer click. Added support coverage for delayed creation and timeout
+  diagnostics.
+- Verification: `npm run typecheck --prefix e2e/tauri` passes; `npm run
+  test:support --prefix e2e/tauri` passes 20/20; the Windows targeted Help E2E
+  (`verify-tauri-e2e.ps1 -Surface help -VirtualAudio`) passes 3/3, including
+  Help→Settings. Context7 Tauri docs confirm
+  the WebDriver multi-window model; the installed WDIO service exposes
+  `listWindows()`/`switchWindow()` and no `getAppWindows()` API.
+- Release/CI workflow was not changed: the existing release gate correctly
+  fails closed when required macOS/Ubuntu jobs do not succeed.
+
 ## Session 096 (2026-08-19) - Confirm v0.1.4 release completion
 
 - Continued the outstanding release follow-up from Session 094. Verified that
