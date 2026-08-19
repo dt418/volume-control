@@ -7,10 +7,16 @@
   `feature_list.json` + `claude-progress.md` record pair, so the shared CI
   job failed at `bash scripts/check-records.sh --branch` even though the
   workflow, frontend, format, deadlock, Windows, and macOS checks passed.
+- Follow-up root cause from the fresh run: moving Ubuntu clippy before the
+  frontend build left `frontend/dist` absent, so Tauri's
+  `generate_context!()` macro failed on `frontendDist = "../frontend/dist"`.
+  The Ubuntu job now builds the frontend before clippy, matching the required
+  asset dependency.
 - What landed: recorded the CI shared-checks cost optimization and the exact
-  failure/fix evidence; workflow behavior remains unchanged from the PR
-  branch (duplicate frontend release builds are removed, platform jobs retain
-  their own build before Tauri packaging).
+  failure/fix evidence; duplicate frontend release builds remain removed,
+  platform jobs retain their own build before Tauri packaging, and Ubuntu now
+  builds frontend assets before clippy so Tauri context generation can resolve
+  `frontend/dist`.
 - Automation decision: keep the guard fail-closed and human-authored. A
   future scaffold/comment helper may suggest record templates, but CI should
   not invent feature intent or verification evidence and commit it silently.

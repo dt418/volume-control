@@ -280,13 +280,13 @@ jobs:
           else
             echo "GTK4 layer-shell development package unavailable; using the X11 fallback."
           fi
-      - name: Lint (clippy, workspace)
-        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
       - name: Frontend build
         working-directory: frontend
         run: |
           npm ci
           npm run build
+      - name: Lint (clippy, workspace)
+        run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
       - name: Install isolated Tauri E2E dependencies
         working-directory: e2e/tauri
         run: npm ci

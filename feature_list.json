@@ -28,7 +28,7 @@
                                                "The workflow diff removes only duplicate frontend build invocations from release-host steps; the platform jobs retain their own frontend build before Tauri packaging."
                                            ],
                          "evidence":  [
-                                              "Session 098 (2026-08-20): PR #41 initially failed only at Record-keeping guard (branch change set); the workflow, frontend, format, deadlock, Windows, and macOS steps completed successfully. The missing records were added in this change set.",
+                                              "Session 098 (2026-08-20): PR #41 initially failed at Record-keeping guard (branch change set); after the records fix, Ubuntu exposed a second ordering defect: clippy ran before the frontend build and tauri::generate_context! rejected the missing ../frontend/dist. The frontend build now precedes clippy; the missing records were added in this change set.",
                                               "Mandatory pre-push review: Domain A guard core PASS, Domain B gate chain PASS, and Domain C wiring/records PASS; no guard, gate, or wiring defects were found.",
                                               "The shared checks job remains frontend/format/diff/deadlock/records focused, while clippy and native Tauri validation remain on the Ubuntu/Windows/macOS jobs; release-gate still requires the selected matrix to succeed."
                                        ],
