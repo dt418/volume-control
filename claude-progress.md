@@ -1,5 +1,40 @@
 # Progress Log
 
+## Session 103 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
+
+- Config: `[general] language = en|vi` (`Language` enum, serde default en,
+  strict INI parse/write, `SettingsPatch.language` with fail-early
+  validation). Round-trip + malformed-value tests added.
+- Rust surfaces: new `locale` module (EN/VI tables + dynamic blacklist
+  toasts + update-check strings). Tray menus (Windows `muda` + Tauri), the
+  volume overlay labels and toasts, the Win32 mixer window (title, UIA
+  names, buttons; relabeled on every show), the Win32 settings window
+  (header, nav, section titles/subtitles), and the GTK/macOS mixer controls
+  now render from the locale table. `update_settings` relabels the tray when
+  the patch carries a language.
+- Update check: new `updates` module (ureq; GitHub `releases/latest`;
+  pure `is_newer` with numeric component compare and fail-closed parsing) and
+  `TrayCommand::CheckUpdates` (`check_updates`) wired into both hosts; the
+  Tauri dispatch runs the fetch off the core lock and toasts the localized
+  result on the overlay.
+- Webview: `frontend/src/lib/i18n.tsx` (typed EN/VI dictionaries,
+  `LanguageProvider`/`useT`, `asLanguage` normalization) localizes the Mixer
+  surface, every Settings section + shell, the Help surface, and the
+  overlay; General gains the language selector and the draft bootstrap
+  hydrates `language`. Surface tests render under the EN default.
+- PowerShell: `Install-VolumeControl.ps1` message table (23 IDs) with
+  `VOLUMECONTROL_LANG` override then Windows UI culture; EN texts byte-
+  identical; both scripts copied into this worktree from the bootstrap branch
+  and given a UTF-8 BOM so PS 5.1 does not mojibake VI at parse time.
+- Verification: cargo test (292 lib + suites) PASS; clippy `-D warnings` and
+  `fmt --check` exit 0; frontend tsc clean + vitest 17 files/105 tests PASS;
+  real-network update check printed EN and VI results against the live
+  GitHub API (`v0.1.4`, "up to date"); PowerShell suite PASS in both
+  languages (agent-run and parent rerun).
+- Encoding/limits: NSIS installer shell stays English (no per-language MUI
+  in the current bundle config); GTK host records the update result in
+  `HostCore::update_message` (no overlay text channel).
+
 ## Session 098 (2026-08-19) - Fix PR #41 CI record guard
 
 - Root cause: PR #41 changed `.github/workflows/ci.yml` and

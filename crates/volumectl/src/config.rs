@@ -132,6 +132,26 @@ pub enum HotkeyModifier {
     CapsLock,
 }
 
+/// UI language. Serialized lowercase (`en`, `vi`); unknown INI values
+/// normalize to English at parse time so a hand-edited file never bricks
+/// startup over a cosmetic preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+    #[default]
+    En,
+    Vi,
+}
+
+impl Language {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Language::En => "en",
+            Language::Vi => "vi",
+        }
+    }
+}
+
 /// User-configurable global shortcuts.
 ///
 /// Values use the portable `global-hotkey` spelling (for example
@@ -225,6 +245,9 @@ pub struct Config {
     /// config files and fresh installations.
     #[serde(default)]
     pub autostart: bool,
+    /// UI language for native surfaces and webviews (default English).
+    #[serde(default)]
+    pub language: Language,
 }
 
 /// Beep feedback settings (mirrors VolumePro's `[Beep]` section).
@@ -281,6 +304,7 @@ impl Default for Config {
             beep: BeepConfig::default(),
             appearance: AppearanceConfig::default(),
             autostart: false,
+            language: Language::default(),
         }
     }
 }

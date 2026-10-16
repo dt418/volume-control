@@ -34,6 +34,7 @@ use crate::config::Config;
 use crate::help::{Help, HelpAppearance, WM_APP_HELP_OPEN_CONFIG, WM_APP_HELP_SETTINGS};
 use crate::hotkeys::{hotkey_from_id, HotkeyAction, HotkeyRegResult};
 use crate::hotkeys_global::GlobalHotkeys;
+use crate::locale;
 use crate::mixer::{
     Mixer, MixerAppearance, WM_APP_MIXER_CHANGE, WM_APP_MIXER_MUTE, WM_APP_MIXER_RESET,
 };
@@ -72,6 +73,7 @@ fn reload_config_if_changed(ctx: &mut AppContext) -> bool {
 
     let new_cfg = crate::config::load();
     let modifier_changed = new_cfg.modifier != ctx.config.modifier;
+    let language_changed = new_cfg.language != ctx.config.language;
     log::info!(
         "config reloaded (step={}, step_large={}, overlay_ms={}, modifier={:?})",
         new_cfg.volume_step,
@@ -85,6 +87,10 @@ fn reload_config_if_changed(ctx: &mut AppContext) -> bool {
         ctx.settings.reload(&new_cfg);
     }
     ctx.config = new_cfg;
+
+    if language_changed {
+        ctx.tray.apply_language(ctx.config.language);
+    }
 
     if modifier_changed {
         ctx.hotkeys.set_modifier(ctx.config.modifier);
@@ -379,7 +385,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let last_config_mtime = config_mtime();
     let audio = WindowsAudio::new()?;
     let overlay = Overlay::new()?;
-    let tray = Tray::new()?;
+    let tray = Tray::new(config.language)?;
     let last_state = audio.get_state().unwrap_or(VolumeState {
         volume: 0.5,
         muted: false,
@@ -427,7 +433,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let hotkey_status = hotkeys.status().to_vec();
     install_wheel_hook(hwnd)?;
 
-    let mixer = Mixer::new(hwnd)?;
+    let mixer = Mixer::new(hwnd, config.language)?;
     let settings = Settings::new(hwnd)?;
     let help = Help::new(hwnd)?;
 
@@ -776,6 +782,7 @@ fn tray_command_to_action(cmd: TrayCommand) -> AppAction {
         C::Settings => AppAction::ToggleSurface(SurfaceId::Settings),
         C::EditConfig => AppAction::OpenConfigLocation,
         C::ReloadConfig => AppAction::ReloadConfig,
+        C::CheckUpdates => AppAction::CheckUpdates,
         C::Exit => AppAction::Exit,
     }
 }
@@ -914,7 +921,7 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
         A::OpenConfigLocation => {
             crate::config::open_in_editor();
             ctx.overlay.show_text(
-                "Editing config — changes reload automatically",
+                locale::strings(ctx.config.language).toast_editing_config,
                 &ctx.config,
                 &overlay_appearance(&*ctx),
             );
@@ -922,8 +929,18 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
         A::ReloadConfig => {
             ctx.last_config_mtime = None; // force
             reload_config_if_changed(ctx);
+            ctx.overlay.show_text(
+                locale::strings(ctx.config.language).toast_config_reloaded,
+                &ctx.config,
+                &overlay_appearance(&*ctx),
+            );
+        }
+        A::CheckUpdates => {
+            // Blocking fetch (~seconds worst case); the result lands on the
+            // overlay through the same text-toast path as the reload hint.
+            let message = crate::updates::check_for_updates(ctx.config.language);
             ctx.overlay
-                .show_text("Config reloaded", &ctx.config, &overlay_appearance(&*ctx));
+                .show_text(&message, &ctx.config, &overlay_appearance(&*ctx));
         }
         A::ApplyRecommendedBlacklist => {
             let recommended = crate::config::recommended_blacklist(ctx.config.modifier);
@@ -931,11 +948,14 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
             ctx.last_config_mtime = None; // force reload from disk
             reload_config_if_changed(ctx);
             let msg = if recommended.is_empty() {
-                format!("No blacklist needed for {:?}", ctx.config.modifier)
+                locale::toast_blacklist_none(
+                    ctx.config.language,
+                    &format!("{:?}", ctx.config.modifier),
+                )
             } else if added > 0 {
-                format!("Blacklist: +{added} app(s) applied")
+                locale::toast_blacklist_applied(ctx.config.language, added)
             } else {
-                "Blacklist already up to date".to_string()
+                locale::toast_blacklist_current(ctx.config.language).to_string()
             };
             log::info!("{msg}");
             ctx.overlay
@@ -1107,7 +1127,7 @@ mod tests {
     fn every_tray_command_maps_to_intended_action() {
         use TrayCommand as C;
         // Together with `tray_commands_bypass_the_blacklist_gate` below, every
-        // remaining `TrayCommand` variant is enumerated (8/8), so a separate
+        // remaining `TrayCommand` variant is enumerated (9/9), so a separate
         // exhaustiveness test would be redundant.
         assert_eq!(tray_command_to_action(C::ToggleMute), AppAction::ToggleMute);
         assert_eq!(tray_command_to_action(C::Reset50), AppAction::ResetVolume);
@@ -1131,6 +1151,10 @@ mod tests {
             tray_command_to_action(C::ReloadConfig),
             AppAction::ReloadConfig
         );
+        assert_eq!(
+            tray_command_to_action(C::CheckUpdates),
+            AppAction::CheckUpdates
+        );
         assert_eq!(tray_command_to_action(C::Exit), AppAction::Exit);
     }
 
@@ -1147,6 +1171,7 @@ mod tests {
             C::Settings,
             C::EditConfig,
             C::ReloadConfig,
+            C::CheckUpdates,
             C::Exit,
         ] {
             let action = tray_command_to_action(cmd);

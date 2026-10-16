@@ -18,6 +18,14 @@ pub struct TauriTray {
     tray: TrayIcon,
     vol_label: MenuItem<tauri::Wry>,
     mute_item: CheckMenuItem<tauri::Wry>,
+    reset_item: MenuItem<tauri::Wry>,
+    mixer_item: MenuItem<tauri::Wry>,
+    settings_item: MenuItem<tauri::Wry>,
+    help_item: MenuItem<tauri::Wry>,
+    check_updates_item: MenuItem<tauri::Wry>,
+    reload_item: MenuItem<tauri::Wry>,
+    edit_item: MenuItem<tauri::Wry>,
+    exit_item: MenuItem<tauri::Wry>,
 }
 
 impl TauriTray {
@@ -26,36 +34,57 @@ impl TauriTray {
     /// Menu ids/texts mirror the Windows native tray in
     /// `crates/volumectl/src/tray.rs`; events route through the shared
     /// [`crate::dispatch_tray_command`] so both hosts dispatch identically.
-    pub fn create(app: &AppHandle) -> Result<Self, String> {
+    pub fn create(app: &AppHandle, lang: volumectl_lib::config::Language) -> Result<Self, String> {
         // Live volume label (non-clickable), then volume actions, surface
         // actions, configuration actions, and Exit — grouped per spec §9.
+        // Menu ids stay untranslated; labels come from the locale table.
+        let s = volumectl_lib::locale::strings(lang);
         let vol_label = MenuItem::with_id(app, "volume", "VolumeControl — --", false, None::<&str>)
             .map_err(|e| e.to_string())?;
         let sep1 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
-        let mute_item = CheckMenuItem::with_id(app, "mute", "Mute", true, false, None::<&str>)
+        let mute_item = CheckMenuItem::with_id(app, "mute", s.tray_mute, true, false, None::<&str>)
             .map_err(|e| e.to_string())?;
-        let reset = MenuItem::with_id(app, "reset", "Reset to 50%", true, None::<&str>)
+        let reset = MenuItem::with_id(app, "reset", s.tray_reset, true, None::<&str>)
             .map_err(|e| e.to_string())?;
-        let mixer = MenuItem::with_id(app, "mixer", "Open mixer", true, None::<&str>)
+        let mixer = MenuItem::with_id(app, "mixer", s.tray_mixer, true, None::<&str>)
             .map_err(|e| e.to_string())?;
         let sep2 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
-        let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)
+        let settings = MenuItem::with_id(app, "settings", s.tray_settings, true, None::<&str>)
             .map_err(|e| e.to_string())?;
-        let help = MenuItem::with_id(app, "help", "Help", true, None::<&str>)
+        let help = MenuItem::with_id(app, "help", s.tray_help, true, None::<&str>)
             .map_err(|e| e.to_string())?;
-        let reload = MenuItem::with_id(app, "reload", "Reload configuration", true, None::<&str>)
+        let check_updates = MenuItem::with_id(
+            app,
+            "check_updates",
+            s.tray_check_updates,
+            true,
+            None::<&str>,
+        )
+        .map_err(|e| e.to_string())?;
+        let reload = MenuItem::with_id(app, "reload", s.tray_reload, true, None::<&str>)
             .map_err(|e| e.to_string())?;
-        let edit = MenuItem::with_id(app, "edit", "Open config file", true, None::<&str>)
+        let edit = MenuItem::with_id(app, "edit", s.tray_edit, true, None::<&str>)
             .map_err(|e| e.to_string())?;
         let sep3 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
-        let exit = MenuItem::with_id(app, "exit", "Exit VolumeControl", true, None::<&str>)
+        let exit = MenuItem::with_id(app, "exit", s.tray_exit, true, None::<&str>)
             .map_err(|e| e.to_string())?;
 
         let menu = Menu::with_items(
             app,
             &[
-                &vol_label, &sep1, &mute_item, &reset, &mixer, &sep2, &settings, &help, &reload,
-                &edit, &sep3, &exit,
+                &vol_label,
+                &sep1,
+                &mute_item,
+                &reset,
+                &mixer,
+                &sep2,
+                &settings,
+                &help,
+                &check_updates,
+                &reload,
+                &edit,
+                &sep3,
+                &exit,
             ],
         )
         .map_err(|e| e.to_string())?;
@@ -79,7 +108,29 @@ impl TauriTray {
             tray,
             vol_label,
             mute_item,
+            reset_item: reset,
+            mixer_item: mixer,
+            settings_item: settings,
+            help_item: help,
+            check_updates_item: check_updates,
+            reload_item: reload,
+            edit_item: edit,
+            exit_item: exit,
         })
+    }
+
+    /// Relabel every menu entry for `lang` (menu ids never change).
+    pub fn apply_language(&self, lang: volumectl_lib::config::Language) {
+        let s = volumectl_lib::locale::strings(lang);
+        let _ = self.mute_item.set_text(s.tray_mute);
+        let _ = self.reset_item.set_text(s.tray_reset);
+        let _ = self.mixer_item.set_text(s.tray_mixer);
+        let _ = self.settings_item.set_text(s.tray_settings);
+        let _ = self.help_item.set_text(s.tray_help);
+        let _ = self.check_updates_item.set_text(s.tray_check_updates);
+        let _ = self.reload_item.set_text(s.tray_reload);
+        let _ = self.edit_item.set_text(s.tray_edit);
+        let _ = self.exit_item.set_text(s.tray_exit);
     }
 
     /// Refresh the live volume label, mute check, and tooltip.

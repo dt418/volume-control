@@ -275,12 +275,13 @@ impl NativeRenderer for MacosRenderer {
                     tokens,
                     40, // green_up_to
                     75, // blue_up_to
+                    state.language,
                 );
             }
 
             if plan.surface == SurfaceId::Mixer && visible {
-                panel.set_mixer_controls(&host);
-                panel.update_mixer_value(state.volume_percent, state.muted);
+                panel.set_mixer_controls(&host, state.language);
+                panel.update_mixer_value(state.volume_percent, state.muted, state.language);
             }
         }
     }
@@ -594,6 +595,7 @@ mod appkit {
             tokens: &crate::ui::theme::ThemeTokens,
             green_up_to: u8,
             blue_up_to: u8,
+            lang: crate::config::Language,
         ) {
             let rail = crate::ui::signal_rail::SignalRail::new(
                 volume_percent,
@@ -602,7 +604,7 @@ mod appkit {
                 green_up_to,
                 blue_up_to,
             );
-            let device_name = "System output";
+            let device_name = crate::locale::strings(lang).mixer_output;
 
             // Flush the current NSGraphicsContext into a CoreGraphicsCanvas.
             if let Some(mut canvas) =
@@ -613,6 +615,7 @@ mod appkit {
                     &rail,
                     &tokens.typography,
                     device_name,
+                    lang,
                 );
             }
         }
@@ -626,11 +629,16 @@ mod appkit {
         /// The MixerLayout rects use a top-left origin; AppKit uses a
         /// bottom-left origin, so y coordinates are flipped relative to the
         /// mixer panel's 224 px height.
-        pub fn set_mixer_controls(&mut self, host: &crate::ui::renderer::HostHandle) {
+        pub fn set_mixer_controls(
+            &mut self,
+            host: &crate::ui::renderer::HostHandle,
+            lang: crate::config::Language,
+        ) {
             if self.mixer_slider.is_some() {
                 self.reattach_mixer_controls();
                 return;
             }
+            let s = crate::locale::strings(lang);
             let mtm = MainThreadMarker::new().expect("mixer controls on main thread");
 
             // Ensure the panel has a content view to host the controls.
@@ -669,19 +677,19 @@ mod appkit {
             // Mute button
             let mb = crate::ui::canvas::MixerLayout::mute_button_rect();
             let mute_btn = NSButton::initWithFrame(NSButton::alloc(mtm), to_ns(mb));
-            let mute_title = NSString::from_str("Mute");
+            let mute_title = NSString::from_str(s.mixer_mute);
             mute_btn.setTitle(&mute_title);
 
             // Reset button
             let rb = crate::ui::canvas::MixerLayout::reset_button_rect();
             let reset_btn = NSButton::initWithFrame(NSButton::alloc(mtm), to_ns(rb));
-            let reset_title = NSString::from_str("Reset");
+            let reset_title = NSString::from_str(s.gtk_reset);
             reset_btn.setTitle(&reset_title);
 
             // Close button
             let cb = crate::ui::canvas::MixerLayout::close_button_rect();
             let close_btn = NSButton::initWithFrame(NSButton::alloc(mtm), to_ns(cb));
-            let close_title = NSString::from_str("Close");
+            let close_title = NSString::from_str(s.gtk_close);
             close_btn.setTitle(&close_title);
 
             // Value label
@@ -780,13 +788,14 @@ mod appkit {
         }
 
         /// Update mixer widget values from authoritative state.
-        pub fn update_mixer_value(&self, volume: u8, muted: bool) {
+        pub fn update_mixer_value(&self, volume: u8, muted: bool, lang: crate::config::Language) {
+            let s = crate::locale::strings(lang);
             if let Some(slider) = &self.mixer_slider {
                 slider.setDoubleValue(volume as f64);
             }
             if let Some(label) = &self.mixer_value_label {
                 let text = if muted {
-                    format!("{volume}% (Muted)")
+                    format!("{volume}% ({})", s.mixer_mute)
                 } else {
                     format!("{volume}%")
                 };
@@ -794,7 +803,7 @@ mod appkit {
                 label.setStringValue(&ns_text);
             }
             if let Some(btn) = &self.mixer_mute_btn {
-                let title = if muted { "Unmute" } else { "Mute" };
+                let title = if muted { s.mixer_unmute } else { s.mixer_mute };
                 let ns_title = NSString::from_str(title);
                 btn.setTitle(&ns_title);
             }

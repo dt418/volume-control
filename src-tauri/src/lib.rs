@@ -83,6 +83,31 @@ fn install_menu_event_handler(builder: tauri::Builder<tauri::Wry>) -> tauri::Bui
 /// Shared tray-command dispatch (Windows global handler and the macOS/Linux
 /// tray callback both route here).
 fn dispatch_tray_command(app: &tauri::AppHandle, command: TrayCommand) {
+    // The update check performs a blocking network fetch; run it off the
+    // core lock so volume/hotkey handling stays responsive while it flies.
+    if command == TrayCommand::CheckUpdates {
+        let handle = app.clone();
+        std::thread::spawn(move || {
+            let language = handle
+                .try_state::<Arc<Mutex<AppCore>>>()
+                .map(|shared| {
+                    shared
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .config()
+                        .language
+                })
+                .unwrap_or_default();
+            let message = volumectl_lib::updates::check_for_updates(language);
+            if let Some(shared) = handle.try_state::<Arc<Mutex<AppCore>>>() {
+                let mut core = shared
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                core.show_overlay_text(message);
+            }
+        });
+        return;
+    }
     let Some(shared) = app.try_state::<Arc<Mutex<AppCore>>>() else {
         log::warn!(
             "tray command {:?} received before AppCore was managed",
@@ -198,10 +223,13 @@ pub fn run() -> tauri::Result<()> {
             let handle = app.handle().clone();
             app.manage(WindowManager::new(handle.clone()));
 
+            // Loaded before any surface so native trays build localized menus.
+            let (config, config_notice) = volumectl_lib::config::load_with_notice();
+
             // Tauri-managed tray (macOS/Linux only). Creation failure is
             // non-fatal: keep the host alive with the webview surfaces.
             #[cfg(not(target_os = "windows"))]
-            match tauri_tray::TauriTray::create(&handle) {
+            match tauri_tray::TauriTray::create(&handle, config.language) {
                 Ok(tray) => {
                     app.manage(tray);
                     log::info!("tray created");
@@ -213,7 +241,7 @@ pub fn run() -> tauri::Result<()> {
             // Linux/macOS: none (the headless host is AppCore alone).
             #[cfg(target_os = "windows")]
             let native = {
-                let native = Arc::new(native_win32::NativeWin32::new()?);
+                let native = Arc::new(native_win32::NativeWin32::new(config.language)?);
                 app.manage(native.clone());
                 native
             };
@@ -225,7 +253,6 @@ pub fn run() -> tauri::Result<()> {
                     Box::new(UnavailableAudio::new(error)) as Box<dyn AudioBackend>
                 }
             };
-            let (config, config_notice) = volumectl_lib::config::load_with_notice();
             let modifier = config.modifier;
             let sink = Arc::new(TauriSink::new(handle));
             let core = AppCore::new_with_notice(audio, config, modifier, sink, config_notice)

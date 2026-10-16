@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
+import { asLanguage, LanguageProvider, translatorFor } from "../lib/i18n";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
 import type { HotkeyRegResult } from "./KeyCard";
@@ -55,6 +56,7 @@ function fieldFromMessage(message: string): string | null {
 function hydrateConfig(config: SettingsConfig): SettingsConfig {
   return {
     ...config,
+    language: asLanguage(config.language),
     hotkeys: config.hotkeys ?? bindingsForModifier(config.modifier),
   };
 }
@@ -75,6 +77,7 @@ function buildPatch(draft: SettingsConfig): Record<string, unknown> {
     beep: { ...draft.beep },
     color_thresholds: { ...draft.color_thresholds },
     blacklist: draft.blacklist,
+    language: draft.language,
   };
 }
 
@@ -93,6 +96,8 @@ export function SettingsSurface() {
   const [error, setError] = useState<string | null>(null);
   const [autostartDisabled, setAutostartDisabled] = useState(false);
   const [configNotice, setConfigNotice] = useState<ConfigLoadNotice | null>(null);
+  const language = asLanguage(draft?.language ?? config?.language);
+  const tr = translatorFor(language);
 
   useEffect(() => {
     let disposed = false;
@@ -169,7 +174,7 @@ export function SettingsSurface() {
         await invoke("set_autostart", { enabled: Boolean(draft.autostart) });
       }
       setConfig(draft);
-      setStatus("Saved");
+      setStatus(tr("status.saved"));
     } catch (error) {
       const message = String(error);
       const field = fieldFromMessage(message);
@@ -201,6 +206,7 @@ export function SettingsSurface() {
   };
 
   return (
+    <LanguageProvider language={language}>
     <main
       data-surface="settings"
       className="surface-shell h-dvh min-h-0 overflow-hidden flex flex-col gap-3 bg-background p-3"
@@ -210,12 +216,12 @@ export function SettingsSurface() {
         className="flex flex-shrink-0 items-start justify-between border-b border-foreground/10 pb-2"
       >
         <div>
-          <h1 className="text-base font-semibold">VolumeControl Settings</h1>
-          <p className="text-xs text-foreground/60">Configure volume, hotkeys, appearance, and feedback</p>
+          <h1 className="text-base font-semibold">VolumeControl {tr("settings.title")}</h1>
+          <p className="text-xs text-foreground/60">{tr("settings.subtitle")}</p>
         </div>
         <button
           type="button"
-          aria-label="Close"
+          aria-label={tr("common.close")}
           onClick={cancel}
           className="rounded-md px-2 py-1 text-lg leading-none text-foreground/60 hover:bg-foreground/5 hover:text-foreground"
         >
@@ -230,7 +236,7 @@ export function SettingsSurface() {
         {error ? (
           <div className="surface-scroll min-h-0 flex-1 overflow-y-auto">
             <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              Settings unavailable: {error}
+              {tr("settings.loadFailed")}: {error}
             </div>
           </div>
         ) : !config || !draft ? (
@@ -289,14 +295,14 @@ export function SettingsSurface() {
             disabled={!dirty || !draft}
             className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm disabled:opacity-40"
           >
-            Reset
+            {tr("common.reset")}
           </button>
           <button
             type="button"
             onClick={cancel}
             className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm"
           >
-            Cancel
+            {tr("common.cancel")}
           </button>
           <button
             type="button"
@@ -304,10 +310,11 @@ export function SettingsSurface() {
             disabled={!dirty || saving || !draft}
             className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-40"
           >
-            Save changes
+            {tr("common.saveChanges")}
           </button>
         </div>
       </footer>
     </main>
+    </LanguageProvider>
   );
 }

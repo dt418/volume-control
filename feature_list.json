@@ -16,6 +16,25 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-088",
+                         "priority":  88,
+                         "area":  "ux",
+                         "title":  "Bilingual UI (EN/VI) and tray update check",
+                         "user_visible_behavior":  "Users pick English or Vietnamese in Settings (config.ini [general] language = en|vi); the native Windows tray, overlay, mixer, settings window, GTK/macOS mixer controls, and the Mixer/Settings/Help webview surfaces render localized labels, and the tray gains a Check for updates item that queries the latest stable GitHub release, compares it with the running version, and reports the result (up to date / version available / check failed) on the overlay in the active language. The PowerShell bootstrap also prints EN/VI messages, selected from VOLUMECONTROL_LANG or the Windows UI culture.",
+                         "status":  "passing",
+                         "verification":  [
+                                               "cargo test --workspace --no-default-features: 292 volumectl lib tests plus integration suites pass, including the new locale table coverage, dynamic toast rendering, language INI round-trip, SettingsPatch language validation, and the update-check version matrix (numeric compare, malformed input fails closed).",
+                                               "cargo clippy --workspace --all-targets --no-default-features -- -D warnings and cargo fmt --all --check exit 0 (clippy.toml msrv=1.82; is_multiple_of removed for MSRV).",
+                                               "frontend: node node_modules/typescript/bin/tsc --noEmit clean; vitest run --no-file-parallelism: 17 files / 105 tests pass (dictionary parity, provider rendering, surface literals under EN default).",
+                                               "Real network proof: cargo example calling updates::check_for_updates against api.github.com printed 'VolumeControl is up to date' (EN) and 'VolumeControl đã là bản mới nhất' (VI) while the latest release is v0.1.4 and the crate is 0.1.4.",
+                                               "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 exits PASS under both VOLUMECONTROL_LANG=en and =vi (agent-run evidence plus parent rerun in this worktree)."
+                                           ],
+                         "evidence":  [
+                                           "Session 103 (2026-10-17): config gains Language (en|vi) with INI parse/write + validation; new locale module with EN/VI tables and dynamic toasts; tray/overlay/mixer/settings/GTK/macOS render localized labels driven by the config; SettingsPatch accepts language and update_settings relabels trays without a restart; new updates module (ureq + GitHub latest release, pure is_newer) wired to TrayCommand::CheckUpdates in both hosts; frontend lib/i18n.tsx (typed dictionaries, provider, useT) localizes Mixer, Settings (all six sections), Help, and Overlay with a language selector in General; PowerShell bootstrap message table with VOLUMECONTROL_LANG/culture selection, EN byte-identical and suite extended for VI."
+                                       ],
+                         "notes":  "NSIS installer-shell strings stay English (Tauri 2.11 bundle config exposes no per-language MUI in this repo); the Linux GTK host records the update result in HostUpdate::update_message (no overlay text channel there)."
+                     },
+                     {
                          "id":  "vol-086",
                          "priority":  86,
                          "area":  "tooling",

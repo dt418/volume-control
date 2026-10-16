@@ -17,6 +17,8 @@ export interface SettingsConfig {
   overlay_duration_ms: number;
   /** Persisted preference; the live registry state is loaded separately. */
   autostart?: boolean;
+  /** UI language ("en" | "vi"); older payloads omit it and hydrate to "en". */
+  language?: string;
   modifier: string;
   /** Older bootstrap fixtures/configs may omit this; the surface hydrates it. */
   hotkeys?: HotkeyBindings;

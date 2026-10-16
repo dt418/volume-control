@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
+import { asLanguage, translatorFor, type Language } from "../lib/i18n";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
 import { DEFAULT_THRESHOLDS, type ColorThresholds } from "./SignalRail";
@@ -14,7 +15,7 @@ export interface AudioSession {
 
 export interface BootstrapPayload {
   /** Serialized `Config`; only `color_thresholds` is consumed by the mixer. */
-  config?: { color_thresholds?: ColorThresholds };
+  config?: { color_thresholds?: ColorThresholds; language?: string };
   volume_pct: number;
   muted: boolean;
   hotkey_status: unknown[];
@@ -57,11 +58,15 @@ export function useSessions() {
   const [volumePct, setVolumePct] = useState(0);
   const [muted, setMuted] = useState(false);
   const [thresholds, setThresholds] = useState<ColorThresholds>(DEFAULT_THRESHOLDS);
+  const [language, setLanguage] = useState<Language>("en");
   const [sessionsSupported, setSessionsSupported] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const volumeEventRevision = useRef(0);
+  // Event listeners compose user-facing notices; they read the language
+  // through a ref because the listeners outlive individual renders.
+  const languageRef = useRef<Language>("en");
 
   useEffect(() => {
     let disposed = false;
@@ -83,9 +88,8 @@ export function useSessions() {
       listen<BackendStatusEvent>("state://backend", (payload) => {
         if (!disposed) {
           if (payload.status === "degraded") {
-            setNotice(
-              `Audio backend temporarily unavailable${payload.error ? `: ${payload.error}` : ""}`,
-            );
+            const prefix = translatorFor(languageRef.current)("mixer.backendTemporarilyUnavailable");
+            setNotice(`${prefix}${payload.error ? `: ${payload.error}` : ""}`);
           } else {
             setNotice(null);
           }
@@ -106,11 +110,12 @@ export function useSessions() {
         if (!b || disposed) return;
         setError(null);
         applyAppearance(b.appearance);
+        const bootstrapLanguage = asLanguage(b.config?.language);
+        languageRef.current = bootstrapLanguage;
         setSessions(b.sessions ?? []);
         if (b.backend_status?.status === "degraded") {
-          setNotice(
-            `Audio backend temporarily unavailable${b.backend_status.error ? `: ${b.backend_status.error}` : ""}`,
-          );
+          const prefix = translatorFor(languageRef.current)("mixer.backendTemporarilyUnavailable");
+          setNotice(`${prefix}${b.backend_status.error ? `: ${b.backend_status.error}` : ""}`);
         }
         // A command can complete while bootstrap is in flight. In that case
         // the backend event is newer than the bootstrap snapshot and must win.
@@ -119,6 +124,7 @@ export function useSessions() {
           setMuted(b.muted);
         }
         setThresholds(b.config?.color_thresholds ?? DEFAULT_THRESHOLDS);
+        setLanguage(bootstrapLanguage);
         setSessionsSupported(b.sessions_supported);
       })
       .catch((error) => {
@@ -152,6 +158,7 @@ export function useSessions() {
     volumePct,
     muted,
     thresholds,
+    language,
     sessionsSupported,
     notice,
     error,

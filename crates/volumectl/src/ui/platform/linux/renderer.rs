@@ -318,12 +318,13 @@ impl NativeRenderer for LinuxRenderer {
                     tokens,
                     40, // green_up_to
                     75, // blue_up_to
+                    state.language,
                 );
             }
 
             if plan.surface == SurfaceId::Mixer && visible {
-                panel.set_mixer_controls(&host);
-                panel.update_mixer_value(state.volume_percent, state.muted);
+                panel.set_mixer_controls(&host, state.language);
+                panel.update_mixer_value(state.volume_percent, state.muted, state.language);
             }
         }
     }
@@ -577,6 +578,7 @@ mod gtk_surfaces {
             tokens: &crate::ui::theme::ThemeTokens,
             green_up_to: u8,
             blue_up_to: u8,
+            lang: crate::config::Language,
         ) {
             let draw_area = gtk::DrawingArea::new();
             let size = logical_size(SurfaceId::Overlay);
@@ -597,7 +599,8 @@ mod gtk_surfaces {
                     &mut canvas,
                     &rail,
                     &typography,
-                    "System output",
+                    crate::locale::strings(lang).mixer_output,
+                    lang,
                 );
             });
 
@@ -606,10 +609,11 @@ mod gtk_surfaces {
 
         /// Create mixer controls (slider, buttons, value label) and wire them
         /// to the host. Idempotent — skips creation if widgets already exist.
-        pub fn set_mixer_controls(&mut self, host: &HostHandle) {
+        pub fn set_mixer_controls(&mut self, host: &HostHandle, lang: crate::config::Language) {
             if self.mixer_scale.is_some() {
                 return;
             }
+            let s = crate::locale::strings(lang);
 
             let fixed = gtk::Fixed::new();
             let size = logical_size(SurfaceId::Mixer);
@@ -634,7 +638,7 @@ mod gtk_surfaces {
             });
 
             // Mute button.
-            let mute_btn = gtk::Button::with_label("Mute");
+            let mute_btn = gtk::Button::with_label(s.mixer_mute);
             let mb = crate::ui::canvas::MixerLayout::mute_button_rect();
             mute_btn.set_size_request(mb.width() as i32, mb.height() as i32);
             fixed.put(&mute_btn, mb.left as f64, mb.top as f64);
@@ -645,7 +649,7 @@ mod gtk_surfaces {
             });
 
             // Reset button.
-            let reset_btn = gtk::Button::with_label("Reset");
+            let reset_btn = gtk::Button::with_label(s.gtk_reset);
             let rb = crate::ui::canvas::MixerLayout::reset_button_rect();
             reset_btn.set_size_request(rb.width() as i32, rb.height() as i32);
             fixed.put(&reset_btn, rb.left as f64, rb.top as f64);
@@ -656,7 +660,7 @@ mod gtk_surfaces {
             });
 
             // Close button.
-            let close_btn = gtk::Button::with_label("Close");
+            let close_btn = gtk::Button::with_label(s.gtk_close);
             let cb = crate::ui::canvas::MixerLayout::close_button_rect();
             close_btn.set_size_request(cb.width() as i32, cb.height() as i32);
             fixed.put(&close_btn, cb.left as f64, cb.top as f64);
@@ -675,15 +679,16 @@ mod gtk_surfaces {
         }
 
         /// Update mixer widget values from authoritative state.
-        pub fn update_mixer_value(&self, volume: u8, muted: bool) {
-            if let Some(ref scale) = self.mixer_scale {
+        pub fn update_mixer_value(&self, volume: u8, muted: bool, lang: crate::config::Language) {
+            let s = crate::locale::strings(lang);
+            if let Some(scale) = &self.mixer_scale {
                 scale.set_value(volume as f64);
             }
-            if let Some(ref label) = self.mixer_value_label {
+            if let Some(label) = &self.mixer_value_label {
                 label.set_text(&format!("{volume}%"));
             }
-            if let Some(ref btn) = self.mixer_mute_btn {
-                btn.set_label(if muted { "Unmute" } else { "Mute" });
+            if let Some(btn) = &self.mixer_mute_btn {
+                btn.set_label(if muted { s.mixer_unmute } else { s.mixer_mute });
             }
         }
 

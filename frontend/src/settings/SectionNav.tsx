@@ -1,3 +1,5 @@
+import { useT, type TranslationKey } from "../lib/i18n";
+
 export const SETTINGS_SECTIONS = [
   "General",
   "Hotkeys",
@@ -9,6 +11,16 @@ export const SETTINGS_SECTIONS = [
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
+/** Section identity stays canonical English; only the label is translated. */
+const SECTION_LABELS: Record<SettingsSection, TranslationKey> = {
+  General: "settings.general",
+  Hotkeys: "settings.hotkeys",
+  Appearance: "settings.appearance",
+  Blacklist: "settings.blacklist",
+  Feedback: "settings.feedback",
+  Storage: "settings.storage",
+};
+
 /** Six-section navigation (legacy parity): vertical rail on wide screens,
  *  horizontal strip below 760px. One content pane swaps per selection. */
 export function SectionNav({
@@ -18,6 +30,7 @@ export function SectionNav({
   active: SettingsSection;
   onSelect: (section: SettingsSection) => void;
 }) {
+  const tr = useT();
   return (
     <nav
       aria-label="Settings sections"
@@ -35,7 +48,7 @@ export function SectionNav({
               : "text-foreground/70 hover:bg-foreground/5"
           }`}
         >
-          {section}
+          {tr(SECTION_LABELS[section])}
         </button>
       ))}
     </nav>

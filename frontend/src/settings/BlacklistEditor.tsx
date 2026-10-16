@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { useT } from "../lib/i18n";
 import { invoke } from "../lib/ipc";
 import type { DraftSetter, SettingsConfig } from "./settingsTypes";
 
@@ -16,6 +17,7 @@ export function BlacklistEditor({
   setDraft: DraftSetter;
 }) {
   const [entry, setEntry] = useState("");
+  const tr = useT();
 
   const add = () => {
     const value = entry.trim().toLowerCase();
@@ -47,15 +49,15 @@ export function BlacklistEditor({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Blacklist</CardTitle>
+        <CardTitle>{tr("settings.blacklist")}</CardTitle>
         <p className="text-xs text-foreground/60">
-          Block shortcuts while these apps have focus.
+          {tr("blacklist.subtitle")}
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex gap-2">
           <Input
-            aria-label="Blocked application"
+            aria-label={tr("blacklist.blockedApplication")}
             value={entry}
             onChange={(e) => setEntry(e.target.value)}
             onKeyDown={(e) => {
@@ -63,13 +65,13 @@ export function BlacklistEditor({
             }}
           />
           <button type="button" onClick={add}>
-            Add
+            {tr("blacklist.add")}
           </button>
         </div>
         {draft.blacklist.length === 0 ? (
           <div className="text-sm text-foreground/60">
-            <p>No blocked applications</p>
-            <p>VolumeControl will respond to shortcuts everywhere.</p>
+            <p>{tr("blacklist.empty")}</p>
+            <p>{tr("blacklist.emptyHint")}</p>
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -80,7 +82,7 @@ export function BlacklistEditor({
               >
                 <span>{value}</span>
                 <button type="button" onClick={() => remove(value)}>
-                  Remove
+                  {tr("blacklist.remove")}
                 </button>
               </li>
             ))}
@@ -91,10 +93,10 @@ export function BlacklistEditor({
             type="button"
             onClick={() => setDraft((d) => ({ ...d, blacklist: [] }))}
           >
-            Clear
+            {tr("blacklist.clear")}
           </button>
           <button type="button" onClick={() => void mergeRecommended()}>
-            Apply Recommended
+            {tr("blacklist.applyRecommended")}
           </button>
         </div>
       </CardContent>

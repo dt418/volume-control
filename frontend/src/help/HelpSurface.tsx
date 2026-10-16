@@ -3,6 +3,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import { Kbd } from "../components/ui/kbd";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
+import {
+  asLanguage,
+  LanguageProvider,
+  translatorFor,
+  useT,
+  type Language,
+} from "../lib/i18n";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady, surfaceErrorMessage } from "../lib/surface";
 import type { HotkeyRegResult } from "../settings/KeyCard";
@@ -15,11 +22,12 @@ import { baseActions, helpGroups, helpNote, type HelpShortcut } from "./shortcut
 import { statusForAction } from "./status";
 
 function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const tr = useT();
   return (
     <input
       type="search"
-      placeholder="Search shortcuts…"
-      aria-label="Search shortcuts"
+      placeholder={tr("help.searchPlaceholder")}
+      aria-label={tr("help.searchLabel")}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="mb-4 w-full rounded-md border border-foreground/20 bg-background/60 px-3 py-1.5 text-sm outline-none focus:border-accent"
@@ -42,7 +50,7 @@ function ShortcutCard({ item, status }: { item: HelpShortcut; status: ReturnType
 }
 
 interface BootstrapPayload {
-  config: { modifier?: string; hotkeys?: HotkeyBindings };
+  config: { modifier?: string; hotkeys?: HotkeyBindings; language?: string };
   hotkey_status: HotkeyRegResult[];
   appearance: AppearancePayload;
 }
@@ -60,11 +68,13 @@ function buildCallout(
   if (conflicted.length === 0) return null;
   return {
     combos: conflicted.map((item) => item.combo),
-    tail: conflicted.length === 1 ? "is used by another app." : "are used by another app.",
+    tail: conflicted.length === 1 ? "help.calloutTailOne" : "help.calloutTailMany",
   };
 }
 
 export function HelpSurface() {
+  const [language, setLanguage] = useState<Language>("en");
+  const tr = useMemo(() => translatorFor(language), [language]);
   const [modifier, setModifier] = useState("CtrlAlt");
   const [bindings, setBindings] = useState<HotkeyBindings>(() => bindingsForModifier("CtrlAlt"));
   const [hotkeyStatus, setHotkeyStatus] = useState<HotkeyRegResult[]>([]);
@@ -78,6 +88,7 @@ export function HelpSurface() {
         if (alive) {
           setError(null);
           applyAppearance(bootstrap.appearance as AppearancePayload);
+          setLanguage(asLanguage(bootstrap.config?.language));
           const nextModifier = bootstrap.config?.modifier ?? "CtrlAlt";
           setModifier(nextModifier);
           setBindings(bootstrap.config?.hotkeys ?? bindingsForModifier(nextModifier));
@@ -107,8 +118,8 @@ export function HelpSurface() {
     };
   }, []);
 
-  const groups = useMemo(() => helpGroups(bindings), [bindings]);
-  const note = helpNote(modifier);
+  const groups = useMemo(() => helpGroups(bindings, tr), [bindings, tr]);
+  const note = helpNote(modifier, tr);
   const callout = useMemo(
     () => buildCallout(bindings, hotkeyStatus),
     [bindings, hotkeyStatus],
@@ -148,70 +159,78 @@ export function HelpSurface() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onKeyDown]);
 
+  useEffect(() => {
+    document.title = `VolumeControl ${tr("help.title")}`;
+  }, [tr]);
+
   return (
-    <main
-      data-surface="help"
-      className="surface-shell h-dvh min-h-0 overflow-hidden flex flex-col bg-background"
-    >
-      {/* Header band (legacy parity): 3px accent bar, title, subtitle, close × */}
-      <header data-testid="surface-header" className="relative flex-shrink-0 border-b border-foreground/10">
-        <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-accent" />
-        <div className="flex items-start justify-between px-4 pb-2 pt-6">
-          <div>
-            <h1 className="text-lg font-semibold">VolumeControl</h1>
-            <p className="text-sm text-foreground/60">Keyboard shortcuts</p>
-          </div>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={close}
-            className="rounded-md px-2 py-1 text-foreground/60 hover:bg-foreground/5 hover:text-foreground"
-          >
-            ×
-          </button>
-        </div>
-      </header>
-
-      <div data-testid="surface-content" className="surface-scroll min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-4 p-4">
-          {error ? (
-            <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              Help unavailable: {error}
+    <LanguageProvider language={language}>
+      <main
+        data-surface="help"
+        className="surface-shell h-dvh min-h-0 overflow-hidden flex flex-col bg-background"
+      >
+        {/* Header band (legacy parity): 3px accent bar, title, subtitle, close × */}
+        <header data-testid="surface-header" className="relative flex-shrink-0 border-b border-foreground/10">
+          <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-accent" />
+          <div className="flex items-start justify-between px-4 pb-2 pt-6">
+            <div>
+              <h1 className="text-lg font-semibold">VolumeControl</h1>
+              <p className="text-sm text-foreground/60">{tr("help.shortcuts")}</p>
             </div>
-          ) : (
-            <>
-              {note && <p className="text-sm text-foreground/60">{note}</p>}
-              <SearchBox value={query} onChange={setQuery} />
+            <button
+              type="button"
+              aria-label={tr("help.close")}
+              onClick={close}
+              className="rounded-md px-2 py-1 text-foreground/60 hover:bg-foreground/5 hover:text-foreground"
+            >
+              ×
+            </button>
+          </div>
+        </header>
 
-              {callout && <ConflictCallout data={callout} onOpenSettings={openSettings} />}
+        <div data-testid="surface-content" className="surface-scroll min-h-0 flex-1 overflow-y-auto">
+          <div className="flex flex-col gap-4 p-4">
+            {error ? (
+              <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                {tr("help.unavailable")}: {error}
+              </div>
+            ) : (
+              <>
+                {note && <p className="text-sm text-foreground/60">{note}</p>}
+                <SearchBox value={query} onChange={setQuery} />
 
-              {filtered.map((group) => (
-                <section key={group.id} className="flex flex-col gap-2">
-                  <h2 className="text-sm font-medium text-foreground/70">{group.title}</h2>
-                  <div className="grid grid-cols-1 gap-2">
-                    {group.items.map((item) => (
-                      <ShortcutCard
-                        key={item.action}
-                        item={item}
-                        status={statusForAction(hotkeyStatus, item.action)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
-              {filtered.length === 0 && (
-                <p className="text-sm text-foreground/50">No shortcuts match “{query}”.</p>
-              )}
-            </>
-          )}
+                {callout && <ConflictCallout data={callout} onOpenSettings={openSettings} />}
+
+                {filtered.map((group) => (
+                  <section key={group.id} className="flex flex-col gap-2">
+                    <h2 className="text-sm font-medium text-foreground/70">{group.title}</h2>
+                    <div className="grid grid-cols-1 gap-2">
+                      {group.items.map((item) => (
+                        <ShortcutCard
+                          key={item.action}
+                          item={item}
+                          status={statusForAction(hotkeyStatus, item.action)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ))}
+                {filtered.length === 0 && (
+                  <p className="text-sm text-foreground/50">
+                    {tr("help.noMatches")} “{query}”.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
 
-      <HelpFooter
-        onEditConfig={() => void invoke("open_config_location")}
-        onSettings={openSettings}
-        onClose={close}
-      />
-    </main>
+        <HelpFooter
+          onEditConfig={() => void invoke("open_config_location")}
+          onSettings={openSettings}
+          onClose={close}
+        />
+      </main>
+    </LanguageProvider>
   );
 }

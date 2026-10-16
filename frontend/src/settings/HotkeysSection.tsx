@@ -1,5 +1,6 @@
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { useT } from "../lib/i18n";
 import type { DraftSetter, SettingsConfig } from "./settingsTypes";
 import { conflictForAction, type HotkeyRegResult } from "./KeyCard";
 import { ModifierPicker } from "./ModifierPicker";
@@ -20,17 +21,18 @@ export function HotkeysSection({
   hotkeyStatus: HotkeyRegResult[];
   errors: FieldErrors;
 }) {
+  const tr = useT();
   const bindings = draft.hotkeys ?? bindingsForModifier(draft.modifier);
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Keyboard</CardTitle>
+        <CardTitle>{tr("settings.keyboard")}</CardTitle>
         <p className="text-xs text-foreground/60">
-          Press Record, then press a modifier and key. Changes stay in the draft until you save.
+          {tr("hotkeys.subtitle")}
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div className="flex flex-col gap-2" role="group" aria-label="Global shortcuts">
+        <div className="flex flex-col gap-2" role="group" aria-label={tr("hotkeys.globalShortcutsAria")}>
           {HOTKEY_ACTIONS.map((entry) => {
             const conflict = conflictForAction(hotkeyStatus, entry.action);
             return (
@@ -39,14 +41,14 @@ export function HotkeysSection({
                 className="flex flex-col gap-2 rounded-md border border-foreground/10 p-2 min-[760px]:grid min-[760px]:grid-cols-[minmax(9rem,1fr)_minmax(17rem,auto)] min-[760px]:items-center"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">{entry.label}</p>
-                  <p className="text-xs text-foreground/60">{entry.help}</p>
+                  <p className="text-sm font-medium">{tr(entry.labelKey)}</p>
+                  <p className="text-xs text-foreground/60">{tr(entry.helpKey)}</p>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
                   <ShortcutRecorder
                     id={entry.key}
                     value={bindings[entry.key]}
-                    aria-label={`${entry.label} shortcut`}
+                    aria-label={`${tr(entry.labelKey)} shortcut`}
                     onChange={(value) =>
                       setDraft((current) => ({
                         ...current,
@@ -67,8 +69,8 @@ export function HotkeysSection({
         </div>
         <div className="flex flex-col gap-2 border-t border-foreground/10 pt-3">
           <div>
-            <p className="text-sm font-medium">Presets</p>
-            <p className="text-xs text-foreground/60">Restore a familiar shortcut layout.</p>
+            <p className="text-sm font-medium">{tr("hotkeys.presets")}</p>
+            <p className="text-xs text-foreground/60">{tr("hotkeys.presetsHint")}</p>
           </div>
         <ModifierPicker
           selected={draft.modifier}

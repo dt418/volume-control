@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
+import { asLanguage, translatorFor, type Language } from "../lib/i18n";
 import { invoke, listen } from "../lib/ipc";
 import { markSurfaceReady } from "../lib/surface";
 import { DEFAULT_THRESHOLDS, SignalRail, type ColorThresholds } from "../mixer/SignalRail";
@@ -21,7 +22,7 @@ interface OverlayPayload {
 interface OverlayBootstrap {
   volume_pct: number;
   muted: boolean;
-  config?: { color_thresholds?: ColorThresholds; overlay_duration_ms?: number };
+  config?: { color_thresholds?: ColorThresholds; overlay_duration_ms?: number; language?: string };
   appearance: AppearancePayload;
   /** Debug E2E marker: keep the HUD open so WebDriver can assert it. */
   e2e_debug?: boolean;
@@ -31,6 +32,8 @@ export function OverlaySurface() {
   const [payload, setPayload] = useState<OverlayPayload | null>(null);
   const [initial, setInitial] = useState<OverlayBootstrap | null>(null);
   const [live, setLive] = useState<{ pct: number; muted: boolean } | null>(null);
+  const [language, setLanguage] = useState<Language>("en");
+  const tr = translatorFor(language);
 
   useEffect(() => {
     let disposed = false;
@@ -76,6 +79,7 @@ export function OverlaySurface() {
         if (!b || disposed) return;
         setInitial(b);
         applyAppearance(b.appearance);
+        setLanguage(asLanguage(b.config?.language));
         e2eDebug = b.e2e_debug === true;
         duration = Math.min(
           Math.max(b.config?.overlay_duration_ms ?? 1800, 200),
@@ -129,7 +133,7 @@ export function OverlaySurface() {
           <>
             <div className="flex items-baseline justify-between">
               <span className="text-xs uppercase tracking-wide text-foreground/70">
-                Volume
+                {tr("overlay.volume")}
               </span>
               <span className="text-2xl font-semibold tabular-nums text-foreground">
                 {pct}%

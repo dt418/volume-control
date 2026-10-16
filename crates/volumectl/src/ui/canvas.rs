@@ -9,6 +9,7 @@
 //! All coordinates are logical pixels; the platform backend scales once via
 //! its DPI metrics.
 
+use crate::config::Language;
 use crate::ui::signal_rail::{rail_geometry, MarkerGeometry, SignalRail, TrackRect};
 use crate::ui::theme::{Rgba, TypographyTokens};
 
@@ -116,13 +117,15 @@ pub struct OverlayContentRenderer;
 impl OverlayContentRenderer {
     /// Render the overlay content for `rail` onto `canvas`.
     ///
-    /// `tokens` provides typography and threshold colors. `device_name` is
-    /// the output device label (e.g. "System output").
+    /// `tokens` provides typography and threshold colors; `device_name` is
+    /// the output device label (e.g. "System output"); `lang` localizes the
+    /// title label.
     pub fn render(
         canvas: &mut impl Canvas,
         rail: &SignalRail,
         tokens: &TypographyTokens,
         device_name: &str,
+        lang: Language,
     ) {
         let title_rect = RectF::new(PADDING, PADDING, OVERLAY_WIDTH - PADDING, 32.0);
         let value_rect = RectF::new(PADDING, PADDING, OVERLAY_WIDTH - PADDING, 55.0);
@@ -137,7 +140,7 @@ impl OverlayContentRenderer {
         // Title: "Volume" (left-aligned, caption size).
         canvas.draw_text(
             title_rect,
-            "Volume",
+            crate::locale::strings(lang).overlay_volume,
             TextAlign::Left,
             tokens.caption.size_px,
             tokens.caption.weight,
@@ -350,7 +353,7 @@ mod tests {
         let r = rail(72, false);
         let tokens = TypographyTokens::default();
 
-        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Speakers");
+        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Speakers", Language::En);
 
         // Background fill.
         assert_eq!(canvas.fill_rects.len(), 3); // bg + track bg + threshold fill
@@ -371,12 +374,23 @@ mod tests {
     }
 
     #[test]
+    fn overlay_title_follows_language() {
+        let mut canvas = MockCanvas::default();
+        let r = rail(72, false);
+        let tokens = TypographyTokens::default();
+
+        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Đầu ra", Language::Vi);
+
+        assert_eq!(canvas.texts[0].1, "Âm lượng");
+    }
+
+    #[test]
     fn overlay_muted_shows_muted_label() {
         let mut canvas = MockCanvas::default();
         let r = rail(50, true);
         let tokens = TypographyTokens::default();
 
-        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Headphones");
+        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Headphones", Language::En);
 
         assert_eq!(canvas.texts[1].1, "Muted");
         assert_eq!(canvas.texts[1].5, VolumeThresholdColors::default().muted);
@@ -388,7 +402,7 @@ mod tests {
         let r = rail(50, false);
         let tokens = TypographyTokens::default();
 
-        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Device");
+        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Device", Language::En);
 
         assert_eq!(canvas.fill_circles.len(), 1);
         assert_eq!(canvas.stroke_diamonds.len(), 0);
@@ -400,7 +414,7 @@ mod tests {
         let r = rail(50, true);
         let tokens = TypographyTokens::default();
 
-        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Device");
+        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Device", Language::En);
 
         assert_eq!(canvas.fill_circles.len(), 0);
         assert_eq!(canvas.stroke_diamonds.len(), 1);
@@ -412,7 +426,7 @@ mod tests {
         let r = rail(50, false);
         let tokens = TypographyTokens::default();
 
-        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Device");
+        OverlayContentRenderer::render(&mut canvas, &r, &tokens, "Device", Language::En);
 
         // fill_rects: [0] = bg, [1] = track bg, [2] = threshold fill
         let track_bg = canvas.fill_rects[1];

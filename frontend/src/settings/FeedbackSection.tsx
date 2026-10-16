@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { FieldError } from "./FieldError";
 import type { DraftSetter, FieldErrors, SettingsConfig } from "./settingsTypes";
 
 interface BeepField {
   key: "blocked_freq" | "blocked_duration_ms" | "limit_freq" | "limit_duration_ms";
-  label: string;
-  help: string;
+  labelKey: TranslationKey;
+  helpKey: TranslationKey;
   min: number;
   max: number;
 }
@@ -14,29 +15,29 @@ interface BeepField {
 const BEEP_FIELDS: BeepField[] = [
   {
     key: "blocked_freq",
-    label: "Blocked beep frequency",
-    help: "Beep when a shortcut is blocked.",
+    labelKey: "feedback.blockedFreq",
+    helpKey: "feedback.blockedFreqHelp",
     min: 37,
     max: 32767,
   },
   {
     key: "blocked_duration_ms",
-    label: "Blocked beep duration",
-    help: "How long the blocked beep sounds.",
+    labelKey: "feedback.blockedDuration",
+    helpKey: "feedback.blockedDurationHelp",
     min: 10,
     max: 2000,
   },
   {
     key: "limit_freq",
-    label: "Limit beep frequency",
-    help: "Beep when volume is already at the limit.",
+    labelKey: "feedback.limitFreq",
+    helpKey: "feedback.limitFreqHelp",
     min: 37,
     max: 32767,
   },
   {
     key: "limit_duration_ms",
-    label: "Limit beep duration",
-    help: "How long the limit beep sounds.",
+    labelKey: "feedback.limitDuration",
+    helpKey: "feedback.limitDurationHelp",
     min: 10,
     max: 2000,
   },
@@ -53,31 +54,32 @@ export function FeedbackSection({
   setDraft: DraftSetter;
   errors: FieldErrors;
 }) {
+  const tr = useT();
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Feedback</CardTitle>
+        <CardTitle>{tr("settings.feedback")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            aria-label="Enable beep feedback"
+            aria-label={tr("feedback.beepEnabled")}
             checked={draft.beep.enabled}
             onChange={(e) =>
               setDraft((d) => ({ ...d, beep: { ...d.beep, enabled: e.target.checked } }))
             }
           />
-          Enable beep feedback
+          {tr("feedback.beepEnabled")}
         </label>
-        {BEEP_FIELDS.map(({ key, label, help, min, max }) => {
+        {BEEP_FIELDS.map(({ key, labelKey, helpKey, min, max }) => {
           const full = `beep.${key}`;
           return (
             <label className="flex flex-col gap-1 text-sm" key={key}>
-              <span>{label}</span>
-              <span className="text-xs text-foreground/60">{help}</span>
+              <span>{tr(labelKey)}</span>
+              <span className="text-xs text-foreground/60">{tr(helpKey)}</span>
               <Input
-                aria-label={label}
+                aria-label={tr(labelKey)}
                 type="number"
                 min={min}
                 max={max}

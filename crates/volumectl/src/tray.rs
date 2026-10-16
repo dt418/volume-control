@@ -13,36 +13,61 @@
 use muda::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 
 use crate::audio::VolumeState;
+use crate::config::Language;
+use crate::locale;
 use crate::tray_common::{tray_icon_rgba, TrayCommand};
 
 pub struct Tray {
     _tray: tray_icon::TrayIcon,
     vol_label: MenuItem,
     mute_item: CheckMenuItem,
+    reset_item: MenuItem,
+    mixer_item: MenuItem,
+    settings_item: MenuItem,
+    help_item: MenuItem,
+    check_updates_item: MenuItem,
+    reload_item: MenuItem,
+    edit_item: MenuItem,
+    exit_item: MenuItem,
 }
 
 impl Tray {
-    pub fn new() -> Result<Tray, Box<dyn std::error::Error>> {
+    pub fn new(lang: Language) -> Result<Tray, Box<dyn std::error::Error>> {
         let menu = Menu::new();
+        let s = locale::strings(lang);
 
         // Live label (non-clickable), then volume actions, surface actions,
-        // configuration actions, and Exit — grouped per spec §9.
+        // configuration actions, and Exit — grouped per spec §9. Menu ids are
+        // stable and untranslated; only labels come from the locale table.
         let vol_label = MenuItem::with_id("volume", "VolumeControl — --", false, None);
         let sep1 = PredefinedMenuItem::separator();
-        let mute_item = CheckMenuItem::with_id("mute", "Mute", true, false, None);
-        let reset = MenuItem::with_id("reset", "Reset to 50%", true, None);
-        let mixer = MenuItem::with_id("mixer", "Open mixer", true, None);
+        let mute_item = CheckMenuItem::with_id("mute", s.tray_mute, true, false, None);
+        let reset_item = MenuItem::with_id("reset", s.tray_reset, true, None);
+        let mixer_item = MenuItem::with_id("mixer", s.tray_mixer, true, None);
         let sep2 = PredefinedMenuItem::separator();
-        let settings = MenuItem::with_id("settings", "Settings", true, None);
-        let help = MenuItem::with_id("help", "Help", true, None);
-        let reload = MenuItem::with_id("reload", "Reload configuration", true, None);
-        let edit = MenuItem::with_id("edit", "Open config file", true, None);
+        let settings_item = MenuItem::with_id("settings", s.tray_settings, true, None);
+        let help_item = MenuItem::with_id("help", s.tray_help, true, None);
+        let check_updates_item =
+            MenuItem::with_id("check_updates", s.tray_check_updates, true, None);
+        let reload_item = MenuItem::with_id("reload", s.tray_reload, true, None);
+        let edit_item = MenuItem::with_id("edit", s.tray_edit, true, None);
         let sep3 = PredefinedMenuItem::separator();
-        let exit = MenuItem::with_id("exit", "Exit VolumeControl", true, None);
+        let exit_item = MenuItem::with_id("exit", s.tray_exit, true, None);
 
         menu.append_items(&[
-            &vol_label, &sep1, &mute_item, &reset, &mixer, &sep2, &settings, &help, &reload, &edit,
-            &sep3, &exit,
+            &vol_label,
+            &sep1,
+            &mute_item,
+            &reset_item,
+            &mixer_item,
+            &sep2,
+            &settings_item,
+            &help_item,
+            &check_updates_item,
+            &reload_item,
+            &edit_item,
+            &sep3,
+            &exit_item,
         ])?;
 
         let tray = tray_icon::TrayIconBuilder::new()
@@ -55,7 +80,30 @@ impl Tray {
             _tray: tray,
             vol_label,
             mute_item,
+            reset_item,
+            mixer_item,
+            settings_item,
+            help_item,
+            check_updates_item,
+            reload_item,
+            edit_item,
+            exit_item,
         })
+    }
+
+    /// Relabel every menu entry for `lang` (used after a config reload or a
+    /// Settings save changes the language; menu ids never change).
+    pub fn apply_language(&self, lang: Language) {
+        let s = locale::strings(lang);
+        self.mute_item.set_text(s.tray_mute);
+        self.reset_item.set_text(s.tray_reset);
+        self.mixer_item.set_text(s.tray_mixer);
+        self.settings_item.set_text(s.tray_settings);
+        self.help_item.set_text(s.tray_help);
+        self.check_updates_item.set_text(s.tray_check_updates);
+        self.reload_item.set_text(s.tray_reload);
+        self.edit_item.set_text(s.tray_edit);
+        self.exit_item.set_text(s.tray_exit);
     }
 
     /// Refresh the volume label and mute check state.

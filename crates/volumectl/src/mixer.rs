@@ -62,7 +62,8 @@ use windows_sys::Win32::{
 };
 
 use crate::audio::VolumeState;
-use crate::config::{ColorThresholds, Config};
+use crate::config::{ColorThresholds, Config, Language};
+use crate::locale;
 use crate::overlay::{OVERLAY_HEIGHT, OVERLAY_MARGIN_X, OVERLAY_MARGIN_Y, OVERLAY_WIDTH};
 use crate::ui::platform::windows::text::{TextAlign, TextLayout};
 use crate::ui::primitives::{
@@ -252,6 +253,8 @@ pub struct MixerAppearance {
     pub tokens: ThemeTokens,
     /// Capability-resolved material treatment (blur/translucent/opaque).
     pub material: ResolvedMaterial,
+    /// UI language for control labels and UIA names.
+    pub lang: Language,
 }
 
 impl MixerAppearance {
@@ -273,7 +276,11 @@ impl MixerAppearance {
             system_is_dark,
         );
         let material = resolve_material(appearance.material, caps);
-        Self { tokens, material }
+        Self {
+            tokens,
+            material,
+            lang: config.language,
+        }
     }
 
     /// Placeholder used before the first `sync`/`toggle` (the window is hidden
@@ -282,6 +289,7 @@ impl MixerAppearance {
         Self {
             tokens: tokens_for(ThemeMode::System, false, AccentMode::System, || None),
             material: ResolvedMaterial::Opaque,
+            lang: Language::default(),
         }
     }
 }
@@ -353,7 +361,7 @@ pub struct Mixer {
 
 impl Mixer {
     /// Create the hidden mixer window (shown via `toggle`).
-    pub fn new(host: HWND) -> Result<Mixer, Box<dyn std::error::Error>> {
+    pub fn new(host: HWND, lang: Language) -> Result<Mixer, Box<dyn std::error::Error>> {
         unsafe {
             let mut icc: INITCOMMONCONTROLSEX = std::mem::zeroed();
             icc.dwSize = std::mem::size_of::<INITCOMMONCONTROLSEX>() as u32;
@@ -363,6 +371,12 @@ impl Mixer {
 
         unsafe {
             let hinst = GetModuleHandleW(std::ptr::null());
+            let s = locale::strings(lang);
+            let title_text = wide(s.mixer_title);
+            let slider_text = wide(s.mixer_output_name);
+            let mute_text = wide(s.mixer_mute);
+            let reset_text = wide(s.mixer_reset);
+            let close_text = wide(s.mixer_close);
             let class = windows_sys::core::w!("VolCtlMixer");
             let mut wc: WNDCLASSW = std::mem::zeroed();
             wc.lpfnWndProc = Some(mixer_wndproc);
@@ -373,7 +387,7 @@ impl Mixer {
             let hwnd = CreateWindowExW(
                 WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
                 class,
-                windows_sys::core::w!("Volume Mixer"),
+                title_text.as_ptr(),
                 WS_POPUP,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -406,7 +420,7 @@ impl Mixer {
                 // Spec §11.2: the UIA name of the trackbar is its window text;
                 // Narrator reads `slider, System output volume, 72 percent`
                 // from the name plus the native value pattern.
-                windows_sys::core::w!("System output volume"),
+                slider_text.as_ptr(),
                 WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_NOTICKS | WS_TABSTOP,
                 layout.slider_rect.left as i32,
                 layout.slider_rect.top as i32,
@@ -421,7 +435,7 @@ impl Mixer {
             let mute_btn = CreateWindowExW(
                 0,
                 windows_sys::core::w!("Button"),
-                windows_sys::core::w!("Mute"),
+                mute_text.as_ptr(),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                 layout.mute_rect.left as i32,
                 layout.mute_rect.top as i32,
@@ -436,7 +450,7 @@ impl Mixer {
                 0,
                 windows_sys::core::w!("Button"),
                 // Spec §11.2: the reset button's UIA name (its window text).
-                windows_sys::core::w!("Reset volume to 50 percent"),
+                reset_text.as_ptr(),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP,
                 layout.reset_rect.left as i32,
                 layout.reset_rect.top as i32,
@@ -456,7 +470,7 @@ impl Mixer {
             let close_btn = CreateWindowExW(
                 0,
                 windows_sys::core::w!("Button"),
-                windows_sys::core::w!("Close mixer"),
+                close_text.as_ptr(),
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW as u32,
                 layout.close_rect.left as i32,
                 layout.close_rect.top as i32,
@@ -526,6 +540,21 @@ impl Mixer {
                 d.open = false;
             } else {
                 apply_appearance(self.hwnd, d, *appearance);
+
+                // Re-apply localized control text on every show so a language
+                // switch takes effect without recreating the window.
+                let s = locale::strings(appearance.lang);
+                set_window_text(
+                    d.mute_btn,
+                    if d.muted {
+                        s.mixer_unmute
+                    } else {
+                        s.mixer_mute
+                    },
+                );
+                set_window_text(d.reset_btn, s.mixer_reset);
+                set_window_text(d.close_btn, s.mixer_close);
+                set_window_text(d.slider, s.mixer_output_name);
 
                 let dpi = DpiMetrics::new(dpi_scale_for(self.hwnd));
                 if d.dpi != dpi.scale() {
@@ -643,7 +672,15 @@ impl Mixer {
                 );
                 SendMessageW(d.slider, TBM_SETPOS, 1, pct);
             }
-            set_window_text(d.mute_btn, if state.muted { "Unmute" } else { "Mute" });
+            let s = locale::strings(appearance.lang);
+            set_window_text(
+                d.mute_btn,
+                if state.muted {
+                    s.mixer_unmute
+                } else {
+                    s.mixer_mute
+                },
+            );
             // The rail repaints from confirmed state (the paint reads
             // `d.percent`/`d.muted`); the slider's own chrome never paints,
             // so the rail is the single visible visualization.
@@ -994,7 +1031,7 @@ unsafe fn paint(canvas: &mut PaintCanvas, d: &MixerData) {
 
     // Row 1: eyebrow (label role, secondary text).
     canvas.draw_text(&TextLayout {
-        text: "VOLUME MIXER",
+        text: locale::strings(d.appearance.lang).mixer_title,
         rect: layout.eyebrow_rect,
         align: TextAlign::Left,
         role: tokens.typography.label,
@@ -1003,7 +1040,7 @@ unsafe fn paint(canvas: &mut PaintCanvas, d: &MixerData) {
 
     // Row 2: output identity.
     canvas.draw_text(&TextLayout {
-        text: "System output",
+        text: locale::strings(d.appearance.lang).mixer_output,
         rect: layout.output_rect,
         align: TextAlign::Left,
         role: tokens.typography.caption,
@@ -1127,6 +1164,13 @@ impl Drop for Mixer {
     fn drop(&mut self) {
         self.destroy();
     }
+}
+
+/// NUL-terminated UTF-16 buffer for Win32 text params. The `w!` macro only
+/// accepts literals, so localized strings go through here (the buffer must
+/// outlive the call that consumes its pointer).
+fn wide(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 /// Set the text of a child control (UTF-16).
@@ -1523,7 +1567,7 @@ mod tests {
         // Real-window test (hidden): sync() must move the trackbar to the
         // confirmed state, flip the mute button label, and never steal focus
         // from the focused control.
-        let mixer = Mixer::new(0).expect("mixer window creates");
+        let mixer = Mixer::new(0, Language::En).expect("mixer window creates");
         unsafe {
             let d = &*(GetWindowLongPtrW(mixer.hwnd, GWLP_USERDATA) as *const MixerData);
             let a = appearance(ThemeMode::Dark, MaterialMode::Opaque, false);
@@ -1584,7 +1628,7 @@ mod tests {
         // percent`; the buttons carry their spec names. The close button is
         // OWNER-DRAWN (the × visual is painted by the owner) so its window
         // text can be the required `Close mixer`.
-        let mixer = Mixer::new(0).expect("mixer window creates");
+        let mixer = Mixer::new(0, Language::En).expect("mixer window creates");
         unsafe {
             let d = &*(GetWindowLongPtrW(mixer.hwnd, GWLP_USERDATA) as *const MixerData);
             assert_eq!(
@@ -1631,7 +1675,7 @@ mod tests {
         // Win32 window and dropping it exercises that exact path; a hard crash
         // would need an allocator with guard pages or a live app run, but this
         // still verifies construct→drop end to end deterministically.
-        let mixer = Mixer::new(0).expect("mixer window creates");
+        let mixer = Mixer::new(0, Language::En).expect("mixer window creates");
         drop(mixer);
     }
 }
