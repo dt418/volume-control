@@ -16,6 +16,24 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-088",
+                         "priority":  88,
+                         "area":  "tooling",
+                         "title":  "Release-workflow harness resolves HEAD across Windows/WSL git differences",
+                         "user_visible_behavior":  "Developer-facing: bash scripts/test-release-workflow.sh runs to completion (36 contract checks plus the fail-closed fixture matrix) no matter which shell starts it, including WSL bash against a worktree created by native Windows git.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "bash scripts/test-release-workflow.sh under WSL bash (system32 bash.exe, /usr/bin/git 2.43.0) exits 0 with 36/36 ok checks and 'All release workflow contract checks passed.' Before the fix the same command exited 128 after 24 ok checks with 'fatal: not a git repository: ...' at the HEAD resolution step and skipped the whole fixture/verifier section.",
+                                              "C:/Program Files/Git/bin/bash.exe scripts/test-release-workflow.sh (MSYS bash 5.3.15, native Windows git) exits 0 with all 36 ok checks, matching the first-call path that already worked.",
+                                              "bash -n scripts/test-release-workflow.sh (syntax clean); git diff --check clean.",
+                                              "sh scripts/check-records.sh --staged exit 0 with these records staged."
+                                          ],
+                         "evidence":  [
+                                              "Session 103 (2026-10-17): HEAD resolution in scripts/test-release-workflow.sh now falls back from git -C <repo> to git --git-dir=<converted gitdir> --work-tree=<repo> when .git holds a Windows-form gitdir pointer, converting drive paths with wslpath -u (WSL) or cygpath -u (MSYS); an unresolvable repository exits 1 with a clear message instead of a bare fatal."
+                                          ],
+                         "notes":  "Harness-only fix for the gap surfaced while re-running the vol-087 contract checks from WSL: native Windows git writes 'gitdir: C:/...' into a linked worktree's .git file, which POSIX git resolves relative to the cwd and cannot follow."
+                     },
+                     {
                          "id":  "vol-087",
                          "priority":  87,
                          "area":  "release",
@@ -36,7 +54,7 @@
                                           "Session 101 (2026-10-17): Task 3 desktop validation builds --bundles nsis on windows and writes artifacts[] metadata from the staged manifest; release publish verifies then stages only manifest-declared files into a flat release-assets/, rejects duplicate basenames, emits canonical sorted release-assets/SHA256SUMS.txt, and uploads via gh release create/upload with no overwrite flag. Also added clippy.toml msrv=1.82 (matches Cargo.toml rust-version) and replaced two is_multiple_of(2) calls in autostart.rs with byte_len % 2 != 0 so the clippy -D warnings gate passes under clippy 1.98 while keeping chunks_exact per MSRV.",
                                           "Session 102 (2026-10-17): Task 4 documented verified Windows commands in both READMEs (download plus Get-FileHash verify before running, -Action examples, unsigned/checksum-only limits, no pipe-into-shell text) and added docs/index.html product page with irm/curl/winget install/update/uninstall flows plus scripts/generate-winget-manifest.sh emitting a hash-true winget-pkgs trio for dt418.VolumeControl; harness holds 6 doc-contract and 3 page/winget checks green, 36 ok total."
                                       ],
-                         "notes":  "Tasks 1-4 plus remote-command surface done. Full pre-commit gate verified green; pending commit, merge, and GitHub Pages enablement (source Deploy from a branch, /docs)."
+                         "notes":  "Tasks 1-4 plus remote-command surface done. Full pre-commit gate verified green; PR #42 merged to main as ab3cf7d; pending GitHub Pages enablement (source Deploy from a branch, /docs)."
                      },
                      {
                          "id":  "vol-086",

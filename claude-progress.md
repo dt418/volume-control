@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session 103 (2026-10-17) - Release-workflow harness HEAD resolution across shells
+
+- `scripts/test-release-workflow.sh`: HEAD resolution no longer assumes the
+  running shell's git can read the checkout. The `.git` file of a worktree
+  created by native Windows git holds `gitdir: C:/...`, which a POSIX git
+  (WSL) resolves relative to the cwd and cannot follow; `bash
+  scripts/test-release-workflow.sh` therefore exited 128 at the `expected_sha`
+  step after 24 `ok` checks and skipped the entire fixture/verifier section.
+  The resolver keeps `git -C <repo> rev-parse HEAD` as the primary path and
+  falls back to `git --git-dir=<converted gitdir> --work-tree=<repo> rev-parse
+  HEAD`, converting drive-letter gitdirs with `wslpath -u` (WSL) or `cygpath
+  -u` (MSYS); when neither form resolves it exits 1 with
+  `test-release-workflow: cannot resolve HEAD via git` instead of a bare fatal.
+- Verification (fresh, worktree `fix/release-workflow-git-path-resolution`):
+  - `bash scripts/test-release-workflow.sh` under WSL bash (system32
+    `bash.exe`, `/usr/bin/git` 2.43.0) -> exit 0, 36/36 `ok`, "All release
+    workflow contract checks passed." Before the fix: exit 128, 24 `ok`,
+    fixture section skipped.
+  - `"C:/Program Files/Git/bin/bash.exe" scripts/test-release-workflow.sh`
+    (MSYS bash 5.3.15 with native Windows git) -> exit 0, all 36 `ok`; the
+    first-call path is unchanged.
+  - `bash -n scripts/test-release-workflow.sh` clean; `git diff --check` clean.
+- Records: vol-088 added; vol-087 note updated to the merged state (PR #42
+  merged to main as ab3cf7d); this entry is the `claude-progress.md` half.
+
 ## Session 102 (2026-10-17) - Windows release bootstrap Task 4
 
 - README.md `## Installing on Windows` and README.vi.md

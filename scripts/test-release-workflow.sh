@@ -243,7 +243,31 @@ else
 fi
 rm -rf "$winget_out"
 
-expected_sha="$(git -C "$repo" rev-parse HEAD)"
+# Resolve HEAD without assuming this shell's git can read this checkout: a
+# worktree created by native Windows git stores a `gitdir: C:/...` pointer in
+# `.git`, which a POSIX git (WSL) cannot follow. Fall back to the converted
+# git dir before failing.
+expected_sha="$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)"
+if [[ -z "$expected_sha" ]]; then
+  gitdir="$(sed -n 's/^gitdir:[[:space:]]*//p' "$repo/.git" 2>/dev/null || true)"
+  case "$gitdir" in
+    [A-Za-z]:[\\/]*)
+      if command -v wslpath >/dev/null 2>&1; then
+        gitdir="$(wslpath -u "$gitdir" 2>/dev/null || true)"
+      elif command -v cygpath >/dev/null 2>&1; then
+        gitdir="$(cygpath -u "$gitdir" 2>/dev/null || true)"
+      fi
+      ;;
+  esac
+  if [[ -n "$gitdir" && -d "$gitdir" ]]; then
+    expected_sha="$(git --git-dir="$gitdir" --work-tree="$repo" rev-parse HEAD 2>/dev/null || true)"
+  fi
+fi
+if [[ -z "$expected_sha" ]]; then
+  echo 'test-release-workflow: cannot resolve HEAD via git' >&2
+  echo "  repo: $repo" >&2
+  exit 1
+fi
 valid="$repo/scripts/test-fixtures/release-valid"
 mismatch="$repo/scripts/test-fixtures/release-mismatch"
 wrong_platform="$repo/scripts/test-fixtures/release-wrong-platform"
