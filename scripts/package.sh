@@ -67,14 +67,24 @@ case "$ext" in
     rm -rf "$tmp"
     ;;
 esac
-
-# sha256sum is absent on macOS runners; shasum -a 256 is the portable form
-# (same "hash  name" output format).
-if command -v sha256sum >/dev/null 2>&1; then
-  (cd dist && sha256sum "$name" > SHA256SUMS.txt)
-else
-  (cd dist && shasum -a 256 "$name" > SHA256SUMS.txt)
+if [ "$platform" = "windows" ]; then
+  nsis="target/release/bundle/nsis/VolumeControl_${version}_x64-setup.exe"
+  test -s "$nsis" || { echo "release NSIS installer missing: $nsis" >&2; exit 1; }
+  cp "$nsis" "dist/$(basename "$nsis")"
+  cp scripts/Install-VolumeControl.ps1 dist/Install-VolumeControl.ps1
 fi
+
+# sha256sum is absent on macOS runners; shasum -a 256 is the portable form.
+# The manifest covers every staged file with sorted canonical entries shaped
+# "<64 hex><two spaces><basename>": no directory prefixes, no binary-mode
+# markers, and SHA256SUMS.txt itself is never a manifest input.
+rm -f dist/SHA256SUMS.txt
+if command -v sha256sum >/dev/null 2>&1; then
+  checksum() { sha256sum "$@" | sed -E 's/^([0-9a-fA-F]{64}) [*] ?/\1  /'; }
+else
+  checksum() { shasum -a 256 "$@" | sed -E 's/^([0-9a-fA-F]{64}) [*] ?/\1  /'; }
+fi
+(cd dist && checksum $(ls -1 | LC_ALL=C sort) > SHA256SUMS.txt)
 echo "packaged: dist/$name"
 echo "artifact: $name"
 ls -la "dist/$name"
