@@ -113,5 +113,6 @@ mod tests {
             vi.update_check_available_prefix
         );
         assert_ne!(en.update_check_failed, vi.update_check_failed);
+        assert_ne!(en.update_check_in_progress, vi.update_check_in_progress);
     }
 }

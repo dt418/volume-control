@@ -23,6 +23,7 @@ pub struct Strings {
     pub update_check_up_to_date: &'static str,
     pub update_check_available_prefix: &'static str,
     pub update_check_failed: &'static str,
+    pub update_check_in_progress: &'static str,
     pub toast_editing_config: &'static str,
     pub toast_config_reloaded: &'static str,
     pub mixer_mute: &'static str,
@@ -61,6 +62,7 @@ pub fn strings(lang: Language) -> Strings {
             update_check_up_to_date: "VolumeControl is up to date",
             update_check_available_prefix: "VolumeControl update available:",
             update_check_failed: "Update check failed",
+            update_check_in_progress: "Checking for updates…",
             toast_editing_config: "Editing config — changes reload automatically",
             toast_config_reloaded: "Config reloaded",
             mixer_mute: "Mute",
@@ -95,6 +97,7 @@ pub fn strings(lang: Language) -> Strings {
             update_check_up_to_date: "VolumeControl đã là bản mới nhất",
             update_check_available_prefix: "Đã có bản cập nhật VolumeControl:",
             update_check_failed: "Kiểm tra cập nhật thất bại",
+            update_check_in_progress: "Đang kiểm tra cập nhật…",
             toast_editing_config: "Đang sửa cấu hình — thay đổi tự áp dụng",
             toast_config_reloaded: "Đã tải lại cấu hình",
             mixer_mute: "Tắt tiếng",
@@ -160,6 +163,7 @@ mod tests {
             $check(s.update_check_up_to_date);
             $check(s.update_check_available_prefix);
             $check(s.update_check_failed);
+            $check(s.update_check_in_progress);
             $check(s.toast_editing_config);
             $check(s.toast_config_reloaded);
             $check(s.mixer_mute);

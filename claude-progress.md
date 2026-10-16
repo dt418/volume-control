@@ -34,6 +34,17 @@
 - Encoding/limits: NSIS installer shell stays English (no per-language MUI
   in the current bundle config); GTK host records the update result in
   `HostCore::update_message` (no overlay text channel).
+- REA / performance pass: env-gated startup stage trace in the Tauri setup
+  (`VOLUMECTL_STARTUP_TRACE=1`, zero-cost when off) measured ready in
+  59-116 ms over 6 debug runs (native surfaces 33-46 ms, audio + core
+  33-39 ms, duplicate launch exits in ~1 ms). The update check now shows an
+  immediate localized "Checking for updates…" overlay card while the worker
+  thread fetches. `docs/performance.md` records the stage table and the tao
+  PerMonitorV2 finding. REA artifact lanes on the built PE:
+  `inspect_rust_binary` (pe/amd64, rustc commit inferred) and
+  `inspect_pe_resources` (9 resources, icon 16-256 px, manifest =
+  Common-Controls only); decompiler providers and the layout/objdump lanes
+  are unavailable on this host and were reported, not approximated.
 
 ## Session 098 (2026-08-19) - Fix PR #41 CI record guard
 

@@ -26,6 +26,12 @@ update check:
   (release bootstrap) first, then this branch.
 - Verified: cargo tests, clippy `-D warnings`, fmt, tsc, vitest, PS suite,
   and a real-network run of the update check (EN + VI output).
+- REA/performance: `VOLUMECTL_STARTUP_TRACE=1` stage trace (ready 59-116 ms
+  over 6 debug runs; stage table + re-measure recipe in
+  `docs/performance.md`), immediate "Checking for updates…" overlay card
+  before the worker fetch, and REA artifact evidence (rust-auditable +
+  PE-resource lanes; decompiler/layout/objdump lanes unavailable on this
+  host).
 
 ## Session 072 (2026-08-15) - Volume and mute regression coverage
 
