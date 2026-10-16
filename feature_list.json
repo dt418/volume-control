@@ -20,15 +20,17 @@
                          "priority":  87,
                          "area":  "release",
                          "title":  "Verified Windows release bootstrap",
-                         "user_visible_behavior":  "Users can install, update, or uninstall only under %LOCALAPPDATA%\\VolumeControl through a PowerShell bootstrap that selects stable GitHub Releases, verifies the downloaded NSIS installer against a canonical SHA256SUMS.txt entry, never force-terminates VolumeControl during update, and passes NSIS silent arguments only when requested.",
+                         "user_visible_behavior":  "Users can install, update, or uninstall only under %LOCALAPPDATA%\\VolumeControl through a PowerShell bootstrap that selects stable GitHub Releases, verifies the downloaded NSIS installer against a canonical SHA256SUMS.txt entry, never force-terminates VolumeControl during update, and passes NSIS silent arguments only when requested. Windows validation stages the NSIS installer plus bootstrap into dist/ with a canonical basename-only manifest, and the release verifier binds every declared artifact to its commit, platform set, metadata digest, and manifest entry.",
                          "status":  "in_progress",
                          "verification":  [
-                                               "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 PASS (parent run, worktree feat/windows-release-bootstrap)."
+                                               "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 PASS (parent run, worktree feat/windows-release-bootstrap).",
+                                               "bash scripts/test-release-workflow.sh PASS under Git Bash (parent run, worktree feat/windows-release-bootstrap): all static, ubuntu/windows array, and fail-closed fixture checks green."
                                            ],
                          "evidence":  [
-                                          "Session 099 (2026-10-17): Task 1 added scripts/Install-VolumeControl.ps1 and isolated scripts/test-install-volumecontrol.ps1; duplicate installer/manifest, malformed manifest, child nonzero exit, uninstaller containment, install-existing, update-missing, and already-current no-op covered; uninstall preserves config; parent smoke exits green."
+                                          "Session 099 (2026-10-17): Task 1 added scripts/Install-VolumeControl.ps1 and isolated scripts/test-install-volumecontrol.ps1; duplicate installer/manifest, malformed manifest, child nonzero exit, uninstaller containment, install-existing, update-missing, and already-current no-op covered; uninstall preserves config; parent smoke exits green.",
+                                          "Session 100 (2026-10-17): Task 2 stages Windows NSIS plus bootstrap in scripts/package.sh with sorted canonical SHA256SUMS.txt, migrates build-metadata.json to artifacts[] and rewrites scripts/verify-release-metadata.sh for strict multi-asset fail-closed verification; new windows/missing-nsis/duplicate-checksum/bootstrap-mismatch/ubuntu fixtures plus harness assertions pass."
                                       ],
-                         "notes":  "Task 1 only. Packaging, release workflow, and user documentation remain owned by later plan tasks."
+                         "notes":  "Tasks 1-2 done. Release workflow publishing and user documentation remain owned by later plan tasks."
                      },
                      {
                          "id":  "vol-086",

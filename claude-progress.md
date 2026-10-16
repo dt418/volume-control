@@ -12,9 +12,32 @@
   checksum mismatch/duplicate refusal, install-root refusal, real child
   argument capture for GUI versus silent NSIS launch, and update process-close
   refusal without `Stop-Process`.
- - Parent verification: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1` exits `PASS` in worktree `feat/windows-release-bootstrap`; duplicate asset/manifest, malformed manifest, nonzero child, uninstaller containment, install-existing, update-missing, and already-current no-op covered.
+- Parent verification: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1` exits `PASS` in worktree `feat/windows-release-bootstrap`; duplicate asset/manifest, malformed manifest, nonzero child, uninstaller containment, install-existing, update-missing, and already-current no-op covered.
 - Records: `feature_list.json` vol-087 is `in_progress` pending parent
   verification; `session-handoff.md` records exact scope and command.
+
+## Session 100 (2026-10-17) - Windows release bootstrap Task 2
+
+- `scripts/package.sh`: Windows branch stages
+  `target/release/bundle/nsis/VolumeControl_<version>_x64-setup.exe` plus
+  `scripts/Install-VolumeControl.ps1` into `dist/`, then regenerates
+  `dist/SHA256SUMS.txt` as sorted canonical basename-only entries
+  (`<64 hex><two spaces><basename>`), excluding the manifest itself.
+- `scripts/verify-release-metadata.sh` rewritten: Python and Node parsers
+  require a non-empty `artifacts: [{name, sha256}]` array and reject non-object
+  entries, path separators, hidden names, control characters, non-64-hex or
+  duplicate digests; per-platform artifact sets enforced (macOS one zip,
+  Ubuntu one tarball, Windows zip + setup exe + bootstrap); each artifact must
+  exist, hash-match metadata, and own exactly one canonical manifest line.
+  Handles Windows Python CRLF output and GNU sha256sum backslash escapes.
+- `scripts/test-release-workflow.sh`: new contract assertions for the
+  windows/ubuntu array fixtures and fail-closed NSIS-missing,
+  duplicate-checksum, and bootstrap-digest-mismatch fixtures; five fixture
+  dirs added, four migrated to array schema.
+- Parent verification: `bash scripts/test-release-workflow.sh` exits
+  `All release workflow contract checks passed.` under Git Bash.
+- `scripts/package.sh` smoke: fake windows inputs stage zip, setup exe,
+  bootstrap, and canonical manifest with zero directory prefixes.
 
 ## Session 098 (2026-08-19) - Fix PR #41 CI record guard
 

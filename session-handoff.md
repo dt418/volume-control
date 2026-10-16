@@ -1,5 +1,24 @@
 # Session Handoff
 
+## Session 100 (2026-10-17) - Windows release bootstrap Task 2
+
+Task 2 (uncommitted): `scripts/package.sh` stages the Windows NSIS installer
+plus `Install-VolumeControl.ps1` into `dist/` and emits a sorted canonical
+basename-only `SHA256SUMS.txt`; `scripts/verify-release-metadata.sh` parses
+strict `artifacts: [{name, sha256}]` metadata in both Python and Node paths
+and fail-closes on non-array, duplicate, path, hidden, missing, malformed
+digest, duplicate manifest, or digest-mismatch inputs with exact platform sets
+(macOS one zip, Ubuntu one tarball, Windows zip plus setup exe plus bootstrap).
+Five new fixtures under `scripts/test-fixtures/` plus harness assertions cover
+the windows array pass, ubuntu array pass, missing NSIS, duplicate checksum,
+and bootstrap digest mismatch cases.
+
+Parent verification green (Git Bash):
+
+```bash
+bash scripts/test-release-workflow.sh
+```
+
 ## Session 099 (2026-10-17) - Windows release bootstrap Task 1
 
 Task 1 files added, uncommitted: `scripts/Install-VolumeControl.ps1` and
@@ -13,11 +32,11 @@ without force-terminating it. Tests use an isolated temp root and copied
 `cmd.exe` setup fixture for checksum, validation, child-argument, and
 running-process behavior.
 
- Parent verification green (uncommitted changes):
- 
- ```powershell
- powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1
- ```
+Parent verification green (uncommitted changes):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1
+```
 
 ## Session 072 (2026-08-15) - Volume and mute regression coverage
 

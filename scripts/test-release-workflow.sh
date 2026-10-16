@@ -23,6 +23,14 @@ contains() {
   grep -Eq "$pattern" "$file"
 }
 
+expect_failure() {
+  if bash "$verifier" "$1" "$2" "$3" >/dev/null 2>&1; then
+    report FAIL "$4 fails closed"
+  else
+    report ok "$4 fails closed"
+  fi
+}
+
 if contains "$release" 'uses:[[:space:]]*\./\.github/workflows/desktop-validation\.yml'; then
   report ok 'release caller invokes the reusable desktop validation workflow'
 else
@@ -126,6 +134,11 @@ valid="$repo/scripts/test-fixtures/release-valid"
 mismatch="$repo/scripts/test-fixtures/release-mismatch"
 wrong_platform="$repo/scripts/test-fixtures/release-wrong-platform"
 missing_package="$repo/scripts/test-fixtures/release-missing-package"
+windows_valid="$repo/scripts/test-fixtures/release-windows-valid"
+missing_nsis_fixture="$repo/scripts/test-fixtures/release-missing-nsis"
+duplicate_checksum_fixture="$repo/scripts/test-fixtures/release-duplicate-checksum"
+bootstrap_digest_mismatch_fixture="$repo/scripts/test-fixtures/release-bootstrap-mismatch"
+valid_ubuntu="$repo/scripts/test-fixtures/release-valid-ubuntu"
 
 # The committed valid fixture is anchored to the implementation baseline. On
 # later commits, refresh only its copy so the test continues to exercise the
@@ -155,25 +168,43 @@ node_path() {
   printf '%s' "$value"
 }
 
-valid_copy="$tmp_root/release-valid"
-cp -R "$valid" "$valid_copy"
-"$node_bin" - "$(node_path "$valid_copy/build-metadata.json")" "$expected_sha" <<'NODE'
+refresh_sha() {
+  "$node_bin" - "$(node_path "$1")" "$expected_sha" <<'NODE'
 const fs = require("node:fs");
 const path = process.argv[2];
 const value = JSON.parse(fs.readFileSync(path, "utf8"));
 value.commit_sha = process.argv[3];
 fs.writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 NODE
+}
+
+valid_copy="$tmp_root/release-valid"
+cp -R "$valid" "$valid_copy"
+refresh_sha "$valid_copy/build-metadata.json"
 
 missing_copy="$tmp_root/release-missing-package"
 cp -R "$missing_package" "$missing_copy"
-"$node_bin" - "$(node_path "$missing_copy/build-metadata.json")" "$expected_sha" <<'NODE'
-const fs = require("node:fs");
-const path = process.argv[2];
-const value = JSON.parse(fs.readFileSync(path, "utf8"));
-value.commit_sha = process.argv[3];
-fs.writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
-NODE
+refresh_sha "$missing_copy/build-metadata.json"
+
+valid_ubuntu_copy="$tmp_root/release-valid-ubuntu"
+cp -R "$valid_ubuntu" "$valid_ubuntu_copy"
+refresh_sha "$valid_ubuntu_copy/build-metadata.json"
+
+windows_valid_copy="$tmp_root/release-windows-valid"
+cp -R "$windows_valid" "$windows_valid_copy"
+refresh_sha "$windows_valid_copy/build-metadata.json"
+
+missing_nsis_copy="$tmp_root/release-missing-nsis"
+cp -R "$missing_nsis_fixture" "$missing_nsis_copy"
+refresh_sha "$missing_nsis_copy/build-metadata.json"
+
+duplicate_checksum_copy="$tmp_root/release-duplicate-checksum"
+cp -R "$duplicate_checksum_fixture" "$duplicate_checksum_copy"
+refresh_sha "$duplicate_checksum_copy/build-metadata.json"
+
+bootstrap_mismatch_copy="$tmp_root/release-bootstrap-mismatch"
+cp -R "$bootstrap_digest_mismatch_fixture" "$bootstrap_mismatch_copy"
+refresh_sha "$bootstrap_mismatch_copy/build-metadata.json"
 
 if bash "$verifier" "$valid_copy" "$expected_sha" ubuntu >/dev/null; then
   report ok 'valid release metadata fixture passes'
@@ -198,6 +229,22 @@ if bash "$verifier" "$missing_copy" "$expected_sha" ubuntu >/dev/null 2>&1; then
 else
   report ok 'missing-package fixture fails closed'
 fi
+
+if bash "$verifier" "$valid_ubuntu_copy" "$expected_sha" ubuntu >/dev/null; then
+  report ok 'ubuntu artifact-array fixture passes'
+else
+  report FAIL 'ubuntu artifact-array fixture passes'
+fi
+
+if bash "$verifier" "$windows_valid_copy" "$expected_sha" windows >/dev/null; then
+  report ok 'windows artifact-array fixture passes'
+else
+  report FAIL 'windows artifact-array fixture passes'
+fi
+
+expect_failure "$missing_nsis_copy" "$expected_sha" windows 'missing NSIS fixture'
+expect_failure "$duplicate_checksum_copy" "$expected_sha" windows 'duplicate checksum fixture'
+expect_failure "$bootstrap_mismatch_copy" "$expected_sha" windows 'bootstrap digest mismatch fixture'
 
 if [[ "$failures" -eq 0 ]]; then
   echo "All release workflow contract checks passed."

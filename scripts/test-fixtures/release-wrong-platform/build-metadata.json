@@ -4,6 +4,10 @@
   "runner_arch": "x86_64",
   "rustc": "rustc 1.82.0",
   "node": "v22.0.0",
-  "artifact": "volumecontrol-test.zip",
-  "artifact_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  "artifacts": [
+    {
+      "name": "volumecontrol-test.zip",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
 }

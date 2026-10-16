@@ -1,0 +1,21 @@
+{
+  "commit_sha": "84e4e2a1d9997acdebaa8fadcac99a26c72f3628",
+  "platform": "windows",
+  "runner_arch": "x86_64",
+  "rustc": "rustc 1.82.0 (f6e1b3b5a 2024-10-15)",
+  "node": "v22.0.0",
+  "artifacts": [
+    {
+      "name": "volumecontrol-0.0.0-windows.zip",
+      "sha256": "482100b89d16a8ede72a6a060b797c1dc6e32a21448956f6f26b485ac2b81454"
+    },
+    {
+      "name": "VolumeControl_0.0.0_x64-setup.exe",
+      "sha256": "252250c54a7dfd3f6a43f50d49517f10e0aca59e34612d952462480f9c53c42e"
+    },
+    {
+      "name": "Install-VolumeControl.ps1",
+      "sha256": "ced3d90b9b0f1241fc596dc66bd9fed1d6d768bddc61d1c9b122dc709a9cc0eb"
+    }
+  ]
+}
