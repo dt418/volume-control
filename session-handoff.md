@@ -1,5 +1,27 @@
 # Session Handoff
 
+## Session 102 (2026-10-17) - Windows release bootstrap Task 4
+
+Task 4 (uncommitted): both READMEs gained a Windows install section with the
+safe local download-and-verify sequence (separate `Invoke-WebRequest`
+statements, `Get-FileHash` check against `SHA256SUMS.txt` before execution),
+`-Action install` / `-Action update` / `-Action update -Version` /
+`-Action uninstall` / `-Silent` examples, and explicit trust limits
+(unsigned releases, checksum is not code signing, possible SmartScreen
+warning, `%LOCALAPPDATA%\VolumeControl` root, no forced update termination,
+config preserved at `%APPDATA%\volume-control\config.ini`). Six doc-contract
+harness checks were red before the docs and green after. Remote-command
+surface added: `docs/index.html` (irm/curl/winget × install/update/uninstall,
+no pipe-into-shell anywhere) and `scripts/generate-winget-manifest.sh`
+(hash-true winget-pkgs trio for `dt418.VolumeControl`). Current counts: 54
+recorded features (12 in_progress), harness reports 36 `ok` checks, bootstrap
+PowerShell suite exits `PASS`. Full pre-commit gate green: fmt,
+`git diff --check`, clippy `-D warnings`, `cargo test --workspace
+--no-default-features`, `test-check-records`, `test-format-lint`, `test-ship`
+all exit 0. Enable GitHub Pages for this repo with source **Deploy from a
+branch → `/docs`** to publish the page at
+https://dt418.github.io/volume-control/.
+
 ## Session 101 (2026-10-17) - Windows release bootstrap Task 3
 
 Task 3 (uncommitted): `.github/workflows/desktop-validation.yml` builds

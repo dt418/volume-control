@@ -166,6 +166,51 @@ Requirements: Rust (stable) + a C toolchain:
   For the complete release candidate procedure and evidence classifications,
   see the [cross-platform release checklist](docs/testing/cross-platform-release-checklist.md).
 
+## Installing on Windows
+
+The GitHub release ships a PowerShell bootstrap, its `SHA256SUMS.txt`
+checksum manifest, and an unsigned NSIS installer. Download both files with
+`Invoke-WebRequest`, verify the bootstrap's SHA-256 against the manifest, and
+only then run the local copy — every statement below is a separate line on
+purpose, so no downloaded text executes while it arrives:
+
+```powershell
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $root | Out-Null
+$base = 'https://github.com/dt418/volume-control/releases/latest/download'
+Invoke-WebRequest "$base/Install-VolumeControl.ps1" -OutFile "$root/Install-VolumeControl.ps1"
+Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$root/SHA256SUMS.txt"
+$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
+$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
+if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+& "$root/Install-VolumeControl.ps1" -Action install
+```
+
+Common actions:
+
+```powershell
+& "$root/Install-VolumeControl.ps1" -Action update
+& "$root/Install-VolumeControl.ps1" -Action update -Version v0.1.5
+& "$root/Install-VolumeControl.ps1" -Action uninstall
+& "$root/Install-VolumeControl.ps1" -Action install -Silent
+```
+
+- The default install root is exactly `%LOCALAPPDATA%\VolumeControl`; the
+  bootstrap refuses any other location. `-Silent` only adds the NSIS silent
+  arguments to the same verified installer.
+- `-Action update` refuses to run while `VolumeControl` is open — it never
+  force-terminates your process, so close the app first. Configuration at
+  `%APPDATA%\volume-control\config.ini` lives outside the install root and is
+  preserved by update and uninstall.
+- Trust limits: releases are **unsigned**. `SHA256SUMS.txt` provides
+  same-release SHA-256 **checksum** integrity only — a checksum is not code
+  signing and proves nothing about who built the binary. Windows SmartScreen
+  may warn about the unsigned installer `VolumeControl_<version>_x64-setup.exe`
+  on first run.
+
+One-command remote flows (PowerShell `irm`, `curl`, `winget`) live on the
+product page: <https://dt418.github.io/volume-control/>.
+
 ## Running on macOS
 
 The macOS release is a proper app bundle (`VolumeControl.app`) that runs the

@@ -1,5 +1,43 @@
 # Progress Log
 
+## Session 102 (2026-10-17) - Windows release bootstrap Task 4
+
+- README.md `## Installing on Windows` and README.vi.md
+  `## Cài đặt trên Windows`: multi-line `Invoke-WebRequest` download of
+  `Install-VolumeControl.ps1` + `SHA256SUMS.txt`, explicit `Get-FileHash`
+  SHA-256 verification before the local copy runs, then `-Action install`;
+  examples for `-Action update`, `-Action update -Version vX.Y.Z`,
+  `-Action uninstall`, and `-Action install -Silent`; documented default
+  root `%LOCALAPPDATA%\VolumeControl`, update refusal while `VolumeControl`
+  runs (never force-terminated), preserved `%APPDATA%\volume-control\config.ini`,
+  and trust limits: releases unsigned, `SHA256SUMS.txt` same-release checksum
+  only (not code signing), possible Windows SmartScreen warning. No
+  `Invoke-Expression` or pipe-into-shell text in either README.
+- `scripts/test-release-workflow.sh`: 6 new doc-contract checks (command
+  tokens, trust-limit words, and the never-pipes guard per README) were red
+  before the doc edits and green after; harness now reports 33 `ok` checks.
+- Parent verification: `bash scripts/test-release-workflow.sh` PASS;
+  `powershell -NoProfile -ExecutionPolicy Bypass -File
+  scripts/test-install-volumecontrol.ps1` PASS (Task 4 rerun, exit 0).
+- Remote commands (user request): `docs/index.html` product page with
+  interactive install/update/uninstall snippets for PowerShell `irm` (via
+  `& ([scriptblock]::Create((irm ...))) -Action ...`, proven on PS 5.1 —
+  plain `Invoke-Expression` breaks on the bootstrap's validation attributes),
+  `curl.exe` with download-then-verify, and `winget` (id
+  `dt418.VolumeControl`), plus trust-limit and availability notes.
+  `scripts/generate-winget-manifest.sh` emits the complete winget-pkgs trio
+  with `InstallerSha256` computed from real installer bytes (smoke: fixture
+  exe → 3 YAML files, hash match).
+- Harness grew to 36 `ok` checks: page command tokens, page never-pipes
+  guard, and a behavioral winget-generator run with hash assertion.
+- Browser verification of `docs/index.html`: dark + light screenshots,
+  tab/action switching renders correct snippets, winget note toggles, zero
+  console errors.
+- Full gate before commit: `cargo fmt --all --check`, `git diff --check`,
+  `cargo clippy ... -D warnings`, `cargo test --workspace
+  --no-default-features`, `scripts/test-check-records.sh`,
+  `scripts/test-format-lint.sh`, `scripts/test-ship.sh` all exit 0.
+
 ## Session 101 (2026-10-17) - Windows release bootstrap Task 3
 
 - `.github/workflows/desktop-validation.yml`: `Build release Tauri host` now

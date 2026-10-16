@@ -168,6 +168,81 @@ else
   report FAIL 'staged release assets must include exe installer and bootstrap script'
 fi
 
+# Task 4 contract: both READMEs document the safe local download-and-verify
+# bootstrap sequence (never a pipe-into-shell command) and state the trust
+# boundaries of unsigned, checksum-only release assets.
+for readme in "$repo/README.md" "$repo/README.vi.md"; do
+  readme_name="$(basename "$readme")"
+  if contains "$readme" 'Install-VolumeControl\.ps1' && \
+     contains "$readme" 'SHA256SUMS\.txt' && \
+     contains "$readme" 'Invoke-WebRequest' && \
+     contains "$readme" '[-]Action update' && \
+     contains "$readme" '[-]Action uninstall' && \
+     contains "$readme" '[-]Silent'; then
+    report ok "$readme_name documents verified PowerShell bootstrap commands"
+  else
+    report FAIL "$readme_name documents verified PowerShell bootstrap commands"
+  fi
+  if contains "$readme" 'unsigned' && \
+     contains "$readme" 'checksum' && \
+     contains "$readme" 'SmartScreen'; then
+    report ok "$readme_name states unsigned and checksum trust limits"
+  else
+    report FAIL "$readme_name states unsigned and checksum trust limits"
+  fi
+  if ! contains "$readme" 'Invoke-Expression' && \
+     ! contains "$readme" '\|[[:space:]]+iex'; then
+    report ok "$readme_name never pipes downloads into a shell"
+  else
+    report FAIL "$readme_name never pipes downloads into a shell"
+  fi
+done
+
+# Remote install surface: the product page documents irm, curl, and winget
+# flows without ever piping downloads into a shell, and the winget generator
+# emits a complete manifest trio whose InstallerSha256 matches real bytes.
+page="$repo/docs/index.html"
+if [ -s "$page" ] && \
+   contains "$page" 'Install-VolumeControl\.ps1' && \
+   contains "$page" 'scriptblock\]::Create' && \
+   contains "$page" 'curl\.exe' && \
+   contains "$page" 'winget install --id dt418\.VolumeControl'; then
+  report ok 'product page documents irm, curl, and winget remote commands'
+else
+  report FAIL 'product page documents irm, curl, and winget remote commands'
+fi
+
+if ! contains "$page" 'Invoke-Expression' && \
+   ! contains "$page" '\|[[:space:]]+iex'; then
+  report ok 'product page never pipes downloads into a shell'
+else
+  report FAIL 'product page never pipes downloads into a shell'
+fi
+
+winget_gen="$repo/scripts/generate-winget-manifest.sh"
+fixture_exe="$repo/scripts/test-fixtures/release-windows-valid/VolumeControl_0.0.0_x64-setup.exe"
+winget_out="$(mktemp -d "$repo/.winget-gen.XXXXXX")"
+if command -v sha256sum >/dev/null 2>&1; then
+  fixture_sha="$(sha256sum "$fixture_exe" | awk '{print toupper($1)}')"
+else
+  fixture_sha="$(shasum -a 256 "$fixture_exe" | awk '{print toupper($1)}')"
+fi
+# GNU sha256sum prefixes the digest when the file name contains a backslash.
+fixture_sha="${fixture_sha#\\}"
+if bash "$winget_gen" v0.0.0 "$fixture_exe" "$winget_out" >/dev/null 2>&1 && \
+   [ -s "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.yaml" ] && \
+   [ -s "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.installer.yaml" ] && \
+   [ -s "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.locale.en-US.yaml" ] && \
+   grep -q "InstallerSha256: $fixture_sha" \
+     "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.installer.yaml" && \
+   contains "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.installer.yaml" \
+     'releases/download/v0\.0\.0/VolumeControl_0\.0\.0_x64-setup\.exe'; then
+  report ok 'winget generator emits a complete hash-true manifest trio'
+else
+  report FAIL 'winget generator emits a complete hash-true manifest trio'
+fi
+rm -rf "$winget_out"
+
 expected_sha="$(git -C "$repo" rev-parse HEAD)"
 valid="$repo/scripts/test-fixtures/release-valid"
 mismatch="$repo/scripts/test-fixtures/release-mismatch"

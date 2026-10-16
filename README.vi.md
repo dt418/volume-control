@@ -140,6 +140,50 @@ Yêu cầu: Rust (stable) + trình biên dịch C:
   Xem [checklist bằng chứng phát hành đa nền tảng](docs/testing/cross-platform-release-checklist.md)
   để biết đầy đủ các bước kiểm tra, mức độ tin cậy và giới hạn của từng nền tảng.
 
+## Cài đặt trên Windows
+
+Bản phát hành trên GitHub kèm một script PowerShell bootstrap, manifest
+checksum `SHA256SUMS.txt` và bộ cài NSIS **unsigned**. Tải cả hai file bằng
+`Invoke-WebRequest`, đối chiếu SHA-256 của bootstrap với manifest, rồi mới
+chạy bản sao đã tải về — mỗi câu lệnh dưới đây là một dòng riêng có chủ đích,
+không có nội dung tải về nào được thực thi ngay khi nhận:
+
+```powershell
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $root | Out-Null
+$base = 'https://github.com/dt418/volume-control/releases/latest/download'
+Invoke-WebRequest "$base/Install-VolumeControl.ps1" -OutFile "$root/Install-VolumeControl.ps1"
+Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$root/SHA256SUMS.txt"
+$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
+$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
+if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+& "$root/Install-VolumeControl.ps1" -Action install
+```
+
+Các hành động thường dùng:
+
+```powershell
+& "$root/Install-VolumeControl.ps1" -Action update
+& "$root/Install-VolumeControl.ps1" -Action update -Version v0.1.5
+& "$root/Install-VolumeControl.ps1" -Action uninstall
+& "$root/Install-VolumeControl.ps1" -Action install -Silent
+```
+
+- Thư mục cài mặc định đúng là `%LOCALAPPDATA%\VolumeControl`; bootstrap từ
+  chối mọi vị trí khác. `-Silent` chỉ thêm tham số silent của NSIS cho đúng
+  bộ cài đã xác minh.
+- `-Action update` từ chối chạy khi `VolumeControl` đang mở — script không
+  bao giờ force-terminate tiến trình của bạn, hãy đóng ứng dụng trước. Cấu
+  hình `%APPDATA%\volume-control\config.ini` nằm ngoài thư mục cài và được
+  giữ nguyên khi update lẫn uninstall.
+- Giới hạn tin cậy: bản phát hành **unsigned**. `SHA256SUMS.txt` chỉ cung cấp
+  kiểm tra **checksum** SHA-256 cùng phiên bản — checksum không phải chữ ký số
+  và không chứng minh ai đã build binary. Windows SmartScreen có thể cảnh báo
+  về bộ cài unsigned `VolumeControl_<version>_x64-setup.exe` ở lần chạy đầu.
+
+Các lệnh từ xa một dòng (PowerShell `irm`, `curl`, `winget`) nằm trên trang
+sản phẩm: <https://dt418.github.io/volume-control/>.
+
 ## Trạng thái nền tảng
 
 | Tính năng        | Windows | macOS | Linux |
