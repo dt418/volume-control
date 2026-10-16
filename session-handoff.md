@@ -32,6 +32,10 @@ update check:
   before the worker fetch, and REA artifact evidence (rust-auditable +
   PE-resource lanes; decompiler/layout/objdump lanes unavailable on this
   host).
+- CI follow-up: the Linux/macOS smoke binaries now pass `Language::En` to the
+  new renderer signatures and the macOS host handles `AppAction::CheckUpdates`
+  (both cfg-gated to their platforms; CI is their compile check).
+
 ## Session 102 (2026-10-17) - Windows release bootstrap Task 4
 
 Task 4 (uncommitted): both READMEs gained a Windows install section with the
