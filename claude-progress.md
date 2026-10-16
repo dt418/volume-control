@@ -1,5 +1,32 @@
 # Progress Log
 
+## Session 104 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
+
+- Goal: unblock PR #43 CI; the macOS job failed before running its tests.
+- Root cause: `fe45d18` added `AppAction::CheckUpdates`, but
+  `crates/volumectl/src/macos_app.rs::apply_action` had no arm for it, so
+  the `target_os = "macos"` build died with `error[E0004]` (job 117239883024,
+  step "Run macOS Tauri WebDriver E2E", which builds the debug host first).
+  Windows and Linux never compile that file, so the local workspace gate was
+  green while macOS was red.
+- Fix: the macOS host spawns the localized `updates::check_for_updates` fetch
+  on a worker thread (the fetch blocks up to 10 s and must not stall the
+  AppKit main thread) and records the result in the log; this host still has
+  no tray entry or overlay text channel for update results (vol-076).
+- Same root cause, same commit: the two platform renderer test fixtures
+  (`ui/platform/linux/renderer.rs`, `ui/platform/macos/renderer.rs`) now set
+  the `language` field their `AppState` literals were missing (added by
+  `fe45d18`), so the Linux/macOS `cargo test` builds of those `#[cfg(test)]`
+  modules compile here too.
+- Verification: `cargo fmt --all --check`, `git diff --check`,
+  `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+  and `cargo test --workspace --no-default-features` exit 0 on Windows. The
+  darwin target cannot be cross-checked on this host (`cargo check --target
+  x86_64-apple-darwin` stops in dependency build scripts: `libpulse-sys`
+  pkg-config cross probe, then `cc-rs` ToolNotFound for the coreaudio C
+  sources), so the macOS job of the CI run on this commit is the compile
+  proof.
+
 ## Session 103 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
 
 - Config: `[general] language = en|vi` (`Language` enum, serde default en,

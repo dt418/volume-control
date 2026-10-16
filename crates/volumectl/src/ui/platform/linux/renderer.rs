@@ -721,6 +721,7 @@ pub use gtk_surfaces::{ensure_gtk_initialized, layer_shell_available, GtkPanel};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Language;
     use crate::ui::model::{MaterialMode, SurfaceVisibilityState, ThemeMode};
 
     #[test]
@@ -752,6 +753,7 @@ mod tests {
             theme: ThemeMode::Dark,
             material: MaterialMode::Auto,
             motion: MotionMode::Full,
+            language: Language::En,
             status: crate::ui::UiStatus::Ready,
         }
     }

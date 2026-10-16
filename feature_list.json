@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-10-17T00:00",
+    "last_updated":  "2026-10-17T01:00",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -15,6 +15,22 @@
                           "passing":  "Required verification has passed and evidence is recorded."
                       },
     "features":  [
+                         {
+                             "id":  "vol-089",
+                             "priority":  89,
+                             "area":  "ui",
+                             "title":  "macOS host handles AppAction::CheckUpdates",
+                             "user_visible_behavior":  "On macOS the Check for updates action no longer aborts the build; the host runs the localized GitHub release check on a worker thread (the AppKit main thread keeps handling volume and hotkeys) and records the result in the log. There is still no macOS tray entry or overlay text surface for it - that lands with vol-076 (Tauri tray on macOS and Linux).",
+                             "status":  "in_progress",
+                             "verification":  [
+                                               "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings and cargo test --workspace --no-default-features exit 0 on the Windows host (run after the fix).",
+                                               "macOS compile proof: the macOS job of the PR #43 CI run (cargo build + cargo test + Tauri E2E on macos-15) must report success. Cross-checking the darwin target locally is impossible on this host: cargo check --target x86_64-apple-darwin fails in dependency build scripts (libpulse-sys pkg-config cross probe, then cc-rs ToolNotFound for the coreaudio C sources) before reaching volumectl."
+                             ],
+                             "evidence":  [
+                                               "Session 104 (2026-10-17): PR #43 CI run 38980457506 job 117239883024 failed with error[E0004] non-exhaustive patterns: &model::AppAction::CheckUpdates not covered at crates/volumectl/src/macos_app.rs:159; the arm was added and the macOS job of the next run is the compile proof."
+                             ],
+                             "notes":  "The variant arrived with fe45d18 (bilingual UI + tray update check) and only breaks cfg(target_os = \"macos\") builds, so the Windows workspace gate stays green. macOS parity for the tray item itself stays with vol-076."
+                         },
                      {
                          "id":  "vol-088",
                          "priority":  88,

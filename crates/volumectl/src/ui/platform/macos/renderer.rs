@@ -819,6 +819,7 @@ pub use appkit::{ensure_application, Panel};
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Language;
     use crate::ui::model::{MaterialMode, SurfaceVisibilityState, ThemeMode};
 
     fn caps(dpi: f32) -> UiCapabilities {
@@ -841,6 +842,7 @@ mod tests {
             theme: ThemeMode::Dark,
             material: MaterialMode::Auto,
             motion: MotionMode::Full,
+            language: Language::En,
             status: crate::ui::UiStatus::Ready,
         }
     }
