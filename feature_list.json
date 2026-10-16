@@ -16,6 +16,22 @@
                       },
     "features":  [
                      {
+                         "id":  "vol-089",
+                         "priority":  89,
+                         "area":  "tooling",
+                         "title":  "Format-lint smoke test releases its lock on refused runs",
+                         "user_visible_behavior":  "Developer-facing: when scripts/test-format-lint.sh refuses to run (modified .claude/settings.local.json, dirty index), it no longer leaves scripts/.test-format-lint.lock behind, so later runs and scripts/ship.sh are not blocked by a stale 'already running' lock.",
+                         "status":  "passing",
+                         "verification":  [
+                                              "Negative (live): with a staged scratch file, C:/Program Files/Git/bin/bash.exe scripts/test-format-lint.sh prints 'FAIL - the index has staged changes' and scripts/.test-format-lint.lock is absent afterwards. Before the fix the same refusal left the lock behind and the next invocation exited 1 with 'test-format-lint.sh is already running (lock: ...)'.",
+                                              "bash scripts/test-format-lint.sh (MSYS bash, Git for Windows) passes all checks and releases the lock on exit; the lock is absent after the run."
+                                          ],
+                         "evidence":  [
+                                              "Session 103 (2026-10-17): the lock directory was created before the preconditions but the EXIT trap only after them, so every precondition exit 1 leaked the lock. Observed while shipping this change set: an external merge left the index unmerged, the smoke test refused, leaked the lock, and the next scripts/ship.sh --push aborted at phase 4 with the stale-lock message. The release trap is now installed immediately after the lock is acquired; the full cleanup trap still replaces it further down."
+                                          ],
+                         "notes":  "The lock exists to stop concurrent smoke runs (the pre-push flow dispatches reviewers in parallel); it now covers the refusal paths too."
+                     },
+                     {
                          "id":  "vol-088",
                          "priority":  88,
                          "area":  "tooling",

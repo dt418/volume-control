@@ -52,6 +52,11 @@ fi
 release_lock() {
     rmdir "$lock_dir" 2>/dev/null || true
 }
+# Release the lock on every exit path. The full cleanup trap below is only
+# installed after the preconditions, and those exit 1 early (modified
+# forbidden file, dirty index); without this trap a refused run would leak
+# the lock and block every later invocation with "already running".
+trap 'release_lock' EXIT
 # Usage: bash scripts/test-format-lint.sh
 # Exit: 0 = all checks passed; 1 = at least one check failed.
 set -uo pipefail

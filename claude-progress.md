@@ -22,6 +22,18 @@
     (MSYS bash 5.3.15 with native Windows git) -> exit 0, all 36 `ok`; the
     first-call path is unchanged.
   - `bash -n scripts/test-release-workflow.sh` clean; `git diff --check` clean.
+- `scripts/test-format-lint.sh`: the concurrency lock was acquired before the
+  hermetic preconditions but released only by the EXIT trap installed after
+  them, so any refused run (modified `.claude/settings.local.json`, dirty
+  index) leaked `scripts/.test-format-lint.lock` and blocked every later run
+  with "already running". Hit for real while shipping this change set: an
+  external merge left the index unmerged, the smoke test refused and leaked
+  the lock, and the next `scripts/ship.sh --push` aborted at phase 4. The
+  release trap is now installed immediately after the lock is acquired (the
+  full cleanup trap still replaces it further down). Negative verification:
+  with a staged scratch file the suite prints `FAIL - the index has staged
+  changes` and the lock is absent afterwards; the full suite then passes and
+  releases the lock too.
 - Pre-push three-domain adversarial review (Domain A guard core, Domain B gate
   chain, Domain C wiring/records): no patch-introduced defect in any domain.
   Recorded follow-up (pre-existing, not touched here): the `pre-push-review`
