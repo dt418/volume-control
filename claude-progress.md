@@ -1,5 +1,21 @@
 # Progress Log
 
+## Session 099 (2026-10-17) - Windows release bootstrap Task 1
+
+- Added `scripts/Install-VolumeControl.ps1`: exact per-user install root,
+  stable/exact release resolution, exact installer + manifest asset selection,
+  canonical SHA-256 verification, GUI/silent NSIS launch, install/update/
+  uninstall action handling, no forced process termination, and success-only
+  temporary-download cleanup.
+- Added `scripts/test-install-volumecontrol.ps1`: isolated `%TEMP%` fixtures,
+  copied `cmd.exe` setup binary, generated canonical checksum manifests,
+  checksum mismatch/duplicate refusal, install-root refusal, real child
+  argument capture for GUI versus silent NSIS launch, and update process-close
+  refusal without `Stop-Process`.
+ - Parent verification: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1` exits `PASS` in worktree `feat/windows-release-bootstrap`; duplicate asset/manifest, malformed manifest, nonzero child, uninstaller containment, install-existing, update-missing, and already-current no-op covered.
+- Records: `feature_list.json` vol-087 is `in_progress` pending parent
+  verification; `session-handoff.md` records exact scope and command.
+
 ## Session 098 (2026-08-19) - Fix PR #41 CI record guard
 
 - Root cause: PR #41 changed `.github/workflows/ci.yml` and

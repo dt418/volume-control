@@ -1,0 +1,324 @@
+#!/usr/bin/env powershell
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$bootstrap = Join-Path $PSScriptRoot 'Install-VolumeControl.ps1'
+$testRoot = Join-Path $env:TEMP ("VolumeControl-bootstrap-test-" + [guid]::NewGuid().ToString('N'))
+$originalLocalAppData = $env:LOCALAPPDATA
+$originalAppData = $env:APPDATA
+$originalStartProcess = Get-Command Start-Process -CommandType Function -ErrorAction SilentlyContinue
+$originalGetProcess = Get-Command Get-Process -CommandType Function -ErrorAction SilentlyContinue
+$originalStopProcess = Get-Command Stop-Process -CommandType Function -ErrorAction SilentlyContinue
+$originalGetItem = Get-Command Get-Item -CommandType Function -ErrorAction SilentlyContinue
+
+function Assert-True {
+    param([bool] $Condition, [string] $Message)
+
+    if (-not $Condition) {
+        throw "assertion failed: $Message"
+    }
+}
+
+function Assert-False {
+    param([bool] $Condition, [string] $Message = 'expected false')
+
+    if ($Condition) {
+        throw "assertion failed: $Message"
+    }
+}
+
+function Assert-Equal {
+    param($Actual, $Expected, [string] $Message)
+
+    if ($Actual -cne $Expected) {
+        throw "assertion failed: $Message; expected '$Expected', got '$Actual'"
+    }
+}
+
+function Assert-Throws {
+    param([scriptblock] $Action, [string] $ExpectedMessage)
+
+    try {
+        & $Action
+    } catch {
+        if ($_.Exception.Message -notlike "*$ExpectedMessage*") {
+            throw "expected error containing '$ExpectedMessage', got '$($_.Exception.Message)'"
+        }
+        return
+    }
+
+    throw "expected error containing '$ExpectedMessage'"
+}
+
+try {
+    New-Item -ItemType Directory -Path $testRoot | Out-Null
+    $env:LOCALAPPDATA = $testRoot
+    . $bootstrap
+
+    $installRoot = Get-InstallRoot
+    New-Item -ItemType Directory -Path $installRoot | Out-Null
+    $env:APPDATA = Join-Path $testRoot 'Roaming'
+    $configDirectory = Join-Path $env:APPDATA 'volume-control'
+    New-Item -ItemType Directory -Path $configDirectory | Out-Null
+    $configPath = Join-Path $configDirectory 'config.ini'
+    [System.IO.File]::WriteAllText($configPath, "volume=50`n", [System.Text.UTF8Encoding]::new($false))
+    $installerName = 'VolumeControl_1.2.3_x64-setup.exe'
+    $installerPath = Join-Path $testRoot $installerName
+    Copy-Item (Join-Path $env:WINDIR 'System32\cmd.exe') $installerPath
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $installerBytes = [System.IO.File]::ReadAllBytes($installerPath)
+        try {
+            $installerSha256 = ([System.BitConverter]::ToString($sha256.ComputeHash($installerBytes))).Replace('-', '').ToLowerInvariant()
+        } finally {
+            [Array]::Clear($installerBytes, 0, $installerBytes.Length)
+        }
+    } finally {
+        $sha256.Dispose()
+    }
+
+    $manifestPath = Join-Path $testRoot 'SHA256SUMS.txt'
+    [System.IO.File]::WriteAllText($manifestPath, "$installerSha256  $installerName`n", [System.Text.UTF8Encoding]::new($false))
+    $duplicateManifest = Join-Path $testRoot 'SHA256SUMS-duplicate.txt'
+    $malformedManifest = Join-Path $testRoot 'SHA256SUMS-malformed.txt'
+    [System.IO.File]::WriteAllText($malformedManifest, "$installerSha256 $installerName`n", [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText($duplicateManifest, "$installerSha256  $installerName`n$installerSha256  $installerName`n", [System.Text.UTF8Encoding]::new($false))
+
+    Assert-Throws { Resolve-VolumeControlRelease -Version '1.2.3' } 'must start with v'
+
+    $missingInstallerRelease = [pscustomobject]@{
+        tag_name = 'v1.2.3'
+        draft = $false
+        prerelease = $false
+        assets = @([pscustomobject]@{
+            name = 'SHA256SUMS.txt'
+            browser_download_url = 'https://example.invalid/SHA256SUMS.txt'
+        })
+    }
+    Assert-Throws { Get-ReleaseInstaller -Release $missingInstallerRelease } 'missing installer asset'
+    $validRelease = [pscustomobject]@{
+        tag_name = 'v1.2.3'
+        draft = $false
+        prerelease = $false
+        assets = @(
+            [pscustomobject]@{
+                name = $installerName
+                browser_download_url = 'https://example.invalid/VolumeControl_1.2.3_x64-setup.exe'
+            },
+            [pscustomobject]@{
+                name = 'SHA256SUMS.txt'
+                browser_download_url = 'https://example.invalid/SHA256SUMS.txt'
+            }
+        )
+    }
+    $script:releaseRequestUri = $null
+    $script:releaseResponse = $validRelease
+    function global:Invoke-RestMethod {
+        [CmdletBinding()]
+        param(
+            [string] $Uri,
+            [hashtable] $Headers
+        )
+
+        $script:releaseRequestUri = $Uri
+        return $script:releaseResponse
+    }
+    [void](Resolve-VolumeControlRelease)
+    Assert-Equal $script:releaseRequestUri 'https://api.github.com/repos/dt418/volume-control/releases/latest' 'omitted version selects latest endpoint'
+    [void](Resolve-VolumeControlRelease -Version 'v1.2.3')
+    Assert-Equal $script:releaseRequestUri 'https://api.github.com/repos/dt418/volume-control/releases/tags/v1.2.3' 'exact version selects tag endpoint'
+    $script:releaseResponse = [pscustomobject]@{
+        tag_name = 'v1.2.3'
+        draft = $true
+        prerelease = $false
+        assets = @()
+    }
+    Assert-Throws { Resolve-VolumeControlRelease } 'must not be draft or prerelease'
+    Remove-Item function:global:Invoke-RestMethod -Force
+
+    $releaseInstaller = Get-ReleaseInstaller -Release $validRelease
+    $duplicateInstallerRelease = [pscustomobject]@{
+        tag_name = $validRelease.tag_name
+        draft = $false
+        prerelease = $false
+        assets = @($validRelease.assets) + @($validRelease.assets[0])
+    }
+    $duplicateManifestRelease = [pscustomobject]@{
+        tag_name = $validRelease.tag_name
+        draft = $false
+        prerelease = $false
+        assets = @($validRelease.assets) + @($validRelease.assets[1])
+    }
+    Assert-Throws { Get-ReleaseInstaller -Release $duplicateInstallerRelease } 'exactly one installer asset'
+    Assert-Throws { Get-ReleaseInstaller -Release $duplicateManifestRelease } 'exactly one checksum manifest asset'
+    Assert-Throws { Read-ExpectedSha256 -ManifestPath $malformedManifest -AssetName $installerName } 'not canonical'
+    Assert-Equal $releaseInstaller.Installer.name $installerName 'release selects exact installer name'
+    Assert-Equal (Read-ExpectedSha256 -ManifestPath $manifestPath -AssetName $installerName) $installerSha256 'canonical manifest returns lowercase checksum'
+    Assert-Throws { Read-ExpectedSha256 -ManifestPath $duplicateManifest -AssetName $installerName } 'exactly one checksum entry'
+    Assert-False (Test-FileSha256 -Path $installerPath -ExpectedSha256 ('0' * 64)) 'checksum mismatch must refuse installer'
+    $actualStartInstaller = (Get-Item function:Start-Installer).ScriptBlock
+    $script:expectedDownloadedSha256 = ('0' * 64)
+    $script:installerLaunches = 0
+    $script:lastDownloadRoot = $null
+    function global:Invoke-WebRequest {
+        [CmdletBinding()]
+        param(
+            [string] $Uri,
+            [string] $OutFile,
+            [switch] $UseBasicParsing
+        )
+
+        $script:lastDownloadRoot = Split-Path $OutFile -Parent
+        if ($OutFile.EndsWith('SHA256SUMS.txt', [System.StringComparison]::Ordinal)) {
+            [System.IO.File]::WriteAllText($OutFile, "$script:expectedDownloadedSha256  $installerName`n", [System.Text.UTF8Encoding]::new($false))
+        } else {
+            Copy-Item $installerPath $OutFile
+        }
+    }
+    function Start-Installer {
+        param([string] $InstallerPath, [switch] $Silent, [string] $InstallRoot)
+
+        $script:installerLaunches += 1
+    }
+
+    Assert-Throws { Invoke-VerifiedInstaller -Release $validRelease -InstallRoot $installRoot } 'SHA-256 does not match'
+    Assert-Equal $script:installerLaunches 0 'checksum mismatch must not launch installer'
+    Assert-True (Test-Path $script:lastDownloadRoot) 'failed verification must retain downloaded evidence'
+    Remove-Item -LiteralPath $script:lastDownloadRoot -Recurse -Force
+
+    $script:expectedDownloadedSha256 = $installerSha256
+    Invoke-VerifiedInstaller -Release $validRelease -InstallRoot $installRoot
+    Assert-Equal $script:installerLaunches 1 'verified installer launches once'
+    Assert-False (Test-Path $script:lastDownloadRoot) 'successful child completion removes downloads'
+
+    Set-Item function:Start-Installer -Value $actualStartInstaller
+    Remove-Item function:global:Invoke-WebRequest -Force
+
+
+    $outsideRoot = Join-Path $testRoot 'outside'
+    Assert-Throws { Start-Installer -InstallerPath $installerPath -Silent -InstallRoot $outsideRoot } 'install root must equal'
+
+    $script:capturedInstallerArguments = $null
+    $script:forcedProcessExitCode = $null
+    function global:Start-Process {
+        param(
+            [string] $FilePath,
+            [string[]] $ArgumentList = @(),
+            [switch] $Wait,
+            [switch] $PassThru
+        )
+
+        $script:capturedInstallerArguments = @($ArgumentList)
+        $script:capturedInstallerHasArgumentList = $PSBoundParameters.ContainsKey('ArgumentList')
+        if ($null -ne $script:forcedProcessExitCode) {
+            return [pscustomobject]@{ ExitCode = $script:forcedProcessExitCode }
+        }
+        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+        $startInfo.FileName = $FilePath
+        $startInfo.Arguments = [string]::Join(' ', $ArgumentList)
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardInput = $true
+        $child = New-Object System.Diagnostics.Process
+        $child.StartInfo = $startInfo
+        [void]$child.Start()
+        $child.StandardInput.Close()
+        $child.WaitForExit()
+        return $child
+    }
+
+    Start-Installer -InstallerPath $installerPath -InstallRoot $installRoot
+    Assert-Equal $script:capturedInstallerArguments.Count 0 'GUI installer must receive no arguments'
+    Assert-False $script:capturedInstallerHasArgumentList 'GUI installer must omit ArgumentList'
+
+    Start-Installer -InstallerPath $installerPath -Silent -InstallRoot $installRoot
+    Assert-Equal $script:capturedInstallerArguments.Count 2 'silent installer must receive two arguments'
+    Assert-Equal $script:capturedInstallerArguments[0] '/S' 'silent installer first argument'
+    Assert-Equal $script:capturedInstallerArguments[1] "/D=$installRoot" 'silent installer install-root argument'
+    Assert-True $script:capturedInstallerHasArgumentList 'silent installer must pass ArgumentList'
+    $script:forcedProcessExitCode = 17
+    Assert-Throws { Start-Installer -InstallerPath $installerPath -Silent -InstallRoot $installRoot } 'process failed with exit code 17'
+    $script:forcedProcessExitCode = $null
+
+    $uninstallerPath = Join-Path $installRoot 'uninstall.exe'
+    $outsideUninstaller = Join-Path $testRoot 'outside-uninstall.exe'
+    Copy-Item $installerPath $outsideUninstaller
+    Assert-Throws { Start-Uninstaller -UninstallerPath $outsideUninstaller -Silent -InstallRoot $installRoot } 'uninstaller must equal'
+    Copy-Item $installerPath $uninstallerPath
+    Start-Uninstaller -UninstallerPath $uninstallerPath -Silent -InstallRoot $installRoot
+    Assert-Equal $script:capturedInstallerArguments.Count 1 'silent uninstaller must receive one argument'
+    Assert-Equal $script:capturedInstallerArguments[0] '/S' 'silent uninstaller argument'
+    Invoke-VolumeControlAction -Action uninstall -Silent -InstallRoot $installRoot
+    Assert-True (Test-Path -LiteralPath $configPath -PathType Leaf) 'uninstall must preserve %APPDATA%\volume-control'
+
+    Remove-Item function:global:Start-Process -Force
+    $installedExecutable = Join-Path $installRoot 'VolumeControl.exe'
+    Copy-Item $installerPath $installedExecutable
+    Assert-Throws { Invoke-VolumeControlAction -Action install -Release $validRelease -InstallRoot $installRoot } 'standard executable already exists'
+
+    Remove-Item -LiteralPath $installedExecutable -Force
+    Assert-Throws { Invoke-VolumeControlAction -Action update -Release $validRelease -InstallRoot $installRoot } 'standard executable is missing'
+
+    Copy-Item $installerPath $installedExecutable
+    $actualInvokeVerifiedInstaller = (Get-Item function:Invoke-VerifiedInstaller).ScriptBlock
+    $script:currentVersionLaunches = 0
+    function Invoke-VerifiedInstaller {
+        param($Release, [string] $InstallRoot, [switch] $Silent)
+
+        $script:currentVersionLaunches += 1
+    }
+    function global:Get-Item {
+        [CmdletBinding()]
+        param([string] $LiteralPath)
+
+        if ($LiteralPath -ceq $installedExecutable) {
+            return [pscustomobject]@{
+                VersionInfo = [pscustomobject]@{ FileVersion = '1.2.3' }
+            }
+        }
+        return Microsoft.PowerShell.Management\Get-Item @PSBoundParameters
+    }
+    Invoke-VolumeControlAction -Action update -Release $validRelease -InstallRoot $installRoot
+    Assert-Equal $script:currentVersionLaunches 0 'current release update must not launch installer'
+    Remove-Item function:global:Get-Item -Force
+    Set-Item function:Invoke-VerifiedInstaller -Value $actualInvokeVerifiedInstaller
+
+    $installedExecutable = Join-Path $installRoot 'VolumeControl.exe'
+    Copy-Item $installerPath $installedExecutable -Force
+    $newRelease = [pscustomobject]@{
+        tag_name = 'v9.9.9'
+        draft = $false
+        prerelease = $false
+        assets = @()
+    }
+    function global:Get-Process {
+        [CmdletBinding()]
+        param([string] $Name)
+
+        if ($Name -ceq 'VolumeControl') {
+            return [pscustomobject]@{ Name = 'VolumeControl'; Id = 4242 }
+        }
+        return Microsoft.PowerShell.Management\Get-Process @PSBoundParameters
+    }
+    function global:Stop-Process {
+        throw 'bootstrap must not force-terminate VolumeControl'
+    }
+
+    Assert-Throws { Invoke-VolumeControlAction -Action update -Release $newRelease -InstallRoot $installRoot } 'close VolumeControl'
+} finally {
+    foreach ($commandName in 'Start-Process', 'Get-Item', 'Get-Process', 'Stop-Process') {
+        $functionPath = "function:global:$commandName"
+        if (Test-Path $functionPath) {
+            Remove-Item $functionPath -Force
+        }
+    }
+    foreach ($originalCommand in @($originalStartProcess, $originalGetItem, $originalGetProcess, $originalStopProcess)) {
+        if ($null -ne $originalCommand) {
+            Set-Item -Path "function:global:$($originalCommand.Name)" -Value $originalCommand.ScriptBlock
+        }
+    }
+    $env:LOCALAPPDATA = $originalLocalAppData
+    $env:APPDATA = $originalAppData
+    Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host 'PASS: Install-VolumeControl bootstrap behavioral tests'

@@ -1,5 +1,24 @@
 # Session Handoff
 
+## Session 099 (2026-10-17) - Windows release bootstrap Task 1
+
+Task 1 files added, uncommitted: `scripts/Install-VolumeControl.ps1` and
+`scripts/test-install-volumecontrol.ps1`. Bootstrap permits only
+`%LOCALAPPDATA%\VolumeControl`; resolves stable or exact stable `vX.Y.Z`
+GitHub releases; requires one versioned NSIS installer and one
+`SHA256SUMS.txt`; accepts canonical basename-only SHA-256 records; verifies
+downloaded installers before launch; waits for child success; removes temporary
+downloads only after success; and refuses update while `VolumeControl` runs
+without force-terminating it. Tests use an isolated temp root and copied
+`cmd.exe` setup fixture for checksum, validation, child-argument, and
+running-process behavior.
+
+ Parent verification green (uncommitted changes):
+ 
+ ```powershell
+ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1
+ ```
+
 ## Session 072 (2026-08-15) - Volume and mute regression coverage
 
 `crates/volumectl/tests/host_core.rs` now covers the complete system action
