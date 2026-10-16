@@ -23,6 +23,14 @@ contains() {
   grep -Eq "$pattern" "$file"
 }
 
+expect_failure() {
+  if bash "$verifier" "$1" "$2" "$3" >/dev/null 2>&1; then
+    report FAIL "$4 fails closed"
+  else
+    report ok "$4 fails closed"
+  fi
+}
+
 if contains "$release" 'uses:[[:space:]]*\./\.github/workflows/desktop-validation\.yml'; then
   report ok 'release caller invokes the reusable desktop validation workflow'
 else
@@ -121,11 +129,130 @@ else
   report FAIL 'validation assembly requires non-empty JUnit, manifest, timings, and platform logs'
 fi
 
+# Task 3 contract: Windows validation must produce a real NSIS bundle,
+# metadata must declare the artifacts array from the staged manifest, and
+# publish must stage a flat immutable release-assets directory.
+if contains "$validation" 'matrix\.platform == .windows.' && \
+   contains "$validation" 'tauri build --bundles nsis --ci' && \
+   contains "$validation" 'tauri build --no-bundle --ci'; then
+  report ok 'windows validation builds NSIS bundle while other platforms skip bundling'
+else
+  report FAIL 'windows validation builds NSIS bundle while other platforms skip bundling'
+fi
+
+if contains "$validation" 'artifacts:[[:space:]]' && \
+   ! contains "$validation" 'find dist -maxdepth 1'; then
+  report ok 'build metadata declares artifacts array from the staged manifest'
+else
+  report FAIL 'build metadata declares artifacts array from the staged manifest'
+fi
+
+if contains "$release" 'release-assets' && \
+   contains "$release" 'cd[[:space:]]+release-assets' && \
+   contains "$release" 'release-assets/SHA256SUMS\.txt'; then
+  report ok 'release stages flat assets and checksums inside the staging dir'
+else
+  report FAIL 'release stages flat assets and checksums inside the staging dir'
+fi
+
+if ! contains "$release" '[-]{2}clobber'; then
+  report ok 'release upload never overwrites existing assets'
+else
+  report FAIL 'release upload never overwrites existing assets'
+fi
+
+if contains "$release" "name '\\*\\.exe'" && \
+   contains "$release" "name '\\*\\.ps1'"; then
+  report ok 'staged release assets must include exe installer and bootstrap script'
+else
+  report FAIL 'staged release assets must include exe installer and bootstrap script'
+fi
+
+# Task 4 contract: both READMEs document the safe local download-and-verify
+# bootstrap sequence (never a pipe-into-shell command) and state the trust
+# boundaries of unsigned, checksum-only release assets.
+for readme in "$repo/README.md" "$repo/README.vi.md"; do
+  readme_name="$(basename "$readme")"
+  if contains "$readme" 'Install-VolumeControl\.ps1' && \
+     contains "$readme" 'SHA256SUMS\.txt' && \
+     contains "$readme" 'Invoke-WebRequest' && \
+     contains "$readme" '[-]Action update' && \
+     contains "$readme" '[-]Action uninstall' && \
+     contains "$readme" '[-]Silent'; then
+    report ok "$readme_name documents verified PowerShell bootstrap commands"
+  else
+    report FAIL "$readme_name documents verified PowerShell bootstrap commands"
+  fi
+  if contains "$readme" 'unsigned' && \
+     contains "$readme" 'checksum' && \
+     contains "$readme" 'SmartScreen'; then
+    report ok "$readme_name states unsigned and checksum trust limits"
+  else
+    report FAIL "$readme_name states unsigned and checksum trust limits"
+  fi
+  if ! contains "$readme" 'Invoke-Expression' && \
+     ! contains "$readme" '\|[[:space:]]+iex'; then
+    report ok "$readme_name never pipes downloads into a shell"
+  else
+    report FAIL "$readme_name never pipes downloads into a shell"
+  fi
+done
+
+# Remote install surface: the product page documents irm, curl, and winget
+# flows without ever piping downloads into a shell, and the winget generator
+# emits a complete manifest trio whose InstallerSha256 matches real bytes.
+page="$repo/docs/index.html"
+if [ -s "$page" ] && \
+   contains "$page" 'Install-VolumeControl\.ps1' && \
+   contains "$page" 'scriptblock\]::Create' && \
+   contains "$page" 'curl\.exe' && \
+   contains "$page" 'winget install --id dt418\.VolumeControl'; then
+  report ok 'product page documents irm, curl, and winget remote commands'
+else
+  report FAIL 'product page documents irm, curl, and winget remote commands'
+fi
+
+if ! contains "$page" 'Invoke-Expression' && \
+   ! contains "$page" '\|[[:space:]]+iex'; then
+  report ok 'product page never pipes downloads into a shell'
+else
+  report FAIL 'product page never pipes downloads into a shell'
+fi
+
+winget_gen="$repo/scripts/generate-winget-manifest.sh"
+fixture_exe="$repo/scripts/test-fixtures/release-windows-valid/VolumeControl_0.0.0_x64-setup.exe"
+winget_out="$(mktemp -d "$repo/.winget-gen.XXXXXX")"
+if command -v sha256sum >/dev/null 2>&1; then
+  fixture_sha="$(sha256sum "$fixture_exe" | awk '{print toupper($1)}')"
+else
+  fixture_sha="$(shasum -a 256 "$fixture_exe" | awk '{print toupper($1)}')"
+fi
+# GNU sha256sum prefixes the digest when the file name contains a backslash.
+fixture_sha="${fixture_sha#\\}"
+if bash "$winget_gen" v0.0.0 "$fixture_exe" "$winget_out" >/dev/null 2>&1 && \
+   [ -s "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.yaml" ] && \
+   [ -s "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.installer.yaml" ] && \
+   [ -s "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.locale.en-US.yaml" ] && \
+   grep -q "InstallerSha256: $fixture_sha" \
+     "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.installer.yaml" && \
+   contains "$winget_out/dt418.VolumeControl/0.0.0/dt418.VolumeControl.installer.yaml" \
+     'releases/download/v0\.0\.0/VolumeControl_0\.0\.0_x64-setup\.exe'; then
+  report ok 'winget generator emits a complete hash-true manifest trio'
+else
+  report FAIL 'winget generator emits a complete hash-true manifest trio'
+fi
+rm -rf "$winget_out"
+
 expected_sha="$(git -C "$repo" rev-parse HEAD)"
 valid="$repo/scripts/test-fixtures/release-valid"
 mismatch="$repo/scripts/test-fixtures/release-mismatch"
 wrong_platform="$repo/scripts/test-fixtures/release-wrong-platform"
 missing_package="$repo/scripts/test-fixtures/release-missing-package"
+windows_valid="$repo/scripts/test-fixtures/release-windows-valid"
+missing_nsis_fixture="$repo/scripts/test-fixtures/release-missing-nsis"
+duplicate_checksum_fixture="$repo/scripts/test-fixtures/release-duplicate-checksum"
+bootstrap_digest_mismatch_fixture="$repo/scripts/test-fixtures/release-bootstrap-mismatch"
+valid_ubuntu="$repo/scripts/test-fixtures/release-valid-ubuntu"
 
 # The committed valid fixture is anchored to the implementation baseline. On
 # later commits, refresh only its copy so the test continues to exercise the
@@ -155,25 +282,43 @@ node_path() {
   printf '%s' "$value"
 }
 
-valid_copy="$tmp_root/release-valid"
-cp -R "$valid" "$valid_copy"
-"$node_bin" - "$(node_path "$valid_copy/build-metadata.json")" "$expected_sha" <<'NODE'
+refresh_sha() {
+  "$node_bin" - "$(node_path "$1")" "$expected_sha" <<'NODE'
 const fs = require("node:fs");
 const path = process.argv[2];
 const value = JSON.parse(fs.readFileSync(path, "utf8"));
 value.commit_sha = process.argv[3];
 fs.writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 NODE
+}
+
+valid_copy="$tmp_root/release-valid"
+cp -R "$valid" "$valid_copy"
+refresh_sha "$valid_copy/build-metadata.json"
 
 missing_copy="$tmp_root/release-missing-package"
 cp -R "$missing_package" "$missing_copy"
-"$node_bin" - "$(node_path "$missing_copy/build-metadata.json")" "$expected_sha" <<'NODE'
-const fs = require("node:fs");
-const path = process.argv[2];
-const value = JSON.parse(fs.readFileSync(path, "utf8"));
-value.commit_sha = process.argv[3];
-fs.writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
-NODE
+refresh_sha "$missing_copy/build-metadata.json"
+
+valid_ubuntu_copy="$tmp_root/release-valid-ubuntu"
+cp -R "$valid_ubuntu" "$valid_ubuntu_copy"
+refresh_sha "$valid_ubuntu_copy/build-metadata.json"
+
+windows_valid_copy="$tmp_root/release-windows-valid"
+cp -R "$windows_valid" "$windows_valid_copy"
+refresh_sha "$windows_valid_copy/build-metadata.json"
+
+missing_nsis_copy="$tmp_root/release-missing-nsis"
+cp -R "$missing_nsis_fixture" "$missing_nsis_copy"
+refresh_sha "$missing_nsis_copy/build-metadata.json"
+
+duplicate_checksum_copy="$tmp_root/release-duplicate-checksum"
+cp -R "$duplicate_checksum_fixture" "$duplicate_checksum_copy"
+refresh_sha "$duplicate_checksum_copy/build-metadata.json"
+
+bootstrap_mismatch_copy="$tmp_root/release-bootstrap-mismatch"
+cp -R "$bootstrap_digest_mismatch_fixture" "$bootstrap_mismatch_copy"
+refresh_sha "$bootstrap_mismatch_copy/build-metadata.json"
 
 if bash "$verifier" "$valid_copy" "$expected_sha" ubuntu >/dev/null; then
   report ok 'valid release metadata fixture passes'
@@ -198,6 +343,22 @@ if bash "$verifier" "$missing_copy" "$expected_sha" ubuntu >/dev/null 2>&1; then
 else
   report ok 'missing-package fixture fails closed'
 fi
+
+if bash "$verifier" "$valid_ubuntu_copy" "$expected_sha" ubuntu >/dev/null; then
+  report ok 'ubuntu artifact-array fixture passes'
+else
+  report FAIL 'ubuntu artifact-array fixture passes'
+fi
+
+if bash "$verifier" "$windows_valid_copy" "$expected_sha" windows >/dev/null; then
+  report ok 'windows artifact-array fixture passes'
+else
+  report FAIL 'windows artifact-array fixture passes'
+fi
+
+expect_failure "$missing_nsis_copy" "$expected_sha" windows 'missing NSIS fixture'
+expect_failure "$duplicate_checksum_copy" "$expected_sha" windows 'duplicate checksum fixture'
+expect_failure "$bootstrap_mismatch_copy" "$expected_sha" windows 'bootstrap digest mismatch fixture'
 
 if [[ "$failures" -eq 0 ]]; then
   echo "All release workflow contract checks passed."

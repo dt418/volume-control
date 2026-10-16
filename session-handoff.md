@@ -32,6 +32,91 @@ update check:
   before the worker fetch, and REA artifact evidence (rust-auditable +
   PE-resource lanes; decompiler/layout/objdump lanes unavailable on this
   host).
+## Session 102 (2026-10-17) - Windows release bootstrap Task 4
+
+Task 4 (uncommitted): both READMEs gained a Windows install section with the
+safe local download-and-verify sequence (separate `Invoke-WebRequest`
+statements, `Get-FileHash` check against `SHA256SUMS.txt` before execution),
+`-Action install` / `-Action update` / `-Action update -Version` /
+`-Action uninstall` / `-Silent` examples, and explicit trust limits
+(unsigned releases, checksum is not code signing, possible SmartScreen
+warning, `%LOCALAPPDATA%\VolumeControl` root, no forced update termination,
+config preserved at `%APPDATA%\volume-control\config.ini`). Six doc-contract
+harness checks were red before the docs and green after. Remote-command
+surface added: `docs/index.html` (irm/curl/winget × install/update/uninstall,
+no pipe-into-shell anywhere) and `scripts/generate-winget-manifest.sh`
+(hash-true winget-pkgs trio for `dt418.VolumeControl`). Current counts: 54
+recorded features (12 in_progress), harness reports 36 `ok` checks, bootstrap
+PowerShell suite exits `PASS`. Full pre-commit gate green: fmt,
+`git diff --check`, clippy `-D warnings`, `cargo test --workspace
+--no-default-features`, `test-check-records`, `test-format-lint`, `test-ship`
+all exit 0. Enable GitHub Pages for this repo with source **Deploy from a
+branch → `/docs`** to publish the page at
+https://dt418.github.io/volume-control/.
+
+## Session 101 (2026-10-17) - Windows release bootstrap Task 3
+
+Task 3 (uncommitted): `.github/workflows/desktop-validation.yml` builds
+`--bundles nsis` on windows (else `--no-bundle`) and writes `artifacts[]`
+metadata from the staged `dist/SHA256SUMS.txt` manifest instead of a
+`find -print -quit` scalar. `.github/workflows/release.yml` verifies each
+downloaded validation artifact, stages only manifest-declared files into a
+flat `release-assets/` rejecting duplicate basenames, generates canonical
+sorted `release-assets/SHA256SUMS.txt` (two-space, no CI paths, no overwrite
+flag), and uploads all staged assets with `gh release create`/`gh release
+upload`. Five new static harness assertions were red before the workflow
+edits and green after.
+
+Parent verification green (Git Bash):
+
+```bash
+bash scripts/test-release-workflow.sh
+```
+
+Also required for the pre-commit hook (pre-existing on main, clippy 1.98):
+added `clippy.toml` `msrv = "1.82"` matching `Cargo.toml` so the
+`chunks_exact_to_as_chunks` lint honors MSRV (project keeps `chunks_exact`;
+`as_chunks` is 1.88+) and replaced two `is_multiple_of(2)` (1.87 API) calls
+in `crates/volumectl/src/autostart.rs` with `byte_len % 2 != 0`. fmt and
+clippy `-D warnings` both exit 0 after the fix.
+
+## Session 100 (2026-10-17) - Windows release bootstrap Task 2
+
+Task 2 (uncommitted): `scripts/package.sh` stages the Windows NSIS installer
+plus `Install-VolumeControl.ps1` into `dist/` and emits a sorted canonical
+basename-only `SHA256SUMS.txt`; `scripts/verify-release-metadata.sh` parses
+strict `artifacts: [{name, sha256}]` metadata in both Python and Node paths
+and fail-closes on non-array, duplicate, path, hidden, missing, malformed
+digest, duplicate manifest, or digest-mismatch inputs with exact platform sets
+(macOS one zip, Ubuntu one tarball, Windows zip plus setup exe plus bootstrap).
+Five new fixtures under `scripts/test-fixtures/` plus harness assertions cover
+the windows array pass, ubuntu array pass, missing NSIS, duplicate checksum,
+and bootstrap digest mismatch cases.
+
+Parent verification green (Git Bash):
+
+```bash
+bash scripts/test-release-workflow.sh
+```
+
+## Session 099 (2026-10-17) - Windows release bootstrap Task 1
+
+Task 1 files added, uncommitted: `scripts/Install-VolumeControl.ps1` and
+`scripts/test-install-volumecontrol.ps1`. Bootstrap permits only
+`%LOCALAPPDATA%\VolumeControl`; resolves stable or exact stable `vX.Y.Z`
+GitHub releases; requires one versioned NSIS installer and one
+`SHA256SUMS.txt`; accepts canonical basename-only SHA-256 records; verifies
+downloaded installers before launch; waits for child success; removes temporary
+downloads only after success; and refuses update while `VolumeControl` runs
+without force-terminating it. Tests use an isolated temp root and copied
+`cmd.exe` setup fixture for checksum, validation, child-argument, and
+running-process behavior.
+
+Parent verification green (uncommitted changes):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1
+```
 
 ## Session 072 (2026-08-15) - Volume and mute regression coverage
 

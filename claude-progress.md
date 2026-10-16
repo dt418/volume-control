@@ -45,6 +45,116 @@
   `inspect_pe_resources` (9 resources, icon 16-256 px, manifest =
   Common-Controls only); decompiler providers and the layout/objdump lanes
   are unavailable on this host and were reported, not approximated.
+## Session 102 (2026-10-17) - Windows release bootstrap Task 4
+
+- README.md `## Installing on Windows` and README.vi.md
+  `## Cài đặt trên Windows`: multi-line `Invoke-WebRequest` download of
+  `Install-VolumeControl.ps1` + `SHA256SUMS.txt`, explicit `Get-FileHash`
+  SHA-256 verification before the local copy runs, then `-Action install`;
+  examples for `-Action update`, `-Action update -Version vX.Y.Z`,
+  `-Action uninstall`, and `-Action install -Silent`; documented default
+  root `%LOCALAPPDATA%\VolumeControl`, update refusal while `VolumeControl`
+  runs (never force-terminated), preserved `%APPDATA%\volume-control\config.ini`,
+  and trust limits: releases unsigned, `SHA256SUMS.txt` same-release checksum
+  only (not code signing), possible Windows SmartScreen warning. No
+  `Invoke-Expression` or pipe-into-shell text in either README.
+- `scripts/test-release-workflow.sh`: 6 new doc-contract checks (command
+  tokens, trust-limit words, and the never-pipes guard per README) were red
+  before the doc edits and green after; harness now reports 33 `ok` checks.
+- Parent verification: `bash scripts/test-release-workflow.sh` PASS;
+  `powershell -NoProfile -ExecutionPolicy Bypass -File
+  scripts/test-install-volumecontrol.ps1` PASS (Task 4 rerun, exit 0).
+- Remote commands (user request): `docs/index.html` product page with
+  interactive install/update/uninstall snippets for PowerShell `irm` (via
+  `& ([scriptblock]::Create((irm ...))) -Action ...`, proven on PS 5.1 —
+  plain `Invoke-Expression` breaks on the bootstrap's validation attributes),
+  `curl.exe` with download-then-verify, and `winget` (id
+  `dt418.VolumeControl`), plus trust-limit and availability notes.
+  `scripts/generate-winget-manifest.sh` emits the complete winget-pkgs trio
+  with `InstallerSha256` computed from real installer bytes (smoke: fixture
+  exe → 3 YAML files, hash match).
+- Harness grew to 36 `ok` checks: page command tokens, page never-pipes
+  guard, and a behavioral winget-generator run with hash assertion.
+- Browser verification of `docs/index.html`: dark + light screenshots,
+  tab/action switching renders correct snippets, winget note toggles, zero
+  console errors.
+- Full gate before commit: `cargo fmt --all --check`, `git diff --check`,
+  `cargo clippy ... -D warnings`, `cargo test --workspace
+  --no-default-features`, `scripts/test-check-records.sh`,
+  `scripts/test-format-lint.sh`, `scripts/test-ship.sh` all exit 0.
+
+## Session 101 (2026-10-17) - Windows release bootstrap Task 3
+
+- `.github/workflows/desktop-validation.yml`: `Build release Tauri host` now
+  runs `tauri build --bundles nsis --ci` on `matrix.platform == windows` and
+  `--no-bundle --ci` elsewhere; `Write SHA-bound build metadata` reads the
+  canonical `dist/SHA256SUMS.txt` manifest and emits `artifacts: [{name,
+  sha256}]` rows from it (commit_sha, platform, runner_arch, rustc, node
+  preserved; no `find -print -quit` scalar).
+- `.github/workflows/release.yml`: publish verifies every downloaded
+  validation artifact, stages only manifest-declared files into a flat
+  `release-assets/` while rejecting duplicate basenames, generates
+  `release-assets/SHA256SUMS.txt` from a pre-snapshot basename list with
+  canonical two-space normalization, and uploads via `gh release create` /
+  `gh release upload` with no overwrite flag (existing assets fail instead of
+  mutating).
+- `scripts/test-release-workflow.sh`: 5 new static contract checks (NSIS
+  windows build condition, artifacts-array metadata, flat staging with in-dir
+  checksums, no overwrite flag, exe+ps1 staging guard) were red before the
+  workflow edits and green after.
+- Parent verification: harness exits `All release workflow contract
+  checks passed.` (21 static checks + fixtures); extracted publish run blocks
+  pass under `bash -e` with duplicate-basename rejection and canonical
+  manifest; metadata step round-trips through `verify-release-metadata.sh`
+  (`artifacts=3`).
+- Pre-commit gate fix (pre-existing on main with clippy 1.98): added
+  `clippy.toml` declaring `msrv = "1.82"` (matches `Cargo.toml`
+  `rust-version`) so `chunks_exact_to_as_chunks` stops suggesting
+  `as_chunks` (stable only since 1.88, invalid under MSRV — project keeps
+  `chunks_exact`), and replaced the two `is_multiple_of(2)` calls in
+  `crates/volumectl/src/autostart.rs` (stable since 1.87) with equivalent
+  `byte_len % 2 != 0`.
+- Gate after fix: `cargo fmt --all --check` exit 0, `cargo clippy
+  --workspace --all-targets --no-default-features -- -D warnings` exit 0.
+
+## Session 100 (2026-10-17) - Windows release bootstrap Task 2
+
+- `scripts/package.sh`: Windows branch stages
+  `target/release/bundle/nsis/VolumeControl_<version>_x64-setup.exe` plus
+  `scripts/Install-VolumeControl.ps1` into `dist/`, then regenerates
+  `dist/SHA256SUMS.txt` as sorted canonical basename-only entries
+  (`<64 hex><two spaces><basename>`), excluding the manifest itself.
+- `scripts/verify-release-metadata.sh` rewritten: Python and Node parsers
+  require a non-empty `artifacts: [{name, sha256}]` array and reject non-object
+  entries, path separators, hidden names, control characters, non-64-hex or
+  duplicate digests; per-platform artifact sets enforced (macOS one zip,
+  Ubuntu one tarball, Windows zip + setup exe + bootstrap); each artifact must
+  exist, hash-match metadata, and own exactly one canonical manifest line.
+  Handles Windows Python CRLF output and GNU sha256sum backslash escapes.
+- `scripts/test-release-workflow.sh`: new contract assertions for the
+  windows/ubuntu array fixtures and fail-closed NSIS-missing,
+  duplicate-checksum, and bootstrap-digest-mismatch fixtures; five fixture
+  dirs added, four migrated to array schema.
+- Parent verification: `bash scripts/test-release-workflow.sh` exits
+  `All release workflow contract checks passed.` under Git Bash.
+- `scripts/package.sh` smoke: fake windows inputs stage zip, setup exe,
+  bootstrap, and canonical manifest with zero directory prefixes.
+
+## Session 099 (2026-10-17) - Windows release bootstrap Task 1
+
+- Added `scripts/Install-VolumeControl.ps1`: exact per-user install root,
+  stable/exact release resolution, exact installer + manifest asset selection,
+  canonical SHA-256 verification, GUI/silent NSIS launch, install/update/
+  uninstall action handling, no forced process termination, and success-only
+  temporary-download cleanup.
+- Added `scripts/test-install-volumecontrol.ps1`: isolated `%TEMP%` fixtures,
+  copied `cmd.exe` setup binary, generated canonical checksum manifests,
+  checksum mismatch/duplicate refusal, install-root refusal, real child
+  argument capture for GUI versus silent NSIS launch, and update process-close
+  refusal without `Stop-Process`.
+- Parent verification: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1` exits `PASS` in worktree `feat/windows-release-bootstrap`; duplicate asset/manifest, malformed manifest, nonzero child, uninstaller containment, install-existing, update-missing, and already-current no-op covered.
+- Records: `feature_list.json` vol-087 is `in_progress` pending parent
+  verification; `session-handoff.md` records exact scope and command.
 
 ## Session 098 (2026-08-19) - Fix PR #41 CI record guard
 

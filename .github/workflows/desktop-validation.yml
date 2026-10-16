@@ -92,7 +92,11 @@ jobs:
       - name: Build release Tauri host
         shell: bash
         run: |
-          frontend/node_modules/.bin/tauri build --no-bundle --ci
+          if [ "${{ matrix.platform }}" = windows ]; then
+            frontend/node_modules/.bin/tauri build --bundles nsis --ci
+          else
+            frontend/node_modules/.bin/tauri build --no-bundle --ci
+          fi
       - name: Package release artifact
         shell: bash
         env:
@@ -109,30 +113,32 @@ jobs:
           RELEASE_PLATFORM: ${{ matrix.platform }}
           RELEASE_COMMIT_SHA: ${{ github.sha }}
         run: |
-          artifact="$(find dist -maxdepth 1 -type f \( -name '*.zip' -o -name '*.tar.gz' \) -print -quit)"
-          test -n "$artifact" && test -s "$artifact"
-          artifact_name="$(basename "$artifact")"
-          if command -v sha256sum >/dev/null 2>&1; then
-            artifact_sha256="$(sha256sum "$artifact" | awk '{print $1}')"
-          else
-            artifact_sha256="$(shasum -a 256 "$artifact" | awk '{print $1}')"
-          fi
+          # The platform manifest staged by scripts/package.sh is the single
+          # source of truth: every canonical entry becomes an artifacts row.
+          test -s dist/SHA256SUMS.txt
           runner_arch="$(uname -m 2>/dev/null || echo unknown)"
-          file_description="$(file "$artifact" 2>/dev/null || echo unavailable)"
           rustc_version="$(rustc --version)"
           node_version="$(node --version)"
-          export artifact_name artifact_sha256 runner_arch file_description rustc_version node_version
+          export runner_arch rustc_version node_version
           node - <<'NODE'
           const fs = require("node:fs");
+          const rows = fs
+            .readFileSync("dist/SHA256SUMS.txt", "utf8")
+            .split(/\r?\n/)
+            .filter((line) => line.trim() !== "")
+            .map((line) => {
+              const match = line.match(/^([0-9a-fA-F]{64})  (\S+)$/);
+              if (!match) throw new Error(`non-canonical manifest line: ${line}`);
+              return { name: match[2], sha256: match[1].toLowerCase() };
+            });
+          if (rows.length === 0) throw new Error("release manifest declares no artifacts");
           const metadata = {
             commit_sha: process.env.RELEASE_COMMIT_SHA,
             platform: process.env.RELEASE_PLATFORM,
             runner_arch: process.env.runner_arch,
             rustc: process.env.rustc_version,
             node: process.env.node_version,
-            artifact: process.env.artifact_name,
-            artifact_sha256: process.env.artifact_sha256,
-            file: process.env.file_description,
+            artifacts: rows,
           };
           fs.writeFileSync("dist/build-metadata.json", `${JSON.stringify(metadata, null, 2)}\n`);
           NODE

@@ -4,6 +4,10 @@
   "runner_arch": "x86_64",
   "rustc": "rustc 1.82.0 (f6e1b3b5a 2024-10-15)",
   "node": "v22.0.0",
-  "artifact": "volumecontrol-test.tar.gz",
-  "artifact_sha256": "c208935ff7856f2a555410d17b68798d83d241d974ea320f9424645879e61acf"
+  "artifacts": [
+    {
+      "name": "volumecontrol-test.tar.gz",
+      "sha256": "c208935ff7856f2a555410d17b68798d83d241d974ea320f9424645879e61acf"
+    }
+  ]
 }
