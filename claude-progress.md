@@ -1,6 +1,6 @@
 # Progress Log
 
-## Session 104 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
+## Session 105 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
 
 - Goal: unblock PR #43 CI; the macOS job failed before running its tests.
 - Root cause: `fe45d18` added `AppAction::CheckUpdates`, but
@@ -35,7 +35,7 @@
   sources), so the macOS job of the CI run on this commit is the compile
   proof.
 
-## Session 103 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
+## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
 
 - Config: `[general] language = en|vi` (`Language` enum, serde default en,
   strict INI parse/write, `SettingsPatch.language` with fail-early

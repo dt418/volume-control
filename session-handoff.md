@@ -1,6 +1,6 @@
 # Session Handoff
 
-## Session 103 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
+## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
 
 Branch `feat/app-i18n` (worktree `volume-control-app-i18n`, forked from
 `main` at 54e7e5a) implements the user's all-in i18n request plus the tray
