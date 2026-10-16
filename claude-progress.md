@@ -18,6 +18,14 @@
   the `language` field their `AppState` literals were missing (added by
   `fe45d18`), so the Linux/macOS `cargo test` builds of those `#[cfg(test)]`
   modules compile here too.
+- Same root cause, follow-up commit: the two platform renderer smoke tests
+  (`tests/appkit_smoke.rs`, `tests/gtk_smoke.rs`) were still calling
+  `render_overlay` / `set_overlay_content` / `set_mixer_controls` /
+  `update_mixer_value` with their pre-`fe45d18` arities; they now pass
+  `Language::En` (the language those no-panic checks were written under).
+  CI run 38981490852 proved it: the macOS job's build + Tauri E2E steps passed
+  and only `cargo test` failed, compiling `appkit_smoke` (job 117243179633)
+  and `gtk_smoke` (job 117243179587) with `error[E0061]` x4 each.
 - Verification: `cargo fmt --all --check`, `git diff --check`,
   `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
   and `cargo test --workspace --no-default-features` exit 0 on Windows. The
@@ -72,6 +80,12 @@
   `inspect_pe_resources` (9 resources, icon 16-256 px, manifest =
   Common-Controls only); decompiler providers and the layout/objdump lanes
   are unavailable on this host and were reported, not approximated.
+- CI follow-up: PR #43 failed the macOS/Ubuntu jobs on the new renderer
+  signatures; the Linux/macOS smoke binaries (`gtk_smoke.rs`,
+  `appkit_smoke.rs`) now pass `Language::En` to `set_overlay_content`,
+  `render_overlay`, `set_mixer_controls`, and `update_mixer_value`, and the
+  macOS host handles `AppAction::CheckUpdates`. These files are cfg-gated to
+  their platforms, so CI is the compile check for them.
 ## Session 102 (2026-10-17) - Windows release bootstrap Task 4
 
 - README.md `## Installing on Windows` and README.vi.md
