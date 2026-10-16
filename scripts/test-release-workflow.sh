@@ -129,6 +129,45 @@ else
   report FAIL 'validation assembly requires non-empty JUnit, manifest, timings, and platform logs'
 fi
 
+# Task 3 contract: Windows validation must produce a real NSIS bundle,
+# metadata must declare the artifacts array from the staged manifest, and
+# publish must stage a flat immutable release-assets directory.
+if contains "$validation" 'matrix\.platform == .windows.' && \
+   contains "$validation" 'tauri build --bundles nsis --ci' && \
+   contains "$validation" 'tauri build --no-bundle --ci'; then
+  report ok 'windows validation builds NSIS bundle while other platforms skip bundling'
+else
+  report FAIL 'windows validation builds NSIS bundle while other platforms skip bundling'
+fi
+
+if contains "$validation" 'artifacts:[[:space:]]' && \
+   ! contains "$validation" 'find dist -maxdepth 1'; then
+  report ok 'build metadata declares artifacts array from the staged manifest'
+else
+  report FAIL 'build metadata declares artifacts array from the staged manifest'
+fi
+
+if contains "$release" 'release-assets' && \
+   contains "$release" 'cd[[:space:]]+release-assets' && \
+   contains "$release" 'release-assets/SHA256SUMS\.txt'; then
+  report ok 'release stages flat assets and checksums inside the staging dir'
+else
+  report FAIL 'release stages flat assets and checksums inside the staging dir'
+fi
+
+if ! contains "$release" '[-]{2}clobber'; then
+  report ok 'release upload never overwrites existing assets'
+else
+  report FAIL 'release upload never overwrites existing assets'
+fi
+
+if contains "$release" "name '\\*\\.exe'" && \
+   contains "$release" "name '\\*\\.ps1'"; then
+  report ok 'staged release assets must include exe installer and bootstrap script'
+else
+  report FAIL 'staged release assets must include exe installer and bootstrap script'
+fi
+
 expected_sha="$(git -C "$repo" rev-parse HEAD)"
 valid="$repo/scripts/test-fixtures/release-valid"
 mismatch="$repo/scripts/test-fixtures/release-mismatch"

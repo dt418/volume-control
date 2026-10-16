@@ -1,5 +1,31 @@
 # Session Handoff
 
+## Session 101 (2026-10-17) - Windows release bootstrap Task 3
+
+Task 3 (uncommitted): `.github/workflows/desktop-validation.yml` builds
+`--bundles nsis` on windows (else `--no-bundle`) and writes `artifacts[]`
+metadata from the staged `dist/SHA256SUMS.txt` manifest instead of a
+`find -print -quit` scalar. `.github/workflows/release.yml` verifies each
+downloaded validation artifact, stages only manifest-declared files into a
+flat `release-assets/` rejecting duplicate basenames, generates canonical
+sorted `release-assets/SHA256SUMS.txt` (two-space, no CI paths, no overwrite
+flag), and uploads all staged assets with `gh release create`/`gh release
+upload`. Five new static harness assertions were red before the workflow
+edits and green after.
+
+Parent verification green (Git Bash):
+
+```bash
+bash scripts/test-release-workflow.sh
+```
+
+Also required for the pre-commit hook (pre-existing on main, clippy 1.98):
+added `clippy.toml` `msrv = "1.82"` matching `Cargo.toml` so the
+`chunks_exact_to_as_chunks` lint honors MSRV (project keeps `chunks_exact`;
+`as_chunks` is 1.88+) and replaced two `is_multiple_of(2)` (1.87 API) calls
+in `crates/volumectl/src/autostart.rs` with `byte_len % 2 != 0`. fmt and
+clippy `-D warnings` both exit 0 after the fix.
+
 ## Session 100 (2026-10-17) - Windows release bootstrap Task 2
 
 Task 2 (uncommitted): `scripts/package.sh` stages the Windows NSIS installer

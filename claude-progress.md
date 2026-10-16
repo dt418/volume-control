@@ -1,20 +1,38 @@
 # Progress Log
 
-## Session 099 (2026-10-17) - Windows release bootstrap Task 1
+## Session 101 (2026-10-17) - Windows release bootstrap Task 3
 
-- Added `scripts/Install-VolumeControl.ps1`: exact per-user install root,
-  stable/exact release resolution, exact installer + manifest asset selection,
-  canonical SHA-256 verification, GUI/silent NSIS launch, install/update/
-  uninstall action handling, no forced process termination, and success-only
-  temporary-download cleanup.
-- Added `scripts/test-install-volumecontrol.ps1`: isolated `%TEMP%` fixtures,
-  copied `cmd.exe` setup binary, generated canonical checksum manifests,
-  checksum mismatch/duplicate refusal, install-root refusal, real child
-  argument capture for GUI versus silent NSIS launch, and update process-close
-  refusal without `Stop-Process`.
-- Parent verification: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1` exits `PASS` in worktree `feat/windows-release-bootstrap`; duplicate asset/manifest, malformed manifest, nonzero child, uninstaller containment, install-existing, update-missing, and already-current no-op covered.
-- Records: `feature_list.json` vol-087 is `in_progress` pending parent
-  verification; `session-handoff.md` records exact scope and command.
+- `.github/workflows/desktop-validation.yml`: `Build release Tauri host` now
+  runs `tauri build --bundles nsis --ci` on `matrix.platform == windows` and
+  `--no-bundle --ci` elsewhere; `Write SHA-bound build metadata` reads the
+  canonical `dist/SHA256SUMS.txt` manifest and emits `artifacts: [{name,
+  sha256}]` rows from it (commit_sha, platform, runner_arch, rustc, node
+  preserved; no `find -print -quit` scalar).
+- `.github/workflows/release.yml`: publish verifies every downloaded
+  validation artifact, stages only manifest-declared files into a flat
+  `release-assets/` while rejecting duplicate basenames, generates
+  `release-assets/SHA256SUMS.txt` from a pre-snapshot basename list with
+  canonical two-space normalization, and uploads via `gh release create` /
+  `gh release upload` with no overwrite flag (existing assets fail instead of
+  mutating).
+- `scripts/test-release-workflow.sh`: 5 new static contract checks (NSIS
+  windows build condition, artifacts-array metadata, flat staging with in-dir
+  checksums, no overwrite flag, exe+ps1 staging guard) were red before the
+  workflow edits and green after.
+- Parent verification: harness exits `All release workflow contract
+  checks passed.` (21 static checks + fixtures); extracted publish run blocks
+  pass under `bash -e` with duplicate-basename rejection and canonical
+  manifest; metadata step round-trips through `verify-release-metadata.sh`
+  (`artifacts=3`).
+- Pre-commit gate fix (pre-existing on main with clippy 1.98): added
+  `clippy.toml` declaring `msrv = "1.82"` (matches `Cargo.toml`
+  `rust-version`) so `chunks_exact_to_as_chunks` stops suggesting
+  `as_chunks` (stable only since 1.88, invalid under MSRV — project keeps
+  `chunks_exact`), and replaced the two `is_multiple_of(2)` calls in
+  `crates/volumectl/src/autostart.rs` (stable since 1.87) with equivalent
+  `byte_len % 2 != 0`.
+- Gate after fix: `cargo fmt --all --check` exit 0, `cargo clippy
+  --workspace --all-targets --no-default-features -- -D warnings` exit 0.
 
 ## Session 100 (2026-10-17) - Windows release bootstrap Task 2
 
@@ -38,6 +56,22 @@
   `All release workflow contract checks passed.` under Git Bash.
 - `scripts/package.sh` smoke: fake windows inputs stage zip, setup exe,
   bootstrap, and canonical manifest with zero directory prefixes.
+
+## Session 099 (2026-10-17) - Windows release bootstrap Task 1
+
+- Added `scripts/Install-VolumeControl.ps1`: exact per-user install root,
+  stable/exact release resolution, exact installer + manifest asset selection,
+  canonical SHA-256 verification, GUI/silent NSIS launch, install/update/
+  uninstall action handling, no forced process termination, and success-only
+  temporary-download cleanup.
+- Added `scripts/test-install-volumecontrol.ps1`: isolated `%TEMP%` fixtures,
+  copied `cmd.exe` setup binary, generated canonical checksum manifests,
+  checksum mismatch/duplicate refusal, install-root refusal, real child
+  argument capture for GUI versus silent NSIS launch, and update process-close
+  refusal without `Stop-Process`.
+- Parent verification: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1` exits `PASS` in worktree `feat/windows-release-bootstrap`; duplicate asset/manifest, malformed manifest, nonzero child, uninstaller containment, install-existing, update-missing, and already-current no-op covered.
+- Records: `feature_list.json` vol-087 is `in_progress` pending parent
+  verification; `session-handoff.md` records exact scope and command.
 
 ## Session 098 (2026-08-19) - Fix PR #41 CI record guard
 

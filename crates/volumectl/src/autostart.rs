@@ -149,7 +149,7 @@ mod windows_registry {
         if result != ERROR_SUCCESS {
             return Err(registry_error("query", result));
         }
-        if value_type != REG_SZ || byte_len == 0 || !byte_len.is_multiple_of(2) {
+        if value_type != REG_SZ || byte_len == 0 || byte_len % 2 != 0 {
             return Err("auto-start registry value is not a valid UTF-16 string".to_string());
         }
 
@@ -167,7 +167,7 @@ mod windows_registry {
         if result != ERROR_SUCCESS {
             return Err(registry_error("query", result));
         }
-        if value_type != REG_SZ || byte_len == 0 || !byte_len.is_multiple_of(2) {
+        if value_type != REG_SZ || byte_len == 0 || byte_len % 2 != 0 {
             return Err("auto-start registry value changed to an invalid type".to_string());
         }
 

@@ -94,26 +94,49 @@ jobs:
           path: dist
           pattern: validated-*-${{ github.sha }}
           merge-multiple: false
-      - name: Verify every validated artifact
+      - name: Verify and stage release assets
         shell: bash
         env:
           EXPECTED_COMMIT_SHA: ${{ github.sha }}
         run: |
+          rm -rf release-assets
+          mkdir release-assets
+          declare -A seen_names=()
           for platform in windows macos ubuntu; do
             artifact_dir="dist/validated-${platform}-${EXPECTED_COMMIT_SHA}"
             test -d "$artifact_dir"
             bash scripts/verify-release-metadata.sh "$artifact_dir" "$EXPECTED_COMMIT_SHA" "$platform"
+            # Only manifest-declared files are staged; the per-platform
+            # SHA256SUMS.txt is never itself a manifest input.
+            while IFS= read -r manifest_line; do
+              manifest_line="${manifest_line%$'\r'}"
+              name="${manifest_line#*  }"
+              test -n "$name"
+              if [ -n "${seen_names[$name]:-}" ]; then
+                echo "duplicate release basename: $name" >&2
+                exit 1
+              fi
+              seen_names[$name]=1
+              test -s "$artifact_dir/$name"
+              cp "$artifact_dir/$name" "release-assets/$name"
+            done < "$artifact_dir/SHA256SUMS.txt"
           done
+          ls -la release-assets
       - name: Generate release checksums
         shell: bash
         run: |
-          find dist -type f \( -name '*.zip' -o -name '*.tar.gz' \) -print0 \
-            | sort -z \
-            | while IFS= read -r -d '' artifact; do sha256sum "$artifact"; done \
-            > dist/SHA256SUMS.txt
-          test -s dist/SHA256SUMS.txt
-          cat dist/SHA256SUMS.txt
-      - name: Create or update release
+          # Flat staging is the checksum universe: sorted basenames only,
+          # never CI paths, and the manifest excludes itself deterministically
+          # because its input list is snapshotted before the file is created.
+          test -n "$(find release-assets -maxdepth 1 -name '*.exe' -size +0c -print -quit)"
+          test -n "$(find release-assets -maxdepth 1 -name '*.ps1' -size +0c -print -quit)"
+          staged_names="$(cd release-assets && ls -1 | LC_ALL=C sort)"
+          test -n "$staged_names"
+          (cd release-assets && sha256sum $staged_names \
+            | sed -E 's/^([0-9a-fA-F]{64}) [*] ?/\1  /' > SHA256SUMS.txt)
+          test -s release-assets/SHA256SUMS.txt
+          cat release-assets/SHA256SUMS.txt
+      - name: Create or upload immutable release assets
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
@@ -121,15 +144,15 @@ jobs:
         shell: bash
         run: |
           mapfile -d '' release_assets < <(
-            find dist -type f \
-              \( -name '*.zip' -o -name '*.tar.gz' \) \
-              -print0 | sort -z
+            find release-assets -maxdepth 1 -type f -print0 | sort -z
           )
-          release_assets+=(dist/SHA256SUMS.txt)
+          test "${#release_assets[@]}" -gt 0
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $RELEASE_TAG already exists; uploading refreshed assets."
+            # No overwrite flag: existing assets fail this upload instead of
+            # mutating published bytes.
+            echo "Release $RELEASE_TAG already exists; uploading immutable assets."
             gh release upload "$RELEASE_TAG" "${release_assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" --clobber
+              --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$RELEASE_TAG" "${release_assets[@]}" \
               --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" \
