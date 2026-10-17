@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-17T13:20",
+  "last_updated": "2026-10-17T14:10",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,21 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-097",
+      "priority": 97,
+      "area": "release",
+      "title": "Release 0.1.7 with the bilingual UI",
+      "user_visible_behavior": "The next tagged release carries the EN/VI interface, the tray update check, the faster startup path, the record merge drivers, and the format-lint lock fix on top of the v0.1.6 packaging set (Windows installer and archive, macOS zip and dmg, Linux tar.gz, deb, rpm and AppImage, plus the three installer scripts and SHA256SUMS.txt).",
+      "status": "in_progress",
+      "verification": [
+        "Local: cargo fmt --all --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, and cargo test --workspace --no-default-features pass with the 0.1.7 version bump.",
+        "Local: bash scripts/test-release-workflow.sh, bash scripts/test-records-merge.sh, bash scripts/test-install-unix.sh, and the PowerShell installer suite pass.",
+        "CI (required before the tag): the pull request is green on Windows, macOS, and Ubuntu; the tag run then publishes and verifies all twelve assets."
+      ],
+      "evidence": [],
+      "notes": "The version bump touches the workspace manifests, src-tauri/tauri.conf.json, frontend/package.json and its lock file, and the CHANGELOG; the tag is created only after the merge commit is green."
+    },
     {
       "id": "vol-089",
       "priority": 89,
