@@ -217,6 +217,19 @@
 - Records: vol-088 added; vol-087 note updated to the merged state (PR #42
   merged to main as ab3cf7d); this entry is the `claude-progress.md` half.
 
+- `scripts/test-format-lint.sh`: the concurrency lock was acquired before the
+  hermetic preconditions but released only by the EXIT trap installed after
+  them, so any refused run (modified `.claude/settings.local.json`, dirty
+  index) leaked `scripts/.test-format-lint.lock` and blocked every later run
+  with "already running". Hit for real while shipping this change set: an
+  external merge left the index unmerged, the smoke test refused and leaked
+  the lock, and the next `scripts/ship.sh --push` aborted at phase 4. The
+  release trap is now installed immediately after the lock is acquired (the
+  full cleanup trap still replaces it further down). Negative verification:
+  with a staged scratch file the suite prints `FAIL - the index has staged
+  changes` and the lock is absent afterwards; the full suite then passes and
+  releases the lock too.
+
 ## Session 102 (2026-10-17) - Windows release bootstrap Task 4
 
 - README.md `## Installing on Windows` and README.vi.md
@@ -1307,6 +1320,7 @@
   directory even though every WDIO spec passed.
 - Normalized relative output roots to repository-absolute paths before the cwd
   change and added a ship-flow assertion preventing this regression.
+
 ## Session 065 (2026-08-15) - Rename default branch to main
 
 - PR #21 (`fix: harden records guard and finalize release verification`) was
@@ -3545,3 +3559,149 @@ fn get_window_pid_x11() -> Option<u32> {
     `sh scripts/check-records.sh --staged` → exit 0.
 - Records: feature_list.json vol-017 updated (verification 38→39, evidence
   augmented with mirror fix); this entry is the claude-progress.md half.
+
+## Session 110 (2026-10-17) - Merge main into the harness branch: record-id collision + WSL guard fix
+
+- Merge: `origin/main` (`1ba66e5`, App i18n #46) merged into
+  `fix/release-workflow-git-path-resolution` as `0c798cc` with the record
+  merge drivers registered, so `feature_list.json`, `claude-progress.md` and
+  `session-handoff.md` landed without conflict markers; the driver unioned
+  evidence under shared ids and kept the furthest-along status per id.
+- Collision found in the merged ledger: this branch had rewritten main's
+  `vol-089` (macOS `AppAction::CheckUpdates`) into a tooling record for the
+  format-lint lock fix, so the driver unioned two different features under one
+  id and main's macOS title/behavior text fell out of the ledger. Resolved in
+  the records: `vol-089` restored verbatim from `origin/main`, the format-lint
+  record renumbered to `vol-095` carrying only its own two verification lines
+  and the Session 103 evidence, and `vol-096` added for the guard fix below.
+  Audited: every main-side feature id and every main-side
+  evidence/verification line is still present (61 -> 63 features, ids unique,
+  `priority == id` for all, `vol-089.notes` gains one provenance sentence).
+- `scripts/check-records.sh`: the same gitdir defect vol-088 fixed for the
+  release harness, now in the records guard. In a worktree created by native
+  Windows git, `.git` holds `gitdir: C:/...`, which a POSIX git (WSL) resolves
+  against the cwd: under WSL bash every git call in the guard died with exit
+  128 and the guard reported `FAIL - git diff --cached failed (exit 128)`.
+  Because `scripts/format-lint.sh` runs `sh scripts/check-records.sh --staged`,
+  the WSL Linux gate itself could not pass. The guard now walks up to the
+  `.git` marker, converts drive-letter gitdirs with `wslpath -u` (WSL) or
+  `cygpath -u` (MSYS), and exports `GIT_DIR`/`GIT_WORK_TREE` - only after the
+  plain `git rev-parse --git-dir` already failed, so ordinary checkouts and
+  POSIX CI keep the ambient environment.
+- Verification (fresh, this worktree):
+  - WSL bash (`C:/Windows/System32/bash.exe`, GNU bash 5.2.21, `/usr/bin/git`
+    2.43.0): `bash scripts/check-records.sh --staged` exits 0. Before the fix
+    the same call exited 1 with `fatal: not a git repository:
+    /mnt/c/Users/Thanh/orca/volume-control-windows-release-bootstrap/C:/Users/
+    Thanh/orca/volume-control/.git/worktrees/volume-control-windows-release-bootstrap`.
+  - Negative (live, WSL bash): with a scratch file staged the guard reports
+    `this commit changes substantive files but not the records` with
+    `trigger: .tmp-wsl-guard-check`, so the fallback reads the real index
+    instead of passing vacuously; the clean index exits 0.
+  - MSYS `sh` (`C:/Program Files/Git/bin/sh.exe`): exit 0, first-call path
+    unchanged; `bash -n scripts/check-records.sh` clean.
+  - `scripts/test-check-records.sh`: 35 `ok`, exit 0.
+    `scripts/test-records-merge.sh`: 9 `ok`.
+  - `scripts/test-format-lint.sh` (Git Bash, `frontend/dist` built): all
+    format-lint smoke checks passed, exit 0, including
+    `refused run releases the concurrency lock`.
+  - Merge integrity: `git diff --check` clean, no conflict markers anywhere,
+    merged tree identical to this branch for the record files plus main's
+    i18n record edits absorbed (vol-091..094 at main's content).
+- Records: `vol-089` restored, `vol-095` + `vol-096` added; this entry is the
+  `claude-progress.md` half.
+
+## Session 108 (2026-10-17) - Native Linux and macOS packages
+
+- desktop-validation: macOS builds `tauri build --bundles dmg --ci`; Ubuntu
+  builds `--bundles deb,rpm,appimage` (the apt step now installs `rpm`);
+  Windows keeps `--bundles nsis`.
+- `scripts/package.sh` stages the bundles as
+  `volumecontrol-<ver>-macos.dmg` and
+  `volumecontrol-<ver>-ubuntu.{deb,rpm,AppImage}` (fail-closed when a bundle
+  is missing) next to the archives and installer scripts.
+- `scripts/verify-release-metadata.sh`: macOS sets are now
+  zip + install-macos.sh + dmg (3); Ubuntu sets are
+  tarball + install-linux.sh + deb + rpm + AppImage (5); Windows unchanged (3).
+- Fixtures: `release-valid-macos` gained a dmg stub and the two valid Ubuntu
+  fixtures gained deb/rpm/AppImage stubs with refreshed canonical manifests
+  and metadata.
+- `scripts/test-release-workflow.sh`: the bundle build flags and the package
+  staging are asserted; the old "other platforms skip bundling" check is
+  replaced by the per-platform bundle contract.
+- Docs: README (EN/VI) names the native packages; CHANGELOG [Unreleased]
+  records them. `bash scripts/test-release-workflow.sh` passes locally.
+- Portability fix after the v0.1.6 macOS job failed: GNU-only
+  `dd status=none` and `find -maxdepth/-mindepth/-quit` replaced with
+  portable forms in `scripts/package.sh`, the two installers, and
+  `scripts/test-install-unix.sh`; harness + installer suite still pass.
+- Installer-test fixtures are now `chmod +x` (MSYS treats every file as
+  executable, so the `-x` assertions only failed on Linux/macOS), and the
+  suite prints the captured installer output on failing assertions for
+  diagnosable CI logs.
+- bash 3.2 compatibility: `${var,,}` is bash-4-only and macOS ships bash
+  3.2; the installers and the release verifier now lowercase through
+  `tr "[:upper:]" "[:lower:]"`. Suites stay green locally.
+
+
+### Session 108 follow-up (Linux asset naming + CI bundle path)
+
+- Linux bundles are named `volumecontrol-<ver>-linux-amd64.{tar.gz,deb,rpm,AppImage}`:
+  `-ubuntu.rpm` was a Fedora/RHEL package labelled after its build host.
+  `package.sh`, `packaging/install-linux.sh`, the verifier set patterns, the
+  docs checklist and every fixture follow the new scheme.
+- `ci.yml` macOS job builds `--bundles dmg` (was `--no-bundle`) so the
+  validation packaging step that calls `package.sh` can stage the dmg; the
+  harness asserts that flag.
+- `package.sh` bundle lookups end in `|| true` so a missing bundle prints the
+  explicit error instead of dying silently under `set -e` + `pipefail`.
+
+## Session 109 (2026-10-17) - Conflict-free record merges
+
+- Every branch edits `feature_list.json` and `claude-progress.md`, so each PR
+  arrived `CONFLICTING` on additive record edits alone. `feature_list.json`,
+  `claude-progress.md` and `session-handoff.md` now carry merge drivers in
+  `.gitattributes` (`records-json`, `records-md`).
+- `scripts/merge-records-json.sh`: features merge by `id`; `evidence` and
+  `verification` union in place; scalar changes resolve against the merge base
+  so the side that changed a field wins; `last_updated` keeps the newest stamp;
+  `status` ranks passing > in_progress/blocked > not_started.
+- `scripts/merge-records-md.sh`: blocks merge by heading line, ours keep their
+  order, shared headings keep one heading plus the union of their lines, and
+  theirs-only blocks append. Already-conflicted input is refused.
+- `scripts/install-merge-drivers.sh` registers both drivers; both hook
+  installers call it, so a clone set up with `install-hooks.*` merges records
+  conflict-free.
+- `scripts/test-records-merge.sh` covers the drivers (8 checks) including an
+  end-to-end `git merge` in a throwaway repository; the Fast checks job runs it
+  on every pull request.
+- Fallback stays safe: without a registered driver, or on malformed or already
+  conflicted input, git still reports the ordinary conflict.
+- `scripts/install-merge-drivers.sh` also writes the three attribute lines into
+  `.git/info/attributes`, so a topic branch that predates the `.gitattributes`
+  change still merges conflict-free (git reads merge attributes from the branch
+  being merged into). The suite drives its end-to-end merge through the installer
+  and asserts the overrides survive a missing `.gitattributes` (9 checks).
+- The drivers are installed into `<git-common-dir>/records-merge` and the configured
+  command resolves that path through git at merge time: git reads merge attributes
+  from the branch being merged into and no branch carries the scripts yet.
+  `install-merge-drivers.sh` takes an optional target repository, and the end-to-end
+  suite now installs into a throwaway clone whose tree has neither `.gitattributes`
+  nor the driver scripts, then merges main into it successfully.
+
+## Session 109 (2026-10-17) - AppImage bundling
+
+- The v0.1.6 release run failed on the Ubuntu leg: the Tauri bundler panicked
+  with `couldn't find a square icon to use as AppImage icon` at
+  `bundler/src/bundle/linux/appimage/linuxdeploy.rs` after deb and rpm bundled
+  successfully.
+- Cause: `src-tauri/tauri.conf.json` declared no `bundle.icon` list, so the
+  AppImage bundler had no square PNG. The config now declares
+  `icons/32x32.png`, `icons/128x128.png`, `icons/128x128@2x.png` (all square),
+  plus `icon.icns` and `icon.ico`.
+- The Ubuntu job of `ci.yml` now builds `--bundles deb,rpm,appimage` (was
+  `--no-bundle`) and lists the three bundle directories, so a packaging failure
+  surfaces on the pull request instead of at the release tag.
+- `scripts/test-release-workflow.sh` asserts the ci bundle flags (macOS dmg,
+  Ubuntu deb/rpm/AppImage) and that the tauri config declares a square PNG icon;
+  all contract checks pass locally.

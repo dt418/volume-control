@@ -134,10 +134,11 @@ fi
 # publish must stage a flat immutable release-assets directory.
 if contains "$validation" 'matrix\.platform == .windows.' && \
    contains "$validation" 'tauri build --bundles nsis --ci' && \
-   contains "$validation" 'tauri build --no-bundle --ci'; then
-  report ok 'windows validation builds NSIS bundle while other platforms skip bundling'
+   contains "$validation" 'tauri build --bundles dmg --ci' && \
+   contains "$validation" 'tauri build --bundles deb,rpm,appimage --ci'; then
+  report ok 'validation builds nsis, dmg, and deb/rpm/appimage bundles per platform'
 else
-  report FAIL 'windows validation builds NSIS bundle while other platforms skip bundling'
+  report FAIL 'validation builds nsis, dmg, and deb/rpm/appimage bundles per platform'
 fi
 
 if contains "$validation" 'artifacts:[[:space:]]' && \
@@ -256,6 +257,42 @@ if contains "$verifier" 'install-macos\.sh' && contains "$verifier" 'install-lin
   report ok 'release verifier requires the platform installers'
 else
   report FAIL 'release verifier requires the platform installers'
+fi
+
+if contains "$validation" 'bundles deb,rpm,appimage' && \
+   contains "$validation" 'bundles dmg'; then
+  report ok 'desktop validation bundles deb/rpm/AppImage and dmg per platform'
+else
+  report FAIL 'desktop validation bundles deb/rpm/AppImage and dmg per platform'
+fi
+
+if contains "$repo/scripts/package.sh" 'linux-amd64\.deb' && \
+   contains "$repo/scripts/package.sh" 'linux-amd64\.rpm' && \
+   contains "$repo/scripts/package.sh" 'linux-amd64\.AppImage' && \
+   contains "$repo/scripts/package.sh" 'macos\.dmg'; then
+  report ok 'package.sh stages the Linux and macOS bundles'
+else
+  report FAIL 'package.sh stages the Linux and macOS bundles'
+fi
+
+if contains "$repo/.github/workflows/ci.yml" 'tauri build --bundles dmg --ci'; then
+  report ok 'ci macOS job bundles the dmg that package.sh stages'
+else
+  report FAIL 'ci macOS job bundles the dmg that package.sh stages'
+fi
+
+if contains "$repo/.github/workflows/ci.yml" 'tauri build --bundles deb,rpm,appimage --ci'; then
+  report ok 'ci Ubuntu job bundles the Linux packages that package.sh stages'
+else
+  report FAIL 'ci Ubuntu job bundles the Linux packages that package.sh stages'
+fi
+
+# The AppImage bundler panics when no square icon is declared, and deb/rpm use
+# the same list, so the bundle icon set must name a PNG.
+if contains "$repo/src-tauri/tauri.conf.json" '"icons/[0-9]+x[0-9]+\.png"'; then
+  report ok 'tauri.conf.json declares square bundle icons for the Linux packages'
+else
+  report FAIL 'tauri.conf.json declares square bundle icons for the Linux packages'
 fi
 
 # Resolve HEAD without assuming this shell's git can read this checkout: a

@@ -10,6 +10,10 @@
       "sha256": "91e02601a5f6763ec45e3a09b5969e625b47683649f6e759070e67139d24871a"
     },
     {
+      "name": "volumecontrol-0.0.0-macos.dmg",
+      "sha256": "f8adfc6e414410de639d8528b8cc3d2218f81c2de1f3c450dbe667e948cacccc"
+    },
+    {
       "name": "volumecontrol-test-macos.zip",
       "sha256": "0d7e33d2f721bfc1adadc31ca91a95d815f45b4bd9262be2bb946f9b85e8becc"
     }
