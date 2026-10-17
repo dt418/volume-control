@@ -14,6 +14,30 @@
   macOS zip/dmg/installer, Linux tar.gz/deb/rpm/AppImage/installer, and
   SHA256SUMS.txt).
 
+- Follow-up release proof: PR #55 merged as `31679ce55497d12e4d63cd83a3796a2624534eb7`;
+  required CI run `39004662581` and tag release run `39005424195` both
+  completed with `success`. The public `v0.1.7` release is not a draft and
+  exposes all twelve expected assets; release notes were updated on the
+  published release.
+- Downloaded `VolumeControl_0.1.7_x64-setup.exe` hashes to
+  `541c57e8f7b57f571559278e167be4123923a2cfb22cb776791d84519e30b92b`,
+  exactly matching `SHA256SUMS.txt`. `scripts/generate-winget-manifest.sh`
+  generated the 1.12 `dt418.VolumeControl` manifest and
+  `winget validate --manifest` reported `Manifest validation succeeded.`
+- Winget PR [#454508](https://github.com/microsoft/winget-pkgs/pull/454508)
+  now carries v0.1.7 (replacing its pending v0.1.5 submission). Computer-use
+  opened the live Chrome page and confirmed its open title, version, installer
+  URL, and SHA-256. Microsoft checks 01–04 were successful at capture time;
+  remaining asynchronous checks and moderator approval are external and still
+  pending before catalog publication.
+- Pre-push review: independent guard-core, gate-chain, and wiring/records
+  reviewers inspected this records-only diff; all reported no findings.
+- Full gate follow-up: the first `ship.sh --dry-run` exposed only the fresh
+  worktree's missing ignored `frontend/dist`; the documented
+  `npm ci --prefix frontend && npm run build --prefix frontend` setup produced
+  it. The rerun passed the records guard, format/lint (fmt, clippy, and Rust
+  tests), records self-test, and format-lint smoke test without source changes.
+
 ## Session 109 (2026-10-17) - v0.1.6 published
 
 - The AppImage icon fix landed (#52) and `feat/app-i18n` (#46) and the record

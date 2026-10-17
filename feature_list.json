@@ -21,14 +21,20 @@
       "area": "release",
       "title": "Release 0.1.7 with the bilingual UI",
       "user_visible_behavior": "The next tagged release carries the EN/VI interface, the tray update check, the faster startup path, the record merge drivers, and the format-lint lock fix on top of the v0.1.6 packaging set (Windows installer and archive, macOS zip and dmg, Linux tar.gz, deb, rpm and AppImage, plus the three installer scripts and SHA256SUMS.txt).",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
-        "Local: cargo fmt --all --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, and cargo test --workspace --no-default-features pass with the 0.1.7 version bump.",
-        "Local: bash scripts/test-release-workflow.sh, bash scripts/test-records-merge.sh, bash scripts/test-install-unix.sh, and the PowerShell installer suite pass.",
-        "CI (required before the tag): the pull request is green on Windows, macOS, and Ubuntu; the tag run then publishes and verifies all twelve assets."
+        "CI: PR #55 merged as 31679ce55497d12e4d63cd83a3796a2624534eb7 after run 39004662581 completed with conclusion success.",
+        "Release: tag run 39005424195 completed with conclusion success; public GitHub release v0.1.7 is not a draft and contains twelve assets (Windows installer/archive/bootstrap, macOS zip/dmg/installer, Linux tar.gz/deb/rpm/AppImage/installer, and SHA256SUMS.txt).",
+        "Installer integrity: the downloaded VolumeControl_0.1.7_x64-setup.exe SHA-256 is 541c57e8f7b57f571559278e167be4123923a2cfb22cb776791d84519e30b92b, matching SHA256SUMS.txt; winget validate --manifest for the generated 1.12 manifest passed.",
+        "Computer-use proof: Chrome rendered winget PR #454508 as open with title/version 0.1.7 and the published installer URL/SHA-256; its PR, manifest, URL, and URL-domain checks completed successfully while later Microsoft validation stages remained queued or in progress."
       ],
-      "evidence": [],
-      "notes": "The version bump touches the workspace manifests, src-tauri/tauri.conf.json, frontend/package.json and its lock file, and the CHANGELOG; the tag is created only after the merge commit is green."
+      "evidence": [
+        "Session 110 follow-up (2026-10-17): release notes were set on the public v0.1.7 release after PR #55 merge; release and asset API queries, downloaded checksum verification, local winget validation, and a visible GitHub PR inspection produced the verification above.",
+        "Winget PR #454508 replaces the pending 0.1.5 submission with the generated 0.1.7 manifests. Microsoft moderator approval and remaining asynchronous validation are external prerequisites for catalog publication, not evidence omitted from this release record.",
+        "Pre-push review: independent guard-core, gate-chain, and wiring/records reviewers inspected this records-only diff and reported no findings.",
+        "Full ship dry-run: after the documented ignored frontend build setup, bash scripts/ship.sh --dry-run passed its records guard, format/lint gate (including clippy and cargo test), records self-test, and format-lint smoke test."
+      ],
+      "notes": "The version bump touched the workspace manifests, src-tauri/tauri.conf.json, frontend/package.json and its lock file, and the CHANGELOG. The tagged release is complete; the independent winget catalog submission remains open for its required external approval."
     },
     {
       "id": "vol-089",
