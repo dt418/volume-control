@@ -1,5 +1,26 @@
 # Progress Log
 
+## Session 109 (2026-10-17) - v0.1.6 published
+
+- The AppImage icon fix landed (#52) and `feat/app-i18n` (#46) and the record
+  merge drivers (#51) followed, so the tag was re-created at the merged main
+  commit and the release run finished green (630 job steps, 0 failures).
+- Published assets (12): `VolumeControl_0.1.6_x64-setup.exe`,
+  `volumecontrol-0.1.6-windows.zip`, `Install-VolumeControl.ps1`,
+  `volumecontrol-0.1.6-macos.zip`, `volumecontrol-0.1.6-macos.dmg`,
+  `install-macos.sh`, `volumecontrol-0.1.6-linux-amd64.tar.gz` and its
+  `.deb`, `.rpm`, `.AppImage` variants, `install-linux.sh`, and
+  `SHA256SUMS.txt`; the release notes carry the asset legend and the three
+  one-line install commands.
+- Live check of the published Windows bootstrap under Windows PowerShell 5.1
+  with cp1252 decoding: 19036 bytes, 0 non-ASCII bytes, no BOM, the scriptblock
+  parses (`Action,Version,Silent`), and the SHA-256 matches the release
+  manifest - the v0.1.5 `irm` regression is gone on the published asset.
+- PR #45 (release-workflow HEAD resolution + format-lint lock release) was
+  merged forward onto main with the record drivers; its records merged without
+  conflict markers, and the branch keeps the lock fix plus the suite check that
+  proves a refused run releases the lock.
+
 ## Session 105 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
 
 - Goal: unblock PR #43 CI; the macOS job failed before running its tests.

@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-17T12:05",
+  "last_updated": "2026-10-17T13:20",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -1284,7 +1284,7 @@
       "area": "release",
       "title": "Native Linux and macOS packages in every release",
       "user_visible_behavior": "Each release ships native packages next to the archives: .deb, .rpm, and .AppImage for Linux and a .dmg for macOS, built by the platform jobs, staged under canonical names, declared in the release metadata, and verified before publish.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "Local: bash scripts/test-release-workflow.sh passes with the expanded per-platform sets (macOS: zip + installer + dmg; Ubuntu: tarball + installer + deb + rpm + AppImage) and the refreshed fixtures.",
         "CI (required before the tag): the macOS job builds --bundles dmg and the Ubuntu job builds --bundles deb,rpm,appimage; both jobs then run package.sh, the verifier and the installer suite."
@@ -1295,7 +1295,8 @@
         "Session 108 (2026-10-17, CI follow-up): the v0.1.6 macos+ubuntu release jobs failed in scripts/test-install-unix.sh; the fixture stubs lacked +x (MSYS masks this on Windows) and the FAIL branches hid the installer output. The suite now chmods the stubs and echoes captured output on failure; the local run stays 23/23 and PR #50 CI is the POSIX proof.",
         "Session 108 (2026-10-17, bash 3.2): the macOS runner uses bash 3.2, where `${var,,}` is a bad substitution; the installers and verify-release-metadata.sh now lowercase digests via tr, and the harness plus installer suite pass locally.",
         "Session 108 (2026-10-17, naming + CI bundle path): Linux bundles are staged as volumecontrol-<ver>-linux-amd64.{tar.gz,deb,rpm,AppImage} (the rpm was mislabelled -ubuntu); package.sh, install-linux.sh, the verifier set patterns, the release checklist and all fixtures follow the new scheme. The ci.yml macOS job now builds --bundles dmg so the packaging step that calls package.sh can stage the dmg, and package.sh bundle lookups are set -e safe (|| true) so a missing bundle prints its explicit error. Harness: 1 new static assertion, all checks pass.",
-        "Session 109 (2026-10-17, AppImage icon): the v0.1.6 release run failed on the Ubuntu leg with 'couldn't find a square icon to use as AppImage icon' from the Tauri bundler, because src-tauri/tauri.conf.json declared no bundle icon list (deb and rpm bundled first). The config now declares the square PNG set plus the icns/ico, the ubuntu job of ci.yml builds --bundles deb,rpm,appimage so the failure surfaces on the pull request, and the release harness asserts both the ci bundle flag and the declared square icon."
+        "Session 109 (2026-10-17, AppImage icon): the v0.1.6 release run failed on the Ubuntu leg with 'couldn't find a square icon to use as AppImage icon' from the Tauri bundler, because src-tauri/tauri.conf.json declared no bundle icon list (deb and rpm bundled first). The config now declares the square PNG set plus the icns/ico, the ubuntu job of ci.yml builds --bundles deb,rpm,appimage so the failure surfaces on the pull request, and the release harness asserts both the ci bundle flag and the declared square icon.",
+        "Session 109 (2026-10-17, v0.1.6 published): after the AppImage icon fix the tag was re-created at the merged main commit and the release run went green (630 job steps, 0 failures); the published release carries 12 assets - windows zip + NSIS setup + Install-VolumeControl.ps1, macos zip + dmg + install-macos.sh, linux-amd64 tar.gz + deb + rpm + AppImage + install-linux.sh, and SHA256SUMS.txt - and the Pages/README one-liners resolve through releases/latest/download. Live check of the published bootstrap on Windows PowerShell 5.1 (cp1252): 19036 bytes, 0 non-ASCII bytes, no BOM, scriptblock parses with params Action,Version,Silent, and its SHA-256 matches the release manifest (e31b6722...)."
       ],
       "notes": "The archives (zip/tarball) stay the install path for the one-line scripts; the native packages are additive for users who prefer their distro/OS package managers."
     },
