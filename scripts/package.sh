@@ -25,10 +25,11 @@ esac
 test -s "$bin" || { echo "release binary missing: $bin" >&2 ; exit 1; }
 
 name="volumecontrol-${version}-${platform}.${ext}"
+# A release artifact directory is promoted as a unit. Recreate it so stale
+# packages, checksums, or metadata from an earlier local run cannot leak in
+# (portable across GNU and BSD userlands).
+rm -rf dist
 mkdir -p dist
-# A release artifact directory is promoted as a unit. Remove stale packages,
-# checksums, or metadata from an earlier local run before creating this one.
-find dist -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 case "$ext" in
   zip)
@@ -80,16 +81,16 @@ case "$platform" in
   macos)
     test -s packaging/install-macos.sh || { echo "missing packaging/install-macos.sh" >&2; exit 1; }
     cp packaging/install-macos.sh dist/install-macos.sh
-    dmg="$(find target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit 2>/dev/null || true)"
+    dmg="$(find target/release/bundle/dmg -type f -name '*.dmg' 2>/dev/null | head -n 1)"
     test -n "$dmg" && test -s "$dmg" || { echo "release dmg missing under target/release/bundle/dmg" >&2; exit 1; }
     cp "$dmg" "dist/volumecontrol-${version}-macos.dmg"
     ;;
   ubuntu)
     test -s packaging/install-linux.sh || { echo "missing packaging/install-linux.sh" >&2; exit 1; }
     cp packaging/install-linux.sh dist/install-linux.sh
-    deb="$(find target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null || true)"
-    rpm="$(find target/release/bundle/rpm -maxdepth 1 -name '*.rpm' -print -quit 2>/dev/null || true)"
-    appimage="$(find target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit 2>/dev/null || true)"
+    deb="$(find target/release/bundle/deb -type f -name '*.deb' 2>/dev/null | head -n 1)"
+    rpm="$(find target/release/bundle/rpm -type f -name '*.rpm' 2>/dev/null | head -n 1)"
+    appimage="$(find target/release/bundle/appimage -type f -name '*.AppImage' 2>/dev/null | head -n 1)"
     test -n "$deb" && test -s "$deb" || { echo "release deb missing under target/release/bundle/deb" >&2; exit 1; }
     test -n "$rpm" && test -s "$rpm" || { echo "release rpm missing under target/release/bundle/rpm" >&2; exit 1; }
     test -n "$appimage" && test -s "$appimage" || { echo "release appimage missing under target/release/bundle/appimage" >&2; exit 1; }

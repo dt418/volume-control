@@ -20,6 +20,10 @@
   replaced by the per-platform bundle contract.
 - Docs: README (EN/VI) names the native packages; CHANGELOG [Unreleased]
   records them. `bash scripts/test-release-workflow.sh` passes locally.
+- Portability fix after the v0.1.6 macOS job failed: GNU-only
+  `dd status=none` and `find -maxdepth/-mindepth/-quit` replaced with
+  portable forms in `scripts/package.sh`, the two installers, and
+  `scripts/test-install-unix.sh`; harness + installer suite still pass.
 
 ## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
 

@@ -122,7 +122,7 @@ resolve_tag() {
   fi
   if [[ "$RELEASE_BASE" == file://* ]]; then
     local tag
-    tag="$(basename "$(dirname "$(find "${RELEASE_BASE#file://}" -maxdepth 2 -name SHA256SUMS.txt -print -quit)")")"
+    tag="$(basename "$(dirname "$(find "${RELEASE_BASE#file://}" -type f -name SHA256SUMS.txt | head -n 1)")")"
     [[ -n "$tag" ]] || die "download.failed" "no fixture release under $RELEASE_BASE"
     printf '%s' "$tag"
     return

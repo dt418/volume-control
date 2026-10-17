@@ -143,7 +143,7 @@ fi
 
 # Checksum tampering: flip a byte in the zip copy the installer will fetch.
 cp "$release_dir/volumecontrol-$version-macos.zip" "$release_dir/keep.zip"
-printf 'x' | dd of="$release_dir/volumecontrol-$version-macos.zip" bs=1 seek=10 conv=notrunc status=none
+printf 'x' | dd of="$release_dir/volumecontrol-$version-macos.zip" bs=1 seek=10 conv=notrunc 2>/dev/null
 if out="$(run_macos install "$fixture_root/macos-bad" 2>&1)"; then
   report FAIL 'macos install rejects a digest mismatch'
 else
@@ -209,7 +209,7 @@ else
 fi
 
 cp "$release_dir/volumecontrol-$version-ubuntu.tar.gz" "$release_dir/keep.tar.gz"
-printf 'x' | dd of="$release_dir/volumecontrol-$version-ubuntu.tar.gz" bs=1 seek=10 conv=notrunc status=none
+printf 'x' | dd of="$release_dir/volumecontrol-$version-ubuntu.tar.gz" bs=1 seek=10 conv=notrunc 2>/dev/null
 if out="$(run_linux install "$fixture_root/linux-bad" 2>&1)"; then
   report FAIL 'linux install rejects a digest mismatch'
 else

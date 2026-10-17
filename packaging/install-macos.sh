@@ -123,7 +123,7 @@ resolve_tag() {
   if [[ "$RELEASE_BASE" == file://* ]]; then
     # Fixture layout: <base>/<tag>/ holds the release assets.
     local tag_dir tag
-    tag_dir="$(dirname "$(find "${RELEASE_BASE#file://}" -maxdepth 2 -name SHA256SUMS.txt -print -quit)")"
+    tag_dir="$(dirname "$(find "${RELEASE_BASE#file://}" -type f -name SHA256SUMS.txt | head -n 1)")"
     tag="$(basename "$tag_dir")"
     [[ -n "$tag" ]] || die "download.failed" "no fixture release under $RELEASE_BASE"
     printf '%s' "$tag"
