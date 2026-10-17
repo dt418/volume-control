@@ -16,6 +16,23 @@
                       },
     "features":  [
                          {
+                             "id":  "vol-092",
+                             "priority":  92,
+                             "area":  "release",
+                             "title":  "macOS/Linux one-line installers and cp1252-safe bootstrap",
+                             "user_visible_behavior":  "macOS and Linux users install, update, and uninstall VolumeControl with one curl command from the release: the platform installer script verifies SHA-256 against the release manifest, installs into user scope ($HOME/Applications on macOS, $HOME/.local on Linux), keeps config across update and uninstall, and speaks English or Vietnamese. The Windows bootstrap keeps working through the documented irm one-liner because the published script is pure ASCII.",
+                             "status":  "in_progress",
+                             "verification":  [
+                                                  "Local: bash scripts/test-install-unix.sh passes 23/23 checks (install/update/uninstall, overwrite refusal, digest mismatch, missing manifest entry, malformed version, VI messages, latest-tag resolution) against a fixture release driven through the real scripts.",
+                                                  "Local: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 exits PASS including the new cp1252 regression set (pure-ASCII source, no BOM, cp1252-decoded scriptblock parses, VI text renders from the decoded copy).",
+                                                  "Local: bash scripts/test-release-workflow.sh passes with the new per-platform artifact sets (macOS/Ubuntu: one package plus one installer script) and the new macOS fixture.",
+                                                  "CI (required before the tag): the macOS and Ubuntu jobs of the pull request run bash scripts/test-install-unix.sh natively; the release workflow then publishes install-macos.sh / install-linux.sh next to each package."
+                                              ],
+                             "evidence":  [
+                                              "Session 107 (2026-10-17): live check of the published v0.1.5 assets found the documented irm one-liner broken (irm on Windows PowerShell 5.1 returned the UTF-8 BOM as i\u00bb\u00bf and scriptblock::Create raised a parse error); the bootstrap is now ASCII-only with [char] escapes, and the local irm simulation parses and renders VI correctly. packaging/install-macos.sh and packaging/install-linux.sh were added, staged per platform in scripts/package.sh, required by scripts/verify-release-metadata.sh, covered by fixtures (release-valid-macos added; ubuntu fixtures renamed to the real -ubuntu.tar.gz pattern), documented on the product page (macOS/Linux tab) and run in CI on macOS/Ubuntu."
+                                          ],
+                             "notes":  "The bash installers are exercised end-to-end by scripts/test-install-unix.sh on any POSIX shell with curl; CI runs the same suite natively on macOS and Ubuntu. Windows keeps its PowerShell bootstrap and the winget manifest path."
+                         },                     {
                              "id":  "vol-091",
                              "priority":  91,
                              "area":  "release",

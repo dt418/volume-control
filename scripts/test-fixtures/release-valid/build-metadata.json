@@ -6,7 +6,11 @@
   "node": "v22.0.0",
   "artifacts": [
     {
-      "name": "volumecontrol-test.tar.gz",
+      "name": "install-linux.sh",
+      "sha256": "999b140517a0b685b7839c93ae41e40e7e4058627c6b0cdc0b693a8139e4f32c"
+    },
+    {
+      "name": "volumecontrol-0.0.0-ubuntu.tar.gz",
       "sha256": "c208935ff7856f2a555410d17b68798d83d241d974ea320f9424645879e61acf"
     }
   ]

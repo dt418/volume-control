@@ -1,0 +1,2 @@
+91e02601a5f6763ec45e3a09b5969e625b47683649f6e759070e67139d24871a  install-macos.sh
+0d7e33d2f721bfc1adadc31ca91a95d815f45b4bd9262be2bb946f9b85e8becc  volumecontrol-test-macos.zip

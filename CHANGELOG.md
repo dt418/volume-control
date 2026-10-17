@@ -4,6 +4,25 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- macOS/Linux one-line installers: `install-macos.sh` and `install-linux.sh`
+  ship next to each package in the release, verify SHA-256 against the
+  release `SHA256SUMS.txt` before unpacking, and cover install, update, and
+  uninstall in user scope with EN/VI messages (`VOLUMECTL_LANG`,
+  `VOLUMECTL_VERSION`, `VOLUMECTL_INSTALL_ROOT` overrides). The release
+  verifier, the fixture matrix (including a new macOS fixture), and the
+  macOS/Ubuntu CI jobs now exercise the per-platform artifact sets.
+
+### Fixed
+
+- The published PowerShell bootstrap is now pure ASCII with `[char]` escapes
+  for Vietnamese text. Windows PowerShell 5.1 decodes `irm` text/plain
+  responses as cp1252, so the previous UTF-8 BOM arrived as `i»¿` and the
+  documented `[scriptblock]::Create((irm ...))` one-liner failed to parse;
+  the test suite now decodes the script as cp1252 and asserts that it parses
+  and renders the Vietnamese messages correctly.
+
 ## [0.1.5] - 2026-10-17
 
 ### Added
