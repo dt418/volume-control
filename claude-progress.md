@@ -26,6 +26,12 @@
   change still merges conflict-free (git reads merge attributes from the branch
   being merged into). The suite drives its end-to-end merge through the installer
   and asserts the overrides survive a missing `.gitattributes` (9 checks).
+- The drivers are installed into `<git-common-dir>/records-merge` and the configured
+  command resolves that path through git at merge time: git reads merge attributes
+  from the branch being merged into and no branch carries the scripts yet.
+  `install-merge-drivers.sh` takes an optional target repository, and the end-to-end
+  suite now installs into a throwaway clone whose tree has neither `.gitattributes`
+  nor the driver scripts, then merges main into it successfully.
 
 ## Session 108 (2026-10-17) - Native Linux and macOS packages
 

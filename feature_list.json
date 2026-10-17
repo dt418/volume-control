@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-17T11:30",
+  "last_updated": "2026-10-17T12:05",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -29,7 +29,8 @@
       ],
       "evidence": [
         "Session 109 (2026-10-17): every parallel branch edits feature_list.json and claude-progress.md, so each PR arrived CONFLICTING on purely additive record edits (PR #45 harness/git-path work, PR #50 release work, PR #46 i18n). Added scripts/merge-records-json.sh (semantic union keyed by feature id, scalar changes resolved against the merge base, newest last_updated, status rank passing > in_progress/blocked > not_started) and scripts/merge-records-md.sh (heading-block union for the markdown logs), marked the three record files in .gitattributes, registered them through scripts/install-merge-drivers.sh plus both hook installers, and covered the behaviour with scripts/test-records-merge.sh (8 checks, including an end-to-end git merge in a temp repository).",
-        "Session 109 (2026-10-17, stale branches): git reads merge attributes from the branch being merged into, so a topic branch that predates the .gitattributes change would still conflict. scripts/install-merge-drivers.sh now also records the three attribute lines in .git/info/attributes, and scripts/test-records-merge.sh drives its end-to-end merge through that installer (9 checks) and asserts the overrides still apply once .gitattributes is gone."
+        "Session 109 (2026-10-17, stale branches): git reads merge attributes from the branch being merged into, so a topic branch that predates the .gitattributes change would still conflict. scripts/install-merge-drivers.sh now also records the three attribute lines in .git/info/attributes, and scripts/test-records-merge.sh drives its end-to-end merge through that installer (9 checks) and asserts the overrides still apply once .gitattributes is gone.",
+        "Session 109 (2026-10-17, driver location): the drivers now live in <git-common-dir>/records-merge and the configured command resolves that path through git at merge time, because git reads merge attributes from the branch being merged into and no branch carries the scripts until the driver PR lands. install-merge-drivers.sh takes an optional target repository, the end-to-end suite installs into its throwaway clone that has neither .gitattributes nor the driver scripts in the tree, and the merge still lands both sides (9 checks)."
       ],
       "notes": "Drivers are local configuration, so a branch still has to merge origin/main locally (git runs registered drivers only there); GitHub's own merge UI cannot use them. The fallback stays safe: an unregistered clone, a driver failure, or already-conflicted input leaves the normal conflict for the operator."
     },

@@ -9,20 +9,37 @@
 # predates the .gitattributes change, so a stale topic branch still merges the
 # record files conflict-free.
 #
-# Usage: bash scripts/install-merge-drivers.sh
+# Usage: bash scripts/install-merge-drivers.sh [repository]
+# Defaults to the repository this script lives in.
 set -e
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+target="${1:-$(cd "$script_dir/.." && pwd)}"
+target="$(cd "$target" && pwd)"
 
-git -C "$root" config merge.records-json.name "semantic merge for feature_list.json"
-git -C "$root" config merge.records-json.driver 'bash scripts/merge-records-json.sh %O %A %B'
-git -C "$root" config merge.records-md.name "heading merge for the markdown record logs"
-git -C "$root" config merge.records-md.driver 'bash scripts/merge-records-md.sh %O %A %B'
+# The drivers live in the clone's git directory, not in the working tree: a
+# topic branch that predates them (or a merge that is still in flight) has no
+# scripts/merge-records-*.sh to run, and git reads merge attributes from the
+# branch being merged into.
+git_dir="$(git -C "$target" rev-parse --git-common-dir)"
+case "$git_dir" in
+  /*|[A-Za-z]:*) : ;;
+  *) git_dir="$target/$git_dir" ;;
+esac
+driver_dir="$git_dir/records-merge"
+mkdir -p "$driver_dir"
+cp "$script_dir/merge-records-json.sh" "$driver_dir/merge-records-json.sh"
+cp "$script_dir/merge-records-md.sh" "$driver_dir/merge-records-md.sh"
 
-info_attributes="$(git -C "$root" rev-parse --git-path info/attributes)"
+git -C "$target" config merge.records-json.name "semantic merge for feature_list.json"
+git -C "$target" config merge.records-json.driver 'bash "$(git rev-parse --git-common-dir)/records-merge/merge-records-json.sh" %O %A %B'
+git -C "$target" config merge.records-md.name "heading merge for the markdown record logs"
+git -C "$target" config merge.records-md.driver 'bash "$(git rev-parse --git-common-dir)/records-merge/merge-records-md.sh" %O %A %B'
+
+info_attributes="$(git -C "$target" rev-parse --git-path info/attributes)"
 case "$info_attributes" in
   /*|[A-Za-z]:*) : ;;
-  *) info_attributes="$root/$info_attributes" ;;
+  *) info_attributes="$target/$info_attributes" ;;
 esac
 mkdir -p "$(dirname "$info_attributes")"
 touch "$info_attributes"
@@ -36,6 +53,5 @@ do
   fi
 done
 
-echo "Installed merge drivers: $(git -C "$root" config --get merge.records-json.driver)"
-echo "                         $(git -C "$root" config --get merge.records-md.driver)"
-echo "Attribute overrides in:  $info_attributes"
+echo "Installed merge drivers in: $driver_dir"
+echo "Attribute overrides in:     $info_attributes"

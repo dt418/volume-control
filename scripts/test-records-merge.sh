@@ -198,14 +198,14 @@ fi
 # --- end-to-end through git ----------------------------------------------
 
 e2e="$work/e2e"
-mkdir -p "$e2e/scripts"
-cp "$json_driver" "$md_driver" "$root/scripts/install-merge-drivers.sh" "$e2e/scripts/"
+mkdir -p "$e2e"
 (
   cd "$e2e" || exit 1
   git init --quiet -b main
   git config user.email "records@example.invalid"
   git config user.name "records test"
-  cp "$root/.gitattributes" .gitattributes
+  # The branch predates the drivers on purpose: no .gitattributes and no
+  # scripts/merge-records-*.sh in the tree, which is the stale-branch case.
   cat > claude-progress.md <<'MD'
 # Progress Log
 
@@ -267,9 +267,10 @@ PY
   git commit --quiet -m "main records"
 
   git checkout --quiet topic
-  # Register the drivers the way a clone does (config plus .git/info/attributes)
-  # instead of passing -c flags, so the documented flow is what gets tested.
-  bash scripts/install-merge-drivers.sh > /dev/null
+  # Register the drivers the way a clone does (config, .git/records-merge, and
+  # .git/info/attributes) instead of passing -c flags, so the documented flow is
+  # what gets tested.
+  bash "$root/scripts/install-merge-drivers.sh" "$e2e" > /dev/null
   git merge --no-edit main > "$work/e2e.log" 2>&1
   echo "merge-exit=$?" >> "$work/e2e.log"
 )
@@ -300,12 +301,14 @@ else
   report FAIL 'the merged checkout carries both sides of both record files'
 fi
 
-# A branch that predates .gitattributes still merges conflict-free because the
-# installer records the attributes in .git/info/attributes too.
-if (cd "$e2e" && rm -f .gitattributes && [ "$(git check-attr merge -- claude-progress.md feature_list.json | grep -c 'merge: records')" -eq 2 ]); then
-  report ok 'installer attributes cover branches that predate .gitattributes'
+# The installer records the attributes in .git/info/attributes and the driver
+# scripts inside .git/records-merge, so neither the branch nor the working tree
+# needs to carry them.
+if (cd "$e2e" && [ ! -e .gitattributes ] && [ ! -e scripts/merge-records-md.sh ] && \
+    [ "$(git check-attr merge -- claude-progress.md feature_list.json | grep -c 'merge: records')" -eq 2 ]); then
+  report ok 'drivers live in the git directory and cover a branch without them'
 else
-  report FAIL 'installer attributes cover branches that predate .gitattributes'
+  report FAIL 'drivers live in the git directory and cover a branch without them'
 fi
 
 if [ "$failures" -eq 0 ]; then
