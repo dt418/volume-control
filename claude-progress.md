@@ -1,96 +1,55 @@
 # Progress Log
 
-## Session 105 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
+## Session 110 (2026-10-17) - Merge main into the harness branch: record-id collision + WSL guard fix
 
-- Goal: unblock PR #43 CI; the macOS job failed before running its tests.
-- Root cause: `fe45d18` added `AppAction::CheckUpdates`, but
-  `crates/volumectl/src/macos_app.rs::apply_action` had no arm for it, so
-  the `target_os = "macos"` build died with `error[E0004]` (job 117239883024,
-  step "Run macOS Tauri WebDriver E2E", which builds the debug host first).
-  Windows and Linux never compile that file, so the local workspace gate was
-  green while macOS was red.
-- Fix: the macOS host spawns the localized `updates::check_for_updates` fetch
-  on a worker thread (the fetch blocks up to 10 s and must not stall the
-  AppKit main thread) and records the result in the log; this host still has
-  no tray entry or overlay text channel for update results (vol-076).
-- Same root cause, same commit: the two platform renderer test fixtures
-  (`ui/platform/linux/renderer.rs`, `ui/platform/macos/renderer.rs`) now set
-  the `language` field their `AppState` literals were missing (added by
-  `fe45d18`), so the Linux/macOS `cargo test` builds of those `#[cfg(test)]`
-  modules compile here too.
-- Same root cause, follow-up commit: the two platform renderer smoke tests
-  (`tests/appkit_smoke.rs`, `tests/gtk_smoke.rs`) were still calling
-  `render_overlay` / `set_overlay_content` / `set_mixer_controls` /
-  `update_mixer_value` with their pre-`fe45d18` arities; they now pass
-  `Language::En` (the language those no-panic checks were written under).
-  CI run 38981490852 proved it: the macOS job's build + Tauri E2E steps passed
-  and only `cargo test` failed, compiling `appkit_smoke` (job 117243179633)
-  and `gtk_smoke` (job 117243179587) with `error[E0061]` x4 each.
-- Verification: `cargo fmt --all --check`, `git diff --check`,
-  `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
-  and `cargo test --workspace --no-default-features` exit 0 on Windows. The
-  darwin target cannot be cross-checked on this host (`cargo check --target
-  x86_64-apple-darwin` stops in dependency build scripts: `libpulse-sys`
-  pkg-config cross probe, then `cc-rs` ToolNotFound for the coreaudio C
-  sources), so the macOS job of the CI run on this commit is the compile
-  proof.
-- Close-out: CI run 38983711274 on the merged head 3c9ed2c (main PR #44
-  merged in, vol-089 `passing`) is fully green - Windows, Ubuntu 24.04
-  (CLI fallback + gtk-renderer + layer-shell, gtk smoke under Xvfb, Linux
-  Tauri E2E), macOS (build + `cargo test` incl. AppKit smoke + Tauri
-  WebDriver E2E + bundle verification), Fast checks and the Release gate.
-
-## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
-
-- Config: `[general] language = en|vi` (`Language` enum, serde default en,
-  strict INI parse/write, `SettingsPatch.language` with fail-early
-  validation). Round-trip + malformed-value tests added.
-- Rust surfaces: new `locale` module (EN/VI tables + dynamic blacklist
-  toasts + update-check strings). Tray menus (Windows `muda` + Tauri), the
-  volume overlay labels and toasts, the Win32 mixer window (title, UIA
-  names, buttons; relabeled on every show), the Win32 settings window
-  (header, nav, section titles/subtitles), and the GTK/macOS mixer controls
-  now render from the locale table. `update_settings` relabels the tray when
-  the patch carries a language.
-- Update check: new `updates` module (ureq; GitHub `releases/latest`;
-  pure `is_newer` with numeric component compare and fail-closed parsing) and
-  `TrayCommand::CheckUpdates` (`check_updates`) wired into both hosts; the
-  Tauri dispatch runs the fetch off the core lock and toasts the localized
-  result on the overlay.
-- Webview: `frontend/src/lib/i18n.tsx` (typed EN/VI dictionaries,
-  `LanguageProvider`/`useT`, `asLanguage` normalization) localizes the Mixer
-  surface, every Settings section + shell, the Help surface, and the
-  overlay; General gains the language selector and the draft bootstrap
-  hydrates `language`. Surface tests render under the EN default.
-- PowerShell: `Install-VolumeControl.ps1` message table (23 IDs) with
-  `VOLUMECONTROL_LANG` override then Windows UI culture; EN texts byte-
-  identical; both scripts copied into this worktree from the bootstrap branch
-  and given a UTF-8 BOM so PS 5.1 does not mojibake VI at parse time.
-- Verification: cargo test (292 lib + suites) PASS; clippy `-D warnings` and
-  `fmt --check` exit 0; frontend tsc clean + vitest 17 files/105 tests PASS;
-  real-network update check printed EN and VI results against the live
-  GitHub API (`v0.1.4`, "up to date"); PowerShell suite PASS in both
-  languages (agent-run and parent rerun).
-- Encoding/limits: NSIS installer shell stays English (no per-language MUI
-  in the current bundle config); GTK host records the update result in
-  `HostCore::update_message` (no overlay text channel).
-- REA / performance pass: env-gated startup stage trace in the Tauri setup
-  (`VOLUMECTL_STARTUP_TRACE=1`, zero-cost when off) measured ready in
-  59-116 ms over 6 debug runs (native surfaces 33-46 ms, audio + core
-  33-39 ms, duplicate launch exits in ~1 ms). The update check now shows an
-  immediate localized "Checking for updates…" overlay card while the worker
-  thread fetches. `docs/performance.md` records the stage table and the tao
-  PerMonitorV2 finding. REA artifact lanes on the built PE:
-  `inspect_rust_binary` (pe/amd64, rustc commit inferred) and
-  `inspect_pe_resources` (9 resources, icon 16-256 px, manifest =
-  Common-Controls only); decompiler providers and the layout/objdump lanes
-  are unavailable on this host and were reported, not approximated.
-- CI follow-up: PR #43 failed the macOS/Ubuntu jobs on the new renderer
-  signatures; the Linux/macOS smoke binaries (`gtk_smoke.rs`,
-  `appkit_smoke.rs`) now pass `Language::En` to `set_overlay_content`,
-  `render_overlay`, `set_mixer_controls`, and `update_mixer_value`, and the
-  macOS host handles `AppAction::CheckUpdates`. These files are cfg-gated to
-  their platforms, so CI is the compile check for them.
+- Merge: `origin/main` (`1ba66e5`, App i18n #46) merged into
+  `fix/release-workflow-git-path-resolution` as `0c798cc` with the record
+  merge drivers registered, so `feature_list.json`, `claude-progress.md` and
+  `session-handoff.md` landed without conflict markers; the driver unioned
+  evidence under shared ids and kept the furthest-along status per id.
+- Collision found in the merged ledger: this branch had rewritten main's
+  `vol-089` (macOS `AppAction::CheckUpdates`) into a tooling record for the
+  format-lint lock fix, so the driver unioned two different features under one
+  id and main's macOS title/behavior text fell out of the ledger. Resolved in
+  the records: `vol-089` restored verbatim from `origin/main`, the format-lint
+  record renumbered to `vol-095` carrying only its own two verification lines
+  and the Session 103 evidence, and `vol-096` added for the guard fix below.
+  Audited: every main-side feature id and every main-side
+  evidence/verification line is still present (61 -> 63 features, ids unique,
+  `priority == id` for all, `vol-089.notes` gains one provenance sentence).
+- `scripts/check-records.sh`: the same gitdir defect vol-088 fixed for the
+  release harness, now in the records guard. In a worktree created by native
+  Windows git, `.git` holds `gitdir: C:/...`, which a POSIX git (WSL) resolves
+  against the cwd: under WSL bash every git call in the guard died with exit
+  128 and the guard reported `FAIL - git diff --cached failed (exit 128)`.
+  Because `scripts/format-lint.sh` runs `sh scripts/check-records.sh --staged`,
+  the WSL Linux gate itself could not pass. The guard now walks up to the
+  `.git` marker, converts drive-letter gitdirs with `wslpath -u` (WSL) or
+  `cygpath -u` (MSYS), and exports `GIT_DIR`/`GIT_WORK_TREE` - only after the
+  plain `git rev-parse --git-dir` already failed, so ordinary checkouts and
+  POSIX CI keep the ambient environment.
+- Verification (fresh, this worktree):
+  - WSL bash (`C:/Windows/System32/bash.exe`, GNU bash 5.2.21, `/usr/bin/git`
+    2.43.0): `bash scripts/check-records.sh --staged` exits 0. Before the fix
+    the same call exited 1 with `fatal: not a git repository:
+    /mnt/c/Users/Thanh/orca/volume-control-windows-release-bootstrap/C:/Users/
+    Thanh/orca/volume-control/.git/worktrees/volume-control-windows-release-bootstrap`.
+  - Negative (live, WSL bash): with a scratch file staged the guard reports
+    `this commit changes substantive files but not the records` with
+    `trigger: .tmp-wsl-guard-check`, so the fallback reads the real index
+    instead of passing vacuously; the clean index exits 0.
+  - MSYS `sh` (`C:/Program Files/Git/bin/sh.exe`): exit 0, first-call path
+    unchanged; `bash -n scripts/check-records.sh` clean.
+  - `scripts/test-check-records.sh`: 35 `ok`, exit 0.
+    `scripts/test-records-merge.sh`: 9 `ok`.
+  - `scripts/test-format-lint.sh` (Git Bash, `frontend/dist` built): all
+    format-lint smoke checks passed, exit 0, including
+    `refused run releases the concurrency lock`.
+  - Merge integrity: `git diff --check` clean, no conflict markers anywhere,
+    merged tree identical to this branch for the record files plus main's
+    i18n record edits absorbed (vol-091..094 at main's content).
+- Records: `vol-089` restored, `vol-095` + `vol-096` added; this entry is the
+  `claude-progress.md` half.
 
 ## Session 103 (2026-10-17) - Release-workflow harness HEAD resolution across shells
 
@@ -114,6 +73,18 @@
     (MSYS bash 5.3.15 with native Windows git) -> exit 0, all 36 `ok`; the
     first-call path is unchanged.
   - `bash -n scripts/test-release-workflow.sh` clean; `git diff --check` clean.
+- `scripts/test-format-lint.sh`: the concurrency lock was acquired before the
+  hermetic preconditions but released only by the EXIT trap installed after
+  them, so any refused run (modified `.claude/settings.local.json`, dirty
+  index) leaked `scripts/.test-format-lint.lock` and blocked every later run
+  with "already running". Hit for real while shipping this change set: an
+  external merge left the index unmerged, the smoke test refused and leaked
+  the lock, and the next `scripts/ship.sh --push` aborted at phase 4. The
+  release trap is now installed immediately after the lock is acquired (the
+  full cleanup trap still replaces it further down). Negative verification:
+  with a staged scratch file the suite prints `FAIL - the index has staged
+  changes` and the lock is absent afterwards; the full suite then passes and
+  releases the lock too.
 - Pre-push three-domain adversarial review (Domain A guard core, Domain B gate
   chain, Domain C wiring/records): no patch-introduced defect in any domain.
   Recorded follow-up (pre-existing, not touched here): the `pre-push-review`
@@ -3550,6 +3521,139 @@ fn get_window_pid_x11() -> Option<u32> {
 - Tag `v0.1.5` is pushed only after PR CI is green; the tag-triggered
   release workflow publishes the immutable asset set that makes
   `releases/latest/download/` serve the one-line install commands.
+
+## Session 105 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
+
+- Goal: unblock PR #43 CI; the macOS job failed before running its tests.
+- Root cause: `fe45d18` added `AppAction::CheckUpdates`, but
+  `crates/volumectl/src/macos_app.rs::apply_action` had no arm for it, so
+  the `target_os = "macos"` build died with `error[E0004]` (job 117239883024,
+  step "Run macOS Tauri WebDriver E2E", which builds the debug host first).
+  Windows and Linux never compile that file, so the local workspace gate was
+  green while macOS was red.
+- Fix: the macOS host spawns the localized `updates::check_for_updates` fetch
+  on a worker thread (the fetch blocks up to 10 s and must not stall the
+  AppKit main thread) and records the result in the log; this host still has
+  no tray entry or overlay text channel for update results (vol-076).
+- Same root cause, same commit: the two platform renderer test fixtures
+  (`ui/platform/linux/renderer.rs`, `ui/platform/macos/renderer.rs`) now set
+  the `language` field their `AppState` literals were missing (added by
+  `fe45d18`), so the Linux/macOS `cargo test` builds of those `#[cfg(test)]`
+  modules compile here too.
+- Same root cause, follow-up commit: the two platform renderer smoke tests
+  (`tests/appkit_smoke.rs`, `tests/gtk_smoke.rs`) were still calling
+  `render_overlay` / `set_overlay_content` / `set_mixer_controls` /
+  `update_mixer_value` with their pre-`fe45d18` arities; they now pass
+  `Language::En` (the language those no-panic checks were written under).
+  CI run 38981490852 proved it: the macOS job's build + Tauri E2E steps passed
+  and only `cargo test` failed, compiling `appkit_smoke` (job 117243179633)
+  and `gtk_smoke` (job 117243179587) with `error[E0061]` x4 each.
+- Verification: `cargo fmt --all --check`, `git diff --check`,
+  `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+  and `cargo test --workspace --no-default-features` exit 0 on Windows. The
+  darwin target cannot be cross-checked on this host (`cargo check --target
+  x86_64-apple-darwin` stops in dependency build scripts: `libpulse-sys`
+  pkg-config cross probe, then `cc-rs` ToolNotFound for the coreaudio C
+  sources), so the macOS job of the CI run on this commit is the compile
+  proof.
+- Close-out: CI run 38983711274 on the merged head 3c9ed2c (main PR #44
+  merged in, vol-089 `passing`) is fully green - Windows, Ubuntu 24.04
+  (CLI fallback + gtk-renderer + layer-shell, gtk smoke under Xvfb, Linux
+  Tauri E2E), macOS (build + `cargo test` incl. AppKit smoke + Tauri
+  WebDriver E2E + bundle verification), Fast checks and the Release gate.
+
+## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
+
+- Config: `[general] language = en|vi` (`Language` enum, serde default en,
+  strict INI parse/write, `SettingsPatch.language` with fail-early
+  validation). Round-trip + malformed-value tests added.
+- Rust surfaces: new `locale` module (EN/VI tables + dynamic blacklist
+  toasts + update-check strings). Tray menus (Windows `muda` + Tauri), the
+  volume overlay labels and toasts, the Win32 mixer window (title, UIA
+  names, buttons; relabeled on every show), the Win32 settings window
+  (header, nav, section titles/subtitles), and the GTK/macOS mixer controls
+  now render from the locale table. `update_settings` relabels the tray when
+  the patch carries a language.
+- Update check: new `updates` module (ureq; GitHub `releases/latest`;
+  pure `is_newer` with numeric component compare and fail-closed parsing) and
+  `TrayCommand::CheckUpdates` (`check_updates`) wired into both hosts; the
+  Tauri dispatch runs the fetch off the core lock and toasts the localized
+  result on the overlay.
+- Webview: `frontend/src/lib/i18n.tsx` (typed EN/VI dictionaries,
+  `LanguageProvider`/`useT`, `asLanguage` normalization) localizes the Mixer
+  surface, every Settings section + shell, the Help surface, and the
+  overlay; General gains the language selector and the draft bootstrap
+  hydrates `language`. Surface tests render under the EN default.
+- PowerShell: `Install-VolumeControl.ps1` message table (23 IDs) with
+  `VOLUMECONTROL_LANG` override then Windows UI culture; EN texts byte-
+  identical; both scripts copied into this worktree from the bootstrap branch
+  and given a UTF-8 BOM so PS 5.1 does not mojibake VI at parse time.
+- Verification: cargo test (292 lib + suites) PASS; clippy `-D warnings` and
+  `fmt --check` exit 0; frontend tsc clean + vitest 17 files/105 tests PASS;
+  real-network update check printed EN and VI results against the live
+  GitHub API (`v0.1.4`, "up to date"); PowerShell suite PASS in both
+  languages (agent-run and parent rerun).
+- Encoding/limits: NSIS installer shell stays English (no per-language MUI
+  in the current bundle config); GTK host records the update result in
+  `HostCore::update_message` (no overlay text channel).
+- REA / performance pass: env-gated startup stage trace in the Tauri setup
+  (`VOLUMECTL_STARTUP_TRACE=1`, zero-cost when off) measured ready in
+  59-116 ms over 6 debug runs (native surfaces 33-46 ms, audio + core
+  33-39 ms, duplicate launch exits in ~1 ms). The update check now shows an
+  immediate localized "Checking for updates…" overlay card while the worker
+  thread fetches. `docs/performance.md` records the stage table and the tao
+  PerMonitorV2 finding. REA artifact lanes on the built PE:
+  `inspect_rust_binary` (pe/amd64, rustc commit inferred) and
+  `inspect_pe_resources` (9 resources, icon 16-256 px, manifest =
+  Common-Controls only); decompiler providers and the layout/objdump lanes
+  are unavailable on this host and were reported, not approximated.
+- CI follow-up: PR #43 failed the macOS/Ubuntu jobs on the new renderer
+  signatures; the Linux/macOS smoke binaries (`gtk_smoke.rs`,
+  `appkit_smoke.rs`) now pass `Language::En` to `set_overlay_content`,
+  `render_overlay`, `set_mixer_controls`, and `update_mixer_value`, and the
+  macOS host handles `AppAction::CheckUpdates`. These files are cfg-gated to
+  their platforms, so CI is the compile check for them.
+
+## Session 108 (2026-10-17) - Stale main reconciled + smoke lock release on refused runs
+
+- Workspace reconciliation (scheduled resume run): the `volume-control` main
+  checkout this run resumes was 6 commits behind `origin/main` and carried
+  superseded uncommitted work - a tray "Check for updates" item that opened
+  the releases page, plus an untracked 2026-10-16 windows-release-bootstrap
+  plan/spec. That tray design landed upstream in a fuller form (ureq fetch
+  against `releases/latest`, localized overlay result, immediate in-progress
+  card; PR #43 / vol-090), and the bootstrap plan was executed end to end by
+  Sessions 099-107 (vol-087..vol-092; PR #42). The stale change set is
+  preserved in `git stash@{0}`; `main` fast-forwarded `54e7e5a -> ac26346`.
+  - Verified on the reconciled tree: `cargo fmt --all --check`,
+    `git diff --check`, and `cargo test --workspace --no-default-features`
+    all exit 0.
+- Defect fixed in `scripts/test-format-lint.sh`: the suite took
+  `scripts/.test-format-lint.lock` but installed its cleanup trap only after
+  the hermetic preconditions, so every refusal (missing or modified
+  `.claude/settings.local.json`, dirty index) leaked the lock and the next
+  invocation died with "already running" until someone removed the directory
+  by hand. Reproduced live before the fix: append a newline to
+  `.claude/settings.local.json`, run the suite (exit 1), and the lock is still
+  in place; the next run prints "test-format-lint.sh is already running".
+  - `trap 'release_lock' EXIT` is now installed immediately after the lock is
+    taken; the later full cleanup trap replaces it and releases the lock again
+    (rmdir is idempotent).
+  - New check 10 in the suite hands the lock to a nested run forced into the
+    dirty-index refusal and requires that run to exit 1, refuse on its own
+    precondition (not on the lock), and leave no lock directory - the missing
+    regression coverage for this refusal path.
+- Verification: RED (early trap commented out) the new check reported
+  "FAIL - refused run releases the concurrency lock (lock left behind: ...)";
+  GREEN `bash scripts/test-format-lint.sh` prints "All format-lint smoke
+  checks passed." with exit 0, including the new check. The suite was run
+  under Git Bash with `frontend/dist` built, because this host's PATH `bash`
+  is the WSL shim (it cannot read a Windows-form worktree gitdir) and the
+  gate's clippy step compiles `tauri::generate_context!`, which needs the
+  frontend build.
+- Note: the unmerged PR #45 (`fix/release-workflow-git-path-resolution`)
+  carries the same trap fix (`e6a67e6`) plus a HEAD-resolution block that is
+  already on `main` through #44's squash, so it is redundant once this lands.
 
 ## Session 109 (2026-10-17) - Conflict-free record merges
 

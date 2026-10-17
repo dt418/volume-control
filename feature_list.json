@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-17T12:05",
+  "last_updated": "2026-10-17T12:35",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -31,29 +31,7 @@
         "Session 105 (2026-10-17, follow-up): CI run 38981490852 on 3809adf kept the macOS build + Tauri E2E steps green and moved the failure to `cargo test`; jobs 117243179633 (appkit_smoke) and 117243179587 (gtk_smoke) showed 4x error[E0061] each for render_overlay/set_overlay_content/set_mixer_controls/update_mixer_value, now fixed with Language::En.",
         "Session 105 (2026-10-17, close-out): CI run 38983711274 on 3c9ed2c passed every job (Windows, Ubuntu 24.04 with gtk-renderer and layer-shell, macOS build + cargo test + AppKit smoke + Tauri E2E, Fast checks, Release gate), which is the green-run evidence behind vol-089's passing status."
       ],
-      "notes": "The variant arrived with fe45d18 (bilingual UI + tray update check) and only breaks cfg(target_os = \"macos\") builds, so the Windows workspace gate stays green. macOS parity for the tray item itself stays with vol-076."
-    },
-    {
-      "id": "vol-090",
-      "priority": 90,
-      "area": "ux",
-      "title": "Bilingual UI (EN/VI) and tray update check",
-      "user_visible_behavior": "Users pick English or Vietnamese in Settings (config.ini [general] language = en|vi); the native Windows tray, overlay, mixer, settings window, GTK/macOS mixer controls, and the Mixer/Settings/Help webview surfaces render localized labels, and the tray gains a Check for updates item that queries the latest stable GitHub release, compares it with the running version, and reports the result (up to date / version available / check failed) on the overlay in the active language. The PowerShell bootstrap also prints EN/VI messages, selected from VOLUMECONTROL_LANG or the Windows UI culture.",
-      "status": "passing",
-      "verification": [
-        "cargo test --workspace --no-default-features: 292 volumectl lib tests plus integration suites pass, including the new locale table coverage, dynamic toast rendering, language INI round-trip, SettingsPatch language validation, and the update-check version matrix (numeric compare, malformed input fails closed).",
-        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings and cargo fmt --all --check exit 0 (clippy.toml msrv=1.82; is_multiple_of removed for MSRV).",
-        "frontend: node node_modules/typescript/bin/tsc --noEmit clean; vitest run --no-file-parallelism: 17 files / 105 tests pass (dictionary parity, provider rendering, surface literals under EN default).",
-        "Real network proof: cargo example calling updates::check_for_updates against api.github.com printed 'VolumeControl is up to date' (EN) and 'VolumeControl đã là bản mới nhất' (VI) while the latest release is v0.1.4 and the crate is 0.1.4.",
-        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 exits PASS under both VOLUMECONTROL_LANG=en and =vi (agent-run evidence plus parent rerun in this worktree).",
-        "Startup impact measured with the new env-gated stage trace (VOLUMECTL_STARTUP_TRACE=1) over 6 debug-build runs: ready in 59-116 ms; per-stage hot spots are native surfaces (tray/overlay/wheel, 33-46 ms) and audio + core (WASAPI + hotkeys, 33-39 ms); duplicate launches exit in ~1 ms at the single-instance guard. Numbers and the re-measure recipe live in docs/performance.md.",
-        "REA lanes used on the built PE (sha256 4bcdc58f...): inspect_rust_binary (format pe/amd64, 22.3 MB, rustc commit inferred) and inspect_pe_resources (9 resources, 6 icon sizes, manifest = Common-Controls dependency only). Decompiler providers (ghidra/hopper/ida), inspect_binary_layout and inspect_with_objdump are unavailable on this Windows host and were reported as such rather than worked around; the DPI manifest question was resolved from the vendored tao source instead (runtime SetProcessDpiAwarenessContext PerMonitorV2)."
-      ],
-      "evidence": [
-        "Session 104 (2026-10-17): config gains Language (en|vi) with INI parse/write + validation; new locale module with EN/VI tables and dynamic toasts; tray/overlay/mixer/settings/GTK/macOS render localized labels driven by the config; SettingsPatch accepts language and update_settings relabels trays without a restart; new updates module (ureq + GitHub latest release, pure is_newer) wired to TrayCommand::CheckUpdates in both hosts; frontend lib/i18n.tsx (typed dictionaries, provider, useT) localizes Mixer, Settings (all six sections), Help, and Overlay with a language selector in General; PowerShell bootstrap message table with VOLUMECONTROL_LANG/culture selection, EN byte-identical and suite extended for VI.",
-        "Session 104 (2026-10-17, REA/performance pass): permanent env-gated startup stage trace (VOLUMECTL_STARTUP_TRACE=1) in the Tauri setup; immediate in-progress overlay card for the update check (localized) before the worker-thread fetch; docs/performance.md records the measured stage table and the tao DPI finding; REA artifact lanes (rust-auditable metadata, PE resource inventory) ran against the built binary."
-      ],
-      "notes": "NSIS installer-shell strings stay English (Tauri 2.11 bundle config exposes no per-language MUI in this repo); the Linux GTK host records the update result in HostCore::update_message (no overlay text channel there). Startup trace is env-gated and zero-cost when disabled."
+      "notes": "The variant arrived with fe45d18 (bilingual UI + tray update check) and only breaks cfg(target_os = \"macos\") builds, so the Windows workspace gate stays green. macOS parity for the tray item itself stays with vol-076. This record was restored verbatim in Session 110: the fix/release-workflow-git-path-resolution branch had rewritten this id into a tooling record (now vol-095) and the merge driver had unioned the two feature sets under the single id."
     },
     {
       "id": "vol-088",
@@ -1284,10 +1262,14 @@
       "area": "release",
       "title": "Native Linux and macOS packages in every release",
       "user_visible_behavior": "Each release ships native packages next to the archives: .deb, .rpm, and .AppImage for Linux and a .dmg for macOS, built by the platform jobs, staged under canonical names, declared in the release metadata, and verified before publish.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "Local: bash scripts/test-release-workflow.sh passes with the expanded per-platform sets (macOS: zip + installer + dmg; Ubuntu: tarball + installer + deb + rpm + AppImage) and the refreshed fixtures.",
-        "CI (required before the tag): the macOS job builds --bundles dmg and the Ubuntu job builds --bundles deb,rpm,appimage; both jobs then run package.sh, the verifier and the installer suite."
+        "CI (required before the tag): the macOS job builds --bundles dmg and the Ubuntu job builds --bundles deb,rpm,appimage; both jobs then run package.sh, the verifier and the installer suite.",
+        "RED: with the early release trap commented out, bash scripts/test-format-lint.sh reports \"FAIL - refused run releases the concurrency lock (lock left behind: ...)\" and exits 1 while every other check stays green - the new check fails on exactly the regression it guards.",
+        "GREEN: bash scripts/test-format-lint.sh prints \"All format-lint smoke checks passed.\" and exits 0, including \"ok - refused run releases the concurrency lock\".",
+        "Independent reproduction before the fix: appending a newline to .claude/settings.local.json made the suite refuse with exit 1 and leave scripts/.test-format-lint.lock in place; the following run then printed \"test-format-lint.sh is already running (lock: ...)\" instead of running the gates.",
+        "Environment note: the suite was run under Git Bash with frontend/dist built. The PATH bash on this host is the WSL shim, which cannot read a Windows-form worktree gitdir, and the gate's clippy step compiles tauri::generate_context!, which needs the frontend build - both are environment prerequisites of the suite, unrelated to this change."
       ],
       "evidence": [
         "Session 108 (2026-10-17): desktop-validation builds dmg on macOS and deb/rpm/appimage on Ubuntu (rpm toolchain added to the apt step); package.sh stages volumecontrol-<ver>-macos.dmg and volumecontrol-<ver>-ubuntu.{deb,rpm,AppImage}; the verifier requires the new sets; fixtures gained dmg/deb/rpm/AppImage stubs; README (EN/VI) and the CHANGELOG mention the packages.",
@@ -1295,6 +1277,9 @@
         "Session 108 (2026-10-17, CI follow-up): the v0.1.6 macos+ubuntu release jobs failed in scripts/test-install-unix.sh; the fixture stubs lacked +x (MSYS masks this on Windows) and the FAIL branches hid the installer output. The suite now chmods the stubs and echoes captured output on failure; the local run stays 23/23 and PR #50 CI is the POSIX proof.",
         "Session 108 (2026-10-17, bash 3.2): the macOS runner uses bash 3.2, where `${var,,}` is a bad substitution; the installers and verify-release-metadata.sh now lowercase digests via tr, and the harness plus installer suite pass locally.",
         "Session 108 (2026-10-17, naming + CI bundle path): Linux bundles are staged as volumecontrol-<ver>-linux-amd64.{tar.gz,deb,rpm,AppImage} (the rpm was mislabelled -ubuntu); package.sh, install-linux.sh, the verifier set patterns, the release checklist and all fixtures follow the new scheme. The ci.yml macOS job now builds --bundles dmg so the packaging step that calls package.sh can stage the dmg, and package.sh bundle lookups are set -e safe (|| true) so a missing bundle prints its explicit error. Harness: 1 new static assertion, all checks pass.",
+        "Session 108 (2026-10-17): scripts/test-format-lint.sh installs `trap 'release_lock' EXIT` immediately after it takes the lock, ahead of the preconditions that exit 1 (missing forbidden file, modified forbidden file, dirty index); the later full cleanup trap replaces it and releases the lock again (rmdir is idempotent). New check 10 hands the lock to a nested run forced into the dirty-index refusal and requires that run to exit 1, refuse on its own precondition rather than on the lock, and leave no lock directory behind.",
+        "Session 108 (2026-10-17): the class was audited across the harness scripts - only test-format-lint.sh holds a lock; the other EXIT traps release temporary directories, whose leak on a pre-trap exit is benign.",
+        "Session 108 (2026-10-17): the same trap fix exists as e6a67e6 on the unmerged PR #45 branch, which cannot merge (its records conflict and its HEAD-resolution hunk is already on main through #44's squash); PR #45 becomes redundant once this lands.",
         "Session 109 (2026-10-17, AppImage icon): the v0.1.6 release run failed on the Ubuntu leg with 'couldn't find a square icon to use as AppImage icon' from the Tauri bundler, because src-tauri/tauri.conf.json declared no bundle icon list (deb and rpm bundled first). The config now declares the square PNG set plus the icns/ico, the ubuntu job of ci.yml builds --bundles deb,rpm,appimage so the failure surfaces on the pull request, and the release harness asserts both the ci bundle flag and the declared square icon."
       ],
       "notes": "The archives (zip/tarball) stay the install path for the one-line scripts; the native packages are additive for users who prefer their distro/OS package managers."
@@ -1336,6 +1321,28 @@
       "notes": "Tag v0.1.5 is pushed only after the PR CI is green; the release workflow publishes assets without an overwrite flag, so a re-run on an existing tag fails instead of mutating published bytes."
     },
     {
+      "id": "vol-090",
+      "priority": 90,
+      "area": "ux",
+      "title": "Bilingual UI (EN/VI) and tray update check",
+      "user_visible_behavior": "Users pick English or Vietnamese in Settings (config.ini [general] language = en|vi); the native Windows tray, overlay, mixer, settings window, GTK/macOS mixer controls, and the Mixer/Settings/Help webview surfaces render localized labels, and the tray gains a Check for updates item that queries the latest stable GitHub release, compares it with the running version, and reports the result (up to date / version available / check failed) on the overlay in the active language. The PowerShell bootstrap also prints EN/VI messages, selected from VOLUMECONTROL_LANG or the Windows UI culture.",
+      "status": "passing",
+      "verification": [
+        "cargo test --workspace --no-default-features: 292 volumectl lib tests plus integration suites pass, including the new locale table coverage, dynamic toast rendering, language INI round-trip, SettingsPatch language validation, and the update-check version matrix (numeric compare, malformed input fails closed).",
+        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings and cargo fmt --all --check exit 0 (clippy.toml msrv=1.82; is_multiple_of removed for MSRV).",
+        "frontend: node node_modules/typescript/bin/tsc --noEmit clean; vitest run --no-file-parallelism: 17 files / 105 tests pass (dictionary parity, provider rendering, surface literals under EN default).",
+        "Real network proof: cargo example calling updates::check_for_updates against api.github.com printed 'VolumeControl is up to date' (EN) and 'VolumeControl đã là bản mới nhất' (VI) while the latest release is v0.1.4 and the crate is 0.1.4.",
+        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 exits PASS under both VOLUMECONTROL_LANG=en and =vi (agent-run evidence plus parent rerun in this worktree).",
+        "Startup impact measured with the new env-gated stage trace (VOLUMECTL_STARTUP_TRACE=1) over 6 debug-build runs: ready in 59-116 ms; per-stage hot spots are native surfaces (tray/overlay/wheel, 33-46 ms) and audio + core (WASAPI + hotkeys, 33-39 ms); duplicate launches exit in ~1 ms at the single-instance guard. Numbers and the re-measure recipe live in docs/performance.md.",
+        "REA lanes used on the built PE (sha256 4bcdc58f...): inspect_rust_binary (format pe/amd64, 22.3 MB, rustc commit inferred) and inspect_pe_resources (9 resources, 6 icon sizes, manifest = Common-Controls dependency only). Decompiler providers (ghidra/hopper/ida), inspect_binary_layout and inspect_with_objdump are unavailable on this Windows host and were reported as such rather than worked around; the DPI manifest question was resolved from the vendored tao source instead (runtime SetProcessDpiAwarenessContext PerMonitorV2)."
+      ],
+      "evidence": [
+        "Session 104 (2026-10-17): config gains Language (en|vi) with INI parse/write + validation; new locale module with EN/VI tables and dynamic toasts; tray/overlay/mixer/settings/GTK/macOS render localized labels driven by the config; SettingsPatch accepts language and update_settings relabels trays without a restart; new updates module (ureq + GitHub latest release, pure is_newer) wired to TrayCommand::CheckUpdates in both hosts; frontend lib/i18n.tsx (typed dictionaries, provider, useT) localizes Mixer, Settings (all six sections), Help, and Overlay with a language selector in General; PowerShell bootstrap message table with VOLUMECONTROL_LANG/culture selection, EN byte-identical and suite extended for VI.",
+        "Session 104 (2026-10-17, REA/performance pass): permanent env-gated startup stage trace (VOLUMECTL_STARTUP_TRACE=1) in the Tauri setup; immediate in-progress overlay card for the update check (localized) before the worker-thread fetch; docs/performance.md records the measured stage table and the tao DPI finding; REA artifact lanes (rust-auditable metadata, PE resource inventory) ran against the built binary."
+      ],
+      "notes": "NSIS installer-shell strings stay English (Tauri 2.11 bundle config exposes no per-language MUI in this repo); the Linux GTK host records the update result in HostCore::update_message (no overlay text channel there). Startup trace is env-gated and zero-cost when disabled."
+    },
+    {
       "id": "vol-094",
       "priority": 94,
       "area": "repository-governance",
@@ -1353,6 +1360,42 @@
         "Session 109 (2026-10-17, driver location): the drivers now live in <git-common-dir>/records-merge and the configured command resolves that path through git at merge time, because git reads merge attributes from the branch being merged into and no branch carries the scripts until the driver PR lands. install-merge-drivers.sh takes an optional target repository, the end-to-end suite installs into its throwaway clone that has neither .gitattributes nor the driver scripts in the tree, and the merge still lands both sides (9 checks)."
       ],
       "notes": "Drivers are local configuration, so a branch still has to merge origin/main locally (git runs registered drivers only there); GitHub's own merge UI cannot use them. The fallback stays safe: an unregistered clone, a driver failure, or already-conflicted input leaves the normal conflict for the operator."
+    },
+    {
+      "id": "vol-095",
+      "priority": 95,
+      "area": "tooling",
+      "title": "Format-lint smoke test releases its lock on refused runs",
+      "user_visible_behavior": "Developer-facing: when scripts/test-format-lint.sh refuses to run (modified .claude/settings.local.json, dirty index), it no longer leaves scripts/.test-format-lint.lock behind, so later runs and scripts/ship.sh are not blocked by a stale 'already running' lock.",
+      "status": "passing",
+      "verification": [
+        "Negative (live): with a staged scratch file, C:/Program Files/Git/bin/bash.exe scripts/test-format-lint.sh prints 'FAIL - the index has staged changes' and scripts/.test-format-lint.lock is absent afterwards. Before the fix the same refusal left the lock behind and the next invocation exited 1 with 'test-format-lint.sh is already running (lock: ...)'.",
+        "bash scripts/test-format-lint.sh (MSYS bash, Git for Windows) prints 'All format-lint smoke checks passed.' and exits 0, including the refused-run lock check; the lock is absent after the run."
+      ],
+      "evidence": [
+        "Session 103 (2026-10-17): the lock directory was created before the preconditions but the EXIT trap only after them, so every precondition exit 1 leaked the lock. Observed while shipping this change set: an external merge left the index unmerged, the smoke test refused, leaked the lock, and the next scripts/ship.sh --push aborted at phase 4 with the stale-lock message. The release trap is now installed immediately after the lock is acquired; the full cleanup trap still replaces it further down.",
+        "Session 110 (2026-10-17): renumbered from vol-089, where this record had collided with main's macOS AppAction::CheckUpdates record after a merge. The macOS verification and evidence lines that the driver had unioned into this block stayed with vol-089; the two format-lint verification lines and the Session 103 evidence moved here unchanged."
+      ],
+      "notes": "The lock exists to stop concurrent smoke runs (the pre-push flow dispatches reviewers in parallel); it now covers the refusal paths too."
+    },
+    {
+      "id": "vol-096",
+      "priority": 96,
+      "area": "tooling",
+      "title": "Records guard reads the checkout from WSL bash in a native-Windows worktree",
+      "user_visible_behavior": "Developer-facing: scripts/check-records.sh works when the running shell's git cannot follow the checkout, so the WSL Linux gate (scripts/format-lint.sh -> sh scripts/check-records.sh --staged) no longer aborts at the records step with a bare 'fatal: not a git repository' in a worktree created by native Windows git.",
+      "status": "passing",
+      "verification": [
+        "WSL bash (C:/Windows/System32/bash.exe, GNU bash 5.2.21, /usr/bin/git 2.43.0): bash scripts/check-records.sh --staged exits 0 in this worktree. Before the fix the same call printed 'FAIL - git diff --cached failed (exit 128)' and 'fatal: not a git repository: /mnt/c/Users/Thanh/orca/volume-control-windows-release-bootstrap/C:/Users/Thanh/orca/volume-control/.git/worktrees/volume-control-windows-release-bootstrap'.",
+        "Negative (live, WSL bash): with a scratch file staged the guard reports 'this commit changes substantive files but not the records' with 'trigger: .tmp-wsl-guard-check', so the fallback reads the real index instead of passing vacuously; the same clean index exits 0.",
+        "C:/Program Files/Git/bin/sh.exe scripts/check-records.sh --staged exits 0 unchanged (fallback not engaged, first-call path intact); bash -n scripts/check-records.sh clean.",
+        "C:/Program Files/Git/bin/bash.exe scripts/test-check-records.sh passes every check (exit 0)."
+      ],
+      "evidence": [
+        "Session 110 (2026-10-17): the merge of origin/main into fix/release-workflow-git-path-resolution surfaced the same gitdir defect vol-088 fixed in the release harness, now in the records guard: under WSL bash every git call in check-records.sh died with exit 128 because the worktree's .git file holds 'gitdir: C:/...' and a POSIX git resolves it against the cwd. The guard now walks up to the .git marker, converts drive-letter gitdirs with wslpath/cygpath, and exports GIT_DIR/GIT_WORK_TREE only after the plain invocation already failed.",
+        "Session 110 (2026-10-17, impact): scripts/format-lint.sh runs sh scripts/check-records.sh --staged, so the defect blocked the WSL Linux gate itself, not just ad-hoc guard runs."
+      ],
+      "notes": "Engaged only when git rev-parse --git-dir already fails, so ordinary checkouts and POSIX CI keep the ambient git environment; the conversion paths are wslpath (WSL) then cygpath (MSYS), matching scripts/test-release-workflow.sh."
     }
   ]
 }

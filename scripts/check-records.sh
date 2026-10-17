@@ -265,6 +265,50 @@ EOF
     report "the branch change set touches substantive files but not the records"
 }
 
+# ---- Repository resolution ---------------------------------------------------
+# In a worktree created by native Windows git, `.git` is a file holding
+# `gitdir: C:/...`, which a POSIX git (WSL) resolves against the cwd and cannot
+# follow: every git call below then fails with a bare fatal and the WSL Linux
+# gate (scripts/format-lint.sh runs this guard) cannot pass. Convert the pointer
+# with wslpath/cygpath and export GIT_DIR/GIT_WORK_TREE - the same fallback
+# scripts/test-release-workflow.sh uses to resolve HEAD. Only reached when the
+# plain invocation already failed, so ordinary checkouts keep the ambient
+# environment.
+use_linked_git_dir() {
+    probe="$(pwd)"
+    while :; do
+        [ -e "$probe/.git" ] && break
+        probe_parent="${probe%/*}"
+        if [ "$probe_parent" = "$probe" ] || [ -z "$probe_parent" ]; then
+            break
+        fi
+        probe="$probe_parent"
+    done
+    [ -f "$probe/.git" ] || return 0
+    gitdir="$(sed -n 's/^gitdir:[[:space:]]*//p' "$probe/.git" 2>/dev/null || true)"
+    case "$gitdir" in
+        [A-Za-z]:[\\/]*)
+            if command -v wslpath >/dev/null 2>&1; then
+                gitdir="$(wslpath -u "$gitdir" 2>/dev/null || true)"
+            elif command -v cygpath >/dev/null 2>&1; then
+                gitdir="$(cygpath -u "$gitdir" 2>/dev/null || true)"
+            fi
+            ;;
+        /*) : ;;
+        ?*) gitdir="$probe/$gitdir" ;;
+    esac
+    if [ -n "$gitdir" ] && [ -d "$gitdir" ]; then
+        GIT_DIR="$gitdir"
+        GIT_WORK_TREE="$probe"
+        export GIT_DIR GIT_WORK_TREE
+    fi
+    return 0
+}
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    use_linked_git_dir
+fi
+
 # ---- Main -------------------------------------------------------------------
 mode="${1:---staged}"
 case "$mode" in
