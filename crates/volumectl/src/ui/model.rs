@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::Language;
+
 /// A user-visible application surface that can be shown or hidden.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SurfaceId {
@@ -96,6 +98,9 @@ pub struct AppState {
     pub theme: ThemeMode,
     pub material: MaterialMode,
     pub motion: MotionMode,
+    /// UI language for surface copy (defaults to English for older state).
+    #[serde(default)]
+    pub language: Language,
     /// Host/audio synchronization status.
     pub status: UiStatus,
 }
@@ -190,6 +195,7 @@ pub enum AppAction {
     SetMotion(MotionMode),
     OpenConfigLocation,
     ReloadConfig,
+    CheckUpdates,
     AddBlacklistEntry(String),
     RemoveBlacklistEntry(String),
     ClearBlacklist,

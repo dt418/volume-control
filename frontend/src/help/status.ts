@@ -1,4 +1,5 @@
 import type { HotkeyRegResult, HotkeyRegStatus } from "../settings/KeyCard";
+import type { TranslationKey } from "../lib/i18n";
 
 /** Legacy status pill kinds (help.rs BadgeKind parity): Ready / Fallback /
  *  In use, mapped from the ACTUAL registration outcome. */
@@ -24,9 +25,9 @@ export function statusForAction(
   return badgeKindFor(result?.status);
 }
 
-export const BADGE_LABELS: Record<HelpBadgeKind, string> = {
-  ready: "Ready",
-  fallback: "Fallback",
-  "in-use": "In use",
-  disabled: "Disabled",
+export const BADGE_LABELS: Record<HelpBadgeKind, TranslationKey> = {
+  ready: "help.statusReady",
+  fallback: "help.statusFallback",
+  "in-use": "help.statusInUse",
+  disabled: "help.statusDisabled",
 };

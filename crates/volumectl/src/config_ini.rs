@@ -1,7 +1,7 @@
 //! Typed, human-readable INI persistence for [`crate::config::Config`].
 
 use crate::config::{
-    self, Config, ConfigError, ConfigValidationError, HotkeyBindings, HotkeyModifier,
+    self, Config, ConfigError, ConfigValidationError, HotkeyBindings, HotkeyModifier, Language,
 };
 use crate::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
 use std::collections::HashSet;
@@ -115,6 +115,10 @@ pub fn parse_ini(text: &str) -> Result<Config, ConfigError> {
                 "autostart" => {
                     ensure_unique(&mut seen, section_name, key)?;
                     config.autostart = parse_bool(value, "autostart")?;
+                }
+                "language" => {
+                    ensure_unique(&mut seen, section_name, key)?;
+                    config.language = parse_language(value)?;
                 }
                 _ => unknown_key(section_name, key),
             },
@@ -247,6 +251,7 @@ pub fn serialize_ini(config: &Config) -> Result<String, ConfigError> {
     ));
     output.push_str(&format!("modifier={}\n", modifier_name(config.modifier)));
     output.push_str(&format!("autostart={}\n", config.autostart));
+    output.push_str(&format!("language={}\n", config.language.as_str()));
 
     let default_hotkeys = HotkeyBindings::default();
     let hotkeys = config.hotkeys.as_ref().unwrap_or(&default_hotkeys);
@@ -414,6 +419,13 @@ fn parse_modifier(value: &str) -> Result<HotkeyModifier, ConfigError> {
         "Ctrl" => Ok(HotkeyModifier::Ctrl),
         "CapsLock" => Ok(HotkeyModifier::CapsLock),
         _ => Err(ini_error("modifier", "is not a supported modifier")),
+    }
+}
+fn parse_language(value: &str) -> Result<Language, ConfigError> {
+    match value {
+        "en" => Ok(Language::En),
+        "vi" => Ok(Language::Vi),
+        _ => Err(ini_error("language", "is not a supported language")),
     }
 }
 
@@ -591,6 +603,7 @@ mod tests {
             overlay_duration_ms: 2_500,
             modifier: HotkeyModifier::Alt,
             autostart: true,
+            language: Language::Vi,
             hotkeys: Some(HotkeyBindings::for_modifier(HotkeyModifier::Alt)),
             blacklist: vec!["game.exe".into(), "chat.exe".into()],
             color_thresholds: ColorThresholds {
@@ -649,6 +662,7 @@ mod tests {
         assert_eq!(decoded.beep, BeepConfig::default());
         assert_eq!(decoded.color_thresholds, Config::default().color_thresholds);
         assert!(!decoded.autostart);
+        assert_eq!(decoded.language, Language::En);
         assert!(decoded.blacklist.is_empty());
     }
 
@@ -684,6 +698,7 @@ mod tests {
             ("volume_step=not-a-number", "integer"),
             ("[feedback]\nenabled=1", "boolean"),
             ("[appearance]\ntheme=dark", "enum"),
+            ("language=vietnamese", "enum"),
         ];
 
         for (body, label) in cases {
@@ -693,6 +708,22 @@ mod tests {
             assert!(
                 parse_ini(&text).is_err(),
                 "invalid {label} must be rejected"
+            );
+        }
+    }
+    #[test]
+    fn language_selection_round_trips_through_ini() {
+        for (raw, expected) in [("en", Language::En), ("vi", Language::Vi)] {
+            let text = format!(
+                 "[general]\nvolume_step=1\nvolume_step_large=10\noverlay_duration_ms=1800\nmodifier=CtrlAlt\nlanguage={raw}\n"
+             );
+            let decoded = parse_ini(&text).expect("language parses");
+            assert_eq!(decoded.language, expected);
+
+            let encoded = serialize_ini(&decoded).expect("serialize language");
+            assert!(
+                encoded.contains(&format!("language={raw}\n")),
+                "writer emits the selected language"
             );
         }
     }

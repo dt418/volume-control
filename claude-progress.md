@@ -1132,6 +1132,7 @@
   directory even though every WDIO spec passed.
 - Normalized relative output roots to repository-absolute paths before the cwd
   change and added a ship-flow assertion preventing this regression.
+
 ## Session 065 (2026-08-15) - Rename default branch to main
 
 - PR #21 (`fix: harden records guard and finalize release verification`) was
@@ -3370,3 +3371,194 @@ fn get_window_pid_x11() -> Option<u32> {
     `sh scripts/check-records.sh --staged` → exit 0.
 - Records: feature_list.json vol-017 updated (verification 38→39, evidence
   augmented with mirror fix); this entry is the claude-progress.md half.
+
+## Session 108 (2026-10-17) - Native Linux and macOS packages
+
+- desktop-validation: macOS builds `tauri build --bundles dmg --ci`; Ubuntu
+  builds `--bundles deb,rpm,appimage` (the apt step now installs `rpm`);
+  Windows keeps `--bundles nsis`.
+- `scripts/package.sh` stages the bundles as
+  `volumecontrol-<ver>-macos.dmg` and
+  `volumecontrol-<ver>-ubuntu.{deb,rpm,AppImage}` (fail-closed when a bundle
+  is missing) next to the archives and installer scripts.
+- `scripts/verify-release-metadata.sh`: macOS sets are now
+  zip + install-macos.sh + dmg (3); Ubuntu sets are
+  tarball + install-linux.sh + deb + rpm + AppImage (5); Windows unchanged (3).
+- Fixtures: `release-valid-macos` gained a dmg stub and the two valid Ubuntu
+  fixtures gained deb/rpm/AppImage stubs with refreshed canonical manifests
+  and metadata.
+- `scripts/test-release-workflow.sh`: the bundle build flags and the package
+  staging are asserted; the old "other platforms skip bundling" check is
+  replaced by the per-platform bundle contract.
+- Docs: README (EN/VI) names the native packages; CHANGELOG [Unreleased]
+  records them. `bash scripts/test-release-workflow.sh` passes locally.
+- Portability fix after the v0.1.6 macOS job failed: GNU-only
+  `dd status=none` and `find -maxdepth/-mindepth/-quit` replaced with
+  portable forms in `scripts/package.sh`, the two installers, and
+  `scripts/test-install-unix.sh`; harness + installer suite still pass.
+- Installer-test fixtures are now `chmod +x` (MSYS treats every file as
+  executable, so the `-x` assertions only failed on Linux/macOS), and the
+  suite prints the captured installer output on failing assertions for
+  diagnosable CI logs.
+- bash 3.2 compatibility: `${var,,}` is bash-4-only and macOS ships bash
+  3.2; the installers and the release verifier now lowercase through
+  `tr "[:upper:]" "[:lower:]"`. Suites stay green locally.
+
+
+### Session 108 follow-up (Linux asset naming + CI bundle path)
+
+- Linux bundles are named `volumecontrol-<ver>-linux-amd64.{tar.gz,deb,rpm,AppImage}`:
+  `-ubuntu.rpm` was a Fedora/RHEL package labelled after its build host.
+  `package.sh`, `packaging/install-linux.sh`, the verifier set patterns, the
+  docs checklist and every fixture follow the new scheme.
+- `ci.yml` macOS job builds `--bundles dmg` (was `--no-bundle`) so the
+  validation packaging step that calls `package.sh` can stage the dmg; the
+  harness asserts that flag.
+- `package.sh` bundle lookups end in `|| true` so a missing bundle prints the
+  explicit error instead of dying silently under `set -e` + `pipefail`.
+
+## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
+
+- Live verification of the published v0.1.5 assets: `releases/latest` is
+  v0.1.5 with all six assets, but the documented PowerShell one-liner
+  `& ([scriptblock]::Create((irm ...))) -Action install` raised a parse
+  error: Windows PowerShell 5.1 decodes the `irm` text/plain response as
+  cp1252, so the script's UTF-8 BOM arrived as `i»¿` and everything after it
+  was mis-decoded. The published asset is broken through that path; the
+  local file path and the curl download-then-run path work.
+- Fix: both PowerShell scripts are now pure ASCII (BOM removed) with
+  Vietnamese text expressed as `$([char]0xXXXX)` escapes that survive any
+  decoding; the suite decodes the script as cp1252, creates a scriptblock
+  from it, and asserts the VI text renders correctly.
+- New one-line installers `packaging/install-macos.sh` and
+  `packaging/install-linux.sh`: SHA-256 verification against the release
+  manifest before unpacking, install/update/uninstall, user-scope targets
+  (`$HOME/Applications`, `$HOME/.local`), EN/VI messages with
+  `VOLUMECTL_LANG`, `VOLUMECTL_VERSION`, `VOLUMECTL_INSTALL_ROOT`
+  overrides, Gatekeeper note on macOS.
+- Release contract extended: `scripts/package.sh` stages the platform
+  installer next to each package; `scripts/verify-release-metadata.sh`
+  requires exactly two artifacts per macOS/Ubuntu artifact set (package +
+  installer) and three on Windows; a new `release-valid-macos` fixture and
+  the renamed `volumecontrol-0.0.0-ubuntu.tar.gz` fixtures cover it.
+- Verification: `scripts/test-install-unix.sh` 23/23 PASS (real scripts,
+  fixture release over `file://`), PowerShell suite PASS with the cp1252
+  regression set, release harness PASS with the new sets.
+- CI now runs `scripts/test-install-unix.sh` natively on the macOS and
+  Ubuntu jobs; the product page gains a macOS/Linux tab and marks the
+  remote-install row complete for both.
+- Added the MIT `LICENSE` file at the repo root (README already claimed MIT;
+  the winget manifest `LicenseUrl` also needs it to resolve).
+- Release prep v0.1.6: versions bumped 0.1.5 -> 0.1.6 (workspace, volumectl,
+  Tauri, tauri.conf.json, frontend) with the lockfile refreshed and a
+  `[0.1.6]` CHANGELOG section; the winget generator now emits winget-pkgs
+  1.12 manifests (`winget validate --manifest` prints "Manifest validation
+  succeeded."). The NSIS asset keeps its `-setup.exe` name by decision; the
+  v0.1.5 release notes gained an asset legend so the installer is easy to
+  identify on GitHub.
+
+## Session 106 (2026-10-17) - Release v0.1.5 preparation
+
+- Version bump 0.1.4 -> 0.1.5 in the workspace `Cargo.toml`, `volumectl`,
+  `volumecontrol-tauri`, `src-tauri/tauri.conf.json`, and
+  `frontend/package.json`; `Cargo.lock` refreshed by `cargo check`.
+- `CHANGELOG.md` gains the `[0.1.5] - 2026-10-17` section: verified Windows
+  bootstrap, EN/VI UI + tray update check, release tooling (multi-asset
+  packaging, fail-closed verifier, immutable publish, product page, winget
+  manifest generator), the startup stage trace, MSRV-pinned clippy, and the
+  harness/macOS compile fixes.
+- Tag `v0.1.5` is pushed only after PR CI is green; the tag-triggered
+  release workflow publishes the immutable asset set that makes
+  `releases/latest/download/` serve the one-line install commands.
+
+## Session 105 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
+
+- Goal: unblock PR #43 CI; the macOS job failed before running its tests.
+- Root cause: `fe45d18` added `AppAction::CheckUpdates`, but
+  `crates/volumectl/src/macos_app.rs::apply_action` had no arm for it, so
+  the `target_os = "macos"` build died with `error[E0004]` (job 117239883024,
+  step "Run macOS Tauri WebDriver E2E", which builds the debug host first).
+  Windows and Linux never compile that file, so the local workspace gate was
+  green while macOS was red.
+- Fix: the macOS host spawns the localized `updates::check_for_updates` fetch
+  on a worker thread (the fetch blocks up to 10 s and must not stall the
+  AppKit main thread) and records the result in the log; this host still has
+  no tray entry or overlay text channel for update results (vol-076).
+- Same root cause, same commit: the two platform renderer test fixtures
+  (`ui/platform/linux/renderer.rs`, `ui/platform/macos/renderer.rs`) now set
+  the `language` field their `AppState` literals were missing (added by
+  `fe45d18`), so the Linux/macOS `cargo test` builds of those `#[cfg(test)]`
+  modules compile here too.
+- Same root cause, follow-up commit: the two platform renderer smoke tests
+  (`tests/appkit_smoke.rs`, `tests/gtk_smoke.rs`) were still calling
+  `render_overlay` / `set_overlay_content` / `set_mixer_controls` /
+  `update_mixer_value` with their pre-`fe45d18` arities; they now pass
+  `Language::En` (the language those no-panic checks were written under).
+  CI run 38981490852 proved it: the macOS job's build + Tauri E2E steps passed
+  and only `cargo test` failed, compiling `appkit_smoke` (job 117243179633)
+  and `gtk_smoke` (job 117243179587) with `error[E0061]` x4 each.
+- Verification: `cargo fmt --all --check`, `git diff --check`,
+  `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+  and `cargo test --workspace --no-default-features` exit 0 on Windows. The
+  darwin target cannot be cross-checked on this host (`cargo check --target
+  x86_64-apple-darwin` stops in dependency build scripts: `libpulse-sys`
+  pkg-config cross probe, then `cc-rs` ToolNotFound for the coreaudio C
+  sources), so the macOS job of the CI run on this commit is the compile
+  proof.
+- Close-out: CI run 38983711274 on the merged head 3c9ed2c (main PR #44
+  merged in, vol-089 `passing`) is fully green - Windows, Ubuntu 24.04
+  (CLI fallback + gtk-renderer + layer-shell, gtk smoke under Xvfb, Linux
+  Tauri E2E), macOS (build + `cargo test` incl. AppKit smoke + Tauri
+  WebDriver E2E + bundle verification), Fast checks and the Release gate.
+
+## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
+
+- Config: `[general] language = en|vi` (`Language` enum, serde default en,
+  strict INI parse/write, `SettingsPatch.language` with fail-early
+  validation). Round-trip + malformed-value tests added.
+- Rust surfaces: new `locale` module (EN/VI tables + dynamic blacklist
+  toasts + update-check strings). Tray menus (Windows `muda` + Tauri), the
+  volume overlay labels and toasts, the Win32 mixer window (title, UIA
+  names, buttons; relabeled on every show), the Win32 settings window
+  (header, nav, section titles/subtitles), and the GTK/macOS mixer controls
+  now render from the locale table. `update_settings` relabels the tray when
+  the patch carries a language.
+- Update check: new `updates` module (ureq; GitHub `releases/latest`;
+  pure `is_newer` with numeric component compare and fail-closed parsing) and
+  `TrayCommand::CheckUpdates` (`check_updates`) wired into both hosts; the
+  Tauri dispatch runs the fetch off the core lock and toasts the localized
+  result on the overlay.
+- Webview: `frontend/src/lib/i18n.tsx` (typed EN/VI dictionaries,
+  `LanguageProvider`/`useT`, `asLanguage` normalization) localizes the Mixer
+  surface, every Settings section + shell, the Help surface, and the
+  overlay; General gains the language selector and the draft bootstrap
+  hydrates `language`. Surface tests render under the EN default.
+- PowerShell: `Install-VolumeControl.ps1` message table (23 IDs) with
+  `VOLUMECONTROL_LANG` override then Windows UI culture; EN texts byte-
+  identical; both scripts copied into this worktree from the bootstrap branch
+  and given a UTF-8 BOM so PS 5.1 does not mojibake VI at parse time.
+- Verification: cargo test (292 lib + suites) PASS; clippy `-D warnings` and
+  `fmt --check` exit 0; frontend tsc clean + vitest 17 files/105 tests PASS;
+  real-network update check printed EN and VI results against the live
+  GitHub API (`v0.1.4`, "up to date"); PowerShell suite PASS in both
+  languages (agent-run and parent rerun).
+- Encoding/limits: NSIS installer shell stays English (no per-language MUI
+  in the current bundle config); GTK host records the update result in
+  `HostCore::update_message` (no overlay text channel).
+- REA / performance pass: env-gated startup stage trace in the Tauri setup
+  (`VOLUMECTL_STARTUP_TRACE=1`, zero-cost when off) measured ready in
+  59-116 ms over 6 debug runs (native surfaces 33-46 ms, audio + core
+  33-39 ms, duplicate launch exits in ~1 ms). The update check now shows an
+  immediate localized "Checking for updates…" overlay card while the worker
+  thread fetches. `docs/performance.md` records the stage table and the tao
+  PerMonitorV2 finding. REA artifact lanes on the built PE:
+  `inspect_rust_binary` (pe/amd64, rustc commit inferred) and
+  `inspect_pe_resources` (9 resources, icon 16-256 px, manifest =
+  Common-Controls only); decompiler providers and the layout/objdump lanes
+  are unavailable on this host and were reported, not approximated.
+- CI follow-up: PR #43 failed the macOS/Ubuntu jobs on the new renderer
+  signatures; the Linux/macOS smoke binaries (`gtk_smoke.rs`,
+  `appkit_smoke.rs`) now pass `Language::En` to `set_overlay_content`,
+  `render_overlay`, `set_mixer_controls`, and `update_mixer_value`, and the
+  macOS host handles `AppAction::CheckUpdates`. These files are cfg-gated to
+  their platforms, so CI is the compile check for them.

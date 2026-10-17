@@ -75,12 +75,33 @@ pub fn set_modifier(
 /// the config (publishes state, refreshes appearance) on success.
 #[tauri::command]
 pub fn update_settings(
+    app: tauri::AppHandle,
     core: State<'_, Arc<Mutex<AppCore>>>,
     patch: SettingsPatch,
 ) -> Result<(), String> {
+    let language_patch = patch.language.is_some();
     let mut core = core.lock().map_err(|e| e.to_string())?;
     core.update_settings(patch)?;
-    core.save_config()
+    core.save_config()?;
+    let language = core.config().language;
+    drop(core);
+
+    if language_patch {
+        apply_language(&app, language);
+    }
+    Ok(())
+}
+
+/// Relabel every tray so a language change is visible without a restart.
+pub(crate) fn apply_language(app: &tauri::AppHandle, language: volumectl_lib::config::Language) {
+    #[cfg(target_os = "windows")]
+    if let Some(native) = app.try_state::<Arc<crate::native_win32::NativeWin32>>() {
+        native.apply_language(language);
+    }
+    #[cfg(not(target_os = "windows"))]
+    if let Some(tray) = app.try_state::<crate::tauri_tray::TauriTray>() {
+        tray.apply_language(language);
+    }
 }
 
 /// Read the current-user startup registration. This is deliberately separate

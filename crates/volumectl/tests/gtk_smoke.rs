@@ -19,6 +19,7 @@ fn main() {
 
 #[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
 fn run_smoke() {
+    use volumectl_lib::config::Language;
     #[cfg(feature = "layer-shell")]
     use volumectl_lib::ui::platform::linux::renderer::layer_shell_available;
     use volumectl_lib::ui::platform::linux::renderer::{
@@ -122,7 +123,7 @@ fn run_smoke() {
         .unwrap();
     let mut overlay_panel = GtkPanel::new(overlay_plan.surface, false);
     overlay_panel.apply_plan(overlay_plan, &caps());
-    overlay_panel.set_overlay_content(50, false, &tokens, 40, 75);
+    overlay_panel.set_overlay_content(50, false, &tokens, 40, 75, Language::En);
 
     // Mixer controls via native GTK widgets: no panic.
     let mixer_plan = plans
@@ -132,7 +133,7 @@ fn run_smoke() {
     let mut mixer_panel = GtkPanel::new(mixer_plan.surface, false);
     mixer_panel.apply_plan(mixer_plan, &caps());
     let host = HostHandle::new(|_| {});
-    mixer_panel.set_mixer_controls(&host);
-    mixer_panel.update_mixer_value(72, false);
-    mixer_panel.update_mixer_value(30, true);
+    mixer_panel.set_mixer_controls(&host, Language::En);
+    mixer_panel.update_mixer_value(72, false, Language::En);
+    mixer_panel.update_mixer_value(30, true, Language::En);
 }

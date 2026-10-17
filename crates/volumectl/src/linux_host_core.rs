@@ -36,6 +36,8 @@ pub struct HostCore {
     caps: UiCapabilities,
     quit_requested: bool,
     degraded: Vec<String>,
+    /// Latest localized "Check for updates" result (none until first check).
+    pub update_message: Option<String>,
 }
 
 impl HostCore {
@@ -57,6 +59,7 @@ impl HostCore {
             caps,
             quit_requested: false,
             degraded: Vec::new(),
+            update_message: None,
         };
         host.sync_appearance();
         host.refresh_audio();
@@ -199,6 +202,13 @@ impl HostCore {
             AppAction::ReloadConfig => {
                 self.config_reload_requested = true;
             }
+            AppAction::CheckUpdates => {
+                // Result is surfaced through `update_message`; the GTK host
+                // has no overlay text channel, so it also lands in the log.
+                let message = crate::updates::check_for_updates(self.config.language);
+                log::info!("update check: {message}");
+                self.update_message = Some(message);
+            }
             AppAction::Exit => {
                 self.quit_requested = true;
             }
@@ -328,6 +338,7 @@ impl HostCore {
         self.state.theme = self.config.appearance.theme;
         self.state.material = self.config.appearance.material;
         self.state.motion = self.config.appearance.motion;
+        self.state.language = self.config.language;
     }
 }
 

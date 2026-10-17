@@ -23,6 +23,7 @@ pub mod hotkeys_global;
 #[cfg(all(target_os = "linux", feature = "gtk-renderer"))]
 pub mod linux_app;
 pub mod linux_host_core;
+pub mod locale;
 #[cfg(target_os = "macos")]
 pub mod macos_app;
 pub mod ui;
@@ -45,6 +46,7 @@ pub mod settings;
 #[cfg(target_os = "windows")]
 pub mod tray;
 pub mod tray_common;
+pub mod updates;
 #[cfg(target_os = "windows")]
 pub mod wheel_win32;
 

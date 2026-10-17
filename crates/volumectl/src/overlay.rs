@@ -33,7 +33,8 @@ use windows_sys::Win32::{
 };
 
 use crate::audio::VolumeState;
-use crate::config::{ColorThresholds, Config};
+use crate::config::{ColorThresholds, Config, Language};
+use crate::locale;
 use crate::ui::platform::windows::text::{TextAlign, TextLayout};
 use crate::ui::primitives::{
     apply_backdrop, work_area_for, DpiMetrics, PaintCanvas, PointF, RectF,
@@ -78,6 +79,8 @@ pub struct OverlayAppearance {
     /// decorative motion (spec §5.4: reduced motion respected, no perpetual
     /// animation). When entry animation lands, this field is what gates it.
     pub motion: MotionMode,
+    /// UI language for the title/output labels.
+    pub lang: Language,
 }
 
 impl OverlayAppearance {
@@ -104,6 +107,7 @@ impl OverlayAppearance {
             tokens,
             material,
             motion,
+            lang: config.language,
         }
     }
 
@@ -114,6 +118,7 @@ impl OverlayAppearance {
             tokens: tokens_for(ThemeMode::System, false, AccentMode::System, || None),
             material: ResolvedMaterial::Opaque,
             motion: MotionMode::Full,
+            lang: Language::default(),
         }
     }
 }
@@ -488,7 +493,7 @@ fn paint(canvas: &mut PaintCanvas, data: &OverlayData) {
             // alignment math — `TextAlign::Right` origin = rect.right -
             // text_width, never space padding).
             canvas.draw_text(&TextLayout {
-                text: "Volume",
+                text: locale::strings(data.appearance.lang).overlay_volume,
                 rect: layout.title_rect,
                 align: TextAlign::Left,
                 role: tokens.typography.label,
@@ -520,7 +525,7 @@ fn paint(canvas: &mut PaintCanvas, data: &OverlayData) {
 
             // Row 2: output identity.
             canvas.draw_text(&TextLayout {
-                text: "System output",
+                text: locale::strings(data.appearance.lang).mixer_output,
                 rect: layout.output_rect,
                 align: TextAlign::Left,
                 role: tokens.typography.caption,

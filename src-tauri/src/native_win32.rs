@@ -80,12 +80,12 @@ pub fn ensure_single_instance() -> bool {
 impl NativeWin32 {
     /// Create the hidden wheel-bridge window, install the wheel hook, and
     /// create the native overlay + tray.
-    pub fn new() -> Result<Self, String> {
+    pub fn new(lang: volumectl_lib::config::Language) -> Result<Self, String> {
         let (wheel_tx, wheel_rx) = channel();
         let wheel_hwnd = unsafe { create_wheel_bridge_window(wheel_tx)? };
         let caps = volumectl_lib::ui::primitives::detect_capabilities(wheel_hwnd);
         let overlay = Overlay::new().map_err(|e| format!("create overlay: {e}"))?;
-        let tray = Tray::new().map_err(|e| format!("create tray: {e}"))?;
+        let tray = Tray::new(lang).map_err(|e| format!("create tray: {e}"))?;
         wheel_win32::install_wheel_hook(wheel_hwnd)
             .map_err(|e| format!("install wheel hook: {e}"))?;
         Ok(Self {
@@ -113,6 +113,11 @@ impl NativeWin32 {
             .lock()
             .expect("overlay mutex poisoned")
             .show_text(text, config, &appearance);
+    }
+
+    /// Relabel the native tray after the configured language changes.
+    pub fn apply_language(&self, lang: volumectl_lib::config::Language) {
+        self.tray.apply_language(lang);
     }
 
     /// Single resolution point for the native overlay's adaptive appearance

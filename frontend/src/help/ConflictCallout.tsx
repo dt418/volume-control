@@ -1,25 +1,30 @@
 import { Card, CardContent } from "../components/ui/card";
 import { Kbd } from "../components/ui/kbd";
+import { useT, type TranslationKey } from "../lib/i18n";
 
 export interface ConflictCalloutData {
   /** Conflicted base-action combos, one chip list per row (row order,
    *  shift variants deduplicated — legacy help.rs ConflictCallout). */
   combos: string[];
-  /** Sentence tail: "is used by another app." / "are used by another app." */
-  tail: string;
+  /** Sentence tail key (help.calloutTailOne / help.calloutTailMany). */
+  tail: TranslationKey;
 }
 
 /** The conflicted-combo sentence: "<c1> and <c2> are used by another app."
  *  (connector ", " between, " and " before the last — legacy
  *  `explanation_atoms`). */
-export function conflictSentence(combos: string[], tail: string): string {
+export function conflictSentence(
+  combos: string[],
+  tail: TranslationKey,
+  tr: (key: TranslationKey) => string,
+): string {
   if (combos.length === 0) return "";
   let sentence = combos[0];
   for (let i = 1; i < combos.length; i += 1) {
     sentence += i === combos.length - 1 ? " and " : ", ";
     sentence += combos[i];
   }
-  return `${sentence} ${tail}`;
+  return `${sentence} ${tr(tail)}`;
 }
 
 /** Legacy conflict callout card: warning marker, conflicted combo keycaps,
@@ -32,6 +37,7 @@ export function ConflictCallout({
   data: ConflictCalloutData;
   onOpenSettings: () => void;
 }) {
+  const tr = useT();
   return (
     <Card
       data-testid="conflict-callout"
@@ -42,16 +48,16 @@ export function ConflictCallout({
           <span aria-hidden="true" className="text-amber-500">
             ⚠
           </span>
-          <h2 className="text-sm font-semibold">Shortcut conflict</h2>
+          <h2 className="text-sm font-semibold">{tr("help.calloutTitle")}</h2>
         </div>
         <p className="text-sm text-foreground/80">
-          {conflictSentence(data.combos, data.tail)}{" "}
+          {conflictSentence(data.combos, data.tail, tr)}{" "}
           <button
             type="button"
             onClick={onOpenSettings}
             className="text-accent underline underline-offset-2 hover:text-accent/80"
           >
-            Change the modifier in Settings.
+            {tr("help.calloutAction")}
           </button>
         </p>
         <div className="flex flex-wrap gap-1">

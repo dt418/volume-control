@@ -83,6 +83,41 @@ fn install_menu_event_handler(builder: tauri::Builder<tauri::Wry>) -> tauri::Bui
 /// Shared tray-command dispatch (Windows global handler and the macOS/Linux
 /// tray callback both route here).
 fn dispatch_tray_command(app: &tauri::AppHandle, command: TrayCommand) {
+    // The update check performs a blocking network fetch; run it off the
+    // core lock so volume/hotkey handling stays responsive while it flies.
+    if command == TrayCommand::CheckUpdates {
+        let handle = app.clone();
+        // Immediate feedback: the fetch takes seconds, so the overlay shows
+        // the in-progress card before the result replaces it.
+        if let Some(shared) = app.try_state::<Arc<Mutex<AppCore>>>() {
+            let mut core = shared
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let in_progress =
+                volumectl_lib::locale::strings(core.config().language).update_check_in_progress;
+            core.show_overlay_text(in_progress.to_string());
+        }
+        std::thread::spawn(move || {
+            let language = handle
+                .try_state::<Arc<Mutex<AppCore>>>()
+                .map(|shared| {
+                    shared
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .config()
+                        .language
+                })
+                .unwrap_or_default();
+            let message = volumectl_lib::updates::check_for_updates(language);
+            if let Some(shared) = handle.try_state::<Arc<Mutex<AppCore>>>() {
+                let mut core = shared
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                core.show_overlay_text(message);
+            }
+        });
+        return;
+    }
     let Some(shared) = app.try_state::<Arc<Mutex<AppCore>>>() else {
         log::warn!(
             "tray command {:?} received before AppCore was managed",
@@ -182,6 +217,24 @@ pub fn run() -> tauri::Result<()> {
     volumectl_lib::init_logging();
     install_menu_event_handler(register_debug_plugins(tauri::Builder::default()))
         .setup(|app| {
+            // Startup stage trace (env-gated): `VOLUMECTL_STARTUP_TRACE=1`
+            // logs per-stage elapsed milliseconds so startup impact is
+            // measured, not guessed. The marks are cheap no-ops otherwise.
+            let startup_trace = std::env::var("VOLUMECTL_STARTUP_TRACE").as_deref() == Ok("1");
+            let startup_start = std::time::Instant::now();
+            macro_rules! startup_mark {
+                ($label:literal) => {
+                    if startup_trace {
+                        log::info!(
+                            "startup: {:<22} {} ms",
+                            $label,
+                            startup_start.elapsed().as_millis()
+                        );
+                    }
+                };
+            }
+            startup_mark!("setup begin");
+
             // Prevent two instances (mirrors the legacy host's named-mutex
             // guard: a second instance would double-apply hotkeys/wheel and
             // create a second tray icon). The check runs before any native
@@ -194,14 +247,19 @@ pub fn run() -> tauri::Result<()> {
                 log::warn!("another VolumeControl instance is already running");
                 std::process::exit(0);
             }
+            startup_mark!("single instance");
 
             let handle = app.handle().clone();
             app.manage(WindowManager::new(handle.clone()));
 
+            // Loaded before any surface so native trays build localized menus.
+            let (config, config_notice) = volumectl_lib::config::load_with_notice();
+            startup_mark!("config loaded");
+
             // Tauri-managed tray (macOS/Linux only). Creation failure is
             // non-fatal: keep the host alive with the webview surfaces.
             #[cfg(not(target_os = "windows"))]
-            match tauri_tray::TauriTray::create(&handle) {
+            match tauri_tray::TauriTray::create(&handle, config.language) {
                 Ok(tray) => {
                     app.manage(tray);
                     log::info!("tray created");
@@ -213,10 +271,11 @@ pub fn run() -> tauri::Result<()> {
             // Linux/macOS: none (the headless host is AppCore alone).
             #[cfg(target_os = "windows")]
             let native = {
-                let native = Arc::new(native_win32::NativeWin32::new()?);
+                let native = Arc::new(native_win32::NativeWin32::new(config.language)?);
                 app.manage(native.clone());
                 native
             };
+            startup_mark!("native surfaces");
 
             let audio = match create_audio_backend() {
                 Ok(audio) => audio,
@@ -225,16 +284,17 @@ pub fn run() -> tauri::Result<()> {
                     Box::new(UnavailableAudio::new(error)) as Box<dyn AudioBackend>
                 }
             };
-            let (config, config_notice) = volumectl_lib::config::load_with_notice();
             let modifier = config.modifier;
             let sink = Arc::new(TauriSink::new(handle));
             let core = AppCore::new_with_notice(audio, config, modifier, sink, config_notice)
                 .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+            startup_mark!("audio + core");
 
             // AppCore is shared behind a Mutex so commands can mutate it and
             // the poll threads can drain hotkeys/wheel/config concurrently.
             let shared = Arc::new(Mutex::new(core));
             app.manage(shared.clone());
+            startup_mark!("state managed");
 
             // Diagnostic verification opens through the same WindowManager
             // path as production, but only after every command dependency is
@@ -299,6 +359,7 @@ pub fn run() -> tauri::Result<()> {
                 std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
             });
 
+            startup_mark!("poll threads");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

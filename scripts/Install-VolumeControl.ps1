@@ -17,12 +17,150 @@ $script:VolumeControlRepository = 'dt418/volume-control'
 $script:VolumeControlReleaseApi = "https://api.github.com/repos/$script:VolumeControlRepository/releases"
 $script:ChecksumManifestName = 'SHA256SUMS.txt'
 
+# User-facing message table. Keys are stable message IDs and stay internal:
+# only the rendered template is ever printed. The English templates are the
+# canonical text; `{0}` placeholders are filled by Get-VolumeControlMessage.
+$script:VolumeControlMessages = @{
+    'install-root.localappdata-required' = @{
+        en = 'LOCALAPPDATA is required to determine the install root'
+        vi = "C$([char]0x1EA7)n bi$([char]0x1EBF)n m$([char]0x00F4)i tr$([char]0x01B0)$([char]0x1EDD)ng LOCALAPPDATA $([char]0x0111)$([char]0x1EC3) x$([char]0x00E1)c $([char]0x0111)$([char]0x1ECB)nh th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t"
+    }
+    'install-root.must-equal' = @{
+        en = 'install root must equal {0}'
+        vi = "th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng {0}"
+    }
+    'release.draft-or-prerelease' = @{
+        en = 'release must not be draft or prerelease'
+        vi = "b$([char]0x1EA3)n ph$([char]0x00E1)t h$([char]0x00E0)nh kh$([char]0x00F4)ng $([char]0x0111)$([char]0x01B0)$([char]0x1EE3)c $([char]0x1EDF) tr$([char]0x1EA1)ng th$([char]0x00E1)i draft ho$([char]0x1EB7)c prerelease"
+    }
+    'release.tag-format' = @{
+        en = 'release tag must match vMAJOR.MINOR.PATCH'
+        vi = "th$([char]0x1EBB) ph$([char]0x00E1)t h$([char]0x00E0)nh ph$([char]0x1EA3)i kh$([char]0x1EDB)p $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng vMAJOR.MINOR.PATCH"
+    }
+    'version.format' = @{
+        en = 'version must start with v and match vMAJOR.MINOR.PATCH'
+        vi = "phi$([char]0x00EA)n b$([char]0x1EA3)n ph$([char]0x1EA3)i b$([char]0x1EAF)t $([char]0x0111)$([char]0x1EA7)u b$([char]0x1EB1)ng v v$([char]0x00E0) kh$([char]0x1EDB)p $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng vMAJOR.MINOR.PATCH"
+    }
+    'asset.installer-missing' = @{
+        en = 'missing installer asset: {0}'
+        vi = "thi$([char]0x1EBF)u t$([char]0x1EC7)p c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t: {0}"
+    }
+    'asset.installer-duplicate' = @{
+        en = 'expected exactly one installer asset: {0}'
+        vi = "ph$([char]0x1EA3)i c$([char]0x00F3) $([char]0x0111)$([char]0x00FA)ng m$([char]0x1ED9)t t$([char]0x1EC7)p c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t: {0}"
+    }
+    'asset.manifest-missing' = @{
+        en = 'missing checksum manifest asset: {0}'
+        vi = "thi$([char]0x1EBF)u t$([char]0x1EC7)p manifest checksum: {0}"
+    }
+    'asset.manifest-duplicate' = @{
+        en = 'expected exactly one checksum manifest asset: {0}'
+        vi = "ph$([char]0x1EA3)i c$([char]0x00F3) $([char]0x0111)$([char]0x00FA)ng m$([char]0x1ED9)t t$([char]0x1EC7)p manifest checksum: {0}"
+    }
+    'asset.download-url-missing' = @{
+        en = 'release asset download URL is missing'
+        vi = "thi$([char]0x1EBF)u URL t$([char]0x1EA3)i xu$([char]0x1ED1)ng c$([char]0x1EE7)a t$([char]0x1EC7)p ph$([char]0x00E1)t h$([char]0x00E0)nh"
+    }
+    'manifest.asset-basename' = @{
+        en = 'asset name must be a basename'
+        vi = "t$([char]0x00EA)n t$([char]0x1EC7)p ph$([char]0x1EA3)i l$([char]0x00E0) t$([char]0x00EA)n c$([char]0x01A1) s$([char]0x1EDF), kh$([char]0x00F4)ng ch$([char]0x1EE9)a $([char]0x0111)$([char]0x01B0)$([char]0x1EDD)ng d$([char]0x1EAB)n"
+    }
+    'manifest.not-found' = @{
+        en = 'checksum manifest does not exist: {0}'
+        vi = "kh$([char]0x00F4)ng t$([char]0x00EC)m th$([char]0x1EA5)y t$([char]0x1EC7)p manifest checksum: {0}"
+    }
+    'manifest.entry-not-canonical' = @{
+        en = 'checksum manifest entry is not canonical'
+        vi = "m$([char]0x1EE5)c trong manifest checksum kh$([char]0x00F4)ng $([char]0x0111)$([char]0x00FA)ng $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng chu$([char]0x1EA9)n"
+    }
+    'manifest.entry-count' = @{
+        en = 'checksum manifest must contain exactly one checksum entry for {0}'
+        vi = "manifest checksum ph$([char]0x1EA3)i ch$([char]0x1EE9)a $([char]0x0111)$([char]0x00FA)ng m$([char]0x1ED9)t m$([char]0x1EE5)c checksum cho {0}"
+    }
+    'process.exit-code' = @{
+        en = 'installer process failed with exit code {0}'
+        vi = "ti$([char]0x1EBF)n tr$([char]0x00EC)nh c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t th$([char]0x1EA5)t b$([char]0x1EA1)i v$([char]0x1EDB)i m$([char]0x00E3) tho$([char]0x00E1)t {0}"
+    }
+    'installer.not-found' = @{
+        en = 'installer does not exist: {0}'
+        vi = "kh$([char]0x00F4)ng t$([char]0x00EC)m th$([char]0x1EA5)y t$([char]0x1EC7)p c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t: {0}"
+    }
+    'uninstaller.must-equal' = @{
+        en = 'uninstaller must equal {0}'
+        vi = "t$([char]0x1EC7)p g$([char]0x1EE1) c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng {0}"
+    }
+    'uninstaller.not-found' = @{
+        en = 'uninstaller does not exist: {0}'
+        vi = "kh$([char]0x00F4)ng t$([char]0x00EC)m th$([char]0x1EA5)y t$([char]0x1EC7)p g$([char]0x1EE1) c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t: {0}"
+    }
+    'asset.download-failed' = @{
+        en = 'asset download did not create {0}'
+        vi = "qu$([char]0x00E1) tr$([char]0x00EC)nh t$([char]0x1EA3)i t$([char]0x1EC7)p kh$([char]0x00F4)ng t$([char]0x1EA1)o ra {0}"
+    }
+    'installer.sha256-mismatch' = @{
+        en = 'installer SHA-256 does not match {0}'
+        vi = "SHA-256 c$([char]0x1EE7)a t$([char]0x1EC7)p c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t kh$([char]0x00F4)ng kh$([char]0x1EDB)p v$([char]0x1EDB)i {0}"
+    }
+    'install.refused-executable-exists' = @{
+        en = 'install refused because standard executable already exists: {0}'
+        vi = "t$([char]0x1EEB) ch$([char]0x1ED1)i c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t v$([char]0x00EC) t$([char]0x1EC7)p th$([char]0x1EF1)c thi chu$([char]0x1EA9)n $([char]0x0111)$([char]0x00E3) t$([char]0x1ED3)n t$([char]0x1EA1)i: {0}"
+    }
+    'update.refused-executable-missing' = @{
+        en = 'update refused because standard executable is missing: {0}'
+        vi = "t$([char]0x1EEB) ch$([char]0x1ED1)i c$([char]0x1EAD)p nh$([char]0x1EAD)t v$([char]0x00EC) thi$([char]0x1EBF)u t$([char]0x1EC7)p th$([char]0x1EF1)c thi chu$([char]0x1EA9)n: {0}"
+    }
+    'update.refused-running-process' = @{
+        en = 'close VolumeControl before updating; bootstrap will not force-terminate it'
+        vi = "h$([char]0x00E3)y $([char]0x0111)$([char]0x00F3)ng VolumeControl tr$([char]0x01B0)$([char]0x1EDB)c khi c$([char]0x1EAD)p nh$([char]0x1EAD)t; bootstrap s$([char]0x1EBD) kh$([char]0x00F4)ng bu$([char]0x1ED9)c k$([char]0x1EBF)t th$([char]0x00FA)c ti$([char]0x1EBF)n tr$([char]0x00EC)nh"
+    }
+}
+
+function Get-VolumeControlLanguage {
+    [CmdletBinding()]
+    param()
+
+    $override = $env:VOLUMECONTROL_LANG
+    if (-not [string]::IsNullOrWhiteSpace($override)) {
+        if ($override.Trim().ToLowerInvariant() -ceq 'vi') {
+            return 'vi'
+        }
+
+        return 'en'
+    }
+
+    if ([System.Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName -ceq 'vi') {
+        return 'vi'
+    }
+
+    return 'en'
+}
+
+function Get-VolumeControlMessage {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)][string] $Id,
+        [Parameter(Position = 1, ValueFromRemainingArguments = $true)][object[]] $ArgumentList = @()
+    )
+
+    $entry = $script:VolumeControlMessages[$Id]
+    if ($null -eq $entry) {
+        throw "unknown installer message id: $Id"
+    }
+
+    $template = $entry[(Get-VolumeControlLanguage)]
+    if (@($ArgumentList).Count -eq 0) {
+        return $template
+    }
+
+    return ($template -f $ArgumentList)
+}
+
 function Get-InstallRoot {
     [CmdletBinding()]
     param()
 
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-        throw 'LOCALAPPDATA is required to determine the install root'
+        throw (Get-VolumeControlMessage 'install-root.localappdata-required')
     }
 
     return Join-Path $env:LOCALAPPDATA 'VolumeControl'
@@ -34,7 +172,7 @@ function Assert-StandardInstallRoot {
     $expectedRoot = [System.IO.Path]::GetFullPath((Get-InstallRoot))
     $actualRoot = [System.IO.Path]::GetFullPath($InstallRoot)
     if (-not [string]::Equals($actualRoot, $expectedRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "install root must equal $expectedRoot"
+        throw (Get-VolumeControlMessage 'install-root.must-equal' $expectedRoot)
     }
 
     return $expectedRoot
@@ -44,10 +182,10 @@ function Assert-EligibleRelease {
     param([Parameter(Mandatory = $true)] $Release)
 
     if ($Release.draft -ne $false -or $Release.prerelease -ne $false) {
-        throw 'release must not be draft or prerelease'
+        throw (Get-VolumeControlMessage 'release.draft-or-prerelease')
     }
     if ($Release.tag_name -isnot [string] -or $Release.tag_name -notmatch '^v\d+\.\d+\.\d+$') {
-        throw 'release tag must match vMAJOR.MINOR.PATCH'
+        throw (Get-VolumeControlMessage 'release.tag-format')
     }
 
     return $Release
@@ -58,7 +196,7 @@ function Resolve-VolumeControlRelease {
     param([string] $Version)
 
     if (-not [string]::IsNullOrEmpty($Version) -and $Version -notmatch '^v\d+\.\d+\.\d+$') {
-        throw 'version must start with v and match vMAJOR.MINOR.PATCH'
+        throw (Get-VolumeControlMessage 'version.format')
     }
 
     $headers = @{ Accept = 'application/vnd.github+json' }
@@ -82,19 +220,19 @@ function Get-ReleaseInstaller {
     $manifests = @($assets | Where-Object { $_.name -ceq $script:ChecksumManifestName })
 
     if ($installers.Count -eq 0) {
-        throw "missing installer asset: $installerName"
+        throw (Get-VolumeControlMessage 'asset.installer-missing' $installerName)
     }
     if ($installers.Count -ne 1) {
-        throw "expected exactly one installer asset: $installerName"
+        throw (Get-VolumeControlMessage 'asset.installer-duplicate' $installerName)
     }
     if ($manifests.Count -eq 0) {
-        throw "missing checksum manifest asset: $script:ChecksumManifestName"
+        throw (Get-VolumeControlMessage 'asset.manifest-missing' $script:ChecksumManifestName)
     }
     if ($manifests.Count -ne 1) {
-        throw "expected exactly one checksum manifest asset: $script:ChecksumManifestName"
+        throw (Get-VolumeControlMessage 'asset.manifest-duplicate' $script:ChecksumManifestName)
     }
     if ([string]::IsNullOrWhiteSpace($installers[0].browser_download_url) -or [string]::IsNullOrWhiteSpace($manifests[0].browser_download_url)) {
-        throw 'release asset download URL is missing'
+        throw (Get-VolumeControlMessage 'asset.download-url-missing')
     }
 
     return [pscustomobject]@{
@@ -112,16 +250,16 @@ function Read-ExpectedSha256 {
     )
 
     if ([System.IO.Path]::GetFileName($AssetName) -cne $AssetName) {
-        throw 'asset name must be a basename'
+        throw (Get-VolumeControlMessage 'manifest.asset-basename')
     }
     if (-not [System.IO.File]::Exists($ManifestPath)) {
-        throw "checksum manifest does not exist: $ManifestPath"
+        throw (Get-VolumeControlMessage 'manifest.not-found' $ManifestPath)
     }
 
     $expectedChecksums = New-Object System.Collections.Generic.List[string]
     foreach ($line in [System.IO.File]::ReadAllLines($ManifestPath)) {
         if ($line -notmatch '^([0-9A-Fa-f]{64})  ([^\\/]+)$') {
-            throw 'checksum manifest entry is not canonical'
+            throw (Get-VolumeControlMessage 'manifest.entry-not-canonical')
         }
         if ($Matches[2] -ceq $AssetName) {
             $expectedChecksums.Add($Matches[1].ToLowerInvariant())
@@ -129,7 +267,7 @@ function Read-ExpectedSha256 {
     }
 
     if ($expectedChecksums.Count -ne 1) {
-        throw "checksum manifest must contain exactly one checksum entry for $AssetName"
+        throw (Get-VolumeControlMessage 'manifest.entry-count' $AssetName)
     }
 
     return $expectedChecksums[0]
@@ -170,7 +308,7 @@ function Wait-ForSuccessfulProcess {
         $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -Wait
     }
     if ($process.ExitCode -ne 0) {
-        throw "installer process failed with exit code $($process.ExitCode)"
+        throw (Get-VolumeControlMessage 'process.exit-code' $process.ExitCode)
     }
 }
 
@@ -184,7 +322,7 @@ function Start-Installer {
 
     $standardRoot = Assert-StandardInstallRoot -InstallRoot $InstallRoot
     if (-not [System.IO.File]::Exists($InstallerPath)) {
-        throw "installer does not exist: $InstallerPath"
+        throw (Get-VolumeControlMessage 'installer.not-found' $InstallerPath)
     }
 
     $arguments = @()
@@ -206,10 +344,10 @@ function Start-Uninstaller {
     $expectedUninstaller = Join-Path $standardRoot 'uninstall.exe'
     $actualUninstaller = [System.IO.Path]::GetFullPath($UninstallerPath)
     if (-not [string]::Equals($actualUninstaller, $expectedUninstaller, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "uninstaller must equal $expectedUninstaller"
+        throw (Get-VolumeControlMessage 'uninstaller.must-equal' $expectedUninstaller)
     }
     if (-not [System.IO.File]::Exists($actualUninstaller)) {
-        throw "uninstaller does not exist: $actualUninstaller"
+        throw (Get-VolumeControlMessage 'uninstaller.not-found' $actualUninstaller)
     }
 
     $arguments = @()
@@ -227,7 +365,7 @@ function Save-ReleaseAsset {
 
     Invoke-WebRequest -Uri $Asset.browser_download_url -OutFile $DestinationPath -UseBasicParsing -ErrorAction Stop
     if (-not [System.IO.File]::Exists($DestinationPath)) {
-        throw "asset download did not create $DestinationPath"
+        throw (Get-VolumeControlMessage 'asset.download-failed' $DestinationPath)
     }
 }
 
@@ -250,7 +388,7 @@ function Invoke-VerifiedInstaller {
         Save-ReleaseAsset -Asset $releaseInstaller.Manifest -DestinationPath $downloadedManifest
         $expectedSha256 = Read-ExpectedSha256 -ManifestPath $downloadedManifest -AssetName $releaseInstaller.Installer.name
         if (-not (Test-FileSha256 -Path $downloadedInstaller -ExpectedSha256 $expectedSha256)) {
-            throw "installer SHA-256 does not match $script:ChecksumManifestName"
+            throw (Get-VolumeControlMessage 'installer.sha256-mismatch' $script:ChecksumManifestName)
         }
 
         Start-Installer -InstallerPath $downloadedInstaller -Silent:$Silent -InstallRoot $InstallRoot
@@ -290,14 +428,14 @@ function Invoke-VolumeControlAction {
 
     if ($Action -ceq 'install') {
         if ([System.IO.File]::Exists($installedExecutable)) {
-            throw "install refused because standard executable already exists: $installedExecutable"
+            throw (Get-VolumeControlMessage 'install.refused-executable-exists' $installedExecutable)
         }
         Invoke-VerifiedInstaller -Release $Release -InstallRoot $standardRoot -Silent:$Silent
         return
     }
 
     if (-not [System.IO.File]::Exists($installedExecutable)) {
-        throw "update refused because standard executable is missing: $installedExecutable"
+        throw (Get-VolumeControlMessage 'update.refused-executable-missing' $installedExecutable)
     }
 
     $selectedVersion = $Release.tag_name.Substring(1)
@@ -307,7 +445,7 @@ function Invoke-VolumeControlAction {
     }
 
     if ($null -ne (Get-Process -Name 'VolumeControl' -ErrorAction SilentlyContinue)) {
-        throw 'close VolumeControl before updating; bootstrap will not force-terminate it'
+        throw (Get-VolumeControlMessage 'update.refused-running-process')
     }
 
     Invoke-VerifiedInstaller -Release $Release -InstallRoot $standardRoot -Silent:$Silent

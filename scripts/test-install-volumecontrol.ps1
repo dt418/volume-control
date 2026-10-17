@@ -10,6 +10,7 @@ $originalStartProcess = Get-Command Start-Process -CommandType Function -ErrorAc
 $originalGetProcess = Get-Command Get-Process -CommandType Function -ErrorAction SilentlyContinue
 $originalStopProcess = Get-Command Stop-Process -CommandType Function -ErrorAction SilentlyContinue
 $originalGetItem = Get-Command Get-Item -CommandType Function -ErrorAction SilentlyContinue
+$originalVolumeControlLang = $env:VOLUMECONTROL_LANG
 
 function Assert-True {
     param([bool] $Condition, [string] $Message)
@@ -54,6 +55,22 @@ try {
     New-Item -ItemType Directory -Path $testRoot | Out-Null
     $env:LOCALAPPDATA = $testRoot
     . $bootstrap
+
+    Remove-Item Env:\VOLUMECONTROL_LANG -ErrorAction SilentlyContinue
+    $expectedDefaultLanguage = 'en'
+    if ([System.Globalization.CultureInfo]::CurrentUICulture.TwoLetterISOLanguageName -ceq 'vi') {
+        $expectedDefaultLanguage = 'vi'
+    }
+    Assert-Equal (Get-VolumeControlLanguage) $expectedDefaultLanguage 'language follows the UI culture without an override'
+    Assert-Equal (Get-VolumeControlMessage 'install-root.localappdata-required') 'LOCALAPPDATA is required to determine the install root' 'EN template stays byte-identical'
+    Assert-Equal (Get-VolumeControlMessage 'install-root.must-equal' 'C:\root') 'install root must equal C:\root' 'EN template interpolates values'
+    foreach ($messageId in $script:VolumeControlMessages.Keys) {
+        $messageEntry = $script:VolumeControlMessages[$messageId]
+        Assert-True (-not [string]::IsNullOrWhiteSpace($messageEntry['en'])) "EN template missing for $messageId"
+        Assert-True (-not [string]::IsNullOrWhiteSpace($messageEntry['vi'])) "VI template missing for $messageId"
+        Assert-False ($messageEntry['en'] -ceq $messageEntry['vi']) "VI template must differ from EN for $messageId"
+    }
+    $env:VOLUMECONTROL_LANG = 'en'
 
     $installRoot = Get-InstallRoot
     New-Item -ItemType Directory -Path $installRoot | Out-Null
@@ -304,6 +321,72 @@ try {
     }
 
     Assert-Throws { Invoke-VolumeControlAction -Action update -Release $newRelease -InstallRoot $installRoot } 'close VolumeControl'
+
+    # --- Remote-download safety: `irm` on Windows PowerShell 5.1 decodes a
+    # text/plain response as cp1252, so the published asset must be pure ASCII
+    # and BOM-less; VI text travels as [char] escapes that survive that decode.
+    $bootstrapSourcePath = Join-Path $PSScriptRoot 'Install-VolumeControl.ps1'
+    $bootstrapBytes = [System.IO.File]::ReadAllBytes($bootstrapSourcePath)
+    $nonAsciiCount = 0
+    foreach ($byte in $bootstrapBytes) {
+        if ($byte -gt 127) { $nonAsciiCount++ }
+    }
+    Assert-Equal $nonAsciiCount 0 'bootstrap source stays pure ASCII for cp1252-safe downloads'
+    Assert-False ($bootstrapBytes.Length -ge 3 -and $bootstrapBytes[0] -eq 0xEF -and $bootstrapBytes[1] -eq 0xBB -and $bootstrapBytes[2] -eq 0xBF) 'bootstrap source carries no UTF-8 BOM'
+
+    $cp1252 = [System.Text.Encoding]::GetEncoding(1252)
+    $decodedBootstrap = $cp1252.GetString($bootstrapBytes)
+    $decodedBlock = [scriptblock]::Create($decodedBootstrap)
+    Assert-True ($null -ne $decodedBlock) 'cp1252-decoded bootstrap parses as a scriptblock'
+
+    $viFromDecoded = & {
+        . ([scriptblock]::Create($decodedBootstrap))
+        $env:VOLUMECONTROL_LANG = 'vi'
+        Get-VolumeControlMessage 'install-root.must-equal' 'C:\root'
+    }
+    Assert-Equal $viFromDecoded "th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng C:\root" 'cp1252-decoded bootstrap renders VI text correctly'
+
+    # --- VI scenario set: $env:VOLUMECONTROL_LANG override ---
+    $previousVolumeControlLang = $env:VOLUMECONTROL_LANG
+    $previousUiCulture = [System.Globalization.CultureInfo]::CurrentUICulture
+    try {
+        Remove-Item Env:\VOLUMECONTROL_LANG -ErrorAction SilentlyContinue
+        [System.Globalization.CultureInfo]::CurrentUICulture = [System.Globalization.CultureInfo]::GetCultureInfo('en-US')
+        Assert-Equal (Get-VolumeControlLanguage) 'en' 'EN UI culture selects EN without an override'
+        [System.Globalization.CultureInfo]::CurrentUICulture = [System.Globalization.CultureInfo]::GetCultureInfo('vi-VN')
+        Assert-Equal (Get-VolumeControlLanguage) 'vi' 'VI UI culture selects VI without an override'
+        $env:VOLUMECONTROL_LANG = 'EN'
+        Assert-Equal (Get-VolumeControlLanguage) 'en' 'EN override wins over the VI UI culture'
+        $env:VOLUMECONTROL_LANG = 'Vi'
+        Assert-Equal (Get-VolumeControlLanguage) 'vi' 'language override is case-insensitive'
+        $env:VOLUMECONTROL_LANG = 'fr'
+        Assert-Equal (Get-VolumeControlLanguage) 'en' 'unknown language override falls back to EN'
+
+        $env:VOLUMECONTROL_LANG = 'vi'
+        Assert-Equal (Get-VolumeControlMessage 'install-root.must-equal' 'C:\root') "th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng C:\root" 'VI template stays byte-identical'
+        Assert-Throws { Resolve-VolumeControlRelease -Version '1.2.3' } "phi$([char]0x00EA)n b$([char]0x1EA3)n ph$([char]0x1EA3)i b$([char]0x1EAF)t $([char]0x0111)$([char]0x1EA7)u b$([char]0x1EB1)ng v"
+        Assert-Throws { Assert-StandardInstallRoot -InstallRoot $outsideRoot } "th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng"
+        Assert-Throws { Read-ExpectedSha256 -ManifestPath $malformedManifest -AssetName $installerName } "kh$([char]0x00F4)ng $([char]0x0111)$([char]0x00FA)ng $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng chu$([char]0x1EA9)n"
+
+        $viFailureMessage = $null
+        try {
+            Invoke-VolumeControlAction -Action update -Release $newRelease -InstallRoot $installRoot
+        } catch {
+            $viFailureMessage = $_.Exception.Message
+        }
+        Assert-True ($viFailureMessage -clike "*h$([char]0x00E3)y $([char]0x0111)$([char]0x00F3)ng VolumeControl*") 'VI message for the running-process failure path'
+        Assert-False ($viFailureMessage -clike '*update.refused-running-process*') 'message IDs never reach the user'
+
+        Start-Installer -InstallerPath $installerPath -InstallRoot $installRoot
+        Assert-Equal (Read-ExpectedSha256 -ManifestPath $manifestPath -AssetName $installerName) $installerSha256 'successful path stays intact under the VI override'
+    } finally {
+        [System.Globalization.CultureInfo]::CurrentUICulture = $previousUiCulture
+        if ([string]::IsNullOrEmpty($previousVolumeControlLang)) {
+            Remove-Item Env:\VOLUMECONTROL_LANG -ErrorAction SilentlyContinue
+        } else {
+            $env:VOLUMECONTROL_LANG = $previousVolumeControlLang
+        }
+    }
 } finally {
     foreach ($commandName in 'Start-Process', 'Get-Item', 'Get-Process', 'Stop-Process') {
         $functionPath = "function:global:$commandName"
@@ -318,6 +401,11 @@ try {
     }
     $env:LOCALAPPDATA = $originalLocalAppData
     $env:APPDATA = $originalAppData
+    if ([string]::IsNullOrEmpty($originalVolumeControlLang)) {
+        Remove-Item Env:\VOLUMECONTROL_LANG -ErrorAction SilentlyContinue
+    } else {
+        $env:VOLUMECONTROL_LANG = $originalVolumeControlLang
+    }
     Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 

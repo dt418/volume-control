@@ -305,7 +305,7 @@ platform-log paths before inspecting the package contents without executing
 them:
 
 ```bash
-tar tzf output/release/ubuntu/volumecontrol-<version>-ubuntu.tar.gz
+tar tzf output/release/ubuntu/volumecontrol-<version>-linux-amd64.tar.gz
 unzip -l output/release/macos/volumecontrol-<version>-macos.zip
 unzip -l output/release/windows/volumecontrol-<version>-windows.zip
 ```
