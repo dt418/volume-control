@@ -143,6 +143,19 @@
 - Records: vol-088 added; vol-087 note updated to the merged state (PR #42
   merged to main as ab3cf7d); this entry is the `claude-progress.md` half.
 
+- `scripts/test-format-lint.sh`: the concurrency lock was acquired before the
+  hermetic preconditions but released only by the EXIT trap installed after
+  them, so any refused run (modified `.claude/settings.local.json`, dirty
+  index) leaked `scripts/.test-format-lint.lock` and blocked every later run
+  with "already running". Hit for real while shipping this change set: an
+  external merge left the index unmerged, the smoke test refused and leaked
+  the lock, and the next `scripts/ship.sh --push` aborted at phase 4. The
+  release trap is now installed immediately after the lock is acquired (the
+  full cleanup trap still replaces it further down). Negative verification:
+  with a staged scratch file the suite prints `FAIL - the index has staged
+  changes` and the lock is absent afterwards; the full suite then passes and
+  releases the lock too.
+
 ## Session 102 (2026-10-17) - Windows release bootstrap Task 4
 
 - README.md `## Installing on Windows` and README.vi.md
@@ -3621,3 +3634,95 @@ fn get_window_pid_x11() -> Option<u32> {
 - `scripts/test-release-workflow.sh` asserts the ci bundle flags (macOS dmg,
   Ubuntu deb/rpm/AppImage) and that the tauri config declares a square PNG icon;
   all contract checks pass locally.
+
+## Session 110 (2026-10-17) - Merge main into the harness branch: record-id collision + WSL guard fix
+
+- Merge: `origin/main` (`1ba66e5`, App i18n #46) merged into
+  `fix/release-workflow-git-path-resolution` as `0c798cc` with the record
+  merge drivers registered, so `feature_list.json`, `claude-progress.md` and
+  `session-handoff.md` landed without conflict markers; the driver unioned
+  evidence under shared ids and kept the furthest-along status per id.
+- Collision found in the merged ledger: this branch had rewritten main's
+  `vol-089` (macOS `AppAction::CheckUpdates`) into a tooling record for the
+  format-lint lock fix, so the driver unioned two different features under one
+  id and main's macOS title/behavior text fell out of the ledger. Resolved in
+  the records: `vol-089` restored verbatim from `origin/main`, the format-lint
+  record renumbered to `vol-095` carrying only its own two verification lines
+  and the Session 103 evidence, and `vol-096` added for the guard fix below.
+  Audited: every main-side feature id and every main-side
+  evidence/verification line is still present (61 -> 63 features, ids unique,
+  `priority == id` for all, `vol-089.notes` gains one provenance sentence).
+- `scripts/check-records.sh`: the same gitdir defect vol-088 fixed for the
+  release harness, now in the records guard. In a worktree created by native
+  Windows git, `.git` holds `gitdir: C:/...`, which a POSIX git (WSL) resolves
+  against the cwd: under WSL bash every git call in the guard died with exit
+  128 and the guard reported `FAIL - git diff --cached failed (exit 128)`.
+  Because `scripts/format-lint.sh` runs `sh scripts/check-records.sh --staged`,
+  the WSL Linux gate itself could not pass. The guard now walks up to the
+  `.git` marker, converts drive-letter gitdirs with `wslpath -u` (WSL) or
+  `cygpath -u` (MSYS), and exports `GIT_DIR`/`GIT_WORK_TREE` - only after the
+  plain `git rev-parse --git-dir` already failed, so ordinary checkouts and
+  POSIX CI keep the ambient environment.
+- Verification (fresh, this worktree):
+  - WSL bash (`C:/Windows/System32/bash.exe`, GNU bash 5.2.21, `/usr/bin/git`
+    2.43.0): `bash scripts/check-records.sh --staged` exits 0. Before the fix
+    the same call exited 1 with `fatal: not a git repository:
+    /mnt/c/Users/Thanh/orca/volume-control-windows-release-bootstrap/C:/Users/
+    Thanh/orca/volume-control/.git/worktrees/volume-control-windows-release-bootstrap`.
+  - Negative (live, WSL bash): with a scratch file staged the guard reports
+    `this commit changes substantive files but not the records` with
+    `trigger: .tmp-wsl-guard-check`, so the fallback reads the real index
+    instead of passing vacuously; the clean index exits 0.
+  - MSYS `sh` (`C:/Program Files/Git/bin/sh.exe`): exit 0, first-call path
+    unchanged; `bash -n scripts/check-records.sh` clean.
+  - `scripts/test-check-records.sh`: 35 `ok`, exit 0.
+    `scripts/test-records-merge.sh`: 9 `ok`.
+  - `scripts/test-format-lint.sh` (Git Bash, `frontend/dist` built): all
+    format-lint smoke checks passed, exit 0, including
+    `refused run releases the concurrency lock`.
+  - Merge integrity: `git diff --check` clean, no conflict markers anywhere,
+    merged tree identical to this branch for the record files plus main's
+    i18n record edits absorbed (vol-091..094 at main's content).
+- Records: `vol-089` restored, `vol-095` + `vol-096` added; this entry is the
+  `claude-progress.md` half.
+
+## Session 108 (2026-10-17) - Stale main reconciled + smoke lock release on refused runs
+
+- Workspace reconciliation (scheduled resume run): the `volume-control` main
+  checkout this run resumes was 6 commits behind `origin/main` and carried
+  superseded uncommitted work - a tray "Check for updates" item that opened
+  the releases page, plus an untracked 2026-10-16 windows-release-bootstrap
+  plan/spec. That tray design landed upstream in a fuller form (ureq fetch
+  against `releases/latest`, localized overlay result, immediate in-progress
+  card; PR #43 / vol-090), and the bootstrap plan was executed end to end by
+  Sessions 099-107 (vol-087..vol-092; PR #42). The stale change set is
+  preserved in `git stash@{0}`; `main` fast-forwarded `54e7e5a -> ac26346`.
+  - Verified on the reconciled tree: `cargo fmt --all --check`,
+    `git diff --check`, and `cargo test --workspace --no-default-features`
+    all exit 0.
+- Defect fixed in `scripts/test-format-lint.sh`: the suite took
+  `scripts/.test-format-lint.lock` but installed its cleanup trap only after
+  the hermetic preconditions, so every refusal (missing or modified
+  `.claude/settings.local.json`, dirty index) leaked the lock and the next
+  invocation died with "already running" until someone removed the directory
+  by hand. Reproduced live before the fix: append a newline to
+  `.claude/settings.local.json`, run the suite (exit 1), and the lock is still
+  in place; the next run prints "test-format-lint.sh is already running".
+  - `trap 'release_lock' EXIT` is now installed immediately after the lock is
+    taken; the later full cleanup trap replaces it and releases the lock again
+    (rmdir is idempotent).
+  - New check 10 in the suite hands the lock to a nested run forced into the
+    dirty-index refusal and requires that run to exit 1, refuse on its own
+    precondition (not on the lock), and leave no lock directory - the missing
+    regression coverage for this refusal path.
+- Verification: RED (early trap commented out) the new check reported
+  "FAIL - refused run releases the concurrency lock (lock left behind: ...)";
+  GREEN `bash scripts/test-format-lint.sh` prints "All format-lint smoke
+  checks passed." with exit 0, including the new check. The suite was run
+  under Git Bash with `frontend/dist` built, because this host's PATH `bash`
+  is the WSL shim (it cannot read a Windows-form worktree gitdir) and the
+  gate's clippy step compiles `tauri::generate_context!`, which needs the
+  frontend build.
+- Note: the unmerged PR #45 (`fix/release-workflow-git-path-resolution`)
+  carries the same trap fix (`e6a67e6`) plus a HEAD-resolution block that is
+  already on `main` through #44's squash, so it is redundant once this lands.
