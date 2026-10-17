@@ -1,5 +1,27 @@
 # Progress Log
 
+## Session 109 (2026-10-17) - Conflict-free record merges
+
+- Every branch edits `feature_list.json` and `claude-progress.md`, so each PR
+  arrived `CONFLICTING` on additive record edits alone. `feature_list.json`,
+  `claude-progress.md` and `session-handoff.md` now carry merge drivers in
+  `.gitattributes` (`records-json`, `records-md`).
+- `scripts/merge-records-json.sh`: features merge by `id`; `evidence` and
+  `verification` union in place; scalar changes resolve against the merge base
+  so the side that changed a field wins; `last_updated` keeps the newest stamp;
+  `status` ranks passing > in_progress/blocked > not_started.
+- `scripts/merge-records-md.sh`: blocks merge by heading line, ours keep their
+  order, shared headings keep one heading plus the union of their lines, and
+  theirs-only blocks append. Already-conflicted input is refused.
+- `scripts/install-merge-drivers.sh` registers both drivers; both hook
+  installers call it, so a clone set up with `install-hooks.*` merges records
+  conflict-free.
+- `scripts/test-records-merge.sh` covers the drivers (8 checks) including an
+  end-to-end `git merge` in a throwaway repository; the Fast checks job runs it
+  on every pull request.
+- Fallback stays safe: without a registered driver, or on malformed or already
+  conflicted input, git still reports the ordinary conflict.
+
 ## Session 108 (2026-10-17) - Native Linux and macOS packages
 
 - desktop-validation: macOS builds `tauri build --bundles dmg --ci`; Ubuntu

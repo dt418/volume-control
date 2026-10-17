@@ -9,3 +9,12 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 .githooks/pre-commit text eol=lf
+
+# Record files are touched by every task on every branch, so a textual merge
+# conflicts on purely additive edits. These drivers merge them semantically:
+# feature_list.json by feature id, the markdown logs by heading block.
+# scripts/install-merge-drivers.sh (or either hook installer) registers them
+# in a clone; without registration git keeps the plain conflict behaviour.
+claude-progress.md merge=records-md
+session-handoff.md merge=records-md
+feature_list.json merge=records-json
