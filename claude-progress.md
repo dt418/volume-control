@@ -1,5 +1,22 @@
 # Progress Log
 
+## Session 109 (2026-10-17) - AppImage bundling
+
+- The v0.1.6 release run failed on the Ubuntu leg: the Tauri bundler panicked
+  with `couldn't find a square icon to use as AppImage icon` at
+  `bundler/src/bundle/linux/appimage/linuxdeploy.rs` after deb and rpm bundled
+  successfully.
+- Cause: `src-tauri/tauri.conf.json` declared no `bundle.icon` list, so the
+  AppImage bundler had no square PNG. The config now declares
+  `icons/32x32.png`, `icons/128x128.png`, `icons/128x128@2x.png` (all square),
+  plus `icon.icns` and `icon.ico`.
+- The Ubuntu job of `ci.yml` now builds `--bundles deb,rpm,appimage` (was
+  `--no-bundle`) and lists the three bundle directories, so a packaging failure
+  surfaces on the pull request instead of at the release tag.
+- `scripts/test-release-workflow.sh` asserts the ci bundle flags (macOS dmg,
+  Ubuntu deb/rpm/AppImage) and that the tauri config declares a square PNG icon;
+  all contract checks pass locally.
+
 ## Session 108 (2026-10-17) - Native Linux and macOS packages
 
 - desktop-validation: macOS builds `tauri build --bundles dmg --ci`; Ubuntu
