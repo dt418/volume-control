@@ -35,6 +35,7 @@ mkdir -p "$release_dir"
 app_dir="$fixture_root/build/$version-macos"
 mkdir -p "$app_dir/VolumeControl.app/Contents/MacOS"
 printf '#!/bin/sh\necho harness-free macos stub\n' > "$app_dir/VolumeControl.app/Contents/MacOS/volumectl"
+chmod +x "$app_dir/VolumeControl.app/Contents/MacOS/volumectl"
 printf 'plist-stub' > "$app_dir/VolumeControl.app/Contents/Info.plist"
 printf 'readme' > "$app_dir/README.md"
 
@@ -62,8 +63,9 @@ make_zip "$app_dir" "$release_dir/volumecontrol-$version-macos.zip"
 linux_dir="$fixture_root/build/$version-ubuntu"
 mkdir -p "$linux_dir"
 printf '#!/bin/sh\necho harness-free linux stub\n' > "$linux_dir/volumectl"
+chmod +x "$linux_dir/volumectl"
 printf 'readme' > "$linux_dir/README.md"
-(cd "$linux_dir" && tar czf "$release_dir/volumecontrol-$version-ubuntu.tar.gz" volumectl README.md)
+(cd "$linux_dir" && tar czf "$release_dir/volumecontrol-$version-linux-amd64.tar.gz" volumectl README.md)
 
 # Canonical manifest (sorted basenames, two spaces).
 (
@@ -97,6 +99,7 @@ if out="$(run_macos install "$mac_root" 2>&1)"; then
   case "$out" in *"Installed VolumeControl $version"*) report ok 'macos install copies the verified app bundle' ;;
                  *) report FAIL 'macos install copies the verified app bundle' ;; esac
 else
+  printf '%s\n' "$out" >&2
   report FAIL 'macos install copies the verified app bundle'
 fi
 [[ -x "$mac_root/VolumeControl.app/Contents/MacOS/volumectl" ]] \
@@ -114,6 +117,7 @@ if out="$(run_macos update "$mac_root" 2>&1)"; then
   case "$out" in *"Updated VolumeControl $version"*) report ok 'macos update replaces the installed app' ;;
                  *) report FAIL 'macos update replaces the installed app' ;; esac
 else
+  printf '%s\n' "$out" >&2
   report FAIL 'macos update replaces the installed app'
 fi
 grep -q 'plist-stub' "$mac_root/VolumeControl.app/Contents/Info.plist" \
@@ -124,6 +128,7 @@ if out="$(run_macos uninstall "$mac_root" 2>&1)"; then
   case "$out" in *"Removed VolumeControl"*) report ok 'macos uninstall removes the app' ;;
                  *) report FAIL 'macos uninstall removes the app' ;; esac
 else
+  printf '%s\n' "$out" >&2
   report FAIL 'macos uninstall removes the app'
 fi
 [[ ! -e "$mac_root/VolumeControl.app" ]] \
@@ -143,7 +148,7 @@ fi
 
 # Checksum tampering: flip a byte in the zip copy the installer will fetch.
 cp "$release_dir/volumecontrol-$version-macos.zip" "$release_dir/keep.zip"
-printf 'x' | dd of="$release_dir/volumecontrol-$version-macos.zip" bs=1 seek=10 conv=notrunc status=none
+printf 'x' | dd of="$release_dir/volumecontrol-$version-macos.zip" bs=1 seek=10 conv=notrunc 2>/dev/null
 if out="$(run_macos install "$fixture_root/macos-bad" 2>&1)"; then
   report FAIL 'macos install rejects a digest mismatch'
 else
@@ -186,6 +191,7 @@ if out="$(run_linux install "$linux_root" 2>&1)"; then
   case "$out" in *"Installed VolumeControl $version"*) report ok 'linux install places the verified binary' ;;
                  *) report FAIL 'linux install places the verified binary' ;; esac
 else
+  printf '%s\n' "$out" >&2
   report FAIL 'linux install places the verified binary'
 fi
 [[ -x "$linux_root/bin/volumectl" ]] \
@@ -205,23 +211,25 @@ if out="$(run_linux update "$linux_root" 2>&1)"; then
   case "$out" in *"Updated VolumeControl $version"*) report ok 'linux update reinstalls the verified binary' ;;
                  *) report FAIL 'linux update reinstalls the verified binary' ;; esac
 else
+  printf '%s\n' "$out" >&2
   report FAIL 'linux update reinstalls the verified binary'
 fi
 
-cp "$release_dir/volumecontrol-$version-ubuntu.tar.gz" "$release_dir/keep.tar.gz"
-printf 'x' | dd of="$release_dir/volumecontrol-$version-ubuntu.tar.gz" bs=1 seek=10 conv=notrunc status=none
+cp "$release_dir/volumecontrol-$version-linux-amd64.tar.gz" "$release_dir/keep.tar.gz"
+printf 'x' | dd of="$release_dir/volumecontrol-$version-linux-amd64.tar.gz" bs=1 seek=10 conv=notrunc 2>/dev/null
 if out="$(run_linux install "$fixture_root/linux-bad" 2>&1)"; then
   report FAIL 'linux install rejects a digest mismatch'
 else
   case "$out" in *"SHA-256 mismatch"*) report ok 'linux install rejects a digest mismatch' ;;
                  *) report FAIL 'linux install rejects a digest mismatch' ;; esac
 fi
-mv "$release_dir/keep.tar.gz" "$release_dir/volumecontrol-$version-ubuntu.tar.gz"
+mv "$release_dir/keep.tar.gz" "$release_dir/volumecontrol-$version-linux-amd64.tar.gz"
 
 if out="$(run_linux uninstall "$linux_root" 2>&1)"; then
   case "$out" in *"Removed VolumeControl"*) report ok 'linux uninstall removes the installed files' ;;
                  *) report FAIL 'linux uninstall removes the installed files' ;; esac
 else
+  printf '%s\n' "$out" >&2
   report FAIL 'linux uninstall removes the installed files'
 fi
 [[ ! -e "$linux_root/bin/volumectl" ]] \

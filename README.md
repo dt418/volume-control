@@ -209,7 +209,9 @@ Common actions:
   on first run.
 
 One-command remote flows (PowerShell `irm`, `curl`, `winget`) live on the
-product page: <https://dt418.github.io/volume-control/>.
+product page: <https://dt418.github.io/volume-control/>. Releases also carry
+native packages: `.deb`, `.rpm`, and `.AppImage` for Linux and a `.dmg` for
+macOS.
 
 ## Running on macOS
 

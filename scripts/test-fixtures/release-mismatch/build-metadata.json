@@ -7,7 +7,7 @@
   "artifacts": [
     {
       "name": "install-linux.sh",
-      "sha256": "999b140517a0b685b7839c93ae41e40e7e4058627c6b0cdc0b693a8139e4f32c"
+      "sha256": "0ad08d294f7650f62669886dbdb1d5ba0dcee40b3c88034574cf1bd2044392c7"
     }
   ]
 }
