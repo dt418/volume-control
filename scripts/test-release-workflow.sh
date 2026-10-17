@@ -281,6 +281,20 @@ else
   report FAIL 'ci macOS job bundles the dmg that package.sh stages'
 fi
 
+if contains "$repo/.github/workflows/ci.yml" 'tauri build --bundles deb,rpm,appimage --ci'; then
+  report ok 'ci Ubuntu job bundles the Linux packages that package.sh stages'
+else
+  report FAIL 'ci Ubuntu job bundles the Linux packages that package.sh stages'
+fi
+
+# The AppImage bundler panics when no square icon is declared, and deb/rpm use
+# the same list, so the bundle icon set must name a PNG.
+if contains "$repo/src-tauri/tauri.conf.json" '"icons/[0-9]+x[0-9]+\.png"'; then
+  report ok 'tauri.conf.json declares square bundle icons for the Linux packages'
+else
+  report FAIL 'tauri.conf.json declares square bundle icons for the Linux packages'
+fi
+
 # Resolve HEAD without assuming this shell's git can read this checkout: a
 # worktree created by native Windows git stores a `gitdir: C:/...` pointer in
 # `.git`, which a POSIX git (WSL) cannot follow. Fall back to the converted
