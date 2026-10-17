@@ -16,6 +16,21 @@
                       },
     "features":  [
                          {
+                             "id":  "vol-091",
+                             "priority":  91,
+                             "area":  "release",
+                             "title":  "Release v0.1.5 with verified install assets",
+                             "user_visible_behavior":  "The v0.1.5 GitHub Release publishes the verified Windows bootstrap (Install-VolumeControl.ps1), the immutable NSIS installer (VolumeControl_0.1.5_x64-setup.exe), the portable Windows zip, the macOS zip, the Ubuntu tarball, and one canonical SHA256SUMS.txt; releases/latest/download/ therefore serves the one-line install commands documented on the product page, and the in-app Check for updates reports the new version.",
+                             "status":  "in_progress",
+                             "verification":  [
+                                                  "Local gate on the bump commit: cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features exit 0.",
+                                                  "CI on the chore/release-0.1.5 pull request must report success (Windows, macOS, Ubuntu, release gate) before the tag is pushed; the tag-triggered release workflow is the publish proof."
+                                              ],
+                             "evidence":  [
+                                              "Session 106 (2026-10-17): workspace, volumectl, Tauri, tauri.conf.json, and frontend package versions bumped 0.1.4 -> 0.1.5 with the Cargo.lock refreshed; CHANGELOG gains the 0.1.5 section (bootstrap, i18n, update check, release tooling, harness fix)."
+                                          ],
+                             "notes":  "Tag v0.1.5 is pushed only after the PR CI is green; the release workflow publishes assets without an overwrite flag, so a re-run on an existing tag fails instead of mutating published bytes."
+                         },                     {
                              "id":  "vol-089",
                              "priority":  89,
                              "area":  "ui",

@@ -4,6 +4,46 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-10-17
+
+### Added
+
+- Verified Windows install bootstrap: `scripts/Install-VolumeControl.ps1`
+  installs, updates, and uninstalls strictly under
+  `%LOCALAPPDATA%\VolumeControl`, resolves stable or exact `vX.Y.Z` GitHub
+  releases, verifies the NSIS installer against the release
+  `SHA256SUMS.txt`, never force-terminates a running VolumeControl during
+  update, and keeps `%APPDATA%\volume-control\config.ini` across update and
+  uninstall.
+- Multi-language UI (English/Vietnamese): `[general] language = en|vi` in
+  `config.ini` with a Settings selector; the tray, overlay, mixer, settings
+  window, the GTK/macOS renderer controls, and every webview surface render
+  localized labels. The PowerShell bootstrap ships the same EN/VI message
+  table (`VOLUMECONTROL_LANG` overrides the Windows UI culture).
+- Tray "Check for updates": queries the latest stable GitHub release, shows
+  an immediate in-progress card in the active language, and reports the
+  result (up to date / version available / check failed) on the overlay.
+- Release tooling: multi-asset packaging (`dist/` NSIS + installer script +
+  canonical `SHA256SUMS.txt`), a fail-closed release-metadata verifier, a
+  Windows NSIS bundle step in desktop validation, immutable release
+  publishing (`release-assets/` with no overwrite flag), a product page
+  (`docs/index.html`) with `irm`/`curl`/`winget` install commands, and
+  `scripts/generate-winget-manifest.sh` for winget-pkgs submissions.
+
+### Changed
+
+- Startup now logs per-stage timings behind `VOLUMECTL_STARTUP_TRACE=1`
+  (zero-cost when off); `docs/performance.md` records the measured budget.
+- Clippy is pinned to the project MSRV (`clippy.toml`), so
+  `chunks_exact` stays valid on Rust 1.82.
+
+### Fixed
+
+- `bash scripts/test-release-workflow.sh` resolves `HEAD` across Windows
+  git worktrees and WSL/MSYS shells instead of exiting 128 mid-run.
+- macOS host handles the new `AppAction::CheckUpdates`, and the Linux/macOS
+  renderer smoke binaries pass the language argument through.
+
 ## [0.1.4] - 2026-08-17
 
 ### Fixed
