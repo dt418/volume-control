@@ -572,6 +572,7 @@ Windows.
 ## Verification commands (Windows host)
 
 ```
+
 # Full format-lint gate (includes tests)
 bash scripts/format-lint.sh
 
@@ -599,8 +600,10 @@ powershell -ExecutionPolicy Bypass -File scripts/verify-vol011.ps1 -Release
 cargo fmt --all --check
 cargo build
 cargo test --workspace --no-default-features
+
 # macOS cross-check from Windows:
 cargo check --target x86_64-apple-darwin -p volumectl --tests
+
 # Linux cross-check from Windows (needs libpulse-dev on CI):
 cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests
 ```
@@ -629,3 +632,30 @@ cargo check --target x86_64-unknown-linux-gnu -p volumectl --tests
 - **Workflow**: investigate + plan with the capable model first, implement with flash.
 - **Web research**: `pi-web-access` extension (web_search/fetch_content/get_search_content) + `@upstash/context7-pi` (resolve-library-id/query-docs) — enable via `extensions: ['npm:pi-web-access']` + `tools: [...]` on the subagent launch.
 - Extensions installed this session: `npm:pi-web-access`, `npm:@upstash/context7-pi`.
+
+## Session 108 (2026-10-17) - Stale main reconciled + smoke lock release
+
+Branch `fix/format-lint-lock-release` (worktree
+`volume-control-format-lint-lock`, forked from `main` at ac26346).
+
+- The scheduled resume run found its `volume-control` checkout 6 commits
+  behind `origin/main` with superseded uncommitted work: a tray "Check for
+  updates" item that opened the releases page (the feature is on `main` in a
+  fuller form - ureq fetch against `releases/latest` plus a localized overlay
+  result, PR #43 / vol-090) and an untracked 2026-10-16
+  windows-release-bootstrap plan/spec (implemented by PR #42, vol-087..vol-092).
+  That change set is preserved in `git stash@{0}`; `main` is fast-forwarded to
+  ac26346 and the workspace gate is green again
+  (`cargo test --workspace --no-default-features`).
+- `scripts/test-format-lint.sh` released its concurrency lock only after its
+  hermetic preconditions, so a refused run wedged every later invocation into
+  "already running" until the lock directory was removed by hand. The release
+  trap is installed with the lock now, and check 10 of the suite proves a
+  refused run releases it.
+- Next: open the PR for `fix/format-lint-lock-release`; PR #45 is redundant
+  after that (same trap fix as `e6a67e6`, and its HEAD-resolution hunk is
+  already on `main` through #44's squash).
+- Running this suite needs Git Bash and a built `frontend/dist`: the PATH
+  `bash` on this host is the WSL shim, which cannot read a Windows-form
+  worktree gitdir, and the gate's clippy step compiles
+  `tauri::generate_context!`.

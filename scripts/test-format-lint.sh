@@ -27,6 +27,9 @@
 #   9. a quoted manifest version ("3") is rejected by BOTH gates, so the
 #      PowerShell parser's numeric-version sanity cannot drift from the bash
 #      gate's sed
+#  10. a REFUSED run (dirty index) must still release the concurrency lock,
+#      so a rejection cannot wedge every later invocation into "already
+#      running" until the lock directory is removed by hand
 #
 # The PowerShell gate is exercised only when `powershell`/`pwsh` is on PATH.
 # Tests stay fast by using --skip-tests and relying on cached clippy
@@ -52,10 +55,13 @@ fi
 release_lock() {
     rmdir "$lock_dir" 2>/dev/null || true
 }
-# Release the lock on every exit path. The full cleanup trap below is only
-# installed after the preconditions, and those exit 1 early (modified
-# forbidden file, dirty index); without this trap a refused run would leak
-# the lock and block every later invocation with "already running".
+# Release the lock on every exit path. The full cleanup trap is installed only
+# after the preconditions below have passed, but those preconditions refuse a
+# run with exit 1 (missing or modified forbidden file, dirty index) *before*
+# that: without this trap a refused run leaks the lock and every later
+# invocation dies with "already running" until the directory is removed by
+# hand. The later trap replaces this one and releases the lock again (rmdir is
+# idempotent).
 trap 'release_lock' EXIT
 # Usage: bash scripts/test-format-lint.sh
 # Exit: 0 = all checks passed; 1 = at least one check failed.
@@ -606,6 +612,42 @@ else
     report FAIL 'mirrors: format-lint.sh .agents copy differs (resync .agents/skills/format-lint/)'
 fi
 
+
+# --- refused runs must release the concurrency lock --------------------------
+# The suite takes scripts/.test-format-lint.lock, but its preconditions
+# (missing / modified forbidden file, dirty index) refuse with exit 1 before
+# the full cleanup trap is installed. A refused run that kept the lock would
+# wedge every later invocation into "already running" until someone removed
+# the directory by hand, so force the dirty-index refusal in a nested run and
+# prove that run released the lock. This run has to hand the lock over first,
+# because the nested run cannot acquire a lock this run still holds. A nested
+# run that found a clean index would re-run this whole battery recursively, so
+# the staged-set precondition is asserted before invoking it, and a nested
+# refusal on the lock itself is rejected as the wrong reason.
+rmdir "$lock_dir" 2>/dev/null || true
+printf 'lock smoke scratch\n' > "$records_scratch"
+git add "$records_scratch"
+if ! git diff --cached --quiet; then
+    bash scripts/test-format-lint.sh >"$tmpdir/lock-refused" 2>&1
+    rc=$?
+    git reset -q -- "$records_scratch"
+    if [ "$rc" -ne 1 ]; then
+        report FAIL 'refused run releases the concurrency lock' "nested run rc=$rc (expected 1)"
+        sed 's/^/      /' "$tmpdir/lock-refused" | tail -4
+    elif grep -q 'already running' "$tmpdir/lock-refused"; then
+        report FAIL 'refused run releases the concurrency lock' \
+            'nested run refused on the lock instead of its own precondition'
+    elif [ -d "$lock_dir" ]; then
+        report FAIL 'refused run releases the concurrency lock' "lock left behind: $lock_dir"
+        rmdir "$lock_dir" 2>/dev/null || true
+    else
+        report ok 'refused run releases the concurrency lock'
+    fi
+else
+    report FAIL 'refused run releases the concurrency lock' 'setup: scratch file was not staged'
+fi
+rm -f "$records_scratch"
+mkdir "$lock_dir" 2>/dev/null || true   # re-acquired for the rest of this run
 
 if [ "$failures" -eq 0 ]; then
     echo "All format-lint smoke checks passed."
