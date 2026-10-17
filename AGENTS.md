@@ -28,6 +28,23 @@ The pre-commit hook is intentionally lightweight: it runs the records guard,
 format, cached whitespace, and clippy checks. The full workspace test suite is
 enforced by the full gate and CI, not by every local commit hook invocation.
 
+## Conflict-free record merges
+
+`.gitattributes` marks `feature_list.json` (`records-json`) and
+`claude-progress.md` / `session-handoff.md` (`records-md`) with merge drivers, so
+a branch that meets an updated `main` merges additive record edits without
+conflict markers. The drivers are local git configuration:
+
+- `bash scripts/install-merge-drivers.sh` (or either hook installer) registers
+  them for this clone;
+- `scripts/merge-records-json.sh` merges features by `id` and unions evidence;
+- `scripts/merge-records-md.sh` merges the markdown logs by heading block;
+- `bash scripts/test-records-merge.sh` is the regression suite (run by CI).
+
+GitHub's web merge cannot use them: merge `origin/main` into the branch locally
+first. Without registration, or for malformed/already-conflicted input, the
+ordinary conflict remains.
+
 CI enforces the same checks in `.github/workflows/ci.yml`. Never weaken the
 `-D warnings` policy or hide project warnings to make a check pass. See
 `GUARDRAILS.md` for the hard rules.

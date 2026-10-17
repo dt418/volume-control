@@ -121,6 +121,8 @@ jobs:
         run: bash scripts/check-records.sh --branch
       - name: Smoke-test record-keeping guard
         run: bash scripts/test-check-records.sh
+      - name: Smoke-test record merge drivers
+        run: bash scripts/test-records-merge.sh
       - name: Smoke-test ship-flow wiring
         run: bash scripts/test-ship.sh
 
@@ -325,10 +327,11 @@ jobs:
       - name: Build release Tauri host and validate artifact (FE + BE)
         shell: bash
         run: |
-          frontend/node_modules/.bin/tauri build --no-bundle --ci
+          frontend/node_modules/.bin/tauri build --bundles deb,rpm,appimage --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
           file target/release/VolumeControl
+          ls -la target/release/bundle/deb target/release/bundle/rpm target/release/bundle/appimage
 
   release-gate:
     name: Release gate (required)

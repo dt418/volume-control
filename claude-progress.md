@@ -3603,3 +3603,53 @@ fn get_window_pid_x11() -> Option<u32> {
 - Note: the unmerged PR #45 (`fix/release-workflow-git-path-resolution`)
   carries the same trap fix (`e6a67e6`) plus a HEAD-resolution block that is
   already on `main` through #44's squash, so it is redundant once this lands.
+
+## Session 109 (2026-10-17) - Conflict-free record merges
+
+- Every branch edits `feature_list.json` and `claude-progress.md`, so each PR
+  arrived `CONFLICTING` on additive record edits alone. `feature_list.json`,
+  `claude-progress.md` and `session-handoff.md` now carry merge drivers in
+  `.gitattributes` (`records-json`, `records-md`).
+- `scripts/merge-records-json.sh`: features merge by `id`; `evidence` and
+  `verification` union in place; scalar changes resolve against the merge base
+  so the side that changed a field wins; `last_updated` keeps the newest stamp;
+  `status` ranks passing > in_progress/blocked > not_started.
+- `scripts/merge-records-md.sh`: blocks merge by heading line, ours keep their
+  order, shared headings keep one heading plus the union of their lines, and
+  theirs-only blocks append. Already-conflicted input is refused.
+- `scripts/install-merge-drivers.sh` registers both drivers; both hook
+  installers call it, so a clone set up with `install-hooks.*` merges records
+  conflict-free.
+- `scripts/test-records-merge.sh` covers the drivers (8 checks) including an
+  end-to-end `git merge` in a throwaway repository; the Fast checks job runs it
+  on every pull request.
+- Fallback stays safe: without a registered driver, or on malformed or already
+  conflicted input, git still reports the ordinary conflict.
+- `scripts/install-merge-drivers.sh` also writes the three attribute lines into
+  `.git/info/attributes`, so a topic branch that predates the `.gitattributes`
+  change still merges conflict-free (git reads merge attributes from the branch
+  being merged into). The suite drives its end-to-end merge through the installer
+  and asserts the overrides survive a missing `.gitattributes` (9 checks).
+- The drivers are installed into `<git-common-dir>/records-merge` and the configured
+  command resolves that path through git at merge time: git reads merge attributes
+  from the branch being merged into and no branch carries the scripts yet.
+  `install-merge-drivers.sh` takes an optional target repository, and the end-to-end
+  suite now installs into a throwaway clone whose tree has neither `.gitattributes`
+  nor the driver scripts, then merges main into it successfully.
+
+## Session 109 (2026-10-17) - AppImage bundling
+
+- The v0.1.6 release run failed on the Ubuntu leg: the Tauri bundler panicked
+  with `couldn't find a square icon to use as AppImage icon` at
+  `bundler/src/bundle/linux/appimage/linuxdeploy.rs` after deb and rpm bundled
+  successfully.
+- Cause: `src-tauri/tauri.conf.json` declared no `bundle.icon` list, so the
+  AppImage bundler had no square PNG. The config now declares
+  `icons/32x32.png`, `icons/128x128.png`, `icons/128x128@2x.png` (all square),
+  plus `icon.icns` and `icon.ico`.
+- The Ubuntu job of `ci.yml` now builds `--bundles deb,rpm,appimage` (was
+  `--no-bundle`) and lists the three bundle directories, so a packaging failure
+  surfaces on the pull request instead of at the release tag.
+- `scripts/test-release-workflow.sh` asserts the ci bundle flags (macOS dmg,
+  Ubuntu deb/rpm/AppImage) and that the tauri config declares a square PNG icon;
+  all contract checks pass locally.

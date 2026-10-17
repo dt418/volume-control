@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-17T10:40",
+  "last_updated": "2026-10-17T12:05",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -1282,7 +1282,8 @@
         "Session 108 (2026-10-17, naming + CI bundle path): Linux bundles are staged as volumecontrol-<ver>-linux-amd64.{tar.gz,deb,rpm,AppImage} (the rpm was mislabelled -ubuntu); package.sh, install-linux.sh, the verifier set patterns, the release checklist and all fixtures follow the new scheme. The ci.yml macOS job now builds --bundles dmg so the packaging step that calls package.sh can stage the dmg, and package.sh bundle lookups are set -e safe (|| true) so a missing bundle prints its explicit error. Harness: 1 new static assertion, all checks pass.",
         "Session 108 (2026-10-17): scripts/test-format-lint.sh installs `trap 'release_lock' EXIT` immediately after it takes the lock, ahead of the preconditions that exit 1 (missing forbidden file, modified forbidden file, dirty index); the later full cleanup trap replaces it and releases the lock again (rmdir is idempotent). New check 10 hands the lock to a nested run forced into the dirty-index refusal and requires that run to exit 1, refuse on its own precondition rather than on the lock, and leave no lock directory behind.",
         "Session 108 (2026-10-17): the class was audited across the harness scripts - only test-format-lint.sh holds a lock; the other EXIT traps release temporary directories, whose leak on a pre-trap exit is benign.",
-        "Session 108 (2026-10-17): the same trap fix exists as e6a67e6 on the unmerged PR #45 branch, which cannot merge (its records conflict and its HEAD-resolution hunk is already on main through #44's squash); PR #45 becomes redundant once this lands."
+        "Session 108 (2026-10-17): the same trap fix exists as e6a67e6 on the unmerged PR #45 branch, which cannot merge (its records conflict and its HEAD-resolution hunk is already on main through #44's squash); PR #45 becomes redundant once this lands.",
+        "Session 109 (2026-10-17, AppImage icon): the v0.1.6 release run failed on the Ubuntu leg with 'couldn't find a square icon to use as AppImage icon' from the Tauri bundler, because src-tauri/tauri.conf.json declared no bundle icon list (deb and rpm bundled first). The config now declares the square PNG set plus the icns/ico, the ubuntu job of ci.yml builds --bundles deb,rpm,appimage so the failure surfaces on the pull request, and the release harness asserts both the ci bundle flag and the declared square icon."
       ],
       "notes": "The archives (zip/tarball) stay the install path for the one-line scripts; the native packages are additive for users who prefer their distro/OS package managers."
     },
@@ -1343,6 +1344,25 @@
         "Session 104 (2026-10-17, REA/performance pass): permanent env-gated startup stage trace (VOLUMECTL_STARTUP_TRACE=1) in the Tauri setup; immediate in-progress overlay card for the update check (localized) before the worker-thread fetch; docs/performance.md records the measured stage table and the tao DPI finding; REA artifact lanes (rust-auditable metadata, PE resource inventory) ran against the built binary."
       ],
       "notes": "NSIS installer-shell strings stay English (Tauri 2.11 bundle config exposes no per-language MUI in this repo); the Linux GTK host records the update result in HostCore::update_message (no overlay text channel there). Startup trace is env-gated and zero-cost when disabled."
+    },
+    {
+      "id": "vol-094",
+      "priority": 94,
+      "area": "repository-governance",
+      "title": "Conflict-free record merges through git merge drivers",
+      "user_visible_behavior": "Branches that both edit the record files merge without conflict markers: feature_list.json merges semantically by feature id (evidence and verification are unioned, the newest last_updated and the furthest-along status win), and claude-progress.md / session-handoff.md merge by heading block, so parallel session logs and new features survive a merge instead of blocking the PR.",
+      "status": "in_progress",
+      "verification": [
+        "Local: bash scripts/test-records-merge.sh passes all 8 checks (json union of evidence and new features, newest timestamp, byte-stable re-merge, refusal of malformed input; markdown union of session blocks, refusal of already-conflicted input; end-to-end git merge in a throwaway repository exits 0 with both sides' records intact).",
+        "CI: the Fast checks job runs bash scripts/test-records-merge.sh on every pull request.",
+        "Local (dogfood): the feat/native-packages and fix/release-workflow-git-path-resolution branches were merged on top of the updated main with the drivers registered, without touching conflict markers in feature_list.json or claude-progress.md."
+      ],
+      "evidence": [
+        "Session 109 (2026-10-17): every parallel branch edits feature_list.json and claude-progress.md, so each PR arrived CONFLICTING on purely additive record edits (PR #45 harness/git-path work, PR #50 release work, PR #46 i18n). Added scripts/merge-records-json.sh (semantic union keyed by feature id, scalar changes resolved against the merge base, newest last_updated, status rank passing > in_progress/blocked > not_started) and scripts/merge-records-md.sh (heading-block union for the markdown logs), marked the three record files in .gitattributes, registered them through scripts/install-merge-drivers.sh plus both hook installers, and covered the behaviour with scripts/test-records-merge.sh (8 checks, including an end-to-end git merge in a temp repository).",
+        "Session 109 (2026-10-17, stale branches): git reads merge attributes from the branch being merged into, so a topic branch that predates the .gitattributes change would still conflict. scripts/install-merge-drivers.sh now also records the three attribute lines in .git/info/attributes, and scripts/test-records-merge.sh drives its end-to-end merge through that installer (9 checks) and asserts the overrides still apply once .gitattributes is gone.",
+        "Session 109 (2026-10-17, driver location): the drivers now live in <git-common-dir>/records-merge and the configured command resolves that path through git at merge time, because git reads merge attributes from the branch being merged into and no branch carries the scripts until the driver PR lands. install-merge-drivers.sh takes an optional target repository, the end-to-end suite installs into its throwaway clone that has neither .gitattributes nor the driver scripts in the tree, and the merge still lands both sides (9 checks)."
+      ],
+      "notes": "Drivers are local configuration, so a branch still has to merge origin/main locally (git runs registered drivers only there); GitHub's own merge UI cannot use them. The fallback stays safe: an unregistered clone, a driver failure, or already-conflicted input leaves the normal conflict for the operator."
     }
   ]
 }
