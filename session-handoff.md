@@ -17,6 +17,13 @@ bootstrap asset discovered during live verification:
   script as cp1252 and assert it parses and renders VI correctly.
 - Next: PR, CI, merge, tag v0.1.6, then re-run the live one-liner checks
   against the published assets.
+- Release 0.1.6 prep is included in the same branch: version bump (workspace,
+  volumectl, Tauri, tauri.conf.json, frontend), `[0.1.6]` CHANGELOG, and
+  winget-pkgs 1.12 manifests validated with `winget validate --manifest`.
+  The installer keeps the `-setup.exe` name (user decision); v0.1.5 release
+  notes now carry an asset legend. After v0.1.6 publishes: submit the winget
+  manifest PR, then add native Linux bundles (deb/rpm/AppImage) and a macOS
+  dmg for v0.1.7.
 
 ## Session 106 (2026-10-17) - Release v0.1.5 preparation
 

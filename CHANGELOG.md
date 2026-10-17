@@ -4,6 +4,8 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-17
+
 ### Added
 
 - macOS/Linux one-line installers: `install-macos.sh` and `install-linux.sh`
@@ -13,6 +15,8 @@ All notable changes to VolumeControl are documented here.
   `VOLUMECTL_VERSION`, `VOLUMECTL_INSTALL_ROOT` overrides). The release
   verifier, the fixture matrix (including a new macOS fixture), and the
   macOS/Ubuntu CI jobs now exercise the per-platform artifact sets.
+- `scripts/generate-winget-manifest.sh` emits winget-pkgs **1.12** manifests
+  that pass `winget validate --manifest`.
 
 ### Fixed
 

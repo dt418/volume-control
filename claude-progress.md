@@ -32,6 +32,13 @@
   remote-install row complete for both.
 - Added the MIT `LICENSE` file at the repo root (README already claimed MIT;
   the winget manifest `LicenseUrl` also needs it to resolve).
+- Release prep v0.1.6: versions bumped 0.1.5 -> 0.1.6 (workspace, volumectl,
+  Tauri, tauri.conf.json, frontend) with the lockfile refreshed and a
+  `[0.1.6]` CHANGELOG section; the winget generator now emits winget-pkgs
+  1.12 manifests (`winget validate --manifest` prints "Manifest validation
+  succeeded."). The NSIS asset keeps its `-setup.exe` name by decision; the
+  v0.1.5 release notes gained an asset legend so the installer is easy to
+  identify on GitHub.
 
 ## Session 106 (2026-10-17) - Release v0.1.5 preparation
 
