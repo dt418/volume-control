@@ -21,6 +21,11 @@
   on every pull request.
 - Fallback stays safe: without a registered driver, or on malformed or already
   conflicted input, git still reports the ordinary conflict.
+- `scripts/install-merge-drivers.sh` also writes the three attribute lines into
+  `.git/info/attributes`, so a topic branch that predates the `.gitattributes`
+  change still merges conflict-free (git reads merge attributes from the branch
+  being merged into). The suite drives its end-to-end merge through the installer
+  and asserts the overrides survive a missing `.gitattributes` (9 checks).
 
 ## Session 108 (2026-10-17) - Native Linux and macOS packages
 

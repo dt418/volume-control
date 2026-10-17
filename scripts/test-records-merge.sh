@@ -199,7 +199,7 @@ fi
 
 e2e="$work/e2e"
 mkdir -p "$e2e/scripts"
-cp "$json_driver" "$md_driver" "$e2e/scripts/"
+cp "$json_driver" "$md_driver" "$root/scripts/install-merge-drivers.sh" "$e2e/scripts/"
 (
   cd "$e2e" || exit 1
   git init --quiet -b main
@@ -267,9 +267,10 @@ PY
   git commit --quiet -m "main records"
 
   git checkout --quiet topic
-  git -c merge.records-md.driver='bash scripts/merge-records-md.sh %O %A %B' \
-      -c merge.records-json.driver='bash scripts/merge-records-json.sh %O %A %B' \
-      merge --no-edit main > "$work/e2e.log" 2>&1
+  # Register the drivers the way a clone does (config plus .git/info/attributes)
+  # instead of passing -c flags, so the documented flow is what gets tested.
+  bash scripts/install-merge-drivers.sh > /dev/null
+  git merge --no-edit main > "$work/e2e.log" 2>&1
   echo "merge-exit=$?" >> "$work/e2e.log"
 )
 
@@ -297,6 +298,14 @@ then
   report ok 'the merged checkout carries both sides of both record files'
 else
   report FAIL 'the merged checkout carries both sides of both record files'
+fi
+
+# A branch that predates .gitattributes still merges conflict-free because the
+# installer records the attributes in .git/info/attributes too.
+if (cd "$e2e" && rm -f .gitattributes && [ "$(git check-attr merge -- claude-progress.md feature_list.json | grep -c 'merge: records')" -eq 2 ]); then
+  report ok 'installer attributes cover branches that predate .gitattributes'
+else
+  report FAIL 'installer attributes cover branches that predate .gitattributes'
 fi
 
 if [ "$failures" -eq 0 ]; then
