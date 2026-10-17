@@ -4,6 +4,38 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-10-17
+
+### Added
+
+- The app speaks English and Vietnamese: every surface (mixer, overlay,
+  settings, help) resolves its strings through a locale catalog, the tray and
+  settings expose the language switch, and the renderer smoke tests cover both
+  languages.
+- The tray menu gained a "Check for updates" action that reports the result
+  inline, so users do not have to open the settings window to learn whether a
+  newer release exists.
+
+### Changed
+
+- Startup stages are traced and the update check answers immediately, keeping
+  the first window responsive on slower machines.
+
+### Fixed
+
+- The format-lint smoke test releases its concurrency lock on every exit path,
+  so a refused run no longer blocks later invocations with "already running".
+- The release-workflow harness resolves HEAD across shells (WSL, Git Bash,
+  native Windows git) instead of failing inside a worktree.
+
+### Tooling
+
+- Record-file merge drivers (`feature_list.json`, `claude-progress.md`,
+  `session-handoff.md`) merge parallel branches without conflict markers.
+- The Ubuntu CI job builds the Linux bundles and the macOS job builds the dmg,
+  so packaging failures surface on the pull request instead of at the tag.
+
+
 ## [0.1.6] - 2026-10-17
 
 ### Added

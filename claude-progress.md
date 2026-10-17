@@ -1,5 +1,19 @@
 # Progress Log
 
+## Session 110 (2026-10-17) - Release 0.1.7
+
+- Version bump to 0.1.7 across the workspace manifests (`Cargo.toml`,
+  `crates/volumectl/Cargo.toml`, `src-tauri/Cargo.toml`),
+  `src-tauri/tauri.conf.json`, `frontend/package.json` and its lock file;
+  `Cargo.lock` refreshed so the workspace members read 0.1.7.
+- CHANGELOG gained the [0.1.7] section: the EN/VI interface, the tray update
+  check, the startup tracing, the format-lint lock release, the release
+  harness HEAD resolution, and the record merge drivers - the post-0.1.6 work
+  that the tag ships on top of the same twelve-asset packaging set.
+- The release keeps the v0.1.6 asset set (Windows installer/archive/bootstrap,
+  macOS zip/dmg/installer, Linux tar.gz/deb/rpm/AppImage/installer, and
+  SHA256SUMS.txt).
+
 ## Session 109 (2026-10-17) - v0.1.6 published
 
 - The AppImage icon fix landed (#52) and `feat/app-i18n` (#46) and the record
