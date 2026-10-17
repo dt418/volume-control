@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
 import { Kbd } from "../components/ui/kbd";
+import { useT } from "../lib/i18n";
 import { formatShortcut } from "./modifierOptions";
 
 export interface ShortcutRecorderProps {
@@ -39,6 +40,7 @@ export function ShortcutRecorder({
   const [recording, setRecording] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const captureRef = useRef<HTMLButtonElement>(null);
+  const tr = useT();
 
   useEffect(() => {
     if (recording) captureRef.current?.focus();
@@ -57,27 +59,27 @@ export function ShortcutRecorder({
       if (event.key === "Backspace" || event.key === "Delete") {
         onChange("");
         setRecording(false);
-        setMessage("Shortcut cleared");
+        setMessage(tr("recorder.cleared"));
         return;
       }
       if (event.repeat) return;
       const shortcut = recordableShortcut(event);
       if (!shortcut) {
         if (!isModifierKey(event.key)) {
-          setMessage("Press a modifier such as Ctrl, Alt, Shift, or Cmd with a key");
+          setMessage(tr("recorder.needModifier"));
         }
         return;
       }
       onChange(shortcut);
       setRecording(false);
-      setMessage("Shortcut recorded");
+      setMessage(tr("recorder.recorded"));
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [onChange, recording]);
+  }, [onChange, recording, tr]);
 
-  const display = value ? formatShortcut(value) : "Not set";
-  const label = ariaLabel ?? "Global shortcut";
+  const display = value ? formatShortcut(value) : tr("recorder.notSet");
+  const label = ariaLabel ?? tr("recorder.globalShortcut");
 
   return (
     <div
@@ -104,7 +106,7 @@ export function ShortcutRecorder({
         )}
       >
         <Kbd className="border-0 bg-transparent px-0 py-0 text-inherit">
-          {recording ? "Press shortcut…" : display}
+          {recording ? tr("recorder.pressShortcut") : display}
         </Kbd>
       </button>
       <button
@@ -122,7 +124,7 @@ export function ShortcutRecorder({
           disabled && "cursor-not-allowed opacity-50",
         )}
       >
-        Record
+        {tr("recorder.record")}
       </button>
       <button
         type="button"
@@ -132,7 +134,7 @@ export function ShortcutRecorder({
         onClick={() => {
           setRecording(false);
           onChange("");
-          setMessage("Shortcut cleared");
+          setMessage(tr("recorder.cleared"));
         }}
         className={cn(
           "rounded-md border border-foreground/20 px-3 py-2 text-sm",
@@ -140,7 +142,7 @@ export function ShortcutRecorder({
           "disabled:cursor-not-allowed disabled:opacity-40",
         )}
       >
-        Clear
+        {tr("recorder.clear")}
       </button>
       <span className="sr-only" aria-live="polite">
         {message ?? ""}

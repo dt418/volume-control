@@ -19,6 +19,7 @@ pub enum TrayCommand {
     Settings,
     EditConfig,
     ReloadConfig,
+    CheckUpdates,
     Exit,
 }
 
@@ -39,6 +40,7 @@ impl TrayCommand {
             "settings" => Some(Self::Settings),
             "edit" => Some(Self::EditConfig),
             "reload" => Some(Self::ReloadConfig),
+            "check_updates" => Some(Self::CheckUpdates),
             "exit" => Some(Self::Exit),
             _ => None,
         }
@@ -103,6 +105,7 @@ mod tests {
             ("help", TrayCommand::Help),
             ("reload", TrayCommand::ReloadConfig),
             ("edit", TrayCommand::EditConfig),
+            ("check_updates", TrayCommand::CheckUpdates),
             ("exit", TrayCommand::Exit),
         ];
 

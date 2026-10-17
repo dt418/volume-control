@@ -44,6 +44,8 @@ pub struct SettingsPatch {
     pub beep: Option<BeepPatch>,
     /// Colour legend thresholds (all optional within the group).
     pub color_thresholds: Option<ColorThresholdsPatch>,
+    /// UI language: "en" | "vi".
+    pub language: Option<String>,
     /// Full-list replace for the blacklist (draft commits the whole list
     /// atomically; entries are normalized per-platform).
     pub blacklist: Option<Vec<String>>,
@@ -526,6 +528,13 @@ impl AppCore {
                     self.config.clone(),
                 );
             }
+            A::CheckUpdates => {
+                // Blocking fetch (~seconds worst case). The Tauri tray
+                // dispatch intercepts this command and runs the fetch off
+                // the core lock; this arm serves the legacy host and tests.
+                let message = crate::updates::check_for_updates(self.config.language);
+                self.show_overlay_text(message);
+            }
             A::AddBlacklistEntry(entry) => {
                 let entry = crate::config::normalize_blacklist_entry(&entry);
                 if !self.config.blacklist.iter().any(|e| e == &entry) {
@@ -561,6 +570,13 @@ impl AppCore {
         Ok(())
     }
 
+    /// Show a short text card on the overlay (host-facing seam used by the
+    /// tray update check and other asynchronous results).
+    pub fn show_overlay_text(&mut self, text: String) {
+        self.sink
+            .overlay(Some(text), self.last_state, self.config.clone());
+    }
+
     /// Apply a partial settings patch to the in-memory config. Step sizes,
     /// overlay duration, beep ranges and colour thresholds are validated
     /// against the config.rs rules BEFORE mutating, so a rejected patch never
@@ -577,6 +593,7 @@ impl AppCore {
         let material = patch.material.as_deref().map(parse_material).transpose()?;
         let motion = patch.motion.as_deref().map(parse_motion).transpose()?;
         let accent = patch.accent.as_deref().map(parse_accent).transpose()?;
+        let language = patch.language.as_deref().map(parse_language).transpose()?;
 
         if let Some(hotkeys) = &patch.hotkeys {
             crate::config::validate_hotkeys(hotkeys).map_err(|e| e.to_string())?;
@@ -700,6 +717,9 @@ impl AppCore {
         }
         if let Some(autostart) = patch.autostart {
             self.config.autostart = autostart;
+        }
+        if let Some(lang) = language {
+            self.config.language = lang;
         }
         Ok(())
     }
@@ -1058,6 +1078,14 @@ fn parse_accent(s: &str) -> Result<AccentMode, String> {
     }
 }
 
+fn parse_language(s: &str) -> Result<crate::config::Language, String> {
+    match s {
+        "en" => Ok(crate::config::Language::En),
+        "vi" => Ok(crate::config::Language::Vi),
+        other => Err(format!("language: unsupported value {other:?}")),
+    }
+}
+
 fn motion_str(m: MotionMode) -> &'static str {
     match m {
         MotionMode::Full => "Full",
@@ -1377,6 +1405,7 @@ pub fn tray_command_to_action(cmd: crate::tray_common::TrayCommand) -> AppAction
         C::Settings => AppAction::ToggleSurface(S::Settings),
         C::EditConfig => AppAction::OpenConfigLocation,
         C::ReloadConfig => AppAction::ReloadConfig,
+        C::CheckUpdates => AppAction::CheckUpdates,
         C::Exit => AppAction::Exit,
     }
 }
@@ -1458,6 +1487,10 @@ mod tests {
         assert_eq!(
             tray_command_to_action(C::EditConfig),
             AppAction::OpenConfigLocation
+        );
+        assert_eq!(
+            tray_command_to_action(C::CheckUpdates),
+            AppAction::CheckUpdates
         );
         assert_eq!(
             tray_command_to_action(C::ReloadConfig),

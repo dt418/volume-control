@@ -1,13 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { useT, type TranslationKey } from "../lib/i18n";
 import { AutoStartControl } from "./AutoStartControl";
 import { FieldError } from "./FieldError";
 import type { DraftSetter, FieldErrors, SettingsConfig } from "./settingsTypes";
 
 interface GeneralField {
   key: "volume_step" | "volume_step_large" | "overlay_duration_ms";
-  label: string;
-  help: string;
+  labelKey: TranslationKey;
+  helpKey: TranslationKey;
   min: number;
   max: number;
 }
@@ -15,29 +16,29 @@ interface GeneralField {
 const GENERAL_FIELDS: GeneralField[] = [
   {
     key: "volume_step",
-    label: "Volume step",
-    help: "Small change applied by ↑ / ↓.",
+    labelKey: "settings.volumeStep",
+    helpKey: "settings.volumeStepHelp",
     min: 1,
     max: 50,
   },
   {
     key: "volume_step_large",
-    label: "Large volume step",
-    help: "Shift + ↑ / ↓ applies the large change.",
+    labelKey: "settings.volumeStepLarge",
+    helpKey: "settings.volumeStepLargeHelp",
     min: 1,
     max: 50,
   },
   {
     key: "overlay_duration_ms",
-    label: "Overlay duration",
-    help: "How long the volume overlay stays visible.",
+    labelKey: "settings.overlayDuration",
+    helpKey: "settings.overlayDurationHelp",
     min: 200,
     max: 10000,
   },
 ];
 
 /** General section (legacy parity): step sizes + overlay duration with
- *  inline field errors. */
+ *  inline field errors, plus the UI language selector. */
 export function GeneralSection({
   draft,
   setDraft,
@@ -53,18 +54,31 @@ export function GeneralSection({
   autoStartDisabled?: boolean;
   onAutoStartChange?: (enabled: boolean) => void;
 }) {
+  const tr = useT();
   return (
     <Card>
       <CardHeader>
-        <CardTitle>General</CardTitle>
+        <CardTitle>{tr("settings.general")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {GENERAL_FIELDS.map(({ key, label, help, min, max }) => (
+        <label className="flex flex-col gap-1 text-sm">
+          <span>{tr("app.language")}</span>
+          <select
+            aria-label={tr("app.language")}
+            value={draft.language ?? "en"}
+            onChange={(e) => setDraft((d) => ({ ...d, language: e.target.value }))}
+            className="rounded-md border border-foreground/20 bg-background px-2 py-1.5 text-sm"
+          >
+            <option value="en">{tr("app.languageEn")}</option>
+            <option value="vi">{tr("app.languageVi")}</option>
+          </select>
+        </label>
+        {GENERAL_FIELDS.map(({ key, labelKey, helpKey, min, max }) => (
           <label className="flex flex-col gap-1 text-sm" key={key}>
-            <span>{label}</span>
-            <span className="text-xs text-foreground/60">{help}</span>
+            <span>{tr(labelKey)}</span>
+            <span className="text-xs text-foreground/60">{tr(helpKey)}</span>
             <Input
-              aria-label={label}
+              aria-label={tr(labelKey)}
               type="number"
               min={min}
               max={max}

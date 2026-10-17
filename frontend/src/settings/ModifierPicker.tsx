@@ -1,4 +1,5 @@
 import { cn } from "../lib/utils";
+import { useT } from "../lib/i18n";
 import { MODIFIER_OPTIONS } from "./modifierOptions";
 
 export interface ModifierPickerProps {
@@ -8,8 +9,9 @@ export interface ModifierPickerProps {
 
 /** Compatibility presets for users who prefer the original modifier layouts. */
 export function ModifierPicker({ selected, onSelect }: ModifierPickerProps) {
+  const tr = useT();
   return (
-    <div className="flex flex-wrap gap-2" role="group" aria-label="Shortcut presets">
+    <div className="flex flex-wrap gap-2" role="group" aria-label={tr("modifier.presetsAria")}>
       {MODIFIER_OPTIONS.map((option) => {
         const active = selected === option.id;
         return (
@@ -34,7 +36,7 @@ export function ModifierPicker({ selected, onSelect }: ModifierPickerProps) {
         );
       })}
       <span className="text-xs text-foreground/60" data-testid="capslock-note">
-        Caps Lock falls back to Ctrl + Alt
+        {tr("help.capsFallback")}
       </span>
     </div>
   );

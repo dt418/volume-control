@@ -1,5 +1,41 @@
 # Session Handoff
 
+## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
+
+Branch `feat/app-i18n` (worktree `volume-control-app-i18n`, forked from
+`main` at 54e7e5a) implements the user's all-in i18n request plus the tray
+update check:
+
+- `config.ini [general] language = en|vi`; `Language` enum, strict INI
+  parse/write, `SettingsPatch.language` validation; new `crate::locale`
+  tables drive the Windows tray, overlay labels/toasts, Win32 mixer
+  (title/UIA labels, relabeled on show), Win32 settings header/nav/sections,
+  and GTK/macOS mixer controls. `update_settings` relabels trays immediately.
+- `crate::updates` (ureq, GitHub `releases/latest`, pure `is_newer`) plus
+  `TrayCommand::CheckUpdates` in both hosts; Tauri fetches off the core lock
+  and toasts the localized result.
+- Frontend `lib/i18n.tsx` (typed dictionaries, provider, `useT`) localizes
+  Mixer, all Settings sections + shell, Help, and Overlay; General carries
+  the language selector. tsc clean; vitest 17 files/105 tests.
+- PowerShell bootstrap carries a 23-ID EN/VI message table with
+  `VOLUMECONTROL_LANG`/culture selection (EN byte-identical, BOM added for
+  PS 5.1 decoding). Suite PASS under EN and VI.
+- Note: the two `scripts/*.ps1` files do not exist on `main` yet; they were
+  copied from the unmerged `feat/windows-release-bootstrap` branch so the
+  bootstrap i18n lands with this feature. Merge order matters: PR #42
+  (release bootstrap) first, then this branch.
+- Verified: cargo tests, clippy `-D warnings`, fmt, tsc, vitest, PS suite,
+  and a real-network run of the update check (EN + VI output).
+- REA/performance: `VOLUMECTL_STARTUP_TRACE=1` stage trace (ready 59-116 ms
+  over 6 debug runs; stage table + re-measure recipe in
+  `docs/performance.md`), immediate "Checking for updates…" overlay card
+  before the worker fetch, and REA artifact evidence (rust-auditable +
+  PE-resource lanes; decompiler/layout/objdump lanes unavailable on this
+  host).
+- CI follow-up: the Linux/macOS smoke binaries now pass `Language::En` to the
+  new renderer signatures and the macOS host handles `AppAction::CheckUpdates`
+  (both cfg-gated to their platforms; CI is their compile check).
+
 ## Session 102 (2026-10-17) - Windows release bootstrap Task 4
 
 Task 4 (uncommitted): both READMEs gained a Windows install section with the

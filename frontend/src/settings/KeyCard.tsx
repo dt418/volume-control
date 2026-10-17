@@ -1,6 +1,7 @@
 import { Badge } from "../components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Kbd } from "../components/ui/kbd";
+import { useT } from "../lib/i18n";
 import { HOTKEY_ACTIONS, formatShortcut, modifierById, type ModifierOption } from "./modifierOptions";
 import type { HotkeyBindings } from "./settingsTypes";
 
@@ -46,10 +47,11 @@ export interface KeyCardProps {
 /** Card of read-only key combos for the selected modifier, with conflict
  *  badges per action (spec §5.2). */
 export function KeyCard({ bindings, hotkeyStatus }: KeyCardProps) {
+  const tr = useT();
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Hotkeys</CardTitle>
+        <CardTitle>{tr("settings.hotkeys")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {HOTKEY_ACTIONS.map((entry) => {
@@ -60,7 +62,7 @@ export function KeyCard({ bindings, hotkeyStatus }: KeyCardProps) {
               key={entry.action}
               className="flex items-center justify-between gap-2 text-sm"
             >
-              <span className="text-foreground/80">{entry.label}</span>
+              <span className="text-foreground/80">{tr(entry.labelKey)}</span>
               <span className="flex items-center gap-2">
                 {conflict ? (
                   <Badge variant="destructive" className="destructive">

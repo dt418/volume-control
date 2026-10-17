@@ -1,5 +1,92 @@
 # Progress Log
 
+## Session 105 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
+
+- Goal: unblock PR #43 CI; the macOS job failed before running its tests.
+- Root cause: `fe45d18` added `AppAction::CheckUpdates`, but
+  `crates/volumectl/src/macos_app.rs::apply_action` had no arm for it, so
+  the `target_os = "macos"` build died with `error[E0004]` (job 117239883024,
+  step "Run macOS Tauri WebDriver E2E", which builds the debug host first).
+  Windows and Linux never compile that file, so the local workspace gate was
+  green while macOS was red.
+- Fix: the macOS host spawns the localized `updates::check_for_updates` fetch
+  on a worker thread (the fetch blocks up to 10 s and must not stall the
+  AppKit main thread) and records the result in the log; this host still has
+  no tray entry or overlay text channel for update results (vol-076).
+- Same root cause, same commit: the two platform renderer test fixtures
+  (`ui/platform/linux/renderer.rs`, `ui/platform/macos/renderer.rs`) now set
+  the `language` field their `AppState` literals were missing (added by
+  `fe45d18`), so the Linux/macOS `cargo test` builds of those `#[cfg(test)]`
+  modules compile here too.
+- Same root cause, follow-up commit: the two platform renderer smoke tests
+  (`tests/appkit_smoke.rs`, `tests/gtk_smoke.rs`) were still calling
+  `render_overlay` / `set_overlay_content` / `set_mixer_controls` /
+  `update_mixer_value` with their pre-`fe45d18` arities; they now pass
+  `Language::En` (the language those no-panic checks were written under).
+  CI run 38981490852 proved it: the macOS job's build + Tauri E2E steps passed
+  and only `cargo test` failed, compiling `appkit_smoke` (job 117243179633)
+  and `gtk_smoke` (job 117243179587) with `error[E0061]` x4 each.
+- Verification: `cargo fmt --all --check`, `git diff --check`,
+  `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`
+  and `cargo test --workspace --no-default-features` exit 0 on Windows. The
+  darwin target cannot be cross-checked on this host (`cargo check --target
+  x86_64-apple-darwin` stops in dependency build scripts: `libpulse-sys`
+  pkg-config cross probe, then `cc-rs` ToolNotFound for the coreaudio C
+  sources), so the macOS job of the CI run on this commit is the compile
+  proof.
+
+## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
+
+- Config: `[general] language = en|vi` (`Language` enum, serde default en,
+  strict INI parse/write, `SettingsPatch.language` with fail-early
+  validation). Round-trip + malformed-value tests added.
+- Rust surfaces: new `locale` module (EN/VI tables + dynamic blacklist
+  toasts + update-check strings). Tray menus (Windows `muda` + Tauri), the
+  volume overlay labels and toasts, the Win32 mixer window (title, UIA
+  names, buttons; relabeled on every show), the Win32 settings window
+  (header, nav, section titles/subtitles), and the GTK/macOS mixer controls
+  now render from the locale table. `update_settings` relabels the tray when
+  the patch carries a language.
+- Update check: new `updates` module (ureq; GitHub `releases/latest`;
+  pure `is_newer` with numeric component compare and fail-closed parsing) and
+  `TrayCommand::CheckUpdates` (`check_updates`) wired into both hosts; the
+  Tauri dispatch runs the fetch off the core lock and toasts the localized
+  result on the overlay.
+- Webview: `frontend/src/lib/i18n.tsx` (typed EN/VI dictionaries,
+  `LanguageProvider`/`useT`, `asLanguage` normalization) localizes the Mixer
+  surface, every Settings section + shell, the Help surface, and the
+  overlay; General gains the language selector and the draft bootstrap
+  hydrates `language`. Surface tests render under the EN default.
+- PowerShell: `Install-VolumeControl.ps1` message table (23 IDs) with
+  `VOLUMECONTROL_LANG` override then Windows UI culture; EN texts byte-
+  identical; both scripts copied into this worktree from the bootstrap branch
+  and given a UTF-8 BOM so PS 5.1 does not mojibake VI at parse time.
+- Verification: cargo test (292 lib + suites) PASS; clippy `-D warnings` and
+  `fmt --check` exit 0; frontend tsc clean + vitest 17 files/105 tests PASS;
+  real-network update check printed EN and VI results against the live
+  GitHub API (`v0.1.4`, "up to date"); PowerShell suite PASS in both
+  languages (agent-run and parent rerun).
+- Encoding/limits: NSIS installer shell stays English (no per-language MUI
+  in the current bundle config); GTK host records the update result in
+  `HostCore::update_message` (no overlay text channel).
+- REA / performance pass: env-gated startup stage trace in the Tauri setup
+  (`VOLUMECTL_STARTUP_TRACE=1`, zero-cost when off) measured ready in
+  59-116 ms over 6 debug runs (native surfaces 33-46 ms, audio + core
+  33-39 ms, duplicate launch exits in ~1 ms). The update check now shows an
+  immediate localized "Checking for updates…" overlay card while the worker
+  thread fetches. `docs/performance.md` records the stage table and the tao
+  PerMonitorV2 finding. REA artifact lanes on the built PE:
+  `inspect_rust_binary` (pe/amd64, rustc commit inferred) and
+  `inspect_pe_resources` (9 resources, icon 16-256 px, manifest =
+  Common-Controls only); decompiler providers and the layout/objdump lanes
+  are unavailable on this host and were reported, not approximated.
+- CI follow-up: PR #43 failed the macOS/Ubuntu jobs on the new renderer
+  signatures; the Linux/macOS smoke binaries (`gtk_smoke.rs`,
+  `appkit_smoke.rs`) now pass `Language::En` to `set_overlay_content`,
+  `render_overlay`, `set_mixer_controls`, and `update_mixer_value`, and the
+  macOS host handles `AppAction::CheckUpdates`. These files are cfg-gated to
+  their platforms, so CI is the compile check for them.
+
 ## Session 103 (2026-10-17) - Release-workflow harness HEAD resolution across shells
 
 - `scripts/test-release-workflow.sh`: HEAD resolution no longer assumes the

@@ -18,6 +18,7 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn run_smoke() {
+    use volumectl_lib::config::Language;
     use volumectl_lib::ui::platform::macos::renderer::{
         ensure_application, plan_surfaces, Panel, SurfacePlan,
     };
@@ -93,7 +94,7 @@ fn run_smoke() {
     overlay_panel.apply_plan(overlay_plan, &caps(false));
     overlay_panel.set_overlay_content();
     let overlay_tokens = tokens_for(ThemeMode::Dark, false, AccentMode::System, || Some(true));
-    overlay_panel.render_overlay(50, false, &overlay_tokens, 40, 75);
+    overlay_panel.render_overlay(50, false, &overlay_tokens, 40, 75, Language::En);
 
     // Mixer controls: create and update without panic.
     let mixer_plan = normal
@@ -103,7 +104,7 @@ fn run_smoke() {
     let mut mixer_panel = Panel::new();
     mixer_panel.apply_plan(mixer_plan, &caps(false));
     let host = HostHandle::new(|_| {});
-    mixer_panel.set_mixer_controls(&host);
-    mixer_panel.update_mixer_value(72, false);
-    mixer_panel.update_mixer_value(30, true);
+    mixer_panel.set_mixer_controls(&host, Language::En);
+    mixer_panel.update_mixer_value(72, false, Language::En);
+    mixer_panel.update_mixer_value(30, true, Language::En);
 }

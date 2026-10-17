@@ -1,3 +1,5 @@
+import { useT } from "../lib/i18n";
+
 export interface AutoStartControlProps {
   enabled: boolean;
   disabled?: boolean;
@@ -15,19 +17,20 @@ export function AutoStartControl({
   disabled = false,
   onChange,
 }: AutoStartControlProps) {
+  const tr = useT();
   return (
     <div className="flex flex-col gap-2 border-t border-foreground/10 pt-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium">Start with Windows</span>
+          <span className="text-sm font-medium">{tr("settings.autostart")}</span>
           <span className="text-xs text-foreground/60">
-            Launch VolumeControl when you sign in.
+            {tr("settings.autostartHelp")}
           </span>
         </div>
         <button
           type="button"
           role="switch"
-          aria-label="Start with Windows"
+          aria-label={tr("settings.autostart")}
           aria-checked={enabled}
           disabled={disabled}
           onClick={() => onChange(!enabled)}
@@ -43,7 +46,7 @@ export function AutoStartControl({
       </div>
       {disabled && (
         <p role="status" className="text-xs text-foreground/60">
-          Auto-start is unavailable on this platform.
+          {tr("settings.autostartUnavailable")}
         </p>
       )}
     </div>

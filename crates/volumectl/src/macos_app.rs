@@ -221,6 +221,16 @@ fn apply_action(ctx: &mut HostCtx, action: &AppAction) {
             ctx.config.appearance.motion = *motion;
             ctx.state.motion = *motion;
         }
+        AppAction::CheckUpdates => {
+            // The fetch blocks for seconds; keep it off the AppKit main
+            // thread. This host has no tray or overlay text channel yet
+            // (vol-076), so the localized result lands in the log.
+            let language = ctx.config.language;
+            std::thread::spawn(move || {
+                let message = crate::updates::check_for_updates(language);
+                log::info!("macOS update check: {message}");
+            });
+        }
         AppAction::ApplyConfig
         | AppAction::CancelConfig
         | AppAction::ResetConfig

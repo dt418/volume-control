@@ -84,7 +84,8 @@ use windows_sys::Win32::{
 #[cfg(test)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowRect, GWL_STYLE};
 
-use crate::config::{AppearanceConfig, Config, ConfigError, HotkeyModifier};
+use crate::config::{AppearanceConfig, Config, ConfigError, HotkeyModifier, Language};
+use crate::locale;
 use crate::ui::platform::windows::primitives::{
     apply_backdrop, colorref, dpi_scale_for, paint_close_button, theme_controls, work_area_for,
     DpiMetrics, PaintCanvas, PointF, RectF,
@@ -319,25 +320,36 @@ impl Section {
         Section::from_index(self.index() + 1)
     }
 
-    fn title(self) -> &'static str {
+    fn title(self, lang: Language) -> &'static str {
+        let s = locale::strings(lang);
         match self {
-            Section::General => "General",
-            Section::Hotkeys => "Hotkeys",
-            Section::Appearance => "Appearance",
-            Section::Blacklist => "Blacklist",
-            Section::Feedback => "Feedback",
-            Section::Storage => "Storage",
+            Section::General => s.section_general,
+            Section::Hotkeys => s.section_hotkeys,
+            Section::Appearance => s.section_appearance,
+            Section::Blacklist => s.section_blacklist,
+            Section::Feedback => s.section_feedback,
+            Section::Storage => s.section_storage,
         }
     }
 
-    fn subtitle(self) -> &'static str {
-        match self {
-            Section::General => "Adjust how volume changes feel.",
-            Section::Hotkeys => "The modifier for VolumeControl's custom shortcuts.",
-            Section::Appearance => "Theme, material, motion, and accent.",
-            Section::Blacklist => "Block shortcuts while these apps have focus.",
-            Section::Feedback => "Beep feedback for blocked and limit actions.",
-            Section::Storage => "Where VolumeControl keeps its configuration.",
+    fn subtitle(self, lang: Language) -> &'static str {
+        match lang {
+            Language::En => match self {
+                Section::General => "Adjust how volume changes feel.",
+                Section::Hotkeys => "The modifier for VolumeControl's custom shortcuts.",
+                Section::Appearance => "Theme, material, motion, and accent.",
+                Section::Blacklist => "Block shortcuts while these apps have focus.",
+                Section::Feedback => "Beep feedback for blocked and limit actions.",
+                Section::Storage => "Where VolumeControl keeps its configuration.",
+            },
+            Language::Vi => match self {
+                Section::General => "Điều chỉnh cảm giác khi thay đổi âm lượng.",
+                Section::Hotkeys => "Phím bổ trợ cho các shortcut của VolumeControl.",
+                Section::Appearance => "Giao diện, chất liệu, chuyển động và màu nhấn.",
+                Section::Blacklist => "Chặn shortcut khi các ứng dụng này đang focus.",
+                Section::Feedback => "Tiếng bíp cho hành động bị chặn và giới hạn.",
+                Section::Storage => "Nơi VolumeControl lưu cấu hình.",
+            },
         }
     }
 }
@@ -360,6 +372,8 @@ pub struct SettingsAppearance {
     pub tokens: ThemeTokens,
     /// Capability-resolved material treatment (blur/translucent/opaque).
     pub material: ResolvedMaterial,
+    /// UI language for section copy and control labels.
+    pub lang: Language,
 }
 
 impl SettingsAppearance {
@@ -378,7 +392,11 @@ impl SettingsAppearance {
             system_is_dark,
         );
         let material = resolve_material(appearance.material, caps);
-        Self { tokens, material }
+        Self {
+            tokens,
+            material,
+            lang: config.language,
+        }
     }
 
     /// Placeholder used before the first `show` (the window is hidden then, so
@@ -387,6 +405,7 @@ impl SettingsAppearance {
         Self {
             tokens: tokens_for(ThemeMode::System, false, AccentMode::System, || None),
             material: ResolvedMaterial::Opaque,
+            lang: Language::default(),
         }
     }
 }
@@ -1123,7 +1142,7 @@ impl Settings {
                 (Section::Storage, ID_SUB_STORAGE),
             ] {
                 let wide: Vec<u16> = section
-                    .subtitle()
+                    .subtitle(d.appearance.lang)
                     .encode_utf16()
                     .chain(std::iter::once(0))
                     .collect();
@@ -2952,14 +2971,14 @@ unsafe fn paint(canvas: &mut PaintCanvas, d: &SettingsData) {
     canvas.fill_rect(RectF::new(0.0, 0.0, w, 3.0), tokens.accent);
     canvas.fill_rect(RectF::new(0.0, HEADER_H, w, HEADER_H + 1.0), tokens.border);
     canvas.draw_text(&TextLayout {
-        text: "Settings",
+        text: locale::strings(d.appearance.lang).settings_title,
         rect: layout.title_rect,
         align: TextAlign::Left,
         role: tokens.typography.surface_title,
         color: tokens.text_primary,
     });
     canvas.draw_text(&TextLayout {
-        text: "Configure how VolumeControl behaves",
+        text: locale::strings(d.appearance.lang).settings_subtitle,
         rect: layout.subtitle_rect,
         align: TextAlign::Left,
         role: tokens.typography.caption,
@@ -3016,7 +3035,7 @@ unsafe fn paint(canvas: &mut PaintCanvas, d: &SettingsData) {
             )
         };
         canvas.draw_text(&TextLayout {
-            text: Section::from_index(i).title(),
+            text: Section::from_index(i).title(d.appearance.lang),
             rect: label_rect,
             align: TextAlign::Left,
             role: tokens.typography.body,

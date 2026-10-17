@@ -2,6 +2,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { memo } from "react";
 
 import { AppSlider } from "./AppSlider";
+import { useT } from "../lib/i18n";
 import type { AudioSession } from "./sessionStore";
 
 interface SessionRowProps {
@@ -16,6 +17,7 @@ export const SessionRow = memo(function SessionRow({
   onVolumeError,
 }: SessionRowProps) {
   const MuteIcon = session.muted ? VolumeX : Volume2;
+  const tr = useT();
   return (
     <div
       data-testid="session-row"
@@ -33,7 +35,11 @@ export const SessionRow = memo(function SessionRow({
       </div>
       <button
         type="button"
-        aria-label={session.muted ? `Unmute ${session.name}` : `Mute ${session.name}`}
+        aria-label={
+          session.muted
+            ? `${tr("common.unmute")} ${session.name}`
+            : `${tr("common.mute")} ${session.name}`
+        }
         onClick={() => onMute(session.id)}
         className="shrink-0 rounded-md p-1.5 text-foreground/85 transition-colors hover:bg-foreground/15 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >

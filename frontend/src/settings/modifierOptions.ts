@@ -1,16 +1,22 @@
+import type { TranslationKey } from "../lib/i18n";
 import type { HotkeyBindings } from "./settingsTypes";
 
 /** Shared action metadata for the recorder rows and the Help surface. */
 export const HOTKEY_ACTIONS = [
-  { key: "volume_up", action: "VolumeUp", label: "Volume Up", help: "Increase volume by the small step." },
-  { key: "volume_down", action: "VolumeDown", label: "Volume Down", help: "Decrease volume by the small step." },
-  { key: "volume_up_large", action: "VolumeUpLarge", label: "Volume Up (large)", help: "Increase volume by the large step." },
-  { key: "volume_down_large", action: "VolumeDownLarge", label: "Volume Down (large)", help: "Decrease volume by the large step." },
-  { key: "toggle_mute", action: "ToggleMute", label: "Toggle Mute", help: "Mute or unmute the current output." },
-  { key: "reset_50", action: "Reset50", label: "Reset to 50%", help: "Set the current output to 50%." },
-  { key: "open_mixer", action: "OpenMixer", label: "Open Mixer", help: "Show or hide the mixer panel." },
-  { key: "open_menu", action: "OpenMenu", label: "Open Menu", help: "Open the VolumeControl tray menu." },
-] as const;
+  { key: "volume_up", action: "VolumeUp", labelKey: "hotkey.volumeUp", helpKey: "hotkey.volumeUpHelp" },
+  { key: "volume_down", action: "VolumeDown", labelKey: "hotkey.volumeDown", helpKey: "hotkey.volumeDownHelp" },
+  { key: "volume_up_large", action: "VolumeUpLarge", labelKey: "hotkey.volumeUpLarge", helpKey: "hotkey.volumeUpLargeHelp" },
+  { key: "volume_down_large", action: "VolumeDownLarge", labelKey: "hotkey.volumeDownLarge", helpKey: "hotkey.volumeDownLargeHelp" },
+  { key: "toggle_mute", action: "ToggleMute", labelKey: "hotkey.toggleMute", helpKey: "hotkey.toggleMuteHelp" },
+  { key: "reset_50", action: "Reset50", labelKey: "hotkey.reset50", helpKey: "hotkey.reset50Help" },
+  { key: "open_mixer", action: "OpenMixer", labelKey: "hotkey.openMixer", helpKey: "hotkey.openMixerHelp" },
+  { key: "open_menu", action: "OpenMenu", labelKey: "hotkey.openMenu", helpKey: "hotkey.openMenuHelp" },
+] as const satisfies readonly {
+  key: string;
+  action: string;
+  labelKey: TranslationKey;
+  helpKey: TranslationKey;
+}[];
 
 export type HotkeyActionKey = (typeof HOTKEY_ACTIONS)[number]["key"];
 
