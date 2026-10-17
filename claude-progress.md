@@ -1,5 +1,56 @@
 # Progress Log
 
+## Session 110 (2026-10-17) - Merge main into the harness branch: record-id collision + WSL guard fix
+
+- Merge: `origin/main` (`1ba66e5`, App i18n #46) merged into
+  `fix/release-workflow-git-path-resolution` as `0c798cc` with the record
+  merge drivers registered, so `feature_list.json`, `claude-progress.md` and
+  `session-handoff.md` landed without conflict markers; the driver unioned
+  evidence under shared ids and kept the furthest-along status per id.
+- Collision found in the merged ledger: this branch had rewritten main's
+  `vol-089` (macOS `AppAction::CheckUpdates`) into a tooling record for the
+  format-lint lock fix, so the driver unioned two different features under one
+  id and main's macOS title/behavior text fell out of the ledger. Resolved in
+  the records: `vol-089` restored verbatim from `origin/main`, the format-lint
+  record renumbered to `vol-095` carrying only its own two verification lines
+  and the Session 103 evidence, and `vol-096` added for the guard fix below.
+  Audited: every main-side feature id and every main-side
+  evidence/verification line is still present (61 -> 63 features, ids unique,
+  `priority == id` for all, `vol-089.notes` gains one provenance sentence).
+- `scripts/check-records.sh`: the same gitdir defect vol-088 fixed for the
+  release harness, now in the records guard. In a worktree created by native
+  Windows git, `.git` holds `gitdir: C:/...`, which a POSIX git (WSL) resolves
+  against the cwd: under WSL bash every git call in the guard died with exit
+  128 and the guard reported `FAIL - git diff --cached failed (exit 128)`.
+  Because `scripts/format-lint.sh` runs `sh scripts/check-records.sh --staged`,
+  the WSL Linux gate itself could not pass. The guard now walks up to the
+  `.git` marker, converts drive-letter gitdirs with `wslpath -u` (WSL) or
+  `cygpath -u` (MSYS), and exports `GIT_DIR`/`GIT_WORK_TREE` - only after the
+  plain `git rev-parse --git-dir` already failed, so ordinary checkouts and
+  POSIX CI keep the ambient environment.
+- Verification (fresh, this worktree):
+  - WSL bash (`C:/Windows/System32/bash.exe`, GNU bash 5.2.21, `/usr/bin/git`
+    2.43.0): `bash scripts/check-records.sh --staged` exits 0. Before the fix
+    the same call exited 1 with `fatal: not a git repository:
+    /mnt/c/Users/Thanh/orca/volume-control-windows-release-bootstrap/C:/Users/
+    Thanh/orca/volume-control/.git/worktrees/volume-control-windows-release-bootstrap`.
+  - Negative (live, WSL bash): with a scratch file staged the guard reports
+    `this commit changes substantive files but not the records` with
+    `trigger: .tmp-wsl-guard-check`, so the fallback reads the real index
+    instead of passing vacuously; the clean index exits 0.
+  - MSYS `sh` (`C:/Program Files/Git/bin/sh.exe`): exit 0, first-call path
+    unchanged; `bash -n scripts/check-records.sh` clean.
+  - `scripts/test-check-records.sh`: 35 `ok`, exit 0.
+    `scripts/test-records-merge.sh`: 9 `ok`.
+  - `scripts/test-format-lint.sh` (Git Bash, `frontend/dist` built): all
+    format-lint smoke checks passed, exit 0, including
+    `refused run releases the concurrency lock`.
+  - Merge integrity: `git diff --check` clean, no conflict markers anywhere,
+    merged tree identical to this branch for the record files plus main's
+    i18n record edits absorbed (vol-091..094 at main's content).
+- Records: `vol-089` restored, `vol-095` + `vol-096` added; this entry is the
+  `claude-progress.md` half.
+
 ## Session 103 (2026-10-17) - Release-workflow harness HEAD resolution across shells
 
 - `scripts/test-release-workflow.sh`: HEAD resolution no longer assumes the

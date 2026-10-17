@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-17T12:05",
+  "last_updated": "2026-10-17T12:35",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -18,23 +18,20 @@
     {
       "id": "vol-089",
       "priority": 89,
-      "area": "tooling",
-      "title": "Format-lint smoke test releases its lock on refused runs",
-      "user_visible_behavior": "Developer-facing: when scripts/test-format-lint.sh refuses to run (modified .claude/settings.local.json, dirty index), it no longer leaves scripts/.test-format-lint.lock behind, so later runs and scripts/ship.sh are not blocked by a stale 'already running' lock.",
+      "area": "ui",
+      "title": "macOS host handles AppAction::CheckUpdates",
+      "user_visible_behavior": "On macOS the Check for updates action no longer aborts the build; the host runs the localized GitHub release check on a worker thread (the AppKit main thread keeps handling volume and hotkeys) and records the result in the log. There is still no macOS tray entry or overlay text surface for it - that lands with vol-076 (Tauri tray on macOS and Linux).",
       "status": "passing",
       "verification": [
-        "Negative (live): with a staged scratch file, C:/Program Files/Git/bin/bash.exe scripts/test-format-lint.sh prints 'FAIL - the index has staged changes' and scripts/.test-format-lint.lock is absent afterwards. Before the fix the same refusal left the lock behind and the next invocation exited 1 with 'test-format-lint.sh is already running (lock: ...)'.",
-        "bash scripts/test-format-lint.sh (MSYS bash, Git for Windows) passes all checks and releases the lock on exit; the lock is absent after the run.",
         "Windows host gate: cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings and cargo test --workspace --no-default-features (292 lib tests plus the integration suites) exit 0 on the merge head 3c9ed2c.",
         "Cross-platform proof: CI run 38983711274 on 3c9ed2c merged-into-main head is fully green - Windows (build + tests + release artifact), Ubuntu 24.04 (CLI fallback, gtk-renderer, gtk-renderer + layer-shell builds, gtk smoke under Xvfb, Linux Tauri E2E, release Tauri host), macOS (build + cargo test incl. AppKit smoke + Tauri WebDriver E2E + bundle verification) and the Release gate (required). Local darwin/linux cross-checks remain impossible on this host (libpulse-sys pkg-config cross probe, then cc-rs ToolNotFound for the coreaudio/pulse C sources), so CI is the compile proof."
       ],
       "evidence": [
-        "Session 103 (2026-10-17): the lock directory was created before the preconditions but the EXIT trap only after them, so every precondition exit 1 leaked the lock. Observed while shipping this change set: an external merge left the index unmerged, the smoke test refused, leaked the lock, and the next scripts/ship.sh --push aborted at phase 4 with the stale-lock message. The release trap is now installed immediately after the lock is acquired; the full cleanup trap still replaces it further down.",
         "Session 105 (2026-10-17): PR #43 CI run 38980457506 job 117239883024 failed with error[E0004] non-exhaustive patterns: &model::AppAction::CheckUpdates not covered at crates/volumectl/src/macos_app.rs:159; the arm was added and the macOS job of the next run is the compile proof.",
         "Session 105 (2026-10-17, follow-up): CI run 38981490852 on 3809adf kept the macOS build + Tauri E2E steps green and moved the failure to `cargo test`; jobs 117243179633 (appkit_smoke) and 117243179587 (gtk_smoke) showed 4x error[E0061] each for render_overlay/set_overlay_content/set_mixer_controls/update_mixer_value, now fixed with Language::En.",
         "Session 105 (2026-10-17, close-out): CI run 38983711274 on 3c9ed2c passed every job (Windows, Ubuntu 24.04 with gtk-renderer and layer-shell, macOS build + cargo test + AppKit smoke + Tauri E2E, Fast checks, Release gate), which is the green-run evidence behind vol-089's passing status."
       ],
-      "notes": "The lock exists to stop concurrent smoke runs (the pre-push flow dispatches reviewers in parallel); it now covers the refusal paths too."
+      "notes": "The variant arrived with fe45d18 (bilingual UI + tray update check) and only breaks cfg(target_os = \"macos\") builds, so the Windows workspace gate stays green. macOS parity for the tray item itself stays with vol-076. This record was restored verbatim in Session 110: the fix/release-workflow-git-path-resolution branch had rewritten this id into a tooling record (now vol-095) and the merge driver had unioned the two feature sets under the single id."
     },
     {
       "id": "vol-088",
@@ -1363,6 +1360,42 @@
         "Session 109 (2026-10-17, driver location): the drivers now live in <git-common-dir>/records-merge and the configured command resolves that path through git at merge time, because git reads merge attributes from the branch being merged into and no branch carries the scripts until the driver PR lands. install-merge-drivers.sh takes an optional target repository, the end-to-end suite installs into its throwaway clone that has neither .gitattributes nor the driver scripts in the tree, and the merge still lands both sides (9 checks)."
       ],
       "notes": "Drivers are local configuration, so a branch still has to merge origin/main locally (git runs registered drivers only there); GitHub's own merge UI cannot use them. The fallback stays safe: an unregistered clone, a driver failure, or already-conflicted input leaves the normal conflict for the operator."
+    },
+    {
+      "id": "vol-095",
+      "priority": 95,
+      "area": "tooling",
+      "title": "Format-lint smoke test releases its lock on refused runs",
+      "user_visible_behavior": "Developer-facing: when scripts/test-format-lint.sh refuses to run (modified .claude/settings.local.json, dirty index), it no longer leaves scripts/.test-format-lint.lock behind, so later runs and scripts/ship.sh are not blocked by a stale 'already running' lock.",
+      "status": "passing",
+      "verification": [
+        "Negative (live): with a staged scratch file, C:/Program Files/Git/bin/bash.exe scripts/test-format-lint.sh prints 'FAIL - the index has staged changes' and scripts/.test-format-lint.lock is absent afterwards. Before the fix the same refusal left the lock behind and the next invocation exited 1 with 'test-format-lint.sh is already running (lock: ...)'.",
+        "bash scripts/test-format-lint.sh (MSYS bash, Git for Windows) prints 'All format-lint smoke checks passed.' and exits 0, including the refused-run lock check; the lock is absent after the run."
+      ],
+      "evidence": [
+        "Session 103 (2026-10-17): the lock directory was created before the preconditions but the EXIT trap only after them, so every precondition exit 1 leaked the lock. Observed while shipping this change set: an external merge left the index unmerged, the smoke test refused, leaked the lock, and the next scripts/ship.sh --push aborted at phase 4 with the stale-lock message. The release trap is now installed immediately after the lock is acquired; the full cleanup trap still replaces it further down.",
+        "Session 110 (2026-10-17): renumbered from vol-089, where this record had collided with main's macOS AppAction::CheckUpdates record after a merge. The macOS verification and evidence lines that the driver had unioned into this block stayed with vol-089; the two format-lint verification lines and the Session 103 evidence moved here unchanged."
+      ],
+      "notes": "The lock exists to stop concurrent smoke runs (the pre-push flow dispatches reviewers in parallel); it now covers the refusal paths too."
+    },
+    {
+      "id": "vol-096",
+      "priority": 96,
+      "area": "tooling",
+      "title": "Records guard reads the checkout from WSL bash in a native-Windows worktree",
+      "user_visible_behavior": "Developer-facing: scripts/check-records.sh works when the running shell's git cannot follow the checkout, so the WSL Linux gate (scripts/format-lint.sh -> sh scripts/check-records.sh --staged) no longer aborts at the records step with a bare 'fatal: not a git repository' in a worktree created by native Windows git.",
+      "status": "passing",
+      "verification": [
+        "WSL bash (C:/Windows/System32/bash.exe, GNU bash 5.2.21, /usr/bin/git 2.43.0): bash scripts/check-records.sh --staged exits 0 in this worktree. Before the fix the same call printed 'FAIL - git diff --cached failed (exit 128)' and 'fatal: not a git repository: /mnt/c/Users/Thanh/orca/volume-control-windows-release-bootstrap/C:/Users/Thanh/orca/volume-control/.git/worktrees/volume-control-windows-release-bootstrap'.",
+        "Negative (live, WSL bash): with a scratch file staged the guard reports 'this commit changes substantive files but not the records' with 'trigger: .tmp-wsl-guard-check', so the fallback reads the real index instead of passing vacuously; the same clean index exits 0.",
+        "C:/Program Files/Git/bin/sh.exe scripts/check-records.sh --staged exits 0 unchanged (fallback not engaged, first-call path intact); bash -n scripts/check-records.sh clean.",
+        "C:/Program Files/Git/bin/bash.exe scripts/test-check-records.sh passes every check (exit 0)."
+      ],
+      "evidence": [
+        "Session 110 (2026-10-17): the merge of origin/main into fix/release-workflow-git-path-resolution surfaced the same gitdir defect vol-088 fixed in the release harness, now in the records guard: under WSL bash every git call in check-records.sh died with exit 128 because the worktree's .git file holds 'gitdir: C:/...' and a POSIX git resolves it against the cwd. The guard now walks up to the .git marker, converts drive-letter gitdirs with wslpath/cygpath, and exports GIT_DIR/GIT_WORK_TREE only after the plain invocation already failed.",
+        "Session 110 (2026-10-17, impact): scripts/format-lint.sh runs sh scripts/check-records.sh --staged, so the defect blocked the WSL Linux gate itself, not just ad-hoc guard runs."
+      ],
+      "notes": "Engaged only when git rev-parse --git-dir already fails, so ordinary checkouts and POSIX CI keep the ambient git environment; the conversion paths are wslpath (WSL) then cygpath (MSYS), matching scripts/test-release-workflow.sh."
     }
   ]
 }

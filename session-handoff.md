@@ -1,5 +1,37 @@
 # Session Handoff
 
+## Session 110 (2026-10-17) - Merge main into the harness branch: record-id collision + WSL guard fix
+
+Branch `fix/release-workflow-git-path-resolution` (worktree
+`volume-control-windows-release-bootstrap`) merged `origin/main` (`1ba66e5`,
+App i18n #46) as `0c798cc`. The record merge drivers landed the three record
+files without conflict markers; the merged ledger and the guard then needed
+two repairs:
+
+- `vol-089` id collision: this branch had rewritten main's macOS
+  `AppAction::CheckUpdates` record into the format-lint lock record, so the
+  driver unioned two different features under one id and main's macOS
+  title/behavior text dropped out. `vol-089` is now restored verbatim from
+  main, the format-lint record moved to `vol-095`, and `vol-096` records the
+  guard fix below. Ledger: 63 features (48 passing / 15 in_progress), ids
+  unique, `priority == id` for all.
+- `scripts/check-records.sh` resolves the repository the way vol-088 does for
+  the release harness: walk up to the `.git` marker, convert a drive-letter
+  `gitdir:` with `wslpath -u` (WSL) or `cygpath -u` (MSYS), export
+  `GIT_DIR`/`GIT_WORK_TREE` - only after plain `git rev-parse --git-dir`
+  already failed. Without it the WSL Linux gate (`scripts/format-lint.sh` runs
+  `sh scripts/check-records.sh --staged`) ended in
+  `FAIL - git diff --cached failed (exit 128)` in a worktree created by native
+  Windows git.
+
+Verified in this worktree: WSL bash `bash scripts/check-records.sh --staged`
+exit 0 (before: exit 1, bare `fatal: not a git repository`), staged-scratch
+negative reports the records failure with the real trigger path, MSYS `sh`
+path unchanged, `scripts/test-check-records.sh` 35 `ok`,
+`scripts/test-records-merge.sh` 9 `ok`, `scripts/test-format-lint.sh` all
+checks passed (including the refused-run lock check), `bash -n` clean. Next:
+push, PR CI, merge.
+
 ## Session 108 (2026-10-17) - Native Linux and macOS packages
 
 Branch `chore/release-0.1.5` adds native packages to the release contract:
