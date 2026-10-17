@@ -1,5 +1,32 @@
 # Session Handoff
 
+## Session 108 (2026-10-17) - Stale main reconciled + smoke lock release
+
+Branch `fix/format-lint-lock-release` (worktree
+`volume-control-format-lint-lock`, forked from `main` at ac26346).
+
+- The scheduled resume run found its `volume-control` checkout 6 commits
+  behind `origin/main` with superseded uncommitted work: a tray "Check for
+  updates" item that opened the releases page (the feature is on `main` in a
+  fuller form - ureq fetch against `releases/latest` plus a localized overlay
+  result, PR #43 / vol-090) and an untracked 2026-10-16
+  windows-release-bootstrap plan/spec (implemented by PR #42, vol-087..vol-092).
+  That change set is preserved in `git stash@{0}`; `main` is fast-forwarded to
+  ac26346 and the workspace gate is green again
+  (`cargo test --workspace --no-default-features`).
+- `scripts/test-format-lint.sh` released its concurrency lock only after its
+  hermetic preconditions, so a refused run wedged every later invocation into
+  "already running" until the lock directory was removed by hand. The release
+  trap is installed with the lock now, and check 10 of the suite proves a
+  refused run releases it.
+- Next: open the PR for `fix/format-lint-lock-release`; PR #45 is redundant
+  after that (same trap fix as `e6a67e6`, and its HEAD-resolution hunk is
+  already on `main` through #44's squash).
+- Running this suite needs Git Bash and a built `frontend/dist`: the PATH
+  `bash` on this host is the WSL shim, which cannot read a Windows-form
+  worktree gitdir, and the gate's clippy step compiles
+  `tauri::generate_context!`.
+
 ## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
 
 Branch `chore/release-0.1.5` (worktree `volume-control-release-015`)

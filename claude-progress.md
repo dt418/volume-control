@@ -1,5 +1,46 @@
 # Progress Log
 
+## Session 108 (2026-10-17) - Stale main reconciled + smoke lock release on refused runs
+
+- Workspace reconciliation (scheduled resume run): the `volume-control` main
+  checkout this run resumes was 6 commits behind `origin/main` and carried
+  superseded uncommitted work - a tray "Check for updates" item that opened
+  the releases page, plus an untracked 2026-10-16 windows-release-bootstrap
+  plan/spec. That tray design landed upstream in a fuller form (ureq fetch
+  against `releases/latest`, localized overlay result, immediate in-progress
+  card; PR #43 / vol-090), and the bootstrap plan was executed end to end by
+  Sessions 099-107 (vol-087..vol-092; PR #42). The stale change set is
+  preserved in `git stash@{0}`; `main` fast-forwarded `54e7e5a -> ac26346`.
+  - Verified on the reconciled tree: `cargo fmt --all --check`,
+    `git diff --check`, and `cargo test --workspace --no-default-features`
+    all exit 0.
+- Defect fixed in `scripts/test-format-lint.sh`: the suite took
+  `scripts/.test-format-lint.lock` but installed its cleanup trap only after
+  the hermetic preconditions, so every refusal (missing or modified
+  `.claude/settings.local.json`, dirty index) leaked the lock and the next
+  invocation died with "already running" until someone removed the directory
+  by hand. Reproduced live before the fix: append a newline to
+  `.claude/settings.local.json`, run the suite (exit 1), and the lock is still
+  in place; the next run prints "test-format-lint.sh is already running".
+  - `trap 'release_lock' EXIT` is now installed immediately after the lock is
+    taken; the later full cleanup trap replaces it and releases the lock again
+    (rmdir is idempotent).
+  - New check 10 in the suite hands the lock to a nested run forced into the
+    dirty-index refusal and requires that run to exit 1, refuse on its own
+    precondition (not on the lock), and leave no lock directory - the missing
+    regression coverage for this refusal path.
+- Verification: RED (early trap commented out) the new check reported
+  "FAIL - refused run releases the concurrency lock (lock left behind: ...)";
+  GREEN `bash scripts/test-format-lint.sh` prints "All format-lint smoke
+  checks passed." with exit 0, including the new check. The suite was run
+  under Git Bash with `frontend/dist` built, because this host's PATH `bash`
+  is the WSL shim (it cannot read a Windows-form worktree gitdir) and the
+  gate's clippy step compiles `tauri::generate_context!`, which needs the
+  frontend build.
+- Note: the unmerged PR #45 (`fix/release-workflow-git-path-resolution`)
+  carries the same trap fix (`e6a67e6`) plus a HEAD-resolution block that is
+  already on `main` through #44's squash, so it is redundant once this lands.
+
 ## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
 
 - Live verification of the published v0.1.5 assets: `releases/latest` is

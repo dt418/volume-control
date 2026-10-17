@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-10-17T09:10",
+    "last_updated":  "2026-10-17T09:31",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -16,6 +16,25 @@
                       },
     "features":  [
                          {
+                             "id":  "vol-093",
+                             "priority":  93,
+                             "area":  "tooling",
+                             "title":  "Format-lint smoke suite releases its lock on refused runs",
+                             "user_visible_behavior":  "A refused format-lint smoke run (missing or modified forbidden file, dirty index) no longer leaves scripts/.test-format-lint.lock behind, so the next invocation runs the gates instead of failing with 'already running' until the lock directory is removed by hand. The pre-push flow and scripts/ship.sh (phase 4 runs this suite) cannot be wedged by their own refusal any more.",
+                             "status":  "passing",
+                             "verification":  [
+                                                  "RED: with the early release trap commented out, bash scripts/test-format-lint.sh reports \"FAIL - refused run releases the concurrency lock (lock left behind: ...)\" and exits 1 while every other check stays green - the new check fails on exactly the regression it guards.",
+                                                  "GREEN: bash scripts/test-format-lint.sh prints \"All format-lint smoke checks passed.\" and exits 0, including \"ok - refused run releases the concurrency lock\".",
+                                                  "Independent reproduction before the fix: appending a newline to .claude/settings.local.json made the suite refuse with exit 1 and leave scripts/.test-format-lint.lock in place; the following run then printed \"test-format-lint.sh is already running (lock: ...)\" instead of running the gates.",
+                                                  "Environment note: the suite was run under Git Bash with frontend/dist built. The PATH bash on this host is the WSL shim, which cannot read a Windows-form worktree gitdir, and the gate's clippy step compiles tauri::generate_context!, which needs the frontend build - both are environment prerequisites of the suite, unrelated to this change."
+                                              ],
+                             "evidence":  [
+                                              "Session 108 (2026-10-17): scripts/test-format-lint.sh installs `trap 'release_lock' EXIT` immediately after it takes the lock, ahead of the preconditions that exit 1 (missing forbidden file, modified forbidden file, dirty index); the later full cleanup trap replaces it and releases the lock again (rmdir is idempotent). New check 10 hands the lock to a nested run forced into the dirty-index refusal and requires that run to exit 1, refuse on its own precondition rather than on the lock, and leave no lock directory behind.",
+                                              "Session 108 (2026-10-17): the class was audited across the harness scripts - only test-format-lint.sh holds a lock; the other EXIT traps release temporary directories, whose leak on a pre-trap exit is benign.",
+                                              "Session 108 (2026-10-17): the same trap fix exists as e6a67e6 on the unmerged PR #45 branch, which cannot merge (its records conflict and its HEAD-resolution hunk is already on main through #44's squash); PR #45 becomes redundant once this lands."
+                                          ],
+                             "notes":  "The nested invocation is guarded by an asserted dirty index so it can never re-run the whole battery recursively, and a nested refusal on the lock itself ('already running') is reported as the wrong reason instead of passing."
+                         },                     {
                              "id":  "vol-092",
                              "priority":  92,
                              "area":  "release",
