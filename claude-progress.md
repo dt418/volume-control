@@ -34,6 +34,11 @@
   pkg-config cross probe, then `cc-rs` ToolNotFound for the coreaudio C
   sources), so the macOS job of the CI run on this commit is the compile
   proof.
+- Close-out: CI run 38983711274 on the merged head 3c9ed2c (main PR #44
+  merged in, vol-089 `passing`) is fully green - Windows, Ubuntu 24.04
+  (CLI fallback + gtk-renderer + layer-shell, gtk smoke under Xvfb, Linux
+  Tauri E2E), macOS (build + `cargo test` incl. AppKit smoke + Tauri
+  WebDriver E2E + bundle verification), Fast checks and the Release gate.
 
 ## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
 
