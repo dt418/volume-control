@@ -230,7 +230,7 @@ jobs:
       - name: Build release Tauri host and validate artifact
         shell: bash
         run: |
-          frontend/node_modules/.bin/tauri build --no-bundle --ci
+          frontend/node_modules/.bin/tauri build --bundles dmg --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
           file target/release/VolumeControl

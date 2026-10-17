@@ -4,6 +4,79 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-17
+
+### Added
+
+- Native packages in every release: the macOS job builds a `.dmg` and the
+  Ubuntu job builds `.deb`, `.rpm`, and `.AppImage` bundles (Tauri bundlers)
+  alongside the zip and tarball; `package.sh` stages them under canonical
+  names, `verify-release-metadata.sh` requires them per platform, and the
+  fixture matrix covers the new sets.
+- macOS/Linux one-line installers: `install-macos.sh` and `install-linux.sh`
+  ship next to each package in the release, verify SHA-256 against the
+  release `SHA256SUMS.txt` before unpacking, and cover install, update, and
+  uninstall in user scope with EN/VI messages (`VOLUMECTL_LANG`,
+  `VOLUMECTL_VERSION`, `VOLUMECTL_INSTALL_ROOT` overrides). The release
+  verifier, the fixture matrix (including a new macOS fixture), and the
+  macOS/Ubuntu CI jobs now exercise the per-platform artifact sets.
+- `scripts/generate-winget-manifest.sh` emits winget-pkgs **1.12** manifests
+  that pass `winget validate --manifest`.
+
+### Fixed
+
+- The published PowerShell bootstrap is now pure ASCII with `[char]` escapes
+  for Vietnamese text. Windows PowerShell 5.1 decodes `irm` text/plain
+  responses as cp1252, so the previous UTF-8 BOM arrived as `i»¿` and the
+  documented `[scriptblock]::Create((irm ...))` one-liner failed to parse;
+  the test suite now decodes the script as cp1252 and asserts that it parses
+  and renders the Vietnamese messages correctly.
+
+### Repository
+
+- Added the MIT `LICENSE` file the README already claimed (also required by
+  the winget manifest's `LicenseUrl`).
+
+## [0.1.5] - 2026-10-17
+
+### Added
+
+- Verified Windows install bootstrap: `scripts/Install-VolumeControl.ps1`
+  installs, updates, and uninstalls strictly under
+  `%LOCALAPPDATA%\VolumeControl`, resolves stable or exact `vX.Y.Z` GitHub
+  releases, verifies the NSIS installer against the release
+  `SHA256SUMS.txt`, never force-terminates a running VolumeControl during
+  update, and keeps `%APPDATA%\volume-control\config.ini` across update and
+  uninstall.
+- Multi-language UI (English/Vietnamese): `[general] language = en|vi` in
+  `config.ini` with a Settings selector; the tray, overlay, mixer, settings
+  window, the GTK/macOS renderer controls, and every webview surface render
+  localized labels. The PowerShell bootstrap ships the same EN/VI message
+  table (`VOLUMECONTROL_LANG` overrides the Windows UI culture).
+- Tray "Check for updates": queries the latest stable GitHub release, shows
+  an immediate in-progress card in the active language, and reports the
+  result (up to date / version available / check failed) on the overlay.
+- Release tooling: multi-asset packaging (`dist/` NSIS + installer script +
+  canonical `SHA256SUMS.txt`), a fail-closed release-metadata verifier, a
+  Windows NSIS bundle step in desktop validation, immutable release
+  publishing (`release-assets/` with no overwrite flag), a product page
+  (`docs/index.html`) with `irm`/`curl`/`winget` install commands, and
+  `scripts/generate-winget-manifest.sh` for winget-pkgs submissions.
+
+### Changed
+
+- Startup now logs per-stage timings behind `VOLUMECTL_STARTUP_TRACE=1`
+  (zero-cost when off); `docs/performance.md` records the measured budget.
+- Clippy is pinned to the project MSRV (`clippy.toml`), so
+  `chunks_exact` stays valid on Rust 1.82.
+
+### Fixed
+
+- `bash scripts/test-release-workflow.sh` resolves `HEAD` across Windows
+  git worktrees and WSL/MSYS shells instead of exiting 128 mid-run.
+- macOS host handles the new `AppAction::CheckUpdates`, and the Linux/macOS
+  renderer smoke binaries pass the language argument through.
+
 ## [0.1.4] - 2026-08-17
 
 ### Fixed

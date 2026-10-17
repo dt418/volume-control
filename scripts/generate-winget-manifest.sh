@@ -19,7 +19,7 @@ set -euo pipefail
 
 package_id="dt418.VolumeControl"
 repo_url="https://github.com/dt418/volume-control"
-manifest_version="1.6.0"
+manifest_version="1.12.0"
 
 usage() {
   echo "usage: $0 <vX.Y.Z> <installer.exe> [outdir]" >&2
@@ -65,7 +65,7 @@ dest="$outdir/$package_id/$version"
 mkdir -p "$dest"
 
 cat > "$dest/$package_id.yaml" <<EOF
-# yaml-language-server: \$schema=https://aka.ms/winget-manifest-version.schema.json
+# yaml-language-server: \$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
 
 PackageIdentifier: $package_id
 PackageVersion: $version
@@ -75,11 +75,10 @@ ManifestVersion: $manifest_version
 EOF
 
 cat > "$dest/$package_id.installer.yaml" <<EOF
-# yaml-language-server: \$schema=https://aka.ms/winget-manifest-installer.schema.json
+# yaml-language-server: \$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 
 PackageIdentifier: $package_id
 PackageVersion: $version
-Platform: windows
 MinimumOSVersion: 10.0.17763.0
 InstallerType: nullsoft
 Scope: user
@@ -97,7 +96,7 @@ ManifestVersion: $manifest_version
 EOF
 
 cat > "$dest/$package_id.locale.en-US.yaml" <<EOF
-# yaml-language-server: \$schema=https://aka.ms/winget-manifest-locale.schema.json
+# yaml-language-server: \$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: $package_id
 PackageVersion: $version

@@ -6,7 +6,23 @@
   "node": "v22.0.0",
   "artifacts": [
     {
-      "name": "volumecontrol-test.tar.gz",
+      "name": "install-linux.sh",
+      "sha256": "0ad08d294f7650f62669886dbdb1d5ba0dcee40b3c88034574cf1bd2044392c7"
+    },
+    {
+      "name": "volumecontrol-0.0.0-linux-amd64.AppImage",
+      "sha256": "254a841b923a5b0fda13efb8570cdbfb9709cb3b1a8d862bfc12f7b6b66cd43e"
+    },
+    {
+      "name": "volumecontrol-0.0.0-linux-amd64.deb",
+      "sha256": "2575dc7721ebce5251d8cd1b7a0a826f7a53b755c50fdfc2492435b21515de8a"
+    },
+    {
+      "name": "volumecontrol-0.0.0-linux-amd64.rpm",
+      "sha256": "7b4a368dbd25821091adec1940d2aa62fc0ad9a16fb98770bcc34968c30d1acf"
+    },
+    {
+      "name": "volumecontrol-0.0.0-linux-amd64.tar.gz",
       "sha256": "c208935ff7856f2a555410d17b68798d83d241d974ea320f9424645879e61acf"
     }
   ]

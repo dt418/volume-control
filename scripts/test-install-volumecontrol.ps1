@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env powershell
+#!/usr/bin/env powershell
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
@@ -322,6 +322,30 @@ try {
 
     Assert-Throws { Invoke-VolumeControlAction -Action update -Release $newRelease -InstallRoot $installRoot } 'close VolumeControl'
 
+    # --- Remote-download safety: `irm` on Windows PowerShell 5.1 decodes a
+    # text/plain response as cp1252, so the published asset must be pure ASCII
+    # and BOM-less; VI text travels as [char] escapes that survive that decode.
+    $bootstrapSourcePath = Join-Path $PSScriptRoot 'Install-VolumeControl.ps1'
+    $bootstrapBytes = [System.IO.File]::ReadAllBytes($bootstrapSourcePath)
+    $nonAsciiCount = 0
+    foreach ($byte in $bootstrapBytes) {
+        if ($byte -gt 127) { $nonAsciiCount++ }
+    }
+    Assert-Equal $nonAsciiCount 0 'bootstrap source stays pure ASCII for cp1252-safe downloads'
+    Assert-False ($bootstrapBytes.Length -ge 3 -and $bootstrapBytes[0] -eq 0xEF -and $bootstrapBytes[1] -eq 0xBB -and $bootstrapBytes[2] -eq 0xBF) 'bootstrap source carries no UTF-8 BOM'
+
+    $cp1252 = [System.Text.Encoding]::GetEncoding(1252)
+    $decodedBootstrap = $cp1252.GetString($bootstrapBytes)
+    $decodedBlock = [scriptblock]::Create($decodedBootstrap)
+    Assert-True ($null -ne $decodedBlock) 'cp1252-decoded bootstrap parses as a scriptblock'
+
+    $viFromDecoded = & {
+        . ([scriptblock]::Create($decodedBootstrap))
+        $env:VOLUMECONTROL_LANG = 'vi'
+        Get-VolumeControlMessage 'install-root.must-equal' 'C:\root'
+    }
+    Assert-Equal $viFromDecoded "th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng C:\root" 'cp1252-decoded bootstrap renders VI text correctly'
+
     # --- VI scenario set: $env:VOLUMECONTROL_LANG override ---
     $previousVolumeControlLang = $env:VOLUMECONTROL_LANG
     $previousUiCulture = [System.Globalization.CultureInfo]::CurrentUICulture
@@ -339,10 +363,10 @@ try {
         Assert-Equal (Get-VolumeControlLanguage) 'en' 'unknown language override falls back to EN'
 
         $env:VOLUMECONTROL_LANG = 'vi'
-        Assert-Equal (Get-VolumeControlMessage 'install-root.must-equal' 'C:\root') 'thư mục cài đặt phải bằng C:\root' 'VI template stays byte-identical'
-        Assert-Throws { Resolve-VolumeControlRelease -Version '1.2.3' } 'phiên bản phải bắt đầu bằng v'
-        Assert-Throws { Assert-StandardInstallRoot -InstallRoot $outsideRoot } 'thư mục cài đặt phải bằng'
-        Assert-Throws { Read-ExpectedSha256 -ManifestPath $malformedManifest -AssetName $installerName } 'không đúng định dạng chuẩn'
+        Assert-Equal (Get-VolumeControlMessage 'install-root.must-equal' 'C:\root') "th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng C:\root" 'VI template stays byte-identical'
+        Assert-Throws { Resolve-VolumeControlRelease -Version '1.2.3' } "phi$([char]0x00EA)n b$([char]0x1EA3)n ph$([char]0x1EA3)i b$([char]0x1EAF)t $([char]0x0111)$([char]0x1EA7)u b$([char]0x1EB1)ng v"
+        Assert-Throws { Assert-StandardInstallRoot -InstallRoot $outsideRoot } "th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng"
+        Assert-Throws { Read-ExpectedSha256 -ManifestPath $malformedManifest -AssetName $installerName } "kh$([char]0x00F4)ng $([char]0x0111)$([char]0x00FA)ng $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng chu$([char]0x1EA9)n"
 
         $viFailureMessage = $null
         try {
@@ -350,7 +374,7 @@ try {
         } catch {
             $viFailureMessage = $_.Exception.Message
         }
-        Assert-True ($viFailureMessage -clike '*hãy đóng VolumeControl*') 'VI message for the running-process failure path'
+        Assert-True ($viFailureMessage -clike "*h$([char]0x00E3)y $([char]0x0111)$([char]0x00F3)ng VolumeControl*") 'VI message for the running-process failure path'
         Assert-False ($viFailureMessage -clike '*update.refused-running-process*') 'message IDs never reach the user'
 
         Start-Installer -InstallerPath $installerPath -InstallRoot $installRoot

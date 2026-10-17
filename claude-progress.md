@@ -1212,6 +1212,7 @@
   directory even though every WDIO spec passed.
 - Normalized relative output roots to repository-absolute paths before the cwd
   change and added a ship-flow assertion preventing this regression.
+
 ## Session 065 (2026-08-15) - Rename default branch to main
 
 - PR #21 (`fix: harden records guard and finalize release verification`) was
@@ -3450,3 +3451,102 @@ fn get_window_pid_x11() -> Option<u32> {
     `sh scripts/check-records.sh --staged` → exit 0.
 - Records: feature_list.json vol-017 updated (verification 38→39, evidence
   augmented with mirror fix); this entry is the claude-progress.md half.
+
+## Session 108 (2026-10-17) - Native Linux and macOS packages
+
+- desktop-validation: macOS builds `tauri build --bundles dmg --ci`; Ubuntu
+  builds `--bundles deb,rpm,appimage` (the apt step now installs `rpm`);
+  Windows keeps `--bundles nsis`.
+- `scripts/package.sh` stages the bundles as
+  `volumecontrol-<ver>-macos.dmg` and
+  `volumecontrol-<ver>-ubuntu.{deb,rpm,AppImage}` (fail-closed when a bundle
+  is missing) next to the archives and installer scripts.
+- `scripts/verify-release-metadata.sh`: macOS sets are now
+  zip + install-macos.sh + dmg (3); Ubuntu sets are
+  tarball + install-linux.sh + deb + rpm + AppImage (5); Windows unchanged (3).
+- Fixtures: `release-valid-macos` gained a dmg stub and the two valid Ubuntu
+  fixtures gained deb/rpm/AppImage stubs with refreshed canonical manifests
+  and metadata.
+- `scripts/test-release-workflow.sh`: the bundle build flags and the package
+  staging are asserted; the old "other platforms skip bundling" check is
+  replaced by the per-platform bundle contract.
+- Docs: README (EN/VI) names the native packages; CHANGELOG [Unreleased]
+  records them. `bash scripts/test-release-workflow.sh` passes locally.
+- Portability fix after the v0.1.6 macOS job failed: GNU-only
+  `dd status=none` and `find -maxdepth/-mindepth/-quit` replaced with
+  portable forms in `scripts/package.sh`, the two installers, and
+  `scripts/test-install-unix.sh`; harness + installer suite still pass.
+- Installer-test fixtures are now `chmod +x` (MSYS treats every file as
+  executable, so the `-x` assertions only failed on Linux/macOS), and the
+  suite prints the captured installer output on failing assertions for
+  diagnosable CI logs.
+- bash 3.2 compatibility: `${var,,}` is bash-4-only and macOS ships bash
+  3.2; the installers and the release verifier now lowercase through
+  `tr "[:upper:]" "[:lower:]"`. Suites stay green locally.
+
+
+### Session 108 follow-up (Linux asset naming + CI bundle path)
+
+- Linux bundles are named `volumecontrol-<ver>-linux-amd64.{tar.gz,deb,rpm,AppImage}`:
+  `-ubuntu.rpm` was a Fedora/RHEL package labelled after its build host.
+  `package.sh`, `packaging/install-linux.sh`, the verifier set patterns, the
+  docs checklist and every fixture follow the new scheme.
+- `ci.yml` macOS job builds `--bundles dmg` (was `--no-bundle`) so the
+  validation packaging step that calls `package.sh` can stage the dmg; the
+  harness asserts that flag.
+- `package.sh` bundle lookups end in `|| true` so a missing bundle prints the
+  explicit error instead of dying silently under `set -e` + `pipefail`.
+
+## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
+
+- Live verification of the published v0.1.5 assets: `releases/latest` is
+  v0.1.5 with all six assets, but the documented PowerShell one-liner
+  `& ([scriptblock]::Create((irm ...))) -Action install` raised a parse
+  error: Windows PowerShell 5.1 decodes the `irm` text/plain response as
+  cp1252, so the script's UTF-8 BOM arrived as `i»¿` and everything after it
+  was mis-decoded. The published asset is broken through that path; the
+  local file path and the curl download-then-run path work.
+- Fix: both PowerShell scripts are now pure ASCII (BOM removed) with
+  Vietnamese text expressed as `$([char]0xXXXX)` escapes that survive any
+  decoding; the suite decodes the script as cp1252, creates a scriptblock
+  from it, and asserts the VI text renders correctly.
+- New one-line installers `packaging/install-macos.sh` and
+  `packaging/install-linux.sh`: SHA-256 verification against the release
+  manifest before unpacking, install/update/uninstall, user-scope targets
+  (`$HOME/Applications`, `$HOME/.local`), EN/VI messages with
+  `VOLUMECTL_LANG`, `VOLUMECTL_VERSION`, `VOLUMECTL_INSTALL_ROOT`
+  overrides, Gatekeeper note on macOS.
+- Release contract extended: `scripts/package.sh` stages the platform
+  installer next to each package; `scripts/verify-release-metadata.sh`
+  requires exactly two artifacts per macOS/Ubuntu artifact set (package +
+  installer) and three on Windows; a new `release-valid-macos` fixture and
+  the renamed `volumecontrol-0.0.0-ubuntu.tar.gz` fixtures cover it.
+- Verification: `scripts/test-install-unix.sh` 23/23 PASS (real scripts,
+  fixture release over `file://`), PowerShell suite PASS with the cp1252
+  regression set, release harness PASS with the new sets.
+- CI now runs `scripts/test-install-unix.sh` natively on the macOS and
+  Ubuntu jobs; the product page gains a macOS/Linux tab and marks the
+  remote-install row complete for both.
+- Added the MIT `LICENSE` file at the repo root (README already claimed MIT;
+  the winget manifest `LicenseUrl` also needs it to resolve).
+- Release prep v0.1.6: versions bumped 0.1.5 -> 0.1.6 (workspace, volumectl,
+  Tauri, tauri.conf.json, frontend) with the lockfile refreshed and a
+  `[0.1.6]` CHANGELOG section; the winget generator now emits winget-pkgs
+  1.12 manifests (`winget validate --manifest` prints "Manifest validation
+  succeeded."). The NSIS asset keeps its `-setup.exe` name by decision; the
+  v0.1.5 release notes gained an asset legend so the installer is easy to
+  identify on GitHub.
+
+## Session 106 (2026-10-17) - Release v0.1.5 preparation
+
+- Version bump 0.1.4 -> 0.1.5 in the workspace `Cargo.toml`, `volumectl`,
+  `volumecontrol-tauri`, `src-tauri/tauri.conf.json`, and
+  `frontend/package.json`; `Cargo.lock` refreshed by `cargo check`.
+- `CHANGELOG.md` gains the `[0.1.5] - 2026-10-17` section: verified Windows
+  bootstrap, EN/VI UI + tray update check, release tooling (multi-asset
+  packaging, fail-closed verifier, immutable publish, product page, winget
+  manifest generator), the startup stage trace, MSRV-pinned clippy, and the
+  harness/macOS compile fixes.
+- Tag `v0.1.5` is pushed only after PR CI is green; the tag-triggered
+  release workflow publishes the immutable asset set that makes
+  `releases/latest/download/` serve the one-line install commands.

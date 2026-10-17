@@ -1,5 +1,48 @@
 # Session Handoff
 
+## Session 108 (2026-10-17) - Native Linux and macOS packages
+
+Branch `chore/release-0.1.5` adds native packages to the release contract:
+`dmg` on macOS and `deb`/`rpm`/`AppImage` on Ubuntu, staged by `package.sh`
+under canonical names, required by the verifier (macOS 3 artifacts, Ubuntu
+5), covered by fixtures, asserted in the release harness, and documented in
+the READMEs + CHANGELOG. Next: PR, CI (macOS/Ubuntu bundle builds are the
+proof), merge, tag v0.1.7.
+
+## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
+
+Branch `chore/release-0.1.5` (worktree `volume-control-release-015`)
+continues with the macOS/Linux remote-install feature and the fix for the
+bootstrap asset discovered during live verification:
+
+- `packaging/install-macos.sh` + `packaging/install-linux.sh` (verified
+  against a fixture release by `scripts/test-install-unix.sh`, 23/23) ship
+  as release assets next to each package; `package.sh`, the release verifier
+  (two artifacts per macOS/Ubuntu set), the fixture matrix, and CI
+  (macOS + Ubuntu jobs run the suite) all cover them.
+- The PowerShell bootstrap lost its BOM and became pure ASCII: VS text is
+  `$([char]0xXXXX)` escapes, which survive the cp1252 decode Windows
+  PowerShell 5.1 applies to `irm` responses. Regression tests decode the
+  script as cp1252 and assert it parses and renders VI correctly.
+- Next: PR, CI, merge, tag v0.1.6, then re-run the live one-liner checks
+  against the published assets.
+- Release 0.1.6 prep is included in the same branch: version bump (workspace,
+  volumectl, Tauri, tauri.conf.json, frontend), `[0.1.6]` CHANGELOG, and
+  winget-pkgs 1.12 manifests validated with `winget validate --manifest`.
+  The installer keeps the `-setup.exe` name (user decision); v0.1.5 release
+  notes now carry an asset legend. After v0.1.6 publishes: submit the winget
+  manifest PR, then add native Linux bundles (deb/rpm/AppImage) and a macOS
+  dmg for v0.1.7.
+
+## Session 106 (2026-10-17) - Release v0.1.5 preparation
+
+Branch `chore/release-0.1.5` (worktree `volume-control-release-015`, forked
+from `main` at 8f366cc) bumps every product version to 0.1.5 and writes the
+`[0.1.5]` CHANGELOG section. The tag `v0.1.5` is pushed only after the PR
+CI is green, so the release workflow publishes the verified asset set
+(bootstrap script, NSIS installer, three packages, canonical SHA256SUMS.txt)
+that the product page and the in-app update check depend on.
+
 ## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
 
 Branch `feat/app-i18n` (worktree `volume-control-app-i18n`, forked from
