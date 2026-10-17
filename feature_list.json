@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-10-17T10:05",
+    "last_updated":  "2026-10-17T10:25",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -29,7 +29,8 @@
                              "evidence":  [
                                               "Session 108 (2026-10-17): desktop-validation builds dmg on macOS and deb/rpm/appimage on Ubuntu (rpm toolchain added to the apt step); package.sh stages volumecontrol-<ver>-macos.dmg and volumecontrol-<ver>-ubuntu.{deb,rpm,AppImage}; the verifier requires the new sets; fixtures gained dmg/deb/rpm/AppImage stubs; README (EN/VI) and the CHANGELOG mention the packages.",
                                               "Session 108 (2026-10-17, portability): the v0.1.6 macOS release job failed; the shell scripts were audited for BSD userlands and fixed: GNU-only `dd status=none` replaced with stderr redirection, and `find -maxdepth/-mindepth/-quit` replaced with portable `-type f` + `head -n 1` / `rm -rf dist && mkdir -p dist` in package.sh, install-macos.sh, install-linux.sh, and test-install-unix.sh. The crate-level gate stays green and the installer suite still passes 23/23 locally; the macOS job of PR #50 is the runtime proof.",
-                                              "Session 108 (2026-10-17, CI follow-up): the v0.1.6 macos+ubuntu release jobs failed in scripts/test-install-unix.sh; the fixture stubs lacked +x (MSYS masks this on Windows) and the FAIL branches hid the installer output. The suite now chmods the stubs and echoes captured output on failure; the local run stays 23/23 and PR #50 CI is the POSIX proof."
+                                              "Session 108 (2026-10-17, CI follow-up): the v0.1.6 macos+ubuntu release jobs failed in scripts/test-install-unix.sh; the fixture stubs lacked +x (MSYS masks this on Windows) and the FAIL branches hid the installer output. The suite now chmods the stubs and echoes captured output on failure; the local run stays 23/23 and PR #50 CI is the POSIX proof.",
+                                              "Session 108 (2026-10-17, bash 3.2): the macOS runner uses bash 3.2, where `${var,,}` is a bad substitution; the installers and verify-release-metadata.sh now lowercase digests via tr, and the harness plus installer suite pass locally."
                                           ],
                              "notes":  "The archives (zip/tarball) stay the install path for the one-line scripts; the native packages are additive for users who prefer their distro/OS package managers."
                          },                     {

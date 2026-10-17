@@ -111,7 +111,8 @@ verify_against_manifest() { # file basename manifest_path
   expected="$(awk -v name="$basename" '$0 ~ /^[0-9A-Fa-f]{64}  [^ \/\\]+$/ && substr($0, 67) == name { count++; digest = substr($0, 1, 64) } END { if (count == 1) print digest }' "$manifest")"
   [[ -n "$expected" ]] || die "sha.missing" "$basename"
   actual="$(sha256_of "$file")"
-  [[ "${actual,,}" == "${expected,,}" ]] || die "sha.mismatch" "$basename"
+  [[ "$(printf %s "$actual" | tr "[:upper:]" "[:lower:]")" == "$(printf %s "$expected" | tr "[:upper:]" "[:lower:]")" ]] \
+    || die "sha.mismatch" "$basename"
 }
 
 resolve_tag() {

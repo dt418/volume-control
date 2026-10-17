@@ -28,6 +28,9 @@
   executable, so the `-x` assertions only failed on Linux/macOS), and the
   suite prints the captured installer output on failing assertions for
   diagnosable CI logs.
+- bash 3.2 compatibility: `${var,,}` is bash-4-only and macOS ships bash
+  3.2; the installers and the release verifier now lowercase through
+  `tr "[:upper:]" "[:lower:]"`. Suites stay green locally.
 
 ## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
 

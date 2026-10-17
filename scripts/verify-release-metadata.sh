@@ -298,7 +298,8 @@ for index in "${!names[@]}"; do
   # contains a backslash or newline (Windows-style repo paths hit this).
   actual_sha="${actual_sha#\\}"
   [[ "$actual_sha" =~ ^[[:xdigit:]]{64}$ ]] || fail "could not calculate SHA-256 for $name"
-  [[ "${actual_sha,,}" == "${expected_digest,,}" ]] || fail "metadata sha256 does not match $name"
+  [[ "$(printf %s "$actual_sha" | tr "[:upper:]" "[:lower:]")" == "$(printf %s "$expected_digest" | tr "[:upper:]" "[:lower:]")" ]] \
+    || fail "metadata sha256 does not match $name"
 
   # Canonical manifest lines are "<64 hex><two spaces><basename>"; the
   # artifact must own exactly one of them.
@@ -306,7 +307,8 @@ for index in "${!names[@]}"; do
     '$0 ~ /^[0-9A-Fa-f]{64}  [^ \/\\]+$/ && substr($0, 67) == name { count++; digest=substr($0, 1, 64) } \
      END { if (count == 1) print digest }' "$checksums")"
   [[ -n "$entry_digest" ]] || fail "checksum input must contain exactly one canonical entry for $name"
-  [[ "${entry_digest,,}" == "${actual_sha,,}" ]] || fail "checksum input does not match $name"
+  [[ "$(printf %s "$entry_digest" | tr "[:upper:]" "[:lower:]")" == "$(printf %s "$actual_sha" | tr "[:upper:]" "[:lower:]")" ]] \
+    || fail "checksum input does not match $name"
 done
 
 echo "release metadata verified: platform=$platform commit=$commit_sha artifacts=${#names[@]}"
