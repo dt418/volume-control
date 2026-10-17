@@ -1,0 +1,17 @@
+{
+  "commit_sha": "84e4e2a1d9997acdebaa8fadcac99a26c72f3628",
+  "platform": "macos",
+  "runner_arch": "arm64",
+  "rustc": "rustc 1.82.0 (f6e1b3b5a 2024-10-15)",
+  "node": "v22.0.0",
+  "artifacts": [
+    {
+      "name": "install-macos.sh",
+      "sha256": "91e02601a5f6763ec45e3a09b5969e625b47683649f6e759070e67139d24871a"
+    },
+    {
+      "name": "volumecontrol-test-macos.zip",
+      "sha256": "0d7e33d2f721bfc1adadc31ca91a95d815f45b4bd9262be2bb946f9b85e8becc"
+    }
+  ]
+}

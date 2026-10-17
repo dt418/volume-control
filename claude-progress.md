@@ -1,5 +1,45 @@
 # Progress Log
 
+## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
+
+- Live verification of the published v0.1.5 assets: `releases/latest` is
+  v0.1.5 with all six assets, but the documented PowerShell one-liner
+  `& ([scriptblock]::Create((irm ...))) -Action install` raised a parse
+  error: Windows PowerShell 5.1 decodes the `irm` text/plain response as
+  cp1252, so the script's UTF-8 BOM arrived as `i»¿` and everything after it
+  was mis-decoded. The published asset is broken through that path; the
+  local file path and the curl download-then-run path work.
+- Fix: both PowerShell scripts are now pure ASCII (BOM removed) with
+  Vietnamese text expressed as `$([char]0xXXXX)` escapes that survive any
+  decoding; the suite decodes the script as cp1252, creates a scriptblock
+  from it, and asserts the VI text renders correctly.
+- New one-line installers `packaging/install-macos.sh` and
+  `packaging/install-linux.sh`: SHA-256 verification against the release
+  manifest before unpacking, install/update/uninstall, user-scope targets
+  (`$HOME/Applications`, `$HOME/.local`), EN/VI messages with
+  `VOLUMECTL_LANG`, `VOLUMECTL_VERSION`, `VOLUMECTL_INSTALL_ROOT`
+  overrides, Gatekeeper note on macOS.
+- Release contract extended: `scripts/package.sh` stages the platform
+  installer next to each package; `scripts/verify-release-metadata.sh`
+  requires exactly two artifacts per macOS/Ubuntu artifact set (package +
+  installer) and three on Windows; a new `release-valid-macos` fixture and
+  the renamed `volumecontrol-0.0.0-ubuntu.tar.gz` fixtures cover it.
+- Verification: `scripts/test-install-unix.sh` 23/23 PASS (real scripts,
+  fixture release over `file://`), PowerShell suite PASS with the cp1252
+  regression set, release harness PASS with the new sets.
+- CI now runs `scripts/test-install-unix.sh` natively on the macOS and
+  Ubuntu jobs; the product page gains a macOS/Linux tab and marks the
+  remote-install row complete for both.
+- Added the MIT `LICENSE` file at the repo root (README already claimed MIT;
+  the winget manifest `LicenseUrl` also needs it to resolve).
+- Release prep v0.1.6: versions bumped 0.1.5 -> 0.1.6 (workspace, volumectl,
+  Tauri, tauri.conf.json, frontend) with the lockfile refreshed and a
+  `[0.1.6]` CHANGELOG section; the winget generator now emits winget-pkgs
+  1.12 manifests (`winget validate --manifest` prints "Manifest validation
+  succeeded."). The NSIS asset keeps its `-setup.exe` name by decision; the
+  v0.1.5 release notes gained an asset legend so the installer is easy to
+  identify on GitHub.
+
 ## Session 106 (2026-10-17) - Release v0.1.5 preparation
 
 - Version bump 0.1.4 -> 0.1.5 in the workspace `Cargo.toml`, `volumectl`,

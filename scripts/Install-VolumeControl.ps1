@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env powershell
+#!/usr/bin/env powershell
 [CmdletBinding()]
 param(
     [ValidateSet('install', 'update', 'uninstall')]
@@ -23,95 +23,95 @@ $script:ChecksumManifestName = 'SHA256SUMS.txt'
 $script:VolumeControlMessages = @{
     'install-root.localappdata-required' = @{
         en = 'LOCALAPPDATA is required to determine the install root'
-        vi = 'Cần biến môi trường LOCALAPPDATA để xác định thư mục cài đặt'
+        vi = "C$([char]0x1EA7)n bi$([char]0x1EBF)n m$([char]0x00F4)i tr$([char]0x01B0)$([char]0x1EDD)ng LOCALAPPDATA $([char]0x0111)$([char]0x1EC3) x$([char]0x00E1)c $([char]0x0111)$([char]0x1ECB)nh th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t"
     }
     'install-root.must-equal' = @{
         en = 'install root must equal {0}'
-        vi = 'thư mục cài đặt phải bằng {0}'
+        vi = "th$([char]0x01B0) m$([char]0x1EE5)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng {0}"
     }
     'release.draft-or-prerelease' = @{
         en = 'release must not be draft or prerelease'
-        vi = 'bản phát hành không được ở trạng thái draft hoặc prerelease'
+        vi = "b$([char]0x1EA3)n ph$([char]0x00E1)t h$([char]0x00E0)nh kh$([char]0x00F4)ng $([char]0x0111)$([char]0x01B0)$([char]0x1EE3)c $([char]0x1EDF) tr$([char]0x1EA1)ng th$([char]0x00E1)i draft ho$([char]0x1EB7)c prerelease"
     }
     'release.tag-format' = @{
         en = 'release tag must match vMAJOR.MINOR.PATCH'
-        vi = 'thẻ phát hành phải khớp định dạng vMAJOR.MINOR.PATCH'
+        vi = "th$([char]0x1EBB) ph$([char]0x00E1)t h$([char]0x00E0)nh ph$([char]0x1EA3)i kh$([char]0x1EDB)p $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng vMAJOR.MINOR.PATCH"
     }
     'version.format' = @{
         en = 'version must start with v and match vMAJOR.MINOR.PATCH'
-        vi = 'phiên bản phải bắt đầu bằng v và khớp định dạng vMAJOR.MINOR.PATCH'
+        vi = "phi$([char]0x00EA)n b$([char]0x1EA3)n ph$([char]0x1EA3)i b$([char]0x1EAF)t $([char]0x0111)$([char]0x1EA7)u b$([char]0x1EB1)ng v v$([char]0x00E0) kh$([char]0x1EDB)p $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng vMAJOR.MINOR.PATCH"
     }
     'asset.installer-missing' = @{
         en = 'missing installer asset: {0}'
-        vi = 'thiếu tệp cài đặt: {0}'
+        vi = "thi$([char]0x1EBF)u t$([char]0x1EC7)p c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t: {0}"
     }
     'asset.installer-duplicate' = @{
         en = 'expected exactly one installer asset: {0}'
-        vi = 'phải có đúng một tệp cài đặt: {0}'
+        vi = "ph$([char]0x1EA3)i c$([char]0x00F3) $([char]0x0111)$([char]0x00FA)ng m$([char]0x1ED9)t t$([char]0x1EC7)p c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t: {0}"
     }
     'asset.manifest-missing' = @{
         en = 'missing checksum manifest asset: {0}'
-        vi = 'thiếu tệp manifest checksum: {0}'
+        vi = "thi$([char]0x1EBF)u t$([char]0x1EC7)p manifest checksum: {0}"
     }
     'asset.manifest-duplicate' = @{
         en = 'expected exactly one checksum manifest asset: {0}'
-        vi = 'phải có đúng một tệp manifest checksum: {0}'
+        vi = "ph$([char]0x1EA3)i c$([char]0x00F3) $([char]0x0111)$([char]0x00FA)ng m$([char]0x1ED9)t t$([char]0x1EC7)p manifest checksum: {0}"
     }
     'asset.download-url-missing' = @{
         en = 'release asset download URL is missing'
-        vi = 'thiếu URL tải xuống của tệp phát hành'
+        vi = "thi$([char]0x1EBF)u URL t$([char]0x1EA3)i xu$([char]0x1ED1)ng c$([char]0x1EE7)a t$([char]0x1EC7)p ph$([char]0x00E1)t h$([char]0x00E0)nh"
     }
     'manifest.asset-basename' = @{
         en = 'asset name must be a basename'
-        vi = 'tên tệp phải là tên cơ sở, không chứa đường dẫn'
+        vi = "t$([char]0x00EA)n t$([char]0x1EC7)p ph$([char]0x1EA3)i l$([char]0x00E0) t$([char]0x00EA)n c$([char]0x01A1) s$([char]0x1EDF), kh$([char]0x00F4)ng ch$([char]0x1EE9)a $([char]0x0111)$([char]0x01B0)$([char]0x1EDD)ng d$([char]0x1EAB)n"
     }
     'manifest.not-found' = @{
         en = 'checksum manifest does not exist: {0}'
-        vi = 'không tìm thấy tệp manifest checksum: {0}'
+        vi = "kh$([char]0x00F4)ng t$([char]0x00EC)m th$([char]0x1EA5)y t$([char]0x1EC7)p manifest checksum: {0}"
     }
     'manifest.entry-not-canonical' = @{
         en = 'checksum manifest entry is not canonical'
-        vi = 'mục trong manifest checksum không đúng định dạng chuẩn'
+        vi = "m$([char]0x1EE5)c trong manifest checksum kh$([char]0x00F4)ng $([char]0x0111)$([char]0x00FA)ng $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng chu$([char]0x1EA9)n"
     }
     'manifest.entry-count' = @{
         en = 'checksum manifest must contain exactly one checksum entry for {0}'
-        vi = 'manifest checksum phải chứa đúng một mục checksum cho {0}'
+        vi = "manifest checksum ph$([char]0x1EA3)i ch$([char]0x1EE9)a $([char]0x0111)$([char]0x00FA)ng m$([char]0x1ED9)t m$([char]0x1EE5)c checksum cho {0}"
     }
     'process.exit-code' = @{
         en = 'installer process failed with exit code {0}'
-        vi = 'tiến trình cài đặt thất bại với mã thoát {0}'
+        vi = "ti$([char]0x1EBF)n tr$([char]0x00EC)nh c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t th$([char]0x1EA5)t b$([char]0x1EA1)i v$([char]0x1EDB)i m$([char]0x00E3) tho$([char]0x00E1)t {0}"
     }
     'installer.not-found' = @{
         en = 'installer does not exist: {0}'
-        vi = 'không tìm thấy tệp cài đặt: {0}'
+        vi = "kh$([char]0x00F4)ng t$([char]0x00EC)m th$([char]0x1EA5)y t$([char]0x1EC7)p c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t: {0}"
     }
     'uninstaller.must-equal' = @{
         en = 'uninstaller must equal {0}'
-        vi = 'tệp gỡ cài đặt phải bằng {0}'
+        vi = "t$([char]0x1EC7)p g$([char]0x1EE1) c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t ph$([char]0x1EA3)i b$([char]0x1EB1)ng {0}"
     }
     'uninstaller.not-found' = @{
         en = 'uninstaller does not exist: {0}'
-        vi = 'không tìm thấy tệp gỡ cài đặt: {0}'
+        vi = "kh$([char]0x00F4)ng t$([char]0x00EC)m th$([char]0x1EA5)y t$([char]0x1EC7)p g$([char]0x1EE1) c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t: {0}"
     }
     'asset.download-failed' = @{
         en = 'asset download did not create {0}'
-        vi = 'quá trình tải tệp không tạo ra {0}'
+        vi = "qu$([char]0x00E1) tr$([char]0x00EC)nh t$([char]0x1EA3)i t$([char]0x1EC7)p kh$([char]0x00F4)ng t$([char]0x1EA1)o ra {0}"
     }
     'installer.sha256-mismatch' = @{
         en = 'installer SHA-256 does not match {0}'
-        vi = 'SHA-256 của tệp cài đặt không khớp với {0}'
+        vi = "SHA-256 c$([char]0x1EE7)a t$([char]0x1EC7)p c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t kh$([char]0x00F4)ng kh$([char]0x1EDB)p v$([char]0x1EDB)i {0}"
     }
     'install.refused-executable-exists' = @{
         en = 'install refused because standard executable already exists: {0}'
-        vi = 'từ chối cài đặt vì tệp thực thi chuẩn đã tồn tại: {0}'
+        vi = "t$([char]0x1EEB) ch$([char]0x1ED1)i c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t v$([char]0x00EC) t$([char]0x1EC7)p th$([char]0x1EF1)c thi chu$([char]0x1EA9)n $([char]0x0111)$([char]0x00E3) t$([char]0x1ED3)n t$([char]0x1EA1)i: {0}"
     }
     'update.refused-executable-missing' = @{
         en = 'update refused because standard executable is missing: {0}'
-        vi = 'từ chối cập nhật vì thiếu tệp thực thi chuẩn: {0}'
+        vi = "t$([char]0x1EEB) ch$([char]0x1ED1)i c$([char]0x1EAD)p nh$([char]0x1EAD)t v$([char]0x00EC) thi$([char]0x1EBF)u t$([char]0x1EC7)p th$([char]0x1EF1)c thi chu$([char]0x1EA9)n: {0}"
     }
     'update.refused-running-process' = @{
         en = 'close VolumeControl before updating; bootstrap will not force-terminate it'
-        vi = 'hãy đóng VolumeControl trước khi cập nhật; bootstrap sẽ không buộc kết thúc tiến trình'
+        vi = "h$([char]0x00E3)y $([char]0x0111)$([char]0x00F3)ng VolumeControl tr$([char]0x01B0)$([char]0x1EDB)c khi c$([char]0x1EAD)p nh$([char]0x1EAD)t; bootstrap s$([char]0x1EBD) kh$([char]0x00F4)ng bu$([char]0x1ED9)c k$([char]0x1EBF)t th$([char]0x00FA)c ti$([char]0x1EBF)n tr$([char]0x00EC)nh"
     }
 }
 

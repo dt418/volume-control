@@ -233,12 +233,26 @@ done <<< "$metadata_values"
 
 case "$expected_platform" in
   macos)
-    ((${#names[@]} == 1)) || fail "macOS metadata must declare exactly one artifact"
-    [[ "${names[0]}" == *.zip ]] || fail "expected a zip package for macos: ${names[0]}"
+    ((${#names[@]} == 2)) || fail "macOS metadata must declare exactly two artifacts"
+    zips=0
+    scripts=0
+    for name in "${names[@]}"; do
+      [[ "$name" == volumecontrol-*-macos.zip ]] && zips=$((zips + 1))
+      [[ "$name" == install-macos.sh ]] && scripts=$((scripts + 1))
+    done
+    [[ "$zips" -eq 1 && "$scripts" -eq 1 ]] \
+      || fail "macOS metadata must declare one macos zip and install-macos.sh"
     ;;
   ubuntu)
-    ((${#names[@]} == 1)) || fail "Ubuntu metadata must declare exactly one artifact"
-    [[ "${names[0]}" == *.tar.gz ]] || fail "expected a tar.gz package for ubuntu: ${names[0]}"
+    ((${#names[@]} == 2)) || fail "Ubuntu metadata must declare exactly two artifacts"
+    tarballs=0
+    scripts=0
+    for name in "${names[@]}"; do
+      [[ "$name" == volumecontrol-*-ubuntu.tar.gz ]] && tarballs=$((tarballs + 1))
+      [[ "$name" == install-linux.sh ]] && scripts=$((scripts + 1))
+    done
+    [[ "$tarballs" -eq 1 && "$scripts" -eq 1 ]] \
+      || fail "Ubuntu metadata must declare one ubuntu tarball and install-linux.sh"
     ;;
   windows)
     ((${#names[@]} == 3)) || fail "Windows metadata must declare exactly three artifacts"

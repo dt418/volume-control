@@ -89,6 +89,10 @@ jobs:
       - name: Run platform core checks
         shell: bash
         run: cargo test --workspace --no-default-features
+      - name: Run installer script checks
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: bash scripts/test-install-unix.sh
       - name: Build release Tauri host
         shell: bash
         run: |

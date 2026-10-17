@@ -255,6 +255,7 @@
       <div class="tabs" role="tablist" aria-label="Package tool">
         <button class="tab" role="tab" id="tab-ps" aria-selected="true"  data-tab="ps">PowerShell · irm</button>
         <button class="tab" role="tab" id="tab-curl" aria-selected="false" data-tab="curl">curl</button>
+        <button class="tab" role="tab" id="tab-unix" aria-selected="false" data-tab="unix">macOS / Linux</button>
         <button class="tab" role="tab" id="tab-winget" aria-selected="false" data-tab="winget">winget</button>
       </div>
 
@@ -334,7 +335,7 @@
         <tr><td class="os">Global hotkeys</td><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
         <tr><td class="os">Mixer / Settings / Help</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
         <tr><td class="os">Native overlay &amp; tray</td><td class="yes">✅ native</td><td class="manual">🔜 host integration</td><td class="manual">🔜 host integration</td></tr>
-        <tr><td class="os">Remote install commands</td><td class="yes">✅ irm · curl · winget</td><td class="manual">manual app bundle</td><td class="manual">tarball release</td></tr>
+        <tr><td class="os">Remote install commands</td><td class="yes">✅ irm · curl · winget</td><td class="yes">✅ curl installer</td><td class="yes">✅ curl installer</td></tr>
       </tbody>
     </table>
   </section>
@@ -414,10 +415,26 @@
     return "winget install --id dt418.VolumeControl";
   }
 
+  function unix(action) {
+    // macOS and Linux ship their own verified installer next to the package;
+    // both verify SHA-256 against the release manifest before installing.
+    var body =
+      '# macOS: install-macos.sh   Linux: install-linux.sh\n' +
+      'curl -fsSL "' + BASE + '/install-macos.sh" | bash -s -- ' + action;
+    if (action === "update") {
+      return body + '   # pin a tag: VOLUMECTL_VERSION=v0.1.5 bash -s -- update';
+    }
+    if (action === "uninstall") {
+      return body + '   # removes the app/binary; config is preserved';
+    }
+    return body + '   # verifies SHA256SUMS.txt, then installs under $HOME';
+  }
+
   var SNIPPETS = {
     ps: ps,
     curl: curl,
-    winget: winget
+    winget: winget,
+    unix: unix
   };
 
   var state = { tab: "ps", action: "install" };

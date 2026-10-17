@@ -243,6 +243,21 @@ else
 fi
 rm -rf "$winget_out"
 
+# macOS/Linux one-line installers ride the same release contract as the
+# Windows bootstrap: staged per platform, declared in metadata, verified.
+if contains "$repo/scripts/package.sh" 'install-macos\.sh' && \
+   contains "$repo/scripts/package.sh" 'install-linux\.sh'; then
+  report ok 'package.sh stages the macOS and Linux installers'
+else
+  report FAIL 'package.sh stages the macOS and Linux installers'
+fi
+
+if contains "$verifier" 'install-macos\.sh' && contains "$verifier" 'install-linux\.sh'; then
+  report ok 'release verifier requires the platform installers'
+else
+  report FAIL 'release verifier requires the platform installers'
+fi
+
 # Resolve HEAD without assuming this shell's git can read this checkout: a
 # worktree created by native Windows git stores a `gitdir: C:/...` pointer in
 # `.git`, which a POSIX git (WSL) cannot follow. Fall back to the converted
@@ -277,6 +292,7 @@ missing_nsis_fixture="$repo/scripts/test-fixtures/release-missing-nsis"
 duplicate_checksum_fixture="$repo/scripts/test-fixtures/release-duplicate-checksum"
 bootstrap_digest_mismatch_fixture="$repo/scripts/test-fixtures/release-bootstrap-mismatch"
 valid_ubuntu="$repo/scripts/test-fixtures/release-valid-ubuntu"
+valid_macos="$repo/scripts/test-fixtures/release-valid-macos"
 
 # The committed valid fixture is anchored to the implementation baseline. On
 # later commits, refresh only its copy so the test continues to exercise the
@@ -328,6 +344,10 @@ valid_ubuntu_copy="$tmp_root/release-valid-ubuntu"
 cp -R "$valid_ubuntu" "$valid_ubuntu_copy"
 refresh_sha "$valid_ubuntu_copy/build-metadata.json"
 
+valid_macos_copy="$tmp_root/release-valid-macos"
+cp -R "$valid_macos" "$valid_macos_copy"
+refresh_sha "$valid_macos_copy/build-metadata.json"
+
 windows_valid_copy="$tmp_root/release-windows-valid"
 cp -R "$windows_valid" "$windows_valid_copy"
 refresh_sha "$windows_valid_copy/build-metadata.json"
@@ -372,6 +392,12 @@ if bash "$verifier" "$valid_ubuntu_copy" "$expected_sha" ubuntu >/dev/null; then
   report ok 'ubuntu artifact-array fixture passes'
 else
   report FAIL 'ubuntu artifact-array fixture passes'
+fi
+
+if bash "$verifier" "$valid_macos_copy" "$expected_sha" macos >/dev/null; then
+  report ok 'macos artifact-array fixture passes'
+else
+  report FAIL 'macos artifact-array fixture passes'
 fi
 
 if bash "$verifier" "$windows_valid_copy" "$expected_sha" windows >/dev/null; then

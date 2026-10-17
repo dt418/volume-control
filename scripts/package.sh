@@ -74,6 +74,19 @@ if [ "$platform" = "windows" ]; then
   cp scripts/Install-VolumeControl.ps1 dist/Install-VolumeControl.ps1
 fi
 
+# macOS/Linux ship their own one-line installers next to the package so the
+# product-page curl commands can verify and install from the same release.
+case "$platform" in
+  macos)
+    test -s packaging/install-macos.sh || { echo "missing packaging/install-macos.sh" >&2; exit 1; }
+    cp packaging/install-macos.sh dist/install-macos.sh
+    ;;
+  ubuntu)
+    test -s packaging/install-linux.sh || { echo "missing packaging/install-linux.sh" >&2; exit 1; }
+    cp packaging/install-linux.sh dist/install-linux.sh
+    ;;
+esac
+
 # sha256sum is absent on macOS runners; shasum -a 256 is the portable form.
 # The manifest covers every staged file with sorted canonical entries shaped
 # "<64 hex><two spaces><basename>": no directory prefixes, no binary-mode

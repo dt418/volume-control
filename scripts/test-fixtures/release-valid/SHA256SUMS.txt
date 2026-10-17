@@ -1,1 +1,3 @@
-c208935ff7856f2a555410d17b68798d83d241d974ea320f9424645879e61acf  volumecontrol-test.tar.gz
+c92a33fbebfc151256cecbeda2a07e2f61c41fcebc0d506fbfaebebbd95fc84f  build-metadata.json
+999b140517a0b685b7839c93ae41e40e7e4058627c6b0cdc0b693a8139e4f32c  install-linux.sh
+c208935ff7856f2a555410d17b68798d83d241d974ea320f9424645879e61acf  volumecontrol-0.0.0-ubuntu.tar.gz
