@@ -30,6 +30,8 @@
 - CI now runs `scripts/test-install-unix.sh` natively on the macOS and
   Ubuntu jobs; the product page gains a macOS/Linux tab and marks the
   remote-install row complete for both.
+- Added the MIT `LICENSE` file at the repo root (README already claimed MIT;
+  the winget manifest `LicenseUrl` also needs it to resolve).
 
 ## Session 106 (2026-10-17) - Release v0.1.5 preparation
 

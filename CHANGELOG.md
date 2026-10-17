@@ -23,6 +23,11 @@ All notable changes to VolumeControl are documented here.
   the test suite now decodes the script as cp1252 and asserts that it parses
   and renders the Vietnamese messages correctly.
 
+### Repository
+
+- Added the MIT `LICENSE` file the README already claimed (also required by
+  the winget manifest's `LicenseUrl`).
+
 ## [0.1.5] - 2026-10-17
 
 ### Added

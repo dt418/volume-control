@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-10-17T02:00",
+    "last_updated":  "2026-10-17T08:30",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -29,7 +29,8 @@
                                                   "CI (required before the tag): the macOS and Ubuntu jobs of the pull request run bash scripts/test-install-unix.sh natively; the release workflow then publishes install-macos.sh / install-linux.sh next to each package."
                                               ],
                              "evidence":  [
-                                              "Session 107 (2026-10-17): live check of the published v0.1.5 assets found the documented irm one-liner broken (irm on Windows PowerShell 5.1 returned the UTF-8 BOM as i\u00bb\u00bf and scriptblock::Create raised a parse error); the bootstrap is now ASCII-only with [char] escapes, and the local irm simulation parses and renders VI correctly. packaging/install-macos.sh and packaging/install-linux.sh were added, staged per platform in scripts/package.sh, required by scripts/verify-release-metadata.sh, covered by fixtures (release-valid-macos added; ubuntu fixtures renamed to the real -ubuntu.tar.gz pattern), documented on the product page (macOS/Linux tab) and run in CI on macOS/Ubuntu."
+                                              "Session 107 (2026-10-17): live check of the published v0.1.5 assets found the documented irm one-liner broken (irm on Windows PowerShell 5.1 returned the UTF-8 BOM as i\u00bb\u00bf and scriptblock::Create raised a parse error); the bootstrap is now ASCII-only with [char] escapes, and the local irm simulation parses and renders VI correctly. packaging/install-macos.sh and packaging/install-linux.sh were added, staged per platform in scripts/package.sh, required by scripts/verify-release-metadata.sh, covered by fixtures (release-valid-macos added; ubuntu fixtures renamed to the real -ubuntu.tar.gz pattern), documented on the product page (macOS/Linux tab) and run in CI on macOS/Ubuntu.",
+                                              "Session 107 (2026-10-17, follow-up): added the MIT LICENSE file at the repo root (README already claimed MIT; the winget manifest LicenseUrl needs it to resolve) and confirmed the published NSIS asset (VolumeControl_0.1.5_x64-setup.exe, HTTP 200) while winget itself still reports no dt418 package until the winget-pkgs submission lands."
                                           ],
                              "notes":  "The bash installers are exercised end-to-end by scripts/test-install-unix.sh on any POSIX shell with curl; CI runs the same suite natively on macOS and Ubuntu. Windows keeps its PowerShell bootstrap and the winget manifest path."
                          },                     {
