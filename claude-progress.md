@@ -24,6 +24,10 @@
   `dd status=none` and `find -maxdepth/-mindepth/-quit` replaced with
   portable forms in `scripts/package.sh`, the two installers, and
   `scripts/test-install-unix.sh`; harness + installer suite still pass.
+- Installer-test fixtures are now `chmod +x` (MSYS treats every file as
+  executable, so the `-x` assertions only failed on Linux/macOS), and the
+  suite prints the captured installer output on failing assertions for
+  diagnosable CI logs.
 
 ## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
 
