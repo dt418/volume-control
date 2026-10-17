@@ -1,5 +1,19 @@
 # Progress Log
 
+## Session 106 (2026-10-17) - Release v0.1.5 preparation
+
+- Version bump 0.1.4 -> 0.1.5 in the workspace `Cargo.toml`, `volumectl`,
+  `volumecontrol-tauri`, `src-tauri/tauri.conf.json`, and
+  `frontend/package.json`; `Cargo.lock` refreshed by `cargo check`.
+- `CHANGELOG.md` gains the `[0.1.5] - 2026-10-17` section: verified Windows
+  bootstrap, EN/VI UI + tray update check, release tooling (multi-asset
+  packaging, fail-closed verifier, immutable publish, product page, winget
+  manifest generator), the startup stage trace, MSRV-pinned clippy, and the
+  harness/macOS compile fixes.
+- Tag `v0.1.5` is pushed only after PR CI is green; the tag-triggered
+  release workflow publishes the immutable asset set that makes
+  `releases/latest/download/` serve the one-line install commands.
+
 ## Session 105 (2026-10-17) - macOS host: AppAction::CheckUpdates compile fix
 
 - Goal: unblock PR #43 CI; the macOS job failed before running its tests.

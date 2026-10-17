@@ -1,5 +1,14 @@
 # Session Handoff
 
+## Session 106 (2026-10-17) - Release v0.1.5 preparation
+
+Branch `chore/release-0.1.5` (worktree `volume-control-release-015`, forked
+from `main` at 8f366cc) bumps every product version to 0.1.5 and writes the
+`[0.1.5]` CHANGELOG section. The tag `v0.1.5` is pushed only after the PR
+CI is green, so the release workflow publishes the verified asset set
+(bootstrap script, NSIS installer, three packages, canonical SHA256SUMS.txt)
+that the product page and the in-app update check depend on.
+
 ## Session 104 (2026-10-17) - Bilingual UI (EN/VI) + tray update check
 
 Branch `feat/app-i18n` (worktree `volume-control-app-i18n`, forked from
