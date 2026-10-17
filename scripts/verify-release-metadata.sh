@@ -233,26 +233,34 @@ done <<< "$metadata_values"
 
 case "$expected_platform" in
   macos)
-    ((${#names[@]} == 2)) || fail "macOS metadata must declare exactly two artifacts"
+    ((${#names[@]} == 3)) || fail "macOS metadata must declare exactly three artifacts"
     zips=0
     scripts=0
+    dmgs=0
     for name in "${names[@]}"; do
       [[ "$name" == volumecontrol-*-macos.zip ]] && zips=$((zips + 1))
       [[ "$name" == install-macos.sh ]] && scripts=$((scripts + 1))
+      [[ "$name" == volumecontrol-*-macos.dmg ]] && dmgs=$((dmgs + 1))
     done
-    [[ "$zips" -eq 1 && "$scripts" -eq 1 ]] \
-      || fail "macOS metadata must declare one macos zip and install-macos.sh"
+    [[ "$zips" -eq 1 && "$scripts" -eq 1 && "$dmgs" -eq 1 ]] \
+      || fail "macOS metadata must declare one macos zip, install-macos.sh, and one dmg"
     ;;
   ubuntu)
-    ((${#names[@]} == 2)) || fail "Ubuntu metadata must declare exactly two artifacts"
+    ((${#names[@]} == 5)) || fail "Ubuntu metadata must declare exactly five artifacts"
     tarballs=0
     scripts=0
+    debs=0
+    rpms=0
+    appimages=0
     for name in "${names[@]}"; do
       [[ "$name" == volumecontrol-*-ubuntu.tar.gz ]] && tarballs=$((tarballs + 1))
       [[ "$name" == install-linux.sh ]] && scripts=$((scripts + 1))
+      [[ "$name" == volumecontrol-*-ubuntu.deb ]] && debs=$((debs + 1))
+      [[ "$name" == volumecontrol-*-ubuntu.rpm ]] && rpms=$((rpms + 1))
+      [[ "$name" == volumecontrol-*-ubuntu.AppImage ]] && appimages=$((appimages + 1))
     done
-    [[ "$tarballs" -eq 1 && "$scripts" -eq 1 ]] \
-      || fail "Ubuntu metadata must declare one ubuntu tarball and install-linux.sh"
+    [[ "$tarballs" -eq 1 && "$scripts" -eq 1 && "$debs" -eq 1 && "$rpms" -eq 1 && "$appimages" -eq 1 ]] \
+      || fail "Ubuntu metadata must declare one tarball, install-linux.sh, one deb, one rpm, and one AppImage"
     ;;
   windows)
     ((${#names[@]} == 3)) || fail "Windows metadata must declare exactly three artifacts"

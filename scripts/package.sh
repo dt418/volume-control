@@ -80,10 +80,22 @@ case "$platform" in
   macos)
     test -s packaging/install-macos.sh || { echo "missing packaging/install-macos.sh" >&2; exit 1; }
     cp packaging/install-macos.sh dist/install-macos.sh
+    dmg="$(find target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit 2>/dev/null || true)"
+    test -n "$dmg" && test -s "$dmg" || { echo "release dmg missing under target/release/bundle/dmg" >&2; exit 1; }
+    cp "$dmg" "dist/volumecontrol-${version}-macos.dmg"
     ;;
   ubuntu)
     test -s packaging/install-linux.sh || { echo "missing packaging/install-linux.sh" >&2; exit 1; }
     cp packaging/install-linux.sh dist/install-linux.sh
+    deb="$(find target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null || true)"
+    rpm="$(find target/release/bundle/rpm -maxdepth 1 -name '*.rpm' -print -quit 2>/dev/null || true)"
+    appimage="$(find target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit 2>/dev/null || true)"
+    test -n "$deb" && test -s "$deb" || { echo "release deb missing under target/release/bundle/deb" >&2; exit 1; }
+    test -n "$rpm" && test -s "$rpm" || { echo "release rpm missing under target/release/bundle/rpm" >&2; exit 1; }
+    test -n "$appimage" && test -s "$appimage" || { echo "release appimage missing under target/release/bundle/appimage" >&2; exit 1; }
+    cp "$deb" "dist/volumecontrol-${version}-ubuntu.deb"
+    cp "$rpm" "dist/volumecontrol-${version}-ubuntu.rpm"
+    cp "$appimage" "dist/volumecontrol-${version}-ubuntu.AppImage"
     ;;
 esac
 

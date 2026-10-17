@@ -182,7 +182,8 @@ Các hành động thường dùng:
   về bộ cài unsigned `VolumeControl_<version>_x64-setup.exe` ở lần chạy đầu.
 
 Các lệnh từ xa một dòng (PowerShell `irm`, `curl`, `winget`) nằm trên trang
-sản phẩm: <https://dt418.github.io/volume-control/>.
+sản phẩm: <https://dt418.github.io/volume-control/>. Bản phát hành cũng kèm
+gói cài bản địa: `.deb`, `.rpm`, `.AppImage` cho Linux và `.dmg` cho macOS.
 
 ## Trạng thái nền tảng
 

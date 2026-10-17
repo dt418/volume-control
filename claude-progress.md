@@ -1,5 +1,26 @@
 # Progress Log
 
+## Session 108 (2026-10-17) - Native Linux and macOS packages
+
+- desktop-validation: macOS builds `tauri build --bundles dmg --ci`; Ubuntu
+  builds `--bundles deb,rpm,appimage` (the apt step now installs `rpm`);
+  Windows keeps `--bundles nsis`.
+- `scripts/package.sh` stages the bundles as
+  `volumecontrol-<ver>-macos.dmg` and
+  `volumecontrol-<ver>-ubuntu.{deb,rpm,AppImage}` (fail-closed when a bundle
+  is missing) next to the archives and installer scripts.
+- `scripts/verify-release-metadata.sh`: macOS sets are now
+  zip + install-macos.sh + dmg (3); Ubuntu sets are
+  tarball + install-linux.sh + deb + rpm + AppImage (5); Windows unchanged (3).
+- Fixtures: `release-valid-macos` gained a dmg stub and the two valid Ubuntu
+  fixtures gained deb/rpm/AppImage stubs with refreshed canonical manifests
+  and metadata.
+- `scripts/test-release-workflow.sh`: the bundle build flags and the package
+  staging are asserted; the old "other platforms skip bundling" check is
+  replaced by the per-platform bundle contract.
+- Docs: README (EN/VI) names the native packages; CHANGELOG [Unreleased]
+  records them. `bash scripts/test-release-workflow.sh` passes locally.
+
 ## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
 
 - Live verification of the published v0.1.5 assets: `releases/latest` is

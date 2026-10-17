@@ -1,6 +1,6 @@
 {
     "project":  "volume-control",
-    "last_updated":  "2026-10-17T09:10",
+    "last_updated":  "2026-10-17T09:40",
     "rules":  {
                   "single_active_feature":  true,
                   "passing_requires_evidence":  true,
@@ -16,6 +16,21 @@
                       },
     "features":  [
                          {
+                             "id":  "vol-093",
+                             "priority":  93,
+                             "area":  "release",
+                             "title":  "Native Linux and macOS packages in every release",
+                             "user_visible_behavior":  "Each release ships native packages next to the archives: .deb, .rpm, and .AppImage for Linux and a .dmg for macOS, built by the platform jobs, staged under canonical names, declared in the release metadata, and verified before publish.",
+                             "status":  "in_progress",
+                             "verification":  [
+                                                  "Local: bash scripts/test-release-workflow.sh passes with the expanded per-platform sets (macOS: zip + installer + dmg; Ubuntu: tarball + installer + deb + rpm + AppImage) and the refreshed fixtures.",
+                                                  "CI (required before the tag): the macOS job builds --bundles dmg and the Ubuntu job builds --bundles deb,rpm,appimage; both jobs then run package.sh, the verifier and the installer suite."
+                                              ],
+                             "evidence":  [
+                                              "Session 108 (2026-10-17): desktop-validation builds dmg on macOS and deb/rpm/appimage on Ubuntu (rpm toolchain added to the apt step); package.sh stages volumecontrol-<ver>-macos.dmg and volumecontrol-<ver>-ubuntu.{deb,rpm,AppImage}; the verifier requires the new sets; fixtures gained dmg/deb/rpm/AppImage stubs; README (EN/VI) and the CHANGELOG mention the packages."
+                                          ],
+                             "notes":  "The archives (zip/tarball) stay the install path for the one-line scripts; the native packages are additive for users who prefer their distro/OS package managers."
+                         },                     {
                              "id":  "vol-092",
                              "priority":  92,
                              "area":  "release",

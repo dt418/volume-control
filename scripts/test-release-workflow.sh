@@ -134,10 +134,11 @@ fi
 # publish must stage a flat immutable release-assets directory.
 if contains "$validation" 'matrix\.platform == .windows.' && \
    contains "$validation" 'tauri build --bundles nsis --ci' && \
-   contains "$validation" 'tauri build --no-bundle --ci'; then
-  report ok 'windows validation builds NSIS bundle while other platforms skip bundling'
+   contains "$validation" 'tauri build --bundles dmg --ci' && \
+   contains "$validation" 'tauri build --bundles deb,rpm,appimage --ci'; then
+  report ok 'validation builds nsis, dmg, and deb/rpm/appimage bundles per platform'
 else
-  report FAIL 'windows validation builds NSIS bundle while other platforms skip bundling'
+  report FAIL 'validation builds nsis, dmg, and deb/rpm/appimage bundles per platform'
 fi
 
 if contains "$validation" 'artifacts:[[:space:]]' && \
@@ -256,6 +257,22 @@ if contains "$verifier" 'install-macos\.sh' && contains "$verifier" 'install-lin
   report ok 'release verifier requires the platform installers'
 else
   report FAIL 'release verifier requires the platform installers'
+fi
+
+if contains "$validation" 'bundles deb,rpm,appimage' && \
+   contains "$validation" 'bundles dmg'; then
+  report ok 'desktop validation bundles deb/rpm/AppImage and dmg per platform'
+else
+  report FAIL 'desktop validation bundles deb/rpm/AppImage and dmg per platform'
+fi
+
+if contains "$repo/scripts/package.sh" 'ubuntu\.deb' && \
+   contains "$repo/scripts/package.sh" 'ubuntu\.rpm' && \
+   contains "$repo/scripts/package.sh" 'ubuntu\.AppImage' && \
+   contains "$repo/scripts/package.sh" 'macos\.dmg'; then
+  report ok 'package.sh stages the Linux and macOS bundles'
+else
+  report FAIL 'package.sh stages the Linux and macOS bundles'
 fi
 
 # Resolve HEAD without assuming this shell's git can read this checkout: a

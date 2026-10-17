@@ -1,5 +1,14 @@
 # Session Handoff
 
+## Session 108 (2026-10-17) - Native Linux and macOS packages
+
+Branch `chore/release-0.1.5` adds native packages to the release contract:
+`dmg` on macOS and `deb`/`rpm`/`AppImage` on Ubuntu, staged by `package.sh`
+under canonical names, required by the verifier (macOS 3 artifacts, Ubuntu
+5), covered by fixtures, asserted in the release harness, and documented in
+the READMEs + CHANGELOG. Next: PR, CI (macOS/Ubuntu bundle builds are the
+proof), merge, tag v0.1.7.
+
 ## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
 
 Branch `chore/release-0.1.5` (worktree `volume-control-release-015`)

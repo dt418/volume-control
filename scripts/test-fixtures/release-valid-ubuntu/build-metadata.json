@@ -10,6 +10,18 @@
       "sha256": "999b140517a0b685b7839c93ae41e40e7e4058627c6b0cdc0b693a8139e4f32c"
     },
     {
+      "name": "volumecontrol-0.0.0-ubuntu.AppImage",
+      "sha256": "93fb345837a64de2e1cbcc3e482b4005fe5ff0e052a95f273a1c3b9b941138c1"
+    },
+    {
+      "name": "volumecontrol-0.0.0-ubuntu.deb",
+      "sha256": "701f9b8fa1eacab3c857b3013e33373818a4d1306b3cb83493997490ba658047"
+    },
+    {
+      "name": "volumecontrol-0.0.0-ubuntu.rpm",
+      "sha256": "2be1f1658b9b1647d44a7fc170af3d14f19bfa1f45ff9ebd383359b2d1f835e4"
+    },
+    {
       "name": "volumecontrol-0.0.0-ubuntu.tar.gz",
       "sha256": "c208935ff7856f2a555410d17b68798d83d241d974ea320f9424645879e61acf"
     }

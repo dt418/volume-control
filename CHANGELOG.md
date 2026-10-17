@@ -4,6 +4,14 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Native packages in every release: the macOS job now builds a `.dmg` and
+  the Ubuntu job builds `.deb`, `.rpm`, and `.AppImage` bundles (Tauri
+  bundlers) alongside the zip and tarball; `package.sh` stages them under
+  canonical names, `verify-release-metadata.sh` requires them per platform,
+  and the fixture matrix covers the new sets.
+
 ## [0.1.6] - 2026-10-17
 
 ### Added
