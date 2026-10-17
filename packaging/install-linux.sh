@@ -137,7 +137,7 @@ resolve_tag() {
 
 tag="$(resolve_tag)"
 version="${tag#v}"
-tar_name="volumecontrol-${version}-ubuntu.tar.gz"
+tar_name="volumecontrol-${version}-linux-amd64.tar.gz"
 asset_dir="$RELEASE_BASE/download/$tag"
 [[ "$RELEASE_BASE" == file://* ]] && asset_dir="$RELEASE_BASE/$tag"
 

@@ -65,7 +65,7 @@ mkdir -p "$linux_dir"
 printf '#!/bin/sh\necho harness-free linux stub\n' > "$linux_dir/volumectl"
 chmod +x "$linux_dir/volumectl"
 printf 'readme' > "$linux_dir/README.md"
-(cd "$linux_dir" && tar czf "$release_dir/volumecontrol-$version-ubuntu.tar.gz" volumectl README.md)
+(cd "$linux_dir" && tar czf "$release_dir/volumecontrol-$version-linux-amd64.tar.gz" volumectl README.md)
 
 # Canonical manifest (sorted basenames, two spaces).
 (
@@ -215,15 +215,15 @@ else
   report FAIL 'linux update reinstalls the verified binary'
 fi
 
-cp "$release_dir/volumecontrol-$version-ubuntu.tar.gz" "$release_dir/keep.tar.gz"
-printf 'x' | dd of="$release_dir/volumecontrol-$version-ubuntu.tar.gz" bs=1 seek=10 conv=notrunc 2>/dev/null
+cp "$release_dir/volumecontrol-$version-linux-amd64.tar.gz" "$release_dir/keep.tar.gz"
+printf 'x' | dd of="$release_dir/volumecontrol-$version-linux-amd64.tar.gz" bs=1 seek=10 conv=notrunc 2>/dev/null
 if out="$(run_linux install "$fixture_root/linux-bad" 2>&1)"; then
   report FAIL 'linux install rejects a digest mismatch'
 else
   case "$out" in *"SHA-256 mismatch"*) report ok 'linux install rejects a digest mismatch' ;;
                  *) report FAIL 'linux install rejects a digest mismatch' ;; esac
 fi
-mv "$release_dir/keep.tar.gz" "$release_dir/volumecontrol-$version-ubuntu.tar.gz"
+mv "$release_dir/keep.tar.gz" "$release_dir/volumecontrol-$version-linux-amd64.tar.gz"
 
 if out="$(run_linux uninstall "$linux_root" 2>&1)"; then
   case "$out" in *"Removed VolumeControl"*) report ok 'linux uninstall removes the installed files' ;;

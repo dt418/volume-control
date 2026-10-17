@@ -32,6 +32,19 @@
   3.2; the installers and the release verifier now lowercase through
   `tr "[:upper:]" "[:lower:]"`. Suites stay green locally.
 
+
+### Session 108 follow-up (Linux asset naming + CI bundle path)
+
+- Linux bundles are named `volumecontrol-<ver>-linux-amd64.{tar.gz,deb,rpm,AppImage}`:
+  `-ubuntu.rpm` was a Fedora/RHEL package labelled after its build host.
+  `package.sh`, `packaging/install-linux.sh`, the verifier set patterns, the
+  docs checklist and every fixture follow the new scheme.
+- `ci.yml` macOS job builds `--bundles dmg` (was `--no-bundle`) so the
+  validation packaging step that calls `package.sh` can stage the dmg; the
+  harness asserts that flag.
+- `package.sh` bundle lookups end in `|| true` so a missing bundle prints the
+  explicit error instead of dying silently under `set -e` + `pipefail`.
+
 ## Session 107 (2026-10-17) - macOS/Linux installers + cp1252-safe bootstrap
 
 - Live verification of the published v0.1.5 assets: `releases/latest` is

@@ -253,11 +253,11 @@ case "$expected_platform" in
     rpms=0
     appimages=0
     for name in "${names[@]}"; do
-      [[ "$name" == volumecontrol-*-ubuntu.tar.gz ]] && tarballs=$((tarballs + 1))
+      [[ "$name" == volumecontrol-*-linux-amd64.tar.gz ]] && tarballs=$((tarballs + 1))
       [[ "$name" == install-linux.sh ]] && scripts=$((scripts + 1))
-      [[ "$name" == volumecontrol-*-ubuntu.deb ]] && debs=$((debs + 1))
-      [[ "$name" == volumecontrol-*-ubuntu.rpm ]] && rpms=$((rpms + 1))
-      [[ "$name" == volumecontrol-*-ubuntu.AppImage ]] && appimages=$((appimages + 1))
+      [[ "$name" == volumecontrol-*-linux-amd64.deb ]] && debs=$((debs + 1))
+      [[ "$name" == volumecontrol-*-linux-amd64.rpm ]] && rpms=$((rpms + 1))
+      [[ "$name" == volumecontrol-*-linux-amd64.AppImage ]] && appimages=$((appimages + 1))
     done
     [[ "$tarballs" -eq 1 && "$scripts" -eq 1 && "$debs" -eq 1 && "$rpms" -eq 1 && "$appimages" -eq 1 ]] \
       || fail "Ubuntu metadata must declare one tarball, install-linux.sh, one deb, one rpm, and one AppImage"

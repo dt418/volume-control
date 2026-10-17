@@ -266,13 +266,19 @@ else
   report FAIL 'desktop validation bundles deb/rpm/AppImage and dmg per platform'
 fi
 
-if contains "$repo/scripts/package.sh" 'ubuntu\.deb' && \
-   contains "$repo/scripts/package.sh" 'ubuntu\.rpm' && \
-   contains "$repo/scripts/package.sh" 'ubuntu\.AppImage' && \
+if contains "$repo/scripts/package.sh" 'linux-amd64\.deb' && \
+   contains "$repo/scripts/package.sh" 'linux-amd64\.rpm' && \
+   contains "$repo/scripts/package.sh" 'linux-amd64\.AppImage' && \
    contains "$repo/scripts/package.sh" 'macos\.dmg'; then
   report ok 'package.sh stages the Linux and macOS bundles'
 else
   report FAIL 'package.sh stages the Linux and macOS bundles'
+fi
+
+if contains "$repo/.github/workflows/ci.yml" 'tauri build --bundles dmg --ci'; then
+  report ok 'ci macOS job bundles the dmg that package.sh stages'
+else
+  report FAIL 'ci macOS job bundles the dmg that package.sh stages'
 fi
 
 # Resolve HEAD without assuming this shell's git can read this checkout: a
