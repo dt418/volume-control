@@ -18,8 +18,10 @@
     --border: #e2e5ee;
     --accent: #3b6cf6;
     --accent-2: #7a4df6;
+    --link: #2f5ee0;
+    --on-accent: #ffffff;
     --ok: #12855a;
-    --warn: #9a6400;
+    --warn: #865800;
     --code-bg: #10141d;
     --code-fg: #e7ecf6;
     --code-muted: #8b93a7;
@@ -38,13 +40,16 @@
       --border: #262b38;
       --accent: #6f93ff;
       --accent-2: #a184ff;
+      --link: #6f93ff;
+      --on-accent: #0b0d14;
       --ok: #4fd39a;
       --warn: #e8b34b;
       --shadow: 0 10px 30px rgba(0, 0, 0, .35);
     }
   }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-padding-top: 28px; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
   body {
     margin: 0;
     font: 16px/1.6 ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -53,9 +58,21 @@
     background-image: var(--bg-grad);
     background-attachment: fixed;
   }
-  a { color: var(--accent); text-decoration: none; }
+  a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 6px; }
   .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  .skip {
+    position: absolute; left: 12px; top: -60px; z-index: 100;
+    background: var(--surface); color: var(--fg); border: 1px solid var(--border);
+    padding: 10px 14px; border-radius: 10px; font-weight: 600;
+  }
+  .skip:focus { top: 10px; }
 
   header {
     position: sticky; top: 0; z-index: 50;
@@ -66,14 +83,15 @@
   .bar { display: flex; align-items: center; gap: 14px; height: 60px; }
   .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; color: var(--fg); }
   .logo svg { display: block; }
+  .logo:hover { text-decoration: none; }
   nav { margin-left: auto; display: flex; gap: 20px; align-items: center; }
   nav a { color: var(--muted); font-weight: 500; font-size: 14.5px; }
   nav a:hover { color: var(--fg); text-decoration: none; }
   nav .gh {
-    color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2));
     padding: 7px 14px; border-radius: 999px; font-weight: 600;
   }
-  nav .gh:hover { text-decoration: none; filter: brightness(1.08); }
+  nav .gh:hover { color: var(--on-accent); text-decoration: none; filter: brightness(1.08); }
 
   .hero { padding: 84px 0 40px; text-align: center; }
   .pill {
@@ -82,7 +100,7 @@
     color: var(--muted); border-radius: 999px; padding: 6px 14px;
     font-size: 13.5px; font-weight: 600; box-shadow: var(--shadow);
   }
-  .pill b { color: var(--accent); }
+  .pill b { color: var(--link); }
   h1 {
     font-size: clamp(38px, 6vw, 64px); line-height: 1.06; margin: 22px 0 14px;
     letter-spacing: -1.5px;
@@ -91,16 +109,18 @@
     background: linear-gradient(100deg, var(--accent), var(--accent-2) 60%, #ff7ac6);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
+  @media (forced-colors: active) { h1 .grad { background: none; color: CanvasText; } }
   .sub { font-size: clamp(16px, 2vw, 19px); color: var(--muted); max-width: 680px; margin: 0 auto; }
   .cta { display: flex; gap: 14px; justify-content: center; margin-top: 30px; flex-wrap: wrap; }
   .btn {
     display: inline-block; padding: 12px 22px; border-radius: 12px; font-weight: 650;
     font-size: 15.5px; border: 1px solid transparent; cursor: pointer;
   }
-  .btn-primary { color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow); }
-  .btn-primary:hover { text-decoration: none; filter: brightness(1.08); }
+  .btn:hover { text-decoration: none; }
+  .btn-primary { color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow); }
+  .btn-primary:hover { filter: brightness(1.08); }
   .btn-ghost { color: var(--fg); background: var(--surface); border-color: var(--border); }
-  .btn-ghost:hover { text-decoration: none; border-color: var(--accent); }
+  .btn-ghost:hover { border-color: var(--accent); }
 
   .keys { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 34px; }
   kbd {
@@ -121,7 +141,8 @@
   .tabs { display: flex; gap: 4px; padding: 12px 12px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .tab {
     border: 0; background: transparent; color: var(--muted);
-    font: 600 14.5px/1 inherit; padding: 11px 16px; cursor: pointer;
+    font-family: inherit; font-size: 14.5px; font-weight: 600; line-height: 1;
+    padding: 11px 16px; cursor: pointer;
     border-radius: 10px 10px 0 0; border-bottom: 2px solid transparent;
   }
   .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); background: var(--surface-2); }
@@ -130,11 +151,12 @@
   .actions .cap { color: var(--muted); font-size: 13px; font-weight: 600; margin-right: 4px; }
   .chip {
     border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
-    font: 600 13.5px/1 inherit; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    font-family: inherit; font-size: 13.5px; font-weight: 600; line-height: 1;
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
   }
-  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .chip:hover { border-color: var(--accent); color: var(--fg); }
-  .chip[aria-pressed="true"]:hover { color: #fff; }
+  .chip[aria-pressed="true"]:hover { color: var(--on-accent); }
 
   .codebox { margin: 10px 16px 16px; background: var(--code-bg); border-radius: 12px; position: relative; }
   .codebox pre {
@@ -146,15 +168,18 @@
   .copy {
     position: absolute; top: 10px; right: 10px;
     border: 1px solid #2c3446; background: #1a2130; color: #cdd6ea;
-    font: 600 12.5px/1 inherit; padding: 7px 12px; border-radius: 8px; cursor: pointer;
+    font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1;
+    padding: 7px 12px; border-radius: 8px; cursor: pointer;
   }
   .copy:hover { border-color: var(--accent); color: #fff; }
+  .codebox :focus-visible { outline-color: #9db4ff; }
   .note {
     display: flex; gap: 10px; align-items: flex-start;
     margin: 0 16px 16px; padding: 12px 14px; border-radius: 10px; font-size: 14px;
     background: color-mix(in srgb, var(--warn) 12%, var(--surface));
     border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); color: var(--fg);
   }
+  .note[hidden] { display: none; }
   .note b { color: var(--warn); }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
@@ -170,18 +195,25 @@
   .card h3 { margin: 0 0 6px; font-size: 16.5px; }
   .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
 
-  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .table-wrap {
+    overflow-x: auto; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  table { width: 100%; min-width: 680px; border-collapse: collapse; }
   th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 14.5px; }
   thead th { background: var(--surface-2); font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-  tr:last-child td { border-bottom: 0; }
-  td.os { font-weight: 650; }
+  tbody th { font-weight: 650; }
+  thead th:first-child, tbody th { position: sticky; left: 0; z-index: 1; box-shadow: 1px 0 0 var(--border); }
+  tbody th { background: var(--surface); }
+  thead th:first-child { background: var(--surface-2); }
+  tr:last-child th, tr:last-child td { border-bottom: 0; }
   .yes { color: var(--ok); font-weight: 700; }
   .manual { color: var(--warn); font-weight: 650; }
 
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 4px; }
   .fact { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
   .fact .k { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .7px; font-weight: 700; }
-  .fact code { display: block; margin-top: 6px; font: 600 14px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--accent); word-break: break-all; }
+  .fact code { display: block; margin-top: 6px; font: 600 14px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--link); word-break: break-all; }
   .fact p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
 
   .trust {
@@ -195,10 +227,26 @@
 
   footer { margin-top: 70px; border-top: 1px solid var(--border); padding: 28px 0 44px; color: var(--muted); font-size: 14px; }
   .foot { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
-  .foot nav { margin: 0; }
+  .foot nav { margin: 0; flex-wrap: wrap; gap: 6px 14px; }
+  .foot nav a { color: var(--link); font-size: 14px; }
+
+  @media (max-width: 640px) {
+    .wrap { padding: 0 18px; }
+    .bar { gap: 10px; }
+    nav { gap: 14px; }
+    nav a.hide-sm { display: none; }
+    .hero { padding: 52px 0 24px; }
+    section { padding-top: 44px; }
+    .tab { padding: 10px 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
 </style>
 </head>
 <body>
+
+<a class="skip" href="#main">Skip to content</a>
 
 <header>
   <div class="wrap bar">
@@ -211,15 +259,16 @@
       </svg>
       VolumeControl
     </a>
-    <nav>
+    <nav aria-label="Primary">
       <a href="#install">Install</a>
-      <a href="#features">Features</a>
-      <a href="#platform">Platform</a>
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#platform">Platform</a>
       <a class="gh" href="https://github.com/dt418/volume-control" rel="noopener">GitHub</a>
     </nav>
   </div>
 </header>
 
+<main id="main">
 <div class="wrap">
 
   <div class="hero">
@@ -252,11 +301,11 @@
     </p>
 
     <div class="install-card">
-      <div class="tabs" role="tablist" aria-label="Package tool">
-        <button class="tab" role="tab" id="tab-ps" aria-selected="true"  data-tab="ps">PowerShell · irm</button>
-        <button class="tab" role="tab" id="tab-curl" aria-selected="false" data-tab="curl">curl</button>
-        <button class="tab" role="tab" id="tab-unix" aria-selected="false" data-tab="unix">macOS / Linux</button>
-        <button class="tab" role="tab" id="tab-winget" aria-selected="false" data-tab="winget">winget</button>
+      <div class="tabs" role="tablist" aria-label="Install method">
+        <button class="tab" role="tab" id="tab-ps"     aria-controls="snippet-panel" aria-selected="true"  tabindex="0"  data-tab="ps">PowerShell · irm</button>
+        <button class="tab" role="tab" id="tab-curl"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="curl">curl</button>
+        <button class="tab" role="tab" id="tab-unix"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="unix">macOS / Linux</button>
+        <button class="tab" role="tab" id="tab-winget" aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="winget">winget</button>
       </div>
 
       <div class="actions" role="group" aria-label="Action">
@@ -266,10 +315,11 @@
         <button class="chip" data-action="uninstall" aria-pressed="false">uninstall</button>
       </div>
 
-      <div class="codebox">
+      <div class="codebox" id="snippet-panel" role="tabpanel" aria-labelledby="tab-ps">
         <button class="copy" type="button" aria-label="Copy command">Copy</button>
-        <pre id="snippet" role="region" aria-live="polite"><code></code></pre>
+        <pre id="snippet" tabindex="0"><code></code></pre>
       </div>
+      <span class="sr-only" role="status" id="copy-status"></span>
 
       <div class="note" id="winget-note" hidden>
         <span>ℹ</span>
@@ -316,28 +366,30 @@
     <p class="lede">Every surface is native-first; the Tauri views share the
     same Signal Glass design contract as the Win32 overlay.</p>
     <div class="grid">
-      <div class="card"><div class="ico">⌨️</div><h3>Global hotkeys</h3><p>RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
-      <div class="card"><div class="ico">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay with adaptive rendering, fade duration you can tune, and zero page jank.</p></div>
-      <div class="card"><div class="ico">🎚️</div><h3>Mixer surface</h3><p>Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.</p></div>
-      <div class="card"><div class="ico">📦</div><h3>System tray</h3><p>Real tray icon with context menu, mute/reset actions, and app lifecycle that matches platform norms.</p></div>
-      <div class="card"><div class="ico">⚙️</div><h3>Settings &amp; Help</h3><p>Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
-      <div class="card"><div class="ico">🔄</div><h3>Live config reload</h3><p>Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⌨️</div><h3>Global hotkeys</h3><p>RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay with adaptive rendering, fade duration you can tune, and zero page jank.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🎚️</div><h3>Mixer surface</h3><p>Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">📦</div><h3>System tray</h3><p>Real tray icon with context menu, mute/reset actions, and app lifecycle that matches platform norms.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⚙️</div><h3>Settings &amp; Help</h3><p>Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🔄</div><h3>Live config reload</h3><p>Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
     </div>
   </section>
 
   <section id="platform">
-    <h2>Platform status</h2>
+    <h2 id="platform-title">Platform status</h2>
     <p class="lede">Honest coverage: what is fully proven where.</p>
-    <table>
-      <thead><tr><th>Capability</th><th>Windows</th><th>macOS</th><th>Linux</th></tr></thead>
-      <tbody>
-        <tr><td class="os">Volume control</td><td class="yes">✅ WASAPI</td><td class="yes">✅ CoreAudio</td><td class="yes">✅ PulseAudio</td></tr>
-        <tr><td class="os">Global hotkeys</td><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
-        <tr><td class="os">Mixer / Settings / Help</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
-        <tr><td class="os">Native overlay &amp; tray</td><td class="yes">✅ native</td><td class="manual">🔜 host integration</td><td class="manual">🔜 host integration</td></tr>
-        <tr><td class="os">Remote install commands</td><td class="yes">✅ irm · curl · winget</td><td class="yes">✅ curl installer</td><td class="yes">✅ curl installer</td></tr>
-      </tbody>
-    </table>
+    <div class="table-wrap" role="region" aria-labelledby="platform-title" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Capability</th><th scope="col">Windows</th><th scope="col">macOS</th><th scope="col">Linux</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Volume control</th><td class="yes">✅ WASAPI</td><td class="yes">✅ CoreAudio</td><td class="yes">✅ PulseAudio</td></tr>
+          <tr><th scope="row">Global hotkeys</th><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
+          <tr><th scope="row">Mixer / Settings / Help</th><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
+          <tr><th scope="row">Native overlay &amp; tray</th><td class="yes">✅ native</td><td class="manual">🔜 host integration</td><td class="manual">🔜 host integration</td></tr>
+          <tr><th scope="row">Remote install commands</th><td class="yes">✅ irm · curl · winget</td><td class="yes">✅ curl installer</td><td class="yes">✅ curl installer</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <section id="trust">
@@ -362,11 +414,12 @@
   </section>
 
 </div>
+</main>
 
 <footer>
   <div class="wrap foot">
     <span>VolumeControl — MIT licensed · built with Rust + Tauri</span>
-    <nav>
+    <nav aria-label="Footer">
       <a href="https://github.com/dt418/volume-control">Repository</a> ·
       <a href="https://github.com/dt418/volume-control/releases">Releases</a> ·
       <a href="https://github.com/dt418/volume-control/blob/main/docs/testing/cross-platform-release-checklist.md">Release checklist</a>
@@ -440,6 +493,11 @@
   var state = { tab: "ps", action: "install" };
   var codeEl = document.querySelector("#snippet code");
   var wingetNote = document.getElementById("winget-note");
+  var panel = document.getElementById("snippet-panel");
+  var tablist = document.querySelector("[role=tablist]");
+  var tabs = [].slice.call(tablist.querySelectorAll("[role=tab]"));
+  var copyBtn = document.querySelector(".copy");
+  var copyStatus = document.getElementById("copy-status");
 
   function render() {
     var raw = SNIPPETS[state.tab](state.action);
@@ -448,35 +506,65 @@
     html = html.replace(/(^|\n)(#[^\n]*)/g, '$1<span class="cm">$2</span>');
     codeEl.innerHTML = html;
     wingetNote.hidden = state.tab !== "winget";
-    document.querySelectorAll(".tab").forEach(function (b) {
-      b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
+    tabs.forEach(function (b) {
+      var on = b.dataset.tab === state.tab;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
     });
+    panel.setAttribute("aria-labelledby", "tab-" + state.tab);
     document.querySelectorAll(".chip").forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.dataset.action === state.action));
     });
   }
 
-  document.querySelectorAll(".tab").forEach(function (b) {
+  tabs.forEach(function (b) {
     b.addEventListener("click", function () { state.tab = b.dataset.tab; render(); });
+  });
+  tablist.addEventListener("keydown", function (e) {
+    var i = tabs.indexOf(document.activeElement), n = null;
+    if (i < 0) return;
+    if (e.key === "ArrowRight") n = (i + 1) % tabs.length;
+    else if (e.key === "ArrowLeft") n = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === "Home") n = 0;
+    else if (e.key === "End") n = tabs.length - 1;
+    if (n === null) return;
+    e.preventDefault();
+    tabs[n].focus();
+    state.tab = tabs[n].dataset.tab;
+    render();
   });
   document.querySelectorAll(".chip").forEach(function (b) {
     b.addEventListener("click", function () { state.action = b.dataset.action; render(); });
   });
 
-  var copyBtn = document.querySelector(".copy");
+  var copyTimer;
+  function flash(label, spoken) {
+    copyBtn.textContent = label;
+    copyStatus.textContent = spoken;
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(function () { copyBtn.textContent = "Copy"; copyStatus.textContent = ""; }, 1800);
+  }
+  function legacyCopy(text) {
+    var ta = document.createElement("textarea"), ok = false;
+    ta.value = text; ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function selectSnippet() {
+    var r = document.createRange(); r.selectNodeContents(codeEl);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  function copyFailed() { selectSnippet(); flash("Press Ctrl+C", "Copy failed. The command is selected; press Control C to copy."); }
+  function copied() { flash("Copied", "Command copied to clipboard"); }
   copyBtn.addEventListener("click", function () {
     var text = codeEl.textContent;
-    function done() {
-      copyBtn.textContent = "Copied";
-      setTimeout(function () { copyBtn.textContent = "Copy"; }, 1400);
-    }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, done);
+      navigator.clipboard.writeText(text).then(copied, function () { legacyCopy(text) ? copied() : copyFailed(); });
     } else {
-      var ta = document.createElement("textarea");
-      ta.value = text; document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); } catch (e) {}
-      document.body.removeChild(ta); done();
+      legacyCopy(text) ? copied() : copyFailed();
     }
   });
 
