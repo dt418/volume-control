@@ -50,8 +50,7 @@ pub mod updates;
 #[cfg(target_os = "windows")]
 pub mod wheel_win32;
 
-/// CLI fallback for non-Windows platforms (also handy for testing).
-#[cfg(not(target_os = "windows"))]
+/// CLI fallback (also provides one-shot commands like check-updates across platforms).
 pub mod cli;
 
 /// Legacy application state retained for callers of the original public API.

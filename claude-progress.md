@@ -14,6 +14,7 @@
   - `frontend/src/settings/UpdateCard.tsx`: new Settings component displaying current version, a "Check for updates" button, live loading state, and update alert banner with release notes link. Mounted in `GeneralSection.tsx`.
   - `frontend/src/settings/UpdateCard.test.tsx`: unit tests covering rendering, update-available banner, and up-to-date status.
 - Verification:
+  - `cargo run -p volumecontrol-tauri -- check-updates`: live smoke test passed; successfully fetched latest release tag and output `VolumeControl is up to date`.
   - `cargo test -p volumectl --lib updates`: passed 7 tests.
   - `cargo test -p volumecontrol-tauri`: passed 17 tests.
   - `npm --prefix frontend test`: passed 18 test files, 108 tests.
