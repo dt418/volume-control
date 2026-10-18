@@ -1,5 +1,17 @@
 # Progress Log
 
+## Session 116 (2026-10-18) - Winget deployment pipeline with REA binary verification
+
+- Goal: automate and verify the Winget packaging and deployment pipeline for VolumeControl, using REA static PE inspection on the release installer, generating schema-valid 1.12.0 manifests, and validating with winget CLI.
+- What landed:
+  - Worktree `feat/winget-deploy` established at `C:/Users/Thanh/orca/volume-control-winget-deploy` from `origin/main`.
+  - `docs/superpowers/plans/2026-10-18-winget-deploy.md`: detailed implementation plan covering REA verification, manifest generation, and deployment orchestration.
+  - `scripts/verify-installer-rea.mjs`: static PE binary verification tool inspecting DOS header, PE machine type (IMAGE_FILE_MACHINE_I386 for NSIS bootstrap), NullsoftInst marker, file size, and full SHA-256. Emits REA-compliant evidence dossier.
+  - `scripts/test-verify-installer-rea.mjs`: regression tests verifying rejection of missing and non-PE files, and valid PE inspection.
+- Verification:
+  - `node scripts/test-verify-installer-rea.mjs` passed 3/3 tests.
+  - REA static PE resource inspection against `VolumeControl_0.1.7_x64-setup.exe` executed via `inspect_pe_resources` and `open_binary`.
+
 ## Session 115 (2026-10-18) - PR #57 Linux CI abort: HUD click-through before realize
 
 - Ask: PR #57's checks were red on `Ubuntu 24.04 (GTK4/libadwaita +

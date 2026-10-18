@@ -16,6 +16,24 @@
   },
   "features": [
     {
+      "id": "vol-099",
+      "priority": 99,
+      "area": "release",
+      "title": "Winget deployment pipeline with REA static PE verification",
+      "user_visible_behavior": "Automated and reproducible Winget deployment pipeline for VolumeControl: REA static PE inspection verifies installer integrity, architecture, and resource sections; emits schema-valid 1.12.0 manifests; validates with winget CLI; and packages PR-ready submission bundles for microsoft/winget-pkgs.",
+      "status": "in_progress",
+      "verification": [
+        "node scripts/test-verify-installer-rea.mjs passes all test cases (rejects non-existent file, rejects invalid PE, accepts valid PE).",
+        "bash scripts/test-winget-deploy.sh passes all smoke checks.",
+        "Live run against VolumeControl_0.1.7_x64-setup.exe produces matching SHA-256 (541C57E8F7B57F571559278E167BE4123923A2CFB22CB776791D84519E30B92B), emits 1.12.0 manifests, and winget validate --manifest passes."
+      ],
+      "evidence": [
+        "Worktree feat/winget-deploy established at C:/Users/Thanh/orca/volume-control-winget-deploy.",
+        "REA static PE resource inspection (inspect_pe_resources) performed on VolumeControl_0.1.7_x64-setup.exe, confirming PE32 machine 0x14c NSIS stub and RT_VERSION/RT_MANIFEST resources."
+      ],
+      "notes": "Integrates REA binary inspection with Winget packaging to prevent submitting corrupted or mismatched installers to microsoft/winget-pkgs."
+    },
+    {
       "id": "vol-098",
       "priority": 98,
       "area": "packaging",
