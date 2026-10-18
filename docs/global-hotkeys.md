@@ -77,6 +77,7 @@ The interactive surfaces (Mixer, Settings, Help) are Tauri v2 webview windows
 Hotkey actions reach them through the Tauri host: the host drains the
 `GlobalHotKeys` channel (20 ms poll) and the wheel bridge, applies actions in
 `AppCore`, and pushes `state://volume` / `state://hotkeys` /
-`state://sessions` events to open surfaces. The native HUD overlay and the
-tray stay native (Windows); the 150 ms host poll also live-reloads the config
+`state://sessions` events to open surfaces. Windows uses the native HUD
+overlay and the native tray; macOS/Linux use the Tauri tray and a webview HUD.
+The 150 ms host poll also live-reloads the config
 and drains tray-menu commands.

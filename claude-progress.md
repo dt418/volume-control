@@ -1,5 +1,116 @@
 # Progress Log
 
+## Session 115 (2026-10-18) - PR #57 Linux CI abort: HUD click-through before realize
+
+- Ask: PR #57's checks were red on `Ubuntu 24.04 (GTK4/libadwaita +
+  layer-shell)` and the required `Release gate`.
+- Classification: the release gate is downstream only — its env showed
+  `checks=success windows=success macos=success ubuntu=failure`. The Ubuntu
+  job on `origin/main` (run 39103837841, same `verify-tauri-e2e.sh --surface
+  all --virtual-audio`, same 7 specs) is green, so the branch regression was
+  real, not infra flake.
+- Root cause: the mixer spec's mute click makes the sink open the HUD window,
+  so the first `window-overlay` creation in the run fired the new
+  build-time `set_ignore_cursor_events(true)`. tao 0.35.3's Linux handler
+  (`platform_impl/linux/event_loop.rs:457`) unwraps the GdkWindow, which a
+  hidden builder window does not have: `thread 'main' panicked ... called
+  'Option::unwrap()' on a 'None' value`, then `panic in a function that
+  cannot unwind. aborting.` The process died, the embedded WebDriver died
+  with it, and wdio reported `ECONNREFUSED` on the next click.
+- Fix (`src-tauri/src/window_manager.rs`): the build-time call is gone;
+  `surface_ready_impl` sends the click-through request right after
+  `window.show()`. Same FIFO request channel, so `Visible(true)` (which
+  calls `show_all()` and realizes the GtkWindow) is handled first and the
+  GdkWindow exists for `CursorIgnoreEvents`. X11 input shape and the
+  Wayland no-op are unchanged, and macOS still gets click-through before the
+  user can interact.
+- Gates re-run locally: `cargo fmt --all --check`, `cargo clippy --workspace
+  --all-targets --no-default-features -- -D warnings`, `cargo test
+  --workspace --no-default-features` (all suites 0 failed), and
+  `sh scripts/check-tauri-deadlock.sh` (10/10 ok).
+- Records: the Session 114 evidence line that claimed an unconditional
+  creation-time call was corrected; this session's lines carry the CI
+  evidence from run 39105564354's uploaded artifact.
+- Validation: CI re-run 39107449287 on the fix commit is green end to end.
+  `Ubuntu 24.04 (GTK4/libadwaita + layer-shell)` passed all 7 specs (mixer
+  1/1 in 6 s — the spec that used to die — plus runtime, windows, recovery,
+  settings, help, overlay 1/1) and `Release gate (required)` passed. The
+  run's backend log shows `E2E surface window-overlay created` inside the
+  mixer spec with no panic after it, i.e. the abort is gone at the exact
+  trigger that reproduced it.
+
+## Session 114 (2026-10-18) - macOS/Linux tray + HUD parity and docs truth
+
+- Ask: the docs support matrix still marked "Native overlay & tray" as
+  "🔜 host integration" on macOS/Linux although both surfaces ship.
+  Recon showed the Tauri tray (`src-tauri/src/tauri_tray.rs`) and the
+  webview HUD (`window_manager.rs` + `frontend/src/overlay`) have been live
+  since Sessions 084/085, that hosted CI on `origin/main` (run 39103837841,
+  macOS + Ubuntu jobs green today) already builds them, and that vol-076 /
+  vol-077 had never recorded that prerequisite.
+- Real code gap closed: the HUD was click-through on macOS only. tao 0.35.3
+  implements `set_ignore_cursor_events` on Linux as a 1x1 GTK input-shape
+  region (`event_loop.rs:453-461`), so `window_manager.rs` applies it to the
+  overlay path: Linux X11 gets real click-through, Wayland stays interactive
+  (GTK has no input-shape protocol), and Windows is untouched (its overlay
+  arm is unreachable). Session 115 corrected *when* the request is sent —
+  building the window hid it, and a hidden GtkWindow has no GdkWindow.
+- Stale prose corrected wherever it still claimed the macOS/Linux tray/HUD
+  did not exist: `native_headless.rs` module doc, `host_core.rs` module and
+  `handle_action` docs plus the overlay debug log, and
+  `ui/platform/mod.rs` "not implemented in this plan" notes.
+- Docs now state the verified truth: the `docs/index.html` matrix row reads
+  "✅ Tauri tray + HUD" for macOS/Linux, the overlay/tray cards separate the
+  Win32 HUD from the webview HUD, `README.md`/`README.vi.md` tables and
+  bullets are per-platform (click-through on Windows/macOS/X11, interactive
+  on Wayland, blur CSS-only), the macOS quit step points at the tray Exit
+  item instead of the stale "menu-bar item is a follow-on task", and
+  `docs/global-hotkeys.md` no longer says the HUD/tray are Windows-only.
+- Gates on the combined tree: `cargo fmt --all --check`, clippy
+  `-D warnings`, `cargo test --workspace --no-default-features`, the
+  deadlock guard (10/10), `bash scripts/test-release-workflow.sh`, and the
+  bootstrap suite all exit 0. The PR diff touches `src-tauri/*`, so CI's
+  scope job forces the macOS and Ubuntu jobs to run.
+- Records: vol-076 and vol-077 stay `in_progress` with the hosted-CI
+  prerequisite recorded as satisfied; the only evidence still missing is
+  manual (menu-bar/appindicator interaction, real-desktop compositor
+  check).
+
+## Session 113 (2026-10-18) - Bootstrap result output and GUI install hang
+
+- Red reproduction from a live machine report: the documented one-liner
+  `& ([scriptblock]::Create((irm .../Install-VolumeControl.ps1))) -Action install`
+  over an existing v0.1.4 install refused with
+  `install refused because standard executable already exists` (the intended
+  guard), and the sanctioned `-Action update` form then upgraded the install
+  to 0.1.7 in 9.24 s but printed nothing and never returned while
+  VolumeControl stayed running.
+- Root cause 1 (no result): install/update/uninstall all completed
+  silently - the bootstrap had no success output path at all.
+- Root cause 2 (hang): `Wait-ForSuccessfulProcess` used
+  `Start-Process -Wait`, which waits for the started process *and its
+  descendants*; the NSIS finish page launches `VolumeControl.exe`, so the
+  caller stayed blocked until the user closed the app. Measured on Windows
+  PowerShell 5.1: `-Wait` 13.2 s for a 12 s detached child, `-PassThru` +
+  `WaitForExit()` 0.5 s.
+- Fix: four new message-table IDs (`install.success`, `update.success`,
+  `update.current`, `uninstall.success`) with EN plus ASCII-escaped VI
+  templates (the published asset must stay pure ASCII for cp1252-safe `irm`
+  downloads), printed with `Write-Host`; `Wait-ForSuccessfulProcess` now
+  splats `PassThru` and calls `WaitForExit()` on the started process only,
+  still refusing a nonzero exit code.
+- Tests: `scripts/test-install-volumecontrol.ps1` records the `-Wait` /
+  `-PassThru` contract of every launch and returns a `WaitForExit`-capable
+  object on the forced-failure path; new assertions cover the install,
+  update, uninstall, and up-to-date result lines.
+- Proof: live A/B with a shim that launches a long-lived child and exits
+  (the NSIS finish-page behavior): the HEAD bootstrap returned from
+  `Start-Installer` after 20.5 s, the fixed bootstrap after 0.6 s. Live
+  `-Action update` smoke printed the EN up-to-date line against the real
+  GitHub API; the VI rendering was verified by code point.
+- Docs: both READMEs now document the per-action result line and that the
+  command returns as soon as the installer process exits.
+
 ## Session 112 (2026-10-18) - Windows Settings E2E close guard
 
 - Red: ship's Windows E2E gate passed Mixer, Runtime, Windows, and Recovery,

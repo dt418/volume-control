@@ -6,8 +6,9 @@
 //! surface plumbing (overlay/tray/webview windows): the host routes surface
 //! open/close through the [`EventSink`], and every confirmed volume change is
 //! pushed to the host as a `state://volume` event. The Tauri host wires the
-//! sink in `src-tauri`, and the native HUD overlay/tray return in the host
-//! integration task.
+//! sink in `src-tauri`: it renders the tray and the HUD overlay natively on
+//! Windows (`native_win32`) and through a Tauri tray plus a webview overlay
+//! window on Linux/macOS (`tauri_tray`, `events_sink`).
 
 use std::sync::Arc;
 
@@ -396,8 +397,9 @@ impl AppCore {
     /// Central handler for every [`AppAction`] — the SSOT mutation point.
     /// Audio/config mutations are applied here and confirmed to the host via
     /// the sink; surface show/hide/toggle are routed to the host's window
-    /// manager; native-only intents (settings window internals, tray menu,
-    /// overlay text) are logged stubs until the host integration task.
+    /// manager; the tray menu and overlay text go through the sink, while the
+    /// settings-window internals stay logged stubs (the Settings webview
+    /// drives settings through the command layer).
     pub fn handle_action(&mut self, action: AppAction) {
         use AppAction as A;
         use SurfaceId as S;
@@ -484,7 +486,9 @@ impl AppCore {
             A::ShowSurface(S::Overlay)
             | A::HideSurface(S::Overlay)
             | A::ToggleSurface(S::Overlay) => {
-                log::debug!("overlay surface not wired in AppCore (host integration task)");
+                log::debug!(
+                    "overlay surface show/hide intent is a no-op; the HUD comes from the sink"
+                );
             }
             A::OpenTrayMenu | A::ShowSurface(S::Tray) | A::ToggleSurface(S::Tray) => {
                 self.sink.show_tray_menu();

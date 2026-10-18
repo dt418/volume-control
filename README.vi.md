@@ -29,7 +29,10 @@ Mixer, Settings và Help.
 - **Phím media** (`Volume Up/Down/Mute`) giữ flyout gốc của Windows — ứng
   dụng chỉ đồng bộ trạng thái.
 - **Overlay**: popup góc dưới-phải, thanh màu theo ngưỡng (xám / xanh lá /
-  xanh dương / cam-đỏ) kèm phần trăm; tự ẩn sau ~1,8 giây; không bắt chuột.
+  xanh dương / cam-đỏ) kèm phần trăm; tự ẩn sau ~1,8 giây. HUD Win32 native
+  trên Windows, HUD webview trên macOS/Linux — không bắt chuột trên Windows,
+  macOS và Linux X11; vẫn tương tác trên Linux Wayland (input-shape không có
+  tác dụng ở đó). Blur/vibrancy chỉ là CSS trong webview.
 - **Khay hệ thống**: nhãn âm lượng trực tiếp, bật/tắt tiếng, đặt lại 50%,
   thoát.
 - **Cấu hình ưu tiên qua Settings**: các tùy chọn chung, giao diện, blacklist,
@@ -176,6 +179,10 @@ Các hành động thường dùng:
   bao giờ force-terminate tiến trình của bạn, hãy đóng ứng dụng trước. Cấu
   hình `%APPDATA%\volume-control\config.ini` nằm ngoài thư mục cài và được
   giữ nguyên khi update lẫn uninstall.
+- Mỗi hành động kết thúc bằng một dòng kết quả — `installed/updated/removed
+  VolumeControl <version> <root>` hoặc `VolumeControl <version> is already
+  installed; nothing to update`. Lệnh trả về ngay khi tiến trình bộ cài
+  thoát, kể cả khi trang cuối NSIS mở ứng dụng.
 - Giới hạn tin cậy: bản phát hành **unsigned**. `SHA256SUMS.txt` chỉ cung cấp
   kiểm tra **checksum** SHA-256 cùng phiên bản — checksum không phải chữ ký số
   và không chứng minh ai đã build binary. Windows SmartScreen có thể cảnh báo
@@ -191,7 +198,7 @@ gói cài bản địa: `.deb`, `.rpm`, `.AppImage` cho Linux và `.dmg` cho mac
 |------------------|:-------:|:-----:|:-----:|
 | Điều khiển âm lượng | ✅ WASAPI | ⚠️ CoreAudio host — manual | ⚠️ PulseAudio/PipeWire host — manual |
 | Phím tắt toàn cục | ✅ RegisterHotKey | ⚠️ global-hotkey host — manual | ⚠️ global-hotkey host — manual |
-| Overlay          | ✅ native Win32 | ⚠️ host — manual | ⚠️ host — manual |
+| Overlay          | ✅ native Win32 | ✅ webview HUD (không bắt chuột) | ✅ webview HUD (không bắt chuột; Wayland vẫn tương tác) |
 | Mixer            | ✅ Tauri + session WASAPI | ✅ Tauri / ✖ audio từng app (không có public API) | ✅ Tauri + PulseAudio sink-inputs |
 | Cửa sổ Settings  | ✅ Tauri | ✅ Tauri | ✅ Tauri |
 | Khay hệ thống    | ✅ tray-icon | ✅ Tauri tray (menu-bar — manual) | ✅ Tauri tray (appindicator — manual) |
@@ -202,8 +209,9 @@ gói cài bản địa: `.deb`, `.rpm`, `.AppImage` cho Linux và `.dmg` cho mac
 trên desktop thật; `🔜` chỉ phần chưa được triển khai hoặc chưa có trong host.
 
 macOS và Linux chạy host `global-hotkey` cùng backend audio native. Các surface
-Tauri Settings/Help/Mixer dùng chung; enumeration session từng app và overlay/
-tray native vẫn ưu tiên Windows. Renderer macOS/Linux triển khai cùng hợp đồng
+Tauri Settings/Help/Mixer dùng chung; khay Tauri và HUD webview đã có trên
+macOS/Linux, trong khi HUD Win32 native và tray-icon native vẫn chỉ có trên
+Windows. Renderer macOS/Linux triển khai cùng hợp đồng
 Signal Glass thông qua bridge `NativeRenderer` dùng chung.
 
 Bảng trên mô tả các surface đã triển khai, không có nghĩa mọi hosted runner đều

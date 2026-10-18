@@ -430,9 +430,9 @@
     same Signal Glass design contract as the Win32 overlay.</p>
     <div class="grid">
       <div class="card"><div class="ico" aria-hidden="true">⌨️</div><h3>Global hotkeys</h3><p>RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay with adaptive rendering, fade duration you can tune, and zero page jank.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay on Windows with tunable fade; webview HUD (336x88, always-on-top) on macOS/Linux. Click-through on Windows, macOS and X11 — interactive on Wayland; blur is CSS-only.</p></div>
       <div class="card"><div class="ico" aria-hidden="true">🎚️</div><h3>Mixer surface</h3><p>Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">📦</div><h3>System tray</h3><p>Real tray icon with context menu, mute/reset actions, and app lifecycle that matches platform norms.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">📦</div><h3>System tray</h3><p>Native tray on Windows, Tauri tray on macOS/Linux — live volume label, mute/reset, mixer/settings/help, updates, reload, exit; a tray failure never kills the app. Menu-bar/appindicator clicks still need manual proof.</p></div>
       <div class="card"><div class="ico" aria-hidden="true">⚙️</div><h3>Settings &amp; Help</h3><p>Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
       <div class="card"><div class="ico" aria-hidden="true">🔄</div><h3>Live config reload</h3><p>Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
       <div class="card"><div class="ico" aria-hidden="true">🌐</div><h3>English &amp; <span lang="vi">Tiếng Việt</span></h3><p>Mixer, overlay, settings and help all speak both languages — switch from the tray or Settings.</p></div>
@@ -451,7 +451,7 @@
           <tr><th scope="row">Global hotkeys</th><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
           <tr><th scope="row">System mixer / Settings / Help</th><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
           <tr><th scope="row">Per-app mixer</th><td class="yes">✅ WASAPI sessions</td><td class="manual">✖ no public API</td><td class="yes">✅ PulseAudio sink-inputs</td></tr>
-          <tr><th scope="row">Native overlay &amp; tray</th><td class="yes">✅ native</td><td class="manual">🔜 host integration</td><td class="manual">🔜 host integration</td></tr>
+          <tr><th scope="row">Native overlay &amp; tray</th><td class="yes">✅ native</td><td class="yes">✅ Tauri tray + HUD</td><td class="yes">✅ Tauri tray + HUD</td></tr>
           <!-- When dt418.VolumeControl lands in winget-pkgs: move winget into the ✅ list and set WINGET_LIVE = true in the script below. -->
           <tr><th scope="row">Remote install commands</th><td class="yes">✅ PowerShell · curl.exe <span class="manual">· 🔜 winget</span></td><td class="yes">✅ verified installer script</td><td class="yes">✅ verified installer script</td></tr>
         </tbody>
