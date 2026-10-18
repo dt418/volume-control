@@ -4,6 +4,21 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- The HUD overlay is click-through on Linux X11 in addition to Windows and
+  macOS; on Wayland it stays interactive because GTK exposes no input-shape
+  protocol there.
+
+### Fixed
+
+- The Windows bootstrap prints one result line per action — installed,
+  updated, removed, or already installed — instead of finishing silently.
+- A GUI install or update no longer blocks until the freshly launched app is
+  closed: the bootstrap waits for the installer process only, not its
+  descendants, so the NSIS finish page launching VolumeControl no longer pins
+  the command.
+
 ## [0.1.7] - 2026-10-17
 
 ### Added

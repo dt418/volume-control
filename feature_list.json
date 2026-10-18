@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-18T14:00",
+  "last_updated": "2026-10-18T15:48",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -605,11 +605,13 @@
         "Help E2E verifies its accessible Close control without racing the WebKit transport while the WebView destroys itself.",
         "Host-core tests assert platform-specific blacklist normalization (`.app` on macOS, `.exe` on Windows, bare names on Linux).",
         "Full release gate is rerun before PR creation; hosted Linux/macOS CI remains required for cross-platform evidence.",
-        "Session 060 (2026-08-15): Cross-platform release checklist documents Windows interactive hotkey evidence, Ubuntu/Xvfb and WSLg boundaries, hosted macOS package inspection, SHA-bound release verification, and ad-hoc versus future Developer ID/notarization signing. README claims are limited to what the current workflow actually verifies; hosted URLs/artifacts remain intentionally unrecorded until a run completes."
+        "Session 060 (2026-08-15): Cross-platform release checklist documents Windows interactive hotkey evidence, Ubuntu/Xvfb and WSLg boundaries, hosted macOS package inspection, SHA-bound release verification, and ad-hoc versus future Developer ID/notarization signing. README claims are limited to what the current workflow actually verifies; hosted URLs/artifacts remain intentionally unrecorded until a run completes.",
+        "Session 116 (2026-10-18): CHANGELOG.md [Unreleased] documents the behavior merged from PR #57 (HUD click-through on Linux X11 with Wayland staying interactive, one bootstrap result line per action, GUI install/update no longer pinned by the NSIS finish page); the follow-up carries feature_list.json + claude-progress.md so `bash scripts/check-records.sh --branch` passes, and `git diff --check origin/main HEAD` is clean."
       ],
       "evidence": [
         "Session 051 (2026-08-15): README.md, README.vi.md, CHANGELOG.md, and CI/Release FE+BE build wiring updated to match the current Tauri hybrid implementation.",
-        "Session 060 (2026-08-15): Task 6 implementation/review clean after one documentation fix round; command/link/secret scans and git diff --check pass."
+        "Session 060 (2026-08-15): Task 6 implementation/review clean after one documentation fix round; command/link/secret scans and git diff --check pass.",
+        "Session 116 (2026-10-18): PR #57 merged to main as d5bbbcf left [Unreleased] empty — the changelog entry existed only as an uncommitted local edit in the release-records worktree and was in no commit. It lands through the docs-only follow-up (branch docs/changelog-unreleased-017): main protection (strict status checks, 1 approving review, enforced on admins) requires the PR path instead of a direct push."
       ],
       "notes": "Documentation-only release follow-up for the verified feature branch; mark passing after the final local gate and hosted CI review."
     },
