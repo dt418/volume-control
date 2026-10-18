@@ -1,38 +1,18 @@
 # Progress Log
 
-## Session 121 (2026-10-18) - Release v0.1.8 with bilingual landing page and update notifications
+## Session 119 (2026-10-18) - Installer status feedback, differential update, and concise commands
 
-- Goal: integrate full bilingual (EN/VI) support into the GitHub Pages landing site with an interactive language switcher, synchronize project version 0.1.8 across all package manifests and changelog, and prepare release tag v0.1.8.
+- Goal: provide live CLI progress feedback during installation, add differential component-level checking to avoid overwriting unchanged files during update, and make remote installation commands concise and easy to use.
 - What landed:
-  - Worktree `release/0.1.8` established at `C:/Users/Thanh/orca/volume-control-v018-release` from `origin/main`.
-  - `docs/index.html`: integrated bilingual EN/VI dictionary, language toggle button in header, and responsive localized copy across hero, demo, remote install, feature cards, platform status, and trust boundaries.
-  - Synchronized version `0.1.8` across: root `Cargo.toml`, `crates/volumectl/Cargo.toml`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `frontend/package.json`, `frontend/package-lock.json`, and `Cargo.lock`.
-  - `CHANGELOG.md`: promoted `[Unreleased]` changes to `[0.1.8] - 2026-10-18` documenting update checks, winget REA verification, installer progress, and landing i18n.
+  - `scripts/Install-VolumeControl.ps1`: added step-by-step progress feedback (`[1/3] downloading`, `[2/3] verifying SHA-256`, `[3/3] installing`) with CP1252-safe ASCII escape sequences in both English and Vietnamese; added component status reporting on update.
+  - `packaging/install-linux.sh`: added progress indicators (`progress.downloading`, `progress.verifying`, `progress.installing`); added differential update comparing binary and document SHA-256 to report unchanged components vs replaced components.
+  - `packaging/install-macos.sh`: added step progress indicators and differential component inspection on app bundle update.
+  - `docs/index.html`: simplified install snippets from verbose multi-line scripts to ergonomic one-liners using `& ([scriptblock]::Create((irm ...)))` on Windows and `curl | bash` on Unix, maintaining full SHA-256 verification and passing all 44 release workflow contract checks.
 - Verification:
-  - `bash scripts/test-release-workflow.sh`: passed all 44 release workflow contract checks.
-  - `sh scripts/check-tauri-deadlock.sh`: 10/10 passed.
-  - `npm --prefix frontend test`: passed 18 test files, 108 tests.
-  - `cargo test --workspace --no-default-features`: passed 309 tests (292 lib + 17 tauri).
-
-## Session 120 (2026-10-18) - Update check and notification in Settings, CLI, and IPC bridge
-
-- Goal: implement update check and notification features across the desktop application, CLI, and IPC bridge, allowing users to check for updates from Settings and receive notification banners when newer releases are available.
-- What landed:
-  - Worktree `feat/update-notifications` established at `C:/Users/Thanh/orca/volume-control-update-notifications` from `origin/main`.
-  - `docs/superpowers/plans/2026-10-18-update-notifications.md`: comprehensive implementation plan covering backend API, CLI command, Tauri IPC, and frontend UI.
-  - `crates/volumectl/src/updates.rs`: added `UpdateInfo` struct, `resolve_update_info`, and `check_update_info` with pure semver comparison and bounded network timeouts.
-  - `crates/volumectl/src/cli.rs`: added `volumectl check-updates` CLI subcommand printing localized update messages to stdout.
-  - `src-tauri/src/commands.rs`: added `check_for_updates` Tauri command running on a blocking thread pool and emitting `state://update` event to open surface windows.
-  - `src-tauri/src/lib.rs`: registered `check_for_updates` in `commands::*` and `generate_handler!`.
-  - `frontend/src/lib/i18n.tsx`: added bilingual EN & VI translation strings for updates section, check buttons, loading states, up-to-date message, and available banners.
-  - `frontend/src/settings/UpdateCard.tsx`: new Settings component displaying current version, a "Check for updates" button, live loading state, and update alert banner with release notes link. Mounted in `GeneralSection.tsx`.
-  - `frontend/src/settings/UpdateCard.test.tsx`: unit tests covering rendering, update-available banner, and up-to-date status.
-- Verification:
-  - `cargo run -p volumecontrol-tauri -- check-updates`: live smoke test passed; successfully fetched latest release tag and output `VolumeControl is up to date`.
-  - `cargo test -p volumectl --lib updates`: passed 7 tests.
-  - `cargo test -p volumecontrol-tauri`: passed 17 tests.
-  - `npm --prefix frontend test`: passed 18 test files, 108 tests.
-  - `sh scripts/check-tauri-deadlock.sh`: 10/10 passed.
+  - `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1`: passed all tests including pure ASCII check.
+  - `bash scripts/test-install-unix.sh`: passed all 22 checks.
+  - `bash scripts/test-release-workflow.sh`: passed all 44 contract checks.
+  - `node scripts/test-verify-installer-rea.mjs` and `bash scripts/test-winget-deploy.sh`: passed.
 
 ## Session 118 (2026-10-18) - Winget deployment pipeline with REA binary verification
 
@@ -4032,3 +4012,37 @@ fn get_window_pid_x11() -> Option<u32> {
   - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: passed with 0 warnings.
   - `cargo test --workspace --no-default-features`: passed (354 passed, 8 suites).
   - `bash scripts/check-records.sh --branch`: passed.
+
+## Session 120 (2026-10-18) - Update check and notification in Settings, CLI, and IPC bridge
+
+- Goal: implement update check and notification features across the desktop application, CLI, and IPC bridge, allowing users to check for updates from Settings and receive notification banners when newer releases are available.
+- What landed:
+  - Worktree `feat/update-notifications` established at `C:/Users/Thanh/orca/volume-control-update-notifications` from `origin/main`.
+  - `docs/superpowers/plans/2026-10-18-update-notifications.md`: comprehensive implementation plan covering backend API, CLI command, Tauri IPC, and frontend UI.
+  - `crates/volumectl/src/updates.rs`: added `UpdateInfo` struct, `resolve_update_info`, and `check_update_info` with pure semver comparison and bounded network timeouts.
+  - `crates/volumectl/src/cli.rs`: added `volumectl check-updates` CLI subcommand printing localized update messages to stdout.
+  - `src-tauri/src/commands.rs`: added `check_for_updates` Tauri command running on a blocking thread pool and emitting `state://update` event to open surface windows.
+  - `src-tauri/src/lib.rs`: registered `check_for_updates` in `commands::*` and `generate_handler!`.
+  - `frontend/src/lib/i18n.tsx`: added bilingual EN & VI translation strings for updates section, check buttons, loading states, up-to-date message, and available banners.
+  - `frontend/src/settings/UpdateCard.tsx`: new Settings component displaying current version, a "Check for updates" button, live loading state, and update alert banner with release notes link. Mounted in `GeneralSection.tsx`.
+  - `frontend/src/settings/UpdateCard.test.tsx`: unit tests covering rendering, update-available banner, and up-to-date status.
+- Verification:
+  - `cargo run -p volumecontrol-tauri -- check-updates`: live smoke test passed; successfully fetched latest release tag and output `VolumeControl is up to date`.
+  - `cargo test -p volumectl --lib updates`: passed 7 tests.
+  - `cargo test -p volumecontrol-tauri`: passed 17 tests.
+  - `npm --prefix frontend test`: passed 18 test files, 108 tests.
+  - `sh scripts/check-tauri-deadlock.sh`: 10/10 passed.
+
+## Session 121 (2026-10-18) - Release v0.1.8 with bilingual landing page and update notifications
+
+- Goal: integrate full bilingual (EN/VI) support into the GitHub Pages landing site with an interactive language switcher, synchronize project version 0.1.8 across all package manifests and changelog, and prepare release tag v0.1.8.
+- What landed:
+  - Worktree `release/0.1.8` established at `C:/Users/Thanh/orca/volume-control-v018-release` from `origin/main`.
+  - `docs/index.html`: integrated bilingual EN/VI dictionary, language toggle button in header, and responsive localized copy across hero, demo, remote install, feature cards, platform status, and trust boundaries.
+  - Synchronized version `0.1.8` across: root `Cargo.toml`, `crates/volumectl/Cargo.toml`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `frontend/package.json`, `frontend/package-lock.json`, and `Cargo.lock`.
+  - `CHANGELOG.md`: promoted `[Unreleased]` changes to `[0.1.8] - 2026-10-18` documenting update checks, winget REA verification, installer progress, and landing i18n.
+- Verification:
+  - `bash scripts/test-release-workflow.sh`: passed all 44 release workflow contract checks.
+  - `sh scripts/check-tauri-deadlock.sh`: 10/10 passed.
+  - `npm --prefix frontend test`: passed 18 test files, 108 tests.
+  - `cargo test --workspace --no-default-features`: passed 309 tests (292 lib + 17 tauri).

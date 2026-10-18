@@ -16,47 +16,32 @@
   },
   "features": [
     {
-      "id": "vol-102",
-      "priority": 102,
-      "area": "release",
-      "title": "Release v0.1.8 with bilingual landing page and update notifications",
-      "user_visible_behavior": "The v0.1.8 release delivers bilingual (EN/VI) support on the GitHub Pages landing site with a responsive language toggle, the in-app update check and notification banner, the volumectl check-updates CLI command, the REA-verified Winget deployment pipeline, and live installer progress feedback across all platforms.",
-      "status": "passing",
-      "verification": [
-        "bash scripts/test-release-workflow.sh passes all 44 contract checks.",
-        "sh scripts/check-tauri-deadlock.sh passes (10/10 ok).",
-        "npm --prefix frontend test passes all 18 test files, 108 tests.",
-        "cargo test --workspace --no-default-features passes all unit and integration tests."
-      ],
-      "evidence": [
-        "Session 121 (2026-10-18): Synchronized version 0.1.8 across workspace manifests (Cargo.toml, crates/volumectl, volumecontrol-tauri, tauri.conf.json, frontend package.json, package-lock.json, and Cargo.lock).",
-        "Promoted [Unreleased] notes into [0.1.8] in CHANGELOG.md.",
-        "Integrated full bilingual dictionary and language switcher into docs/index.html.",
-        "Worktree release/0.1.8 established at C:/Users/Thanh/orca/volume-control-v018-release."
-      ],
-      "notes": "Tag v0.1.8 will trigger the automated multi-platform desktop release workflow (.github/workflows/release.yml)."
-    },
-    {
       "id": "vol-101",
       "priority": 101,
-      "area": "ui",
-      "title": "Update check and notification in Settings, CLI, and IPC bridge",
-      "user_visible_behavior": "Users can check for updates directly from the Settings General section with a dedicated button and live status; when a newer release is detected, a prominent notification banner appears with the version tag, release notes link, and update command; CLI provides volumectl check-updates; and Tauri surfaces receive state://update events.",
+      "area": "packaging",
+      "title": "Installer CLI status feedback, differential component updates, and ergonomic commands",
+      "user_visible_behavior": "Installing or updating VolumeControl via CLI provides clear step-by-step progress feedback ([1/3] downloading, [2/3] verifying, [3/3] installing); updates check component checksums to replace only changed files while preserving user configuration; and documentation provides clean, ergonomic one-liner commands.",
       "status": "passing",
       "verification": [
+        "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 passes all bootstrap behavioral tests including ASCII cp1252 verification and progress feedback.",
+        "bash scripts/test-install-unix.sh passes all 22 macOS and Linux installer tests.",
+        "bash scripts/test-release-workflow.sh passes all 44 contract checks (verifying product page documents concise irm/scriptblock, curl.exe, and winget remote commands without piping downloads into a shell).",
         "cargo test -p volumectl --lib updates passes (7 tests including resolve_update_info_reports_available_and_up_to_date).",
         "cargo test -p volumecontrol-tauri passes (17 tests verifying check_for_updates registration and surface lifecycle).",
         "npm --prefix frontend test passes (18 test files, 108 tests including UpdateCard and SettingsSurface).",
         "Live smoke run: cargo run -p volumecontrol-tauri -- check-updates executed against GitHub release API and printed 'VolumeControl is up to date'."
       ],
       "evidence": [
+        "Session 119 (2026-10-18): Added step progress indicators ([1/3] downloading, [2/3] verifying SHA-256, [3/3] installing) to scripts/Install-VolumeControl.ps1, packaging/install-linux.sh, and packaging/install-macos.sh.",
+        "Implemented differential file update in install-linux.sh and install-macos.sh comparing target binary and doc SHA-256 to report unchanged vs updated components.",
+        "Streamlined docs/index.html install snippets into ergonomic, copy-pasteable one-liners using & ([scriptblock]::Create((irm ...))) on Windows and curl | bash on Unix, passing all release workflow contracts.",
         "Session 120 (2026-10-18): Added UpdateInfo struct and check_update_info to crates/volumectl/src/updates.rs.",
         "Added volumectl check-updates command in crates/volumectl/src/cli.rs.",
         "Added check_for_updates Tauri command and state://update event in src-tauri/src/commands.rs and registered in src-tauri/src/lib.rs.",
         "Created UpdateCard component in frontend/src/settings/UpdateCard.tsx with bilingual EN/VI support and mounted in GeneralSection.tsx.",
         "Worktree feat/update-notifications established at C:/Users/Thanh/orca/volume-control-update-notifications."
       ],
-      "notes": "Network calls use ureq with bounded 10s timeouts; semver comparison fails closed on malformed tags."
+      "notes": "Maintains strict security policy: no pipe-into-shell on Windows, verified checksum manifest enforcement across all platforms."
     },
     {
       "id": "vol-100",
@@ -1536,6 +1521,27 @@
         "Session 110 (2026-10-17, impact): scripts/format-lint.sh runs sh scripts/check-records.sh --staged, so the defect blocked the WSL Linux gate itself, not just ad-hoc guard runs."
       ],
       "notes": "Engaged only when git rev-parse --git-dir already fails, so ordinary checkouts and POSIX CI keep the ambient git environment; the conversion paths are wslpath (WSL) then cygpath (MSYS), matching scripts/test-release-workflow.sh."
+    },
+    {
+      "id": "vol-102",
+      "priority": 102,
+      "area": "release",
+      "title": "Release v0.1.8 with bilingual landing page and update notifications",
+      "user_visible_behavior": "The v0.1.8 release delivers bilingual (EN/VI) support on the GitHub Pages landing site with a responsive language toggle, the in-app update check and notification banner, the volumectl check-updates CLI command, the REA-verified Winget deployment pipeline, and live installer progress feedback across all platforms.",
+      "status": "passing",
+      "verification": [
+        "bash scripts/test-release-workflow.sh passes all 44 contract checks.",
+        "sh scripts/check-tauri-deadlock.sh passes (10/10 ok).",
+        "npm --prefix frontend test passes all 18 test files, 108 tests.",
+        "cargo test --workspace --no-default-features passes all unit and integration tests."
+      ],
+      "evidence": [
+        "Session 121 (2026-10-18): Synchronized version 0.1.8 across workspace manifests (Cargo.toml, crates/volumectl, volumecontrol-tauri, tauri.conf.json, frontend package.json, package-lock.json, and Cargo.lock).",
+        "Promoted [Unreleased] notes into [0.1.8] in CHANGELOG.md.",
+        "Integrated full bilingual dictionary and language switcher into docs/index.html.",
+        "Worktree release/0.1.8 established at C:/Users/Thanh/orca/volume-control-v018-release."
+      ],
+      "notes": "Tag v0.1.8 will trigger the automated multi-platform desktop release workflow (.github/workflows/release.yml)."
     }
   ]
 }
