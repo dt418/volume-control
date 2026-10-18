@@ -500,27 +500,11 @@
      every flow is download → verify SHA-256 → run the local copy. -->
 
 <script type="text/plain" id="tpl-ps">
-$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
-New-Item -ItemType Directory -Path $root | Out-Null
-$base = '{{BASE}}'
-Invoke-WebRequest "$base/Install-VolumeControl.ps1" -OutFile "$root/Install-VolumeControl.ps1"
-Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$root/SHA256SUMS.txt"
-$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
-$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
-if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
-& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
+& ([scriptblock]::Create((irm '{{BASE}}/Install-VolumeControl.ps1'))) -Action {{ACTION}}
 </script>
 
 <script type="text/plain" id="tpl-curl">
-$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
-New-Item -ItemType Directory -Path $root | Out-Null
-$base = '{{BASE}}'
-curl.exe -fsSL "$base/Install-VolumeControl.ps1" -o "$root/Install-VolumeControl.ps1"
-curl.exe -fsSL "$base/SHA256SUMS.txt" -o "$root/SHA256SUMS.txt"
-$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
-$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
-if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
-& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
+curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-VolumeControl.ps1"; & "$env:TEMP\Install-VolumeControl.ps1" -Action {{ACTION}}
 </script>
 
 <script type="text/plain" id="tpl-unix">
@@ -568,10 +552,12 @@ if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not 
   }
   function build(tab, action) {
     if (tab === "winget") {
-      var verb = { install: "install", update: "upgrade", uninstall: "uninstall" }[action];
+      var cmd = action === "update" ? "winget upgrade --id dt418.VolumeControl" :
+                action === "uninstall" ? "winget uninstall --id dt418.VolumeControl" :
+                "winget install --id dt418.VolumeControl";
       return (WINGET_LIVE ? "" : "# Not published to winget-pkgs yet - use the PowerShell or curl.exe tab.\n") +
              "# winget checks the installer against the SHA-256 in its manifest before it runs.\n" +
-             "winget " + verb + " --id dt418.VolumeControl";
+             cmd;
     }
     if (tab === "unix") return NOTES.unix[action] + fill(tpl("tpl-unix"), action);
     return NOTES.win[action] + fill(tpl(tab === "curl" ? "tpl-curl" : "tpl-ps"), action);

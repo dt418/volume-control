@@ -1,5 +1,19 @@
 # Progress Log
 
+## Session 119 (2026-10-18) - Installer status feedback, differential update, and concise commands
+
+- Goal: provide live CLI progress feedback during installation, add differential component-level checking to avoid overwriting unchanged files during update, and make remote installation commands concise and easy to use.
+- What landed:
+  - `scripts/Install-VolumeControl.ps1`: added step-by-step progress feedback (`[1/3] downloading`, `[2/3] verifying SHA-256`, `[3/3] installing`) with CP1252-safe ASCII escape sequences in both English and Vietnamese; added component status reporting on update.
+  - `packaging/install-linux.sh`: added progress indicators (`progress.downloading`, `progress.verifying`, `progress.installing`); added differential update comparing binary and document SHA-256 to report unchanged components vs replaced components.
+  - `packaging/install-macos.sh`: added step progress indicators and differential component inspection on app bundle update.
+  - `docs/index.html`: simplified install snippets from verbose multi-line scripts to ergonomic one-liners using `& ([scriptblock]::Create((irm ...)))` on Windows and `curl | bash` on Unix, maintaining full SHA-256 verification and passing all 44 release workflow contract checks.
+- Verification:
+  - `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1`: passed all tests including pure ASCII check.
+  - `bash scripts/test-install-unix.sh`: passed all 22 checks.
+  - `bash scripts/test-release-workflow.sh`: passed all 44 contract checks.
+  - `node scripts/test-verify-installer-rea.mjs` and `bash scripts/test-winget-deploy.sh`: passed.
+
 ## Session 118 (2026-10-18) - Winget deployment pipeline with REA binary verification
 
 - Goal: automate and verify the Winget packaging and deployment pipeline for VolumeControl, using REA static PE inspection on the release installer, generating schema-valid 1.12.0 manifests, validating with winget CLI, and auditing upstream submission status.

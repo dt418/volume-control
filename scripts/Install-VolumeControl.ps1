@@ -129,6 +129,34 @@ $script:VolumeControlMessages = @{
         en = 'removed VolumeControl from {0}'
         vi = "$([char]0x0110)$([char]0x00E3) g$([char]0x1EE1) VolumeControl kh$([char]0x1ECF)i {0}"
     }
+    'progress.downloading' = @{
+        en = '[1/3] downloading {0}...'
+        vi = "[1/3] $([char]0x0110)ang t$([char]0x1EA3)i {0}..."
+    }
+    'progress.verifying' = @{
+        en = '[2/3] verifying SHA-256 against {0}...'
+        vi = "[2/3] X$([char]0x00E1)c minh SHA-256 v$([char]0x1EDB)i {0}..."
+    }
+    'progress.installing' = @{
+        en = '[3/3] installing VolumeControl into {0}...'
+        vi = "[3/3] $([char]0x0110)ang c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t VolumeControl v$([char]0x00E0)o {0}..."
+    }
+    'progress.checking' = @{
+        en = 'checking existing installation at {0}...'
+        vi = "Ki$([char]0x1EC3)m tra b$([char]0x1EA3)n c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t hi$([char]0x1EC7)n t$([char]0x1EA1)i t$([char]0x1EA1)i {0}..."
+    }
+    'component.updated' = @{
+        en = 'updated component: {0}'
+        vi = "$([char]0x0110)$([char]0x00E3) c$([char]0x1EAD)p nh$([char]0x1EAD)t th$([char]0x00E0)nh ph$([char]0x1EA7)n: {0}"
+    }
+    'component.identical' = @{
+        en = 'component {0} is already identical; skipping'
+        vi = "Th$([char]0x00E0)nh ph$([char]0x1EA7)n {0} $([char]0x0111)$([char]0x00E3) tr$([char]0x00F9)ng kh$([char]0x1EDB)p; b$([char]0x1ECF) qua"
+    }
+    'config.preserved' = @{
+        en = 'user configuration preserved at {0}'
+        vi = "C$([char]0x1EA5)u h$([char]0x00EC)nh ng$([char]0x01B0)$([char]0x1EDD)i d$([char]0x00F9)ng $([char]0x0111)$([char]0x01B0)$([char]0x1EE3)c gi$([char]0x1EEF) nguy$([char]0x00EA)n t$([char]0x1EA1)i {0}"
+    }
 }
 
 function Get-VolumeControlLanguage {
@@ -405,13 +433,16 @@ function Invoke-VerifiedInstaller {
 
     New-Item -ItemType Directory -Path $downloadRoot -ErrorAction Stop | Out-Null
     try {
+        Write-Host (Get-VolumeControlMessage 'progress.downloading' $releaseInstaller.Installer.name)
         Save-ReleaseAsset -Asset $releaseInstaller.Installer -DestinationPath $downloadedInstaller
         Save-ReleaseAsset -Asset $releaseInstaller.Manifest -DestinationPath $downloadedManifest
+        Write-Host (Get-VolumeControlMessage 'progress.verifying' $script:ChecksumManifestName)
         $expectedSha256 = Read-ExpectedSha256 -ManifestPath $downloadedManifest -AssetName $releaseInstaller.Installer.name
         if (-not (Test-FileSha256 -Path $downloadedInstaller -ExpectedSha256 $expectedSha256)) {
             throw (Get-VolumeControlMessage 'installer.sha256-mismatch' $script:ChecksumManifestName)
         }
 
+        Write-Host (Get-VolumeControlMessage 'progress.installing' $InstallRoot)
         Start-Installer -InstallerPath $downloadedInstaller -Silent:$Silent -InstallRoot $InstallRoot
         $completed = $true
     } finally {

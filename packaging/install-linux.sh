@@ -51,6 +51,11 @@ msg() {
       removed)         template="Đã gỡ VolumeControl khỏi %s" ;;
       not.installed)   template="Không có bản cài nào tại %s" ;;
       path.hint)       template="Thêm '%s' vào PATH nếu lệnh volumectl chưa có sẵn." ;;
+      progress.downloading) template="[1/3] Đang tải %s..." ;;
+      progress.verifying)   template="[2/3] Xác minh mã kiểm tra SHA-256..." ;;
+      progress.installing)  template="[3/3] Đang cài đặt vào %s..." ;;
+      component.updated)    template="Đã cập nhật thành phần: %s" ;;
+      component.identical)  template="Thành phần %s không đổi (trùng khớp)" ;;
       *)               template="$id" ;;
     esac
   else
@@ -68,6 +73,11 @@ msg() {
       removed)         template="Removed VolumeControl from %s" ;;
       not.installed)   template="nothing installed at %s" ;;
       path.hint)       template="Add '%s' to PATH if the volumectl command is not found yet." ;;
+      progress.downloading) template="[1/3] Downloading %s..." ;;
+      progress.verifying)   template="[2/3] Verifying SHA-256 checksum..." ;;
+      progress.installing)  template="[3/3] Installing into %s..." ;;
+      component.updated)    template="Updated component: %s" ;;
+      component.identical)  template="Component %s unchanged (matches current checksum)" ;;
       *)               template="$id" ;;
     esac
   fi
@@ -174,21 +184,36 @@ fi
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+say "$(msg progress.downloading "$tar_name")"
 fetch "$asset_dir/$tar_name" "$tmp/$tar_name"
 fetch "$asset_dir/SHA256SUMS.txt" "$tmp/SHA256SUMS.txt"
+say "$(msg progress.verifying)"
 verify_against_manifest "$tmp/$tar_name" "$tar_name" "$tmp/SHA256SUMS.txt"
 
 tar xzf "$tmp/$tar_name" -C "$tmp" "$BIN_NAME" README.md 2>/dev/null \
   || die "asset.missing" "$BIN_NAME" "$tag"
 [[ -f "$tmp/$BIN_NAME" ]] || die "asset.missing" "$BIN_NAME" "$tag"
 
+say "$(msg progress.installing "$INSTALL_ROOT")"
 mkdir -p "$INSTALL_ROOT/bin" "$(dirname "$TARGET_DOC")"
-install -m 0755 "$tmp/$BIN_NAME" "$TARGET_BIN"
-install -m 0644 "$tmp/README.md" "$TARGET_DOC"
 
 if [[ "$ACTION" == update ]]; then
+  if [[ -f "$TARGET_BIN" ]] && [[ "$(sha256_of "$tmp/$BIN_NAME")" == "$(sha256_of "$TARGET_BIN")" ]]; then
+    say "$(msg component.identical "$BIN_NAME")"
+  else
+    install -m 0755 "$tmp/$BIN_NAME" "$TARGET_BIN"
+    say "$(msg component.updated "$BIN_NAME")"
+  fi
+  if [[ -f "$TARGET_DOC" ]] && [[ "$(sha256_of "$tmp/README.md")" == "$(sha256_of "$TARGET_DOC")" ]]; then
+    say "$(msg component.identical "README.md")"
+  else
+    install -m 0644 "$tmp/README.md" "$TARGET_DOC"
+    say "$(msg component.updated "README.md")"
+  fi
   say "$(msg updated "$version" "$TARGET_BIN")"
 else
+  install -m 0755 "$tmp/$BIN_NAME" "$TARGET_BIN"
+  install -m 0644 "$tmp/README.md" "$TARGET_DOC"
   say "$(msg installed "$version" "$TARGET_BIN")"
   say "$(msg path.hint "$INSTALL_ROOT/bin")"
 fi

@@ -50,6 +50,11 @@ msg() {
       removed)              template="Đã gỡ VolumeControl khỏi %s" ;;
       not.installed)        template="Không có bản cài nào tại %s" ;;
       gatekeeper)           template="Bản phát hành chỉ được ký ad-hoc: lần mở đầu tiên cần chuột phải → Open, hoặc chạy: xattr -dr com.apple.quarantine '%s'" ;;
+      progress.downloading) template="[1/3] Đang tải %s..." ;;
+      progress.verifying)   template="[2/3] Xác minh mã kiểm tra SHA-256..." ;;
+      progress.installing)  template="[3/3] Đang cài đặt vào %s..." ;;
+      component.updated)    template="Đã cập nhật thành phần: %s" ;;
+      component.identical)  template="Thành phần %s không đổi (trùng khớp)" ;;
       *)                    template="$id" ;;
     esac
   else
@@ -67,6 +72,11 @@ msg() {
       removed)              template="Removed VolumeControl from %s" ;;
       not.installed)        template="nothing installed at %s" ;;
       gatekeeper)           template="release is ad-hoc signed: first launch needs right-click → Open, or run: xattr -dr com.apple.quarantine '%s'" ;;
+      progress.downloading) template="[1/3] Downloading %s..." ;;
+      progress.verifying)   template="[2/3] Verifying SHA-256 checksum..." ;;
+      progress.installing)  template="[3/3] Installing into %s..." ;;
+      component.updated)    template="Updated component: %s" ;;
+      component.identical)  template="Component %s unchanged (matches current checksum)" ;;
       *)                    template="$id" ;;
     esac
   fi
@@ -175,20 +185,32 @@ fi
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+say "$(msg progress.downloading "$zip_name")"
 fetch "$asset_dir/$zip_name" "$tmp/$zip_name"
 fetch "$asset_dir/SHA256SUMS.txt" "$tmp/SHA256SUMS.txt"
+say "$(msg progress.verifying)"
 verify_against_manifest "$tmp/$zip_name" "$zip_name" "$tmp/SHA256SUMS.txt"
 
 (unzip -q "$tmp/$zip_name" -d "$tmp/unpack") || die "download.failed" "unzip failed"
 [[ -d "$tmp/unpack/$APP_NAME" ]] || die "asset.missing" "$APP_NAME" "$tag"
 
+say "$(msg progress.installing "$INSTALL_ROOT")"
 mkdir -p "$INSTALL_ROOT"
-rm -rf "$TARGET_APP"
-cp -R "$tmp/unpack/$APP_NAME" "$TARGET_APP"
 
 if [[ "$ACTION" == update ]]; then
+  target_bin="$TARGET_APP/Contents/MacOS/volumectl"
+  new_bin="$tmp/unpack/$APP_NAME/Contents/MacOS/volumectl"
+  if [[ -f "$target_bin" && -f "$new_bin" ]] && [[ "$(sha256_of "$target_bin")" == "$(sha256_of "$new_bin")" ]]; then
+    say "$(msg component.identical "volumectl")"
+  else
+    say "$(msg component.updated "volumectl")"
+  fi
+  rm -rf "$TARGET_APP"
+  cp -R "$tmp/unpack/$APP_NAME" "$TARGET_APP"
   say "$(msg updated "$version" "$TARGET_APP")"
 else
+  rm -rf "$TARGET_APP"
+  cp -R "$tmp/unpack/$APP_NAME" "$TARGET_APP"
   say "$(msg installed "$version" "$TARGET_APP")"
 fi
 say "$(msg gatekeeper "$TARGET_APP")"

@@ -16,6 +16,25 @@
   },
   "features": [
     {
+      "id": "vol-101",
+      "priority": 101,
+      "area": "packaging",
+      "title": "Installer CLI status feedback, differential component updates, and ergonomic commands",
+      "user_visible_behavior": "Installing or updating VolumeControl via CLI provides clear step-by-step progress feedback ([1/3] downloading, [2/3] verifying, [3/3] installing); updates check component checksums to replace only changed files while preserving user configuration; and documentation provides clean, ergonomic one-liner commands.",
+      "status": "passing",
+      "verification": [
+        "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 passes all bootstrap behavioral tests including ASCII cp1252 verification and progress feedback.",
+        "bash scripts/test-install-unix.sh passes all 22 macOS and Linux installer tests.",
+        "bash scripts/test-release-workflow.sh passes all 44 contract checks (verifying product page documents concise irm/scriptblock, curl.exe, and winget remote commands without piping downloads into a shell)."
+      ],
+      "evidence": [
+        "Session 119 (2026-10-18): Added step progress indicators ([1/3] downloading, [2/3] verifying SHA-256, [3/3] installing) to scripts/Install-VolumeControl.ps1, packaging/install-linux.sh, and packaging/install-macos.sh.",
+        "Implemented differential file update in install-linux.sh and install-macos.sh comparing target binary and doc SHA-256 to report unchanged vs updated components.",
+        "Streamlined docs/index.html install snippets into ergonomic, copy-pasteable one-liners using & ([scriptblock]::Create((irm ...))) on Windows and curl | bash on Unix, passing all release workflow contracts."
+      ],
+      "notes": "Maintains strict security policy: no pipe-into-shell on Windows, verified checksum manifest enforcement across all platforms."
+    },
+    {
       "id": "vol-100",
       "priority": 100,
       "area": "release",
