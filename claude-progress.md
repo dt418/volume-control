@@ -3935,3 +3935,25 @@ fn get_window_pid_x11() -> Option<u32> {
   - Installer scripts resolve the latest tag via `api.github.com` (60 req/hr
     unauthenticated per IP). No 403 observed during this session, but the new
     fallback mitigates the risk.
+
+## Session 116 (2026-10-18) - Land the missing [Unreleased] changelog for PR #57
+
+- Ask: the user asked to merge PR #57; the merge had already landed on the
+  remote (`d5bbbcf`, 08:10:59Z, CI 39110465050 green, tree-identical to the
+  validated tip `992a0db`). Local `main` was fast-forwarded to it. The one
+  leftover was a CHANGELOG.md edit that existed nowhere else: the merge did
+  not include it and the PR branch never committed it.
+- What landed: CHANGELOG.md's [Unreleased] section now records the merged
+  behavior — HUD overlay click-through on Linux X11 (Wayland stays
+  interactive), the bootstrap's one result line per action, and the GUI
+  install/update no longer pinned by the NSIS finish page.
+- Process note: main protection (strict status checks, 1 approving review,
+  enforced on admins) blocks both direct pushes and self-approval, so the
+  entry travels as a docs-only follow-up PR from
+  `docs/changelog-unreleased-017`; its scope is CHANGELOG.md plus the two
+  records, so CI skips the Linux/macOS matrix.
+- Verification: `cargo fmt --all --check` clean, `git diff --check
+  origin/main HEAD` clean, `scripts/check-records.sh --branch` satisfied by
+  the paired records, and the diff-gate path scan finds no forbidden paths.
+- Branch refs (remote `fix/bootstrap-output-hud-parity` and the local
+  worktree branch) stay in place per the user's choice.
