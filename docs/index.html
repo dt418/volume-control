@@ -106,6 +106,13 @@
     color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2));
     padding: 7px 14px; border-radius: 999px; font-weight: 600;
   }
+  .lang-toggle {
+    border: 1px solid var(--border); background: var(--surface); color: var(--fg);
+    padding: 5px 12px; border-radius: 999px; font-weight: 600; font-size: 13px;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+    box-shadow: var(--shadow);
+  }
+  .lang-toggle:hover { border-color: var(--accent); color: var(--link); }
   nav .gh:hover { color: var(--on-accent); text-decoration: none; filter: brightness(1.08); }
 
   .hero { padding: 64px 0 40px; text-align: center; }
@@ -312,9 +319,10 @@
       VolumeControl
     </a>
     <nav aria-label="Primary">
-      <a href="#install">Install</a>
-      <a class="hide-sm" href="#features">Features</a>
-      <a class="hide-sm" href="#platform">Platform</a>
+      <a href="#install" data-i18n="nav.install">Install</a>
+      <a class="hide-sm" href="#features" data-i18n="nav.features">Features</a>
+      <a class="hide-sm" href="#platform" data-i18n="nav.platform">Platform</a>
+      <button type="button" id="lang-btn" class="lang-toggle" aria-label="Change language">VI</button>
       <a class="gh" href="https://github.com/dt418/volume-control" rel="noopener">GitHub</a>
     </nav>
   </div>
@@ -325,15 +333,15 @@
 
   <div class="hero">
     <a class="pill" href="https://github.com/dt418/volume-control/releases/latest"><b id="ver">v0.1.x</b> · native-first · MIT licensed</a>
-    <h1>Volume control that feels<br><span class="grad">native everywhere</span></h1>
-    <p class="sub">
+    <h1 data-i18n="hero.title">Volume control that feels<br><span class="grad">native everywhere</span></h1>
+    <p class="sub" data-i18n="hero.sub">
       Global hotkeys, a real system tray, an on-screen volume overlay, and
       Tauri v2 Mixer / Settings / Help surfaces — powered by WASAPI,
       CoreAudio, and PulseAudio backends.
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="#install">Install VolumeControl</a>
-      <a class="btn btn-ghost" href="https://github.com/dt418/volume-control/releases">View releases</a>
+      <a class="btn btn-primary" href="#install" data-i18n="hero.installBtn">Install VolumeControl</a>
+      <a class="btn btn-ghost" href="https://github.com/dt418/volume-control/releases" data-i18n="hero.releasesBtn">View releases</a>
     </div>
     <div class="demo">
       <div class="screen" aria-hidden="true">
@@ -348,7 +356,7 @@
       </div>
       <p class="sr-only" role="status" id="demo-live"></p>
       <div class="demo-keys" role="group" aria-label="Try the shortcuts">
-        <span class="lbl">Try it — hold <kbd>Ctrl</kbd> + <kbd>Alt</kbd> and press a key, or click:</span>
+        <span class="lbl" data-i18n="demo.try">Try it — hold <kbd>Ctrl</kbd> + <kbd>Alt</kbd> and press a key, or click:</span>
         <button type="button" class="key" data-act="up"     aria-label="Volume up 1 percent"    aria-keyshortcuts="Control+Alt+ArrowUp"><span aria-hidden="true">↑</span><small>+1%</small></button>
         <button type="button" class="key" data-act="down"   aria-label="Volume down 1 percent"  aria-keyshortcuts="Control+Alt+ArrowDown"><span aria-hidden="true">↓</span><small>−1%</small></button>
         <button type="button" class="key" data-act="up10"   aria-label="Volume up 10 percent"   aria-keyshortcuts="Control+Alt+Shift+ArrowUp"><span aria-hidden="true">⇧↑</span><small>+10%</small></button>
@@ -356,13 +364,13 @@
         <button type="button" class="key" data-act="mute"   aria-label="Toggle mute"            aria-keyshortcuts="Control+Alt+M"><span aria-hidden="true">M</span><small>mute</small></button>
         <button type="button" class="key" data-act="reset"  aria-label="Reset to 50 percent"    aria-keyshortcuts="Control+Alt+R"><span aria-hidden="true">R</span><small>reset 50%</small></button>
       </div>
-      <p class="demo-note">Simulated in your browser - same colour bands and steps as the app's defaults. The real overlay is native.</p>
+      <p class="demo-note" data-i18n="demo.note">Simulated in your browser - same colour bands and steps as the app's defaults. The real overlay is native.</p>
     </div>
   </div>
 
   <section id="install">
-    <h2>Install, update, uninstall — remotely</h2>
-    <p class="lede">
+    <h2 data-i18n="install.title">Install, update, uninstall — remotely</h2>
+    <p class="lede" data-i18n="install.sub">
       Pick your tool. Every path resolves the stable GitHub release and
       verifies downloads against the release <code>SHA256SUMS.txt</code>
       manifest before anything runs.
@@ -424,8 +432,8 @@
   </section>
 
   <section id="features">
-    <h2>Built like a desktop app, not a web page</h2>
-    <p class="lede">Every surface is native-first; the Tauri views share the
+    <h2 data-i18n="features.title">Built like a desktop app, not a web page</h2>
+    <p class="lede" data-i18n="features.lede">Every surface is native-first; the Tauri views share the
     same Signal Glass design contract as the Win32 overlay.</p>
     <div class="grid">
       <div class="card"><div class="ico" aria-hidden="true">⌨️</div><h3>Global hotkeys</h3><p>RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
@@ -440,8 +448,8 @@
   </section>
 
   <section id="platform">
-    <h2 id="platform-title">Platform status</h2>
-    <p class="lede">Honest coverage: what is fully proven where.</p>
+    <h2 id="platform-title" data-i18n="platform.title">Platform status</h2>
+    <p class="lede" data-i18n="platform.lede">Honest coverage: what is fully proven where.</p>
     <div class="table-wrap" role="region" aria-labelledby="platform-title" tabindex="0">
       <table>
         <thead><tr><th scope="col">Capability</th><th scope="col">Windows</th><th scope="col">macOS</th><th scope="col">Linux</th></tr></thead>
@@ -459,21 +467,21 @@
   </section>
 
   <section id="trust">
-    <h2>What verification does — and does not — prove</h2>
+    <h2 data-i18n="trust.title">What verification does — and does not — prove</h2>
     <div class="trust">
-      <h3>Trust boundaries, stated plainly</h3>
+      <h3 data-i18n="trust.sub">Trust boundaries, stated plainly</h3>
       <ul>
-        <li><b>Checksums, not signatures.</b> <code>SHA256SUMS.txt</code>
+        <li data-i18n="trust.item1"><b>Checksums, not signatures.</b> <code>SHA256SUMS.txt</code>
         proves a download matches the release it was published with — same-release
         integrity only. It is <b>not</b> code signing and says nothing about who
         built the binary.</li>
-        <li><b>Releases are unsigned.</b> Windows SmartScreen may warn on first
+        <li data-i18n="trust.item2"><b>Releases are unsigned.</b> Windows SmartScreen may warn on first
         run of <code>VolumeControl_&lt;version&gt;_x64-setup.exe</code>;
         that warning is expected until an Authenticode certificate is added.</li>
-        <li><b>No pipes into a shell.</b> Every command above downloads first,
+        <li data-i18n="trust.item3"><b>No pipes into a shell.</b> Every command above downloads first,
         verifies SHA-256, then executes the local copy from a fresh temporary
         folder — downloaded text never runs while it arrives.</li>
-        <li><b>Immutable releases.</b> Published assets are never overwritten;
+        <li data-i18n="trust.item4"><b>Immutable releases.</b> Published assets are never overwritten;
         re-uploading an existing tag fails instead of mutating bytes.</li>
       </ul>
     </div>
@@ -484,7 +492,7 @@
 
 <footer>
   <div class="wrap foot">
-    <span>VolumeControl — MIT licensed · built with Rust + Tauri</span>
+    <span data-i18n="footer.tagline">VolumeControl — MIT licensed · built with Rust + Tauri</span>
     <nav aria-label="Footer">
       <a href="https://github.com/dt418/volume-control">Repository</a>
       <a href="https://github.com/dt418/volume-control/releases">Releases</a>
@@ -706,6 +714,86 @@ curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-Volume
       })
       .catch(function () {});
   })();
+  /* ── bilingual landing page (EN / VI) ── */
+  var I18N = {
+    en: {
+      "nav.install": "Install",
+      "nav.features": "Features",
+      "nav.platform": "Platform",
+      "hero.title": "Volume control that feels<br><span class=\"grad\">native everywhere</span>",
+      "hero.sub": "Global hotkeys, a real system tray, an on-screen volume overlay, and Tauri v2 Mixer / Settings / Help surfaces — powered by WASAPI, CoreAudio, and PulseAudio backends.",
+      "hero.installBtn": "Install VolumeControl",
+      "hero.releasesBtn": "View releases",
+      "demo.try": "Try it — hold <kbd>Ctrl</kbd> + <kbd>Alt</kbd> and press a key, or click:",
+      "demo.note": "Simulated in your browser - same colour bands and steps as the app's defaults. The real overlay is native.",
+      "install.title": "Install, update, uninstall — remotely",
+      "install.sub": "Pick your tool. Every path resolves the stable GitHub release and verifies downloads against the release <code>SHA256SUMS.txt</code> manifest before anything runs.",
+      "features.title": "Built like a desktop app, not a web page",
+      "features.lede": "Every surface is native-first; the Tauri views share the same Signal Glass design contract as the Win32 overlay.",
+      "platform.title": "Platform status",
+      "platform.lede": "Honest coverage: what is fully proven where.",
+      "trust.title": "What verification does — and does not — prove",
+      "trust.sub": "Trust boundaries, stated plainly",
+      "trust.item1": "<b>Checksums, not signatures.</b> <code>SHA256SUMS.txt</code> proves a download matches the release it was published with — same-release integrity only. It is <b>not</b> code signing and says nothing about who built the binary.",
+      "trust.item2": "<b>Releases are unsigned.</b> Windows SmartScreen may warn on first run of <code>VolumeControl_&lt;version&gt;_x64-setup.exe</code>; that warning is expected until an Authenticode certificate is added.",
+      "trust.item3": "<b>No pipes into a shell.</b> Every command above downloads first, verifies SHA-256, then executes the local copy from a fresh temporary folder — downloaded text never runs while it arrives.",
+      "trust.item4": "<b>Immutable releases.</b> Published assets are never overwritten; re-uploading an existing tag fails instead of mutating bytes.",
+      "footer.tagline": "VolumeControl — MIT licensed · built with Rust + Tauri"
+    },
+    vi: {
+      "nav.install": "Cài đặt",
+      "nav.features": "Tính năng",
+      "nav.platform": "Nền tảng",
+      "hero.title": "Điều khiển âm lượng mang lại cảm giác<br><span class=\"grad\">nguyên bản mọi nơi</span>",
+      "hero.sub": "Phím tắt toàn cục, khay hệ thống thực, overlay âm lượng trên màn hình, và giao diện Mixer / Cài đặt / Trợ giúp Tauri v2 — hỗ trợ WASAPI, CoreAudio và PulseAudio.",
+      "hero.installBtn": "Cài đặt VolumeControl",
+      "hero.releasesBtn": "Xem các bản phát hành",
+      "demo.try": "Dùng thử — giữ <kbd>Ctrl</kbd> + <kbd>Alt</kbd> và bấm phím, hoặc nhấp chuột:",
+      "demo.note": "Mô phỏng trên trình duyệt - cùng dải màu và bước nhảy như mặc định của ứng dụng. Overlay thực tế là thành phần nguyên bản.",
+      "install.title": "Cài đặt, cập nhật, gỡ bỏ — từ xa",
+      "install.sub": "Chọn công cụ phù hợp. Mọi lệnh đều đối chiếu và xác minh mã băm <code>SHA256SUMS.txt</code> trước khi thực thi.",
+      "features.title": "Xây dựng chuẩn ứng dụng máy tính, không phải trang web",
+      "features.lede": "Mọi bề mặt đều ưu tiên nguyên bản; các giao diện Tauri chia sẻ cùng ngôn ngữ thiết kế Signal Glass như overlay Win32.",
+      "platform.title": "Trạng thái nền tảng",
+      "platform.lede": "Độ bao phủ thực tế: tính năng nào đã được kiểm chứng ở đâu.",
+      "trust.title": "Xác minh chứng minh điều gì — và không chứng minh điều gì",
+      "trust.sub": "Ranh giới tin cậy, nêu rõ ràng",
+      "trust.item1": "<b>Mã băm, không phải chữ ký số.</b> <code>SHA256SUMS.txt</code> chứng minh tệp tải về khớp với bản phát hành được xuất bản — chỉ đảm bảo tính toàn vẹn của bản phát hành đó.",
+      "trust.item2": "<b>Bản phát hành chưa có chữ ký số.</b> Windows SmartScreen có thể cảnh báo khi chạy <code>VolumeControl_&lt;version&gt;_x64-setup.exe</code> lần đầu; cảnh báo này là bình thường cho đến khi bổ sung chứng chỉ Authenticode.",
+      "trust.item3": "<b>Không pipe trực tiếp vào shell.</b> Mọi lệnh trên tải về trước, kiểm tra mã băm SHA-256, sau đó mới thực thi tệp cục bộ từ thư mục tạm — nội dung tải về không bao giờ chạy trực tiếp khi đang truyền.",
+      "trust.item4": "<b>Phát hành bất biến.</b> Các tệp đã phát hành không bao giờ bị ghi đè; việc tải lại cùng một tag sẽ báo lỗi thay vì thay đổi nội dung tệp.",
+      "footer.tagline": "VolumeControl — Giấy phép MIT · xây dựng bằng Rust + Tauri"
+    }
+  };
+
+  var langBtn = document.getElementById("lang-btn");
+  var savedLang = null;
+  try { savedLang = localStorage.getItem("vc-lang"); } catch (e) {}
+  var activeLang = savedLang || (/^vi/i.test(navigator.language || "") ? "vi" : "en");
+
+  function applyLanguage(lang) {
+    activeLang = lang;
+    try { localStorage.setItem("vc-lang", lang); } catch (e) {}
+    document.documentElement.lang = lang;
+    if (langBtn) {
+      langBtn.textContent = lang === "vi" ? "EN" : "VI";
+      langBtn.setAttribute("title", lang === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt");
+    }
+    var dict = I18N[lang] || I18N.en;
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var key = el.getAttribute("data-i18n");
+      if (dict[key]) {
+        el.innerHTML = dict[key];
+      }
+    });
+  }
+
+  if (langBtn) {
+    langBtn.addEventListener("click", function () {
+      applyLanguage(activeLang === "vi" ? "en" : "vi");
+    });
+  }
+  applyLanguage(activeLang);
 })();
 </script>
 
