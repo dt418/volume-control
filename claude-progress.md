@@ -31,6 +31,13 @@
 - Records: the Session 114 evidence line that claimed an unconditional
   creation-time call was corrected; this session's lines carry the CI
   evidence from run 39105564354's uploaded artifact.
+- Validation: CI re-run 39107449287 on the fix commit is green end to end.
+  `Ubuntu 24.04 (GTK4/libadwaita + layer-shell)` passed all 7 specs (mixer
+  1/1 in 6 s — the spec that used to die — plus runtime, windows, recovery,
+  settings, help, overlay 1/1) and `Release gate (required)` passed. The
+  run's backend log shows `E2E surface window-overlay created` inside the
+  mixer spec with no panic after it, i.e. the abort is gone at the exact
+  trigger that reproduced it.
 
 ## Session 114 (2026-10-18) - macOS/Linux tray + HUD parity and docs truth
 
