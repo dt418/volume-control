@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 122 (2026-10-18) - Address v0.1.8 release review feedback
+
+- Goal: repair selected review defects in the v0.1.8 landing page and Settings update card.
+- What landed:
+  - `docs/index.html`: restored unique-temporary-directory download, SHA-256 verification, and local execution for both Windows bootstrap snippets; curl failures throw before execution.
+  - `docs/index.html`: translated remaining landing-page content and accessibility labels in Vietnamese mode; a 400px breakpoint hides the Install navigation link and removes header overflow at 320px.
+  - `frontend/src/settings/UpdateCard.tsx`: derives pre-check version fallback from `frontend/package.json`; test now proves `v0.1.8` renders before a check.
+- Verification:
+  - `npm --prefix frontend test`: passed 18 files, 109 tests.
+  - `npm --prefix frontend run build`: passed TypeScript validation and Vite production build.
+  - Browser smoke: EN/VI toggle, verified PowerShell/curl snippets, 320px header (`scrollWidth == clientWidth == 320`), console error scan, and axe check (0 violations).
+  - `git diff --check`: passed.
+  - `powershell.exe -ExecutionPolicy Bypass -File .agents/skills/format-lint/scripts/format-lint.ps1`: passed full format, diff, records, Clippy, and workspace-test gate.
+
+
 ## Session 121 (2026-10-18) - Release v0.1.8 with bilingual landing page and update notifications
 
 - Goal: integrate full bilingual (EN/VI) support into the GitHub Pages landing site with an interactive language switcher, synchronize project version 0.1.8 across all package manifests and changelog, and prepare release tag v0.1.8.

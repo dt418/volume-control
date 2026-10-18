@@ -298,6 +298,11 @@
     section { padding-top: 44px; }
     .tab { padding: 10px 12px; }
   }
+  @media (max-width: 400px) {
+    .bar, nav { gap: 8px; }
+    nav a.hide-xs { display: none; }
+    .lang-toggle { padding: 5px 8px; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
   }
@@ -305,7 +310,7 @@
 </head>
 <body>
 
-<a class="skip" href="#main">Skip to content</a>
+<a class="skip" href="#main" data-i18n="skip">Skip to content</a>
 
 <header>
   <div class="wrap bar">
@@ -318,8 +323,8 @@
       </svg>
       VolumeControl
     </a>
-    <nav aria-label="Primary">
-      <a href="#install" data-i18n="nav.install">Install</a>
+    <nav aria-label="Primary" data-i18n-aria="nav.aria">
+      <a class="hide-xs" href="#install" data-i18n="nav.install">Install</a>
       <a class="hide-sm" href="#features" data-i18n="nav.features">Features</a>
       <a class="hide-sm" href="#platform" data-i18n="nav.platform">Platform</a>
       <button type="button" id="lang-btn" class="lang-toggle" aria-label="Change language">VI</button>
@@ -332,7 +337,7 @@
 <div class="wrap">
 
   <div class="hero">
-    <a class="pill" href="https://github.com/dt418/volume-control/releases/latest"><b id="ver">v0.1.x</b> · native-first · MIT licensed</a>
+    <a class="pill" href="https://github.com/dt418/volume-control/releases/latest"><b id="ver">v0.1.x</b><span data-i18n="hero.pill"> · native-first · MIT licensed</span></a>
     <h1 data-i18n="hero.title">Volume control that feels<br><span class="grad">native everywhere</span></h1>
     <p class="sub" data-i18n="hero.sub">
       Global hotkeys, a real system tray, an on-screen volume overlay, and
@@ -355,14 +360,14 @@
         </div>
       </div>
       <p class="sr-only" role="status" id="demo-live"></p>
-      <div class="demo-keys" role="group" aria-label="Try the shortcuts">
+      <div class="demo-keys" role="group" aria-label="Try the shortcuts" data-i18n-aria="demo.aria">
         <span class="lbl" data-i18n="demo.try">Try it — hold <kbd>Ctrl</kbd> + <kbd>Alt</kbd> and press a key, or click:</span>
-        <button type="button" class="key" data-act="up"     aria-label="Volume up 1 percent"    aria-keyshortcuts="Control+Alt+ArrowUp"><span aria-hidden="true">↑</span><small>+1%</small></button>
-        <button type="button" class="key" data-act="down"   aria-label="Volume down 1 percent"  aria-keyshortcuts="Control+Alt+ArrowDown"><span aria-hidden="true">↓</span><small>−1%</small></button>
-        <button type="button" class="key" data-act="up10"   aria-label="Volume up 10 percent"   aria-keyshortcuts="Control+Alt+Shift+ArrowUp"><span aria-hidden="true">⇧↑</span><small>+10%</small></button>
-        <button type="button" class="key" data-act="down10" aria-label="Volume down 10 percent" aria-keyshortcuts="Control+Alt+Shift+ArrowDown"><span aria-hidden="true">⇧↓</span><small>−10%</small></button>
-        <button type="button" class="key" data-act="mute"   aria-label="Toggle mute"            aria-keyshortcuts="Control+Alt+M"><span aria-hidden="true">M</span><small>mute</small></button>
-        <button type="button" class="key" data-act="reset"  aria-label="Reset to 50 percent"    aria-keyshortcuts="Control+Alt+R"><span aria-hidden="true">R</span><small>reset 50%</small></button>
+        <button type="button" class="key" data-act="up"     aria-label="Volume up 1 percent" data-i18n-aria="demo.up.aria" aria-keyshortcuts="Control+Alt+ArrowUp"><span aria-hidden="true">↑</span><small>+1%</small></button>
+        <button type="button" class="key" data-act="down"   aria-label="Volume down 1 percent" data-i18n-aria="demo.down.aria" aria-keyshortcuts="Control+Alt+ArrowDown"><span aria-hidden="true">↓</span><small>−1%</small></button>
+        <button type="button" class="key" data-act="up10"   aria-label="Volume up 10 percent" data-i18n-aria="demo.up10.aria" aria-keyshortcuts="Control+Alt+Shift+ArrowUp"><span aria-hidden="true">⇧↑</span><small>+10%</small></button>
+        <button type="button" class="key" data-act="down10" aria-label="Volume down 10 percent" data-i18n-aria="demo.down10.aria" aria-keyshortcuts="Control+Alt+Shift+ArrowDown"><span aria-hidden="true">⇧↓</span><small>−10%</small></button>
+        <button type="button" class="key" data-act="mute"   aria-label="Toggle mute" data-i18n-aria="demo.mute.aria" aria-keyshortcuts="Control+Alt+M"><span aria-hidden="true">M</span><small data-i18n="demo.mute">mute</small></button>
+        <button type="button" class="key" data-act="reset"  aria-label="Reset to 50 percent" data-i18n-aria="demo.reset.aria" aria-keyshortcuts="Control+Alt+R"><span aria-hidden="true">R</span><small data-i18n="demo.reset">reset 50%</small></button>
       </div>
       <p class="demo-note" data-i18n="demo.note">Simulated in your browser - same colour bands and steps as the app's defaults. The real overlay is native.</p>
     </div>
@@ -377,55 +382,55 @@
     </p>
 
     <div class="install-card">
-      <div class="tabs" role="tablist" aria-label="Install method">
+      <div class="tabs" role="tablist" aria-label="Install method" data-i18n-aria="install.method.aria">
         <button class="tab" role="tab" id="tab-ps"     aria-controls="snippet-panel" aria-selected="true"  tabindex="0"  data-tab="ps">PowerShell</button>
         <button class="tab" role="tab" id="tab-curl"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="curl">Windows · curl.exe</button>
         <button class="tab" role="tab" id="tab-unix"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="unix">macOS / Linux</button>
-        <button class="tab" role="tab" id="tab-winget" aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="winget">winget<span class="badge" id="winget-badge">soon</span></button>
+        <button class="tab" role="tab" id="tab-winget" aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="winget">winget<span class="badge" id="winget-badge" data-i18n="install.soon">soon</span></button>
       </div>
 
-      <div class="actions" role="group" aria-label="Action">
-        <span class="cap">Action</span>
-        <button class="chip" data-action="install"   aria-pressed="true">install</button>
-        <button class="chip" data-action="update"    aria-pressed="false">update</button>
-        <button class="chip" data-action="uninstall" aria-pressed="false">uninstall</button>
+      <div class="actions" role="group" aria-label="Action" data-i18n-aria="install.action.aria">
+        <span class="cap" data-i18n="install.action">Action</span>
+        <button class="chip" data-action="install"   aria-pressed="true" data-i18n="install.install">install</button>
+        <button class="chip" data-action="update"    aria-pressed="false" data-i18n="install.update">update</button>
+        <button class="chip" data-action="uninstall" aria-pressed="false" data-i18n="install.uninstall">uninstall</button>
       </div>
 
       <div class="codebox" id="snippet-panel" role="tabpanel" aria-labelledby="tab-ps">
-        <button class="copy" type="button" aria-label="Copy command">Copy</button>
+        <button class="copy" type="button" aria-label="Copy command" data-i18n="install.copy" data-i18n-aria="install.copy.aria">Copy</button>
         <pre id="snippet" tabindex="0"><code></code></pre>
       </div>
       <span class="sr-only" role="status" id="copy-status"></span>
-      <noscript><p class="note"><span>Enable JavaScript to see the install commands, or follow the steps in the <a href="https://github.com/dt418/volume-control#installing-on-windows">README</a>.</span></p></noscript>
+      <noscript><p class="note"><span data-i18n="install.noScript">Enable JavaScript to see the install commands, or follow the steps in the <a href="https://github.com/dt418/volume-control#installing-on-windows">README</a>.</span></p></noscript>
 
       <div class="note" id="winget-note" hidden>
         <span aria-hidden="true">ℹ</span>
-        <span><b>winget isn’t available yet.</b> Package submission is in review on
+        <span data-i18n="install.wingetNote"><b>winget isn’t available yet.</b> Package submission is in review on
         <a href="https://github.com/microsoft/winget-pkgs/pull/454508" rel="noopener">microsoft/winget-pkgs (PR #454508)</a>
         (Azure validation passed, pending moderator review). Use the PowerShell or curl.exe tab until merged.</span>
       </div>
     </div>
 
-    <p class="alt">Prefer a package? <a href="https://github.com/dt418/volume-control/releases/latest">.exe, .dmg, .deb, .rpm, .AppImage and archives</a>
+    <p class="alt" data-i18n="install.alt">Prefer a package? <a href="https://github.com/dt418/volume-control/releases/latest">.exe, .dmg, .deb, .rpm, .AppImage and archives</a>
       are on the releases page, and every file is listed in <code>SHA256SUMS.txt</code>.</p>
 
     <div class="facts" style="margin-top:18px">
       <div class="fact">
-        <div class="k">Install root</div>
+        <div class="k" data-i18n="facts.root.title">Install root</div>
         <code>%LOCALAPPDATA%\VolumeControl</code>
-        <p>Per-user only. The bootstrap refuses any other location — no
+        <p data-i18n="facts.root.body">Per-user only. The bootstrap refuses any other location — no
         elevation, no Program Files.</p>
       </div>
       <div class="fact">
-        <div class="k">Config survives</div>
+        <div class="k" data-i18n="facts.config.title">Config survives</div>
         <code>%APPDATA%\volume-control\config.ini</code>
-        <p>Lives outside the install root: update and uninstall preserve your
+        <p data-i18n="facts.config.body">Lives outside the install root: update and uninstall preserve your
         hotkeys and settings.</p>
       </div>
       <div class="fact">
-        <div class="k">Update rule</div>
+        <div class="k" data-i18n="facts.update.title">Update rule</div>
         <code>-Action update</code>
-        <p>Refuses to run while VolumeControl is open. It never
+        <p data-i18n="facts.update.body">Refuses to run while VolumeControl is open. It never
         force-terminates your process — close the app first.</p>
       </div>
     </div>
@@ -436,14 +441,14 @@
     <p class="lede" data-i18n="features.lede">Every surface is native-first; the Tauri views share the
     same Signal Glass design contract as the Win32 overlay.</p>
     <div class="grid">
-      <div class="card"><div class="ico" aria-hidden="true">⌨️</div><h3>Global hotkeys</h3><p>RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay on Windows with tunable fade; webview HUD (336x88, always-on-top) on macOS/Linux. Click-through on Windows, macOS and X11 — interactive on Wayland; blur is CSS-only.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">🎚️</div><h3>Mixer surface</h3><p>Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">📦</div><h3>System tray</h3><p>Native tray on Windows, Tauri tray on macOS/Linux — live volume label, mute/reset, mixer/settings/help, updates, reload, exit; a tray failure never kills the app. Menu-bar/appindicator clicks still need manual proof.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">⚙️</div><h3>Settings &amp; Help</h3><p>Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">🔄</div><h3>Live config reload</h3><p>Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">🌐</div><h3>English &amp; <span lang="vi">Tiếng Việt</span></h3><p>Mixer, overlay, settings and help all speak both languages — switch from the tray or Settings.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">⬆️</div><h3>Update check</h3><p>“Check for updates” in the tray menu reports the result inline, so you never have to open Settings to find out.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⌨️</div><h3 data-i18n="feature.hotkeys.title">Global hotkeys</h3><p data-i18n="feature.hotkeys.body">RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🔊</div><h3 data-i18n="feature.overlay.title">Volume overlay</h3><p data-i18n="feature.overlay.body">Native Win32 overlay on Windows with tunable fade; webview HUD (336x88, always-on-top) on macOS/Linux. Click-through on Windows, macOS and X11 — interactive on Wayland; blur is CSS-only.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🎚️</div><h3 data-i18n="feature.mixer.title">Mixer surface</h3><p data-i18n="feature.mixer.body">Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">📦</div><h3 data-i18n="feature.tray.title">System tray</h3><p data-i18n="feature.tray.body">Native tray on Windows, Tauri tray on macOS/Linux — live volume label, mute/reset, mixer/settings/help, updates, reload, exit; a tray failure never kills the app. Menu-bar/appindicator clicks still need manual proof.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⚙️</div><h3 data-i18n="feature.settings.title">Settings &amp; Help</h3><p data-i18n="feature.settings.body">Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🔄</div><h3 data-i18n="feature.reload.title">Live config reload</h3><p data-i18n="feature.reload.body">Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🌐</div><h3 data-i18n="feature.languages.title">English &amp; <span lang="vi">Tiếng Việt</span></h3><p data-i18n="feature.languages.body">Mixer, overlay, settings and help all speak both languages — switch from the tray or Settings.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⬆️</div><h3 data-i18n="feature.updates.title">Update check</h3><p data-i18n="feature.updates.body">“Check for updates” in the tray menu reports the result inline, so you never have to open Settings to find out.</p></div>
     </div>
   </section>
 
@@ -452,15 +457,15 @@
     <p class="lede" data-i18n="platform.lede">Honest coverage: what is fully proven where.</p>
     <div class="table-wrap" role="region" aria-labelledby="platform-title" tabindex="0">
       <table>
-        <thead><tr><th scope="col">Capability</th><th scope="col">Windows</th><th scope="col">macOS</th><th scope="col">Linux</th></tr></thead>
+        <thead><tr><th scope="col" data-i18n="platform.capability">Capability</th><th scope="col">Windows</th><th scope="col">macOS</th><th scope="col">Linux</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Volume control</th><td class="yes">✅ WASAPI</td><td class="yes">✅ CoreAudio</td><td class="yes">✅ PulseAudio</td></tr>
-          <tr><th scope="row">Global hotkeys</th><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
-          <tr><th scope="row">System mixer / Settings / Help</th><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
-          <tr><th scope="row">Per-app mixer</th><td class="yes">✅ WASAPI sessions</td><td class="manual">✖ no public API</td><td class="yes">✅ PulseAudio sink-inputs</td></tr>
-          <tr><th scope="row">Native overlay &amp; tray</th><td class="yes">✅ native</td><td class="yes">✅ Tauri tray + HUD</td><td class="yes">✅ Tauri tray + HUD</td></tr>
+          <tr><th scope="row" data-i18n="platform.volume">Volume control</th><td class="yes">✅ WASAPI</td><td class="yes">✅ CoreAudio</td><td class="yes">✅ PulseAudio</td></tr>
+          <tr><th scope="row" data-i18n="platform.hotkeys">Global hotkeys</th><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
+          <tr><th scope="row" data-i18n="platform.surfaces">System mixer / Settings / Help</th><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
+          <tr><th scope="row" data-i18n="platform.perApp">Per-app mixer</th><td class="yes">✅ WASAPI sessions</td><td class="manual" data-i18n="platform.noApi">✖ no public API</td><td class="yes">✅ PulseAudio sink-inputs</td></tr>
+          <tr><th scope="row" data-i18n="platform.overlayTray">Native overlay &amp; tray</th><td class="yes" data-i18n="platform.native">✅ native</td><td class="yes">✅ Tauri tray + HUD</td><td class="yes">✅ Tauri tray + HUD</td></tr>
           <!-- When dt418.VolumeControl lands in winget-pkgs: move winget into the ✅ list and set WINGET_LIVE = true in the script below. -->
-          <tr><th scope="row">Remote install commands</th><td class="yes">✅ PowerShell · curl.exe <span class="manual">· 🔜 winget</span></td><td class="yes">✅ verified installer script</td><td class="yes">✅ verified installer script</td></tr>
+          <tr><th scope="row" data-i18n="platform.remote">Remote install commands</th><td class="yes" data-i18n="platform.remoteWindows">✅ PowerShell · curl.exe <span class="manual">· 🔜 winget</span></td><td class="yes" data-i18n="platform.verified">✅ verified installer script</td><td class="yes" data-i18n="platform.verified">✅ verified installer script</td></tr>
         </tbody>
       </table>
     </div>
@@ -493,13 +498,13 @@
 <footer>
   <div class="wrap foot">
     <span data-i18n="footer.tagline">VolumeControl — MIT licensed · built with Rust + Tauri</span>
-    <nav aria-label="Footer">
-      <a href="https://github.com/dt418/volume-control">Repository</a>
-      <a href="https://github.com/dt418/volume-control/releases">Releases</a>
-      <a href="https://github.com/dt418/volume-control/blob/main/CHANGELOG.md">Changelog</a>
-      <a href="https://github.com/dt418/volume-control/blob/main/docs/testing/cross-platform-release-checklist.md">Release checklist</a>
-      <a href="https://github.com/dt418/volume-control/issues">Issues</a>
-      <a lang="vi" hreflang="vi" href="https://github.com/dt418/volume-control/blob/main/README.vi.md">Tiếng Việt</a>
+    <nav aria-label="Footer" data-i18n-aria="footer.aria">
+      <a href="https://github.com/dt418/volume-control" data-i18n="footer.repository">Repository</a>
+      <a href="https://github.com/dt418/volume-control/releases" data-i18n="footer.releases">Releases</a>
+      <a href="https://github.com/dt418/volume-control/blob/main/CHANGELOG.md" data-i18n="footer.changelog">Changelog</a>
+      <a href="https://github.com/dt418/volume-control/blob/main/docs/testing/cross-platform-release-checklist.md" data-i18n="footer.checklist">Release checklist</a>
+      <a href="https://github.com/dt418/volume-control/issues" data-i18n="footer.issues">Issues</a>
+      <a lang="vi" hreflang="vi" href="https://github.com/dt418/volume-control/blob/main/README.vi.md" data-i18n="footer.vietnamese">Tiếng Việt</a>
     </nav>
   </div>
 </footer>
@@ -508,11 +513,29 @@
      every flow is download → verify SHA-256 → run the local copy. -->
 
 <script type="text/plain" id="tpl-ps">
-& ([scriptblock]::Create((irm '{{BASE}}/Install-VolumeControl.ps1'))) -Action {{ACTION}}
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
+$base = '{{BASE}}'
+Invoke-WebRequest "$base/Install-VolumeControl.ps1" -OutFile "$root/Install-VolumeControl.ps1" -ErrorAction Stop
+Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$root/SHA256SUMS.txt" -ErrorAction Stop
+$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
+$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
+if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
 </script>
 
 <script type="text/plain" id="tpl-curl">
-curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-VolumeControl.ps1"; & "$env:TEMP\Install-VolumeControl.ps1" -Action {{ACTION}}
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
+$base = '{{BASE}}'
+curl.exe -fsSL "$base/Install-VolumeControl.ps1" -o "$root/Install-VolumeControl.ps1"
+if ($LASTEXITCODE -ne 0) { throw 'Failed to download Install-VolumeControl.ps1' }
+curl.exe -fsSL "$base/SHA256SUMS.txt" -o "$root/SHA256SUMS.txt"
+if ($LASTEXITCODE -ne 0) { throw 'Failed to download SHA256SUMS.txt' }
+$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
+$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
+if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
 </script>
 
 <script type="text/plain" id="tpl-unix">
@@ -563,12 +586,14 @@ curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-Volume
       var cmd = action === "update" ? "winget upgrade --id dt418.VolumeControl" :
                 action === "uninstall" ? "winget uninstall --id dt418.VolumeControl" :
                 "winget install --id dt418.VolumeControl";
-      return (WINGET_LIVE ? "" : "# Not published to winget-pkgs yet - use the PowerShell or curl.exe tab.\n") +
-             "# winget checks the installer against the SHA-256 in its manifest before it runs.\n" +
+      return (WINGET_LIVE ? "" : localized("snippet.winget.unavailable", "# Not published to winget-pkgs yet - use the PowerShell or curl.exe tab.\n")) +
+             localized("snippet.winget.verify", "# winget checks the installer against the SHA-256 in its manifest before it runs.\n") +
              cmd;
     }
-    if (tab === "unix") return NOTES.unix[action] + fill(tpl("tpl-unix"), action);
-    return NOTES.win[action] + fill(tpl(tab === "curl" ? "tpl-curl" : "tpl-ps"), action);
+    var platform = tab === "unix" ? "unix" : "win";
+    var notes = tab === "unix" ? NOTES.unix : NOTES.win;
+    return localized("snippet." + platform + "." + action, notes[action]) +
+           fill(tpl(tab === "unix" ? "tpl-unix" : tab === "curl" ? "tpl-curl" : "tpl-ps"), action);
   }
   function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
@@ -623,7 +648,7 @@ curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-Volume
     copyBtn.textContent = label;
     copyStatus.textContent = spoken;
     clearTimeout(copyTimer);
-    copyTimer = setTimeout(function () { copyBtn.textContent = "Copy"; copyStatus.textContent = ""; }, 1800);
+    copyTimer = setTimeout(function () { copyBtn.textContent = localized("install.copy", "Copy"); copyStatus.textContent = ""; }, 1800);
   }
   function legacyCopy(text) {
     var ta = document.createElement("textarea"), ok = false;
@@ -638,8 +663,8 @@ curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-Volume
     var r = document.createRange(); r.selectNodeContents(codeEl);
     var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
   }
-  function copyFailed() { selectSnippet(); flash("Press Ctrl+C", "Copy failed. The command is selected; press Control C to copy."); }
-  function copied() { flash("Copied", "Command copied to clipboard"); }
+  function copyFailed() { selectSnippet(); flash(localized("copy.failed.label", "Press Ctrl+C"), localized("copy.failed.status", "Copy failed. The command is selected; press Control C to copy.")); }
+  function copied() { flash(localized("copy.copied.label", "Copied"), localized("copy.copied.status", "Command copied to clipboard")); }
   copyBtn.addEventListener("click", function () {
     var text = codeEl.textContent;
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -666,8 +691,8 @@ curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-Volume
   function paint() {
     bar.style.width = vol + "%";
     bar.style.backgroundColor = band(vol, muted);
-    out.textContent = muted ? "Muted" : vol + "%";
-    live.textContent = muted ? "Muted" : "Volume " + vol + " percent";
+    out.textContent = muted ? localized("demo.muted", "Muted") : vol + "%";
+    live.textContent = muted ? localized("demo.muted", "Muted") : localized("demo.volume", "Volume") + " " + vol + " " + localized("demo.percent", "percent");
     ov.classList.add("on");
     clearTimeout(hideTimer);
     hideTimer = setTimeout(function () { ov.classList.remove("on"); }, 1800);   // overlay_duration_ms default
@@ -738,7 +763,84 @@ curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-Volume
       "trust.item2": "<b>Releases are unsigned.</b> Windows SmartScreen may warn on first run of <code>VolumeControl_&lt;version&gt;_x64-setup.exe</code>; that warning is expected until an Authenticode certificate is added.",
       "trust.item3": "<b>No pipes into a shell.</b> Every command above downloads first, verifies SHA-256, then executes the local copy from a fresh temporary folder — downloaded text never runs while it arrives.",
       "trust.item4": "<b>Immutable releases.</b> Published assets are never overwritten; re-uploading an existing tag fails instead of mutating bytes.",
-      "footer.tagline": "VolumeControl — MIT licensed · built with Rust + Tauri"
+      "footer.tagline": "VolumeControl — MIT licensed · built with Rust + Tauri",
+      "skip": "Skip to content",
+      "nav.aria": "Primary",
+      "hero.pill": " · native-first · MIT licensed",
+      "demo.aria": "Try the shortcuts",
+      "demo.up.aria": "Volume up 1 percent",
+      "demo.down.aria": "Volume down 1 percent",
+      "demo.up10.aria": "Volume up 10 percent",
+      "demo.down10.aria": "Volume down 10 percent",
+      "demo.mute.aria": "Toggle mute",
+      "demo.reset.aria": "Reset to 50 percent",
+      "demo.mute": "mute",
+      "demo.reset": "reset 50%",
+      "demo.muted": "Muted",
+      "demo.volume": "Volume",
+      "demo.percent": "percent",
+      "install.method.aria": "Install method",
+      "install.action.aria": "Action",
+      "install.action": "Action",
+      "install.install": "install",
+      "install.update": "update",
+      "install.uninstall": "uninstall",
+      "install.soon": "soon",
+      "install.copy": "Copy",
+      "install.copy.aria": "Copy command",
+      "install.noScript": "Enable JavaScript to see the install commands, or follow the steps in the <a href=\"https://github.com/dt418/volume-control#installing-on-windows\">README</a>.",
+      "install.wingetNote": "<b>winget isn’t available yet.</b> Package submission is in review on <a href=\"https://github.com/microsoft/winget-pkgs/pull/454508\" rel=\"noopener\">microsoft/winget-pkgs (PR #454508)</a> (Azure validation passed, pending moderator review). Use the PowerShell or curl.exe tab until merged.",
+      "install.alt": "Prefer a package? <a href=\"https://github.com/dt418/volume-control/releases/latest\">.exe, .dmg, .deb, .rpm, .AppImage and archives</a> are on the releases page, and every file is listed in <code>SHA256SUMS.txt</code>.",
+      "facts.root.title": "Install root",
+      "facts.root.body": "Per-user only. The bootstrap refuses any other location — no elevation, no Program Files.",
+      "facts.config.title": "Config survives",
+      "facts.config.body": "Lives outside the install root: update and uninstall preserve your hotkeys and settings.",
+      "facts.update.title": "Update rule",
+      "facts.update.body": "Refuses to run while VolumeControl is open. It never force-terminates your process — close the app first.",
+      "feature.hotkeys.title": "Global hotkeys",
+      "feature.hotkeys.body": "RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.",
+      "feature.overlay.title": "Volume overlay",
+      "feature.overlay.body": "Native Win32 overlay on Windows with tunable fade; webview HUD (336x88, always-on-top) on macOS/Linux. Click-through on Windows, macOS and X11 — interactive on Wayland; blur is CSS-only.",
+      "feature.mixer.title": "Mixer surface",
+      "feature.mixer.body": "Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.",
+      "feature.tray.title": "System tray",
+      "feature.tray.body": "Native tray on Windows, Tauri tray on macOS/Linux — live volume label, mute/reset, mixer/settings/help, updates, reload, exit; a tray failure never kills the app. Menu-bar/appindicator clicks still need manual proof.",
+      "feature.settings.title": "Settings &amp; Help",
+      "feature.settings.body": "Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.",
+      "feature.reload.title": "Live config reload",
+      "feature.reload.body": "Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.",
+      "feature.languages.title": "English &amp; <span lang=\"vi\">Tiếng Việt</span>",
+      "feature.languages.body": "Mixer, overlay, settings and help all speak both languages — switch from the tray or Settings.",
+      "feature.updates.title": "Update check",
+      "feature.updates.body": "“Check for updates” in the tray menu reports the result inline, so you never have to open Settings to find out.",
+      "platform.capability": "Capability",
+      "platform.volume": "Volume control",
+      "platform.hotkeys": "Global hotkeys",
+      "platform.surfaces": "System mixer / Settings / Help",
+      "platform.perApp": "Per-app mixer",
+      "platform.noApi": "✖ no public API",
+      "platform.overlayTray": "Native overlay &amp; tray",
+      "platform.native": "✅ native",
+      "platform.remote": "Remote install commands",
+      "platform.remoteWindows": "✅ PowerShell · curl.exe <span class=\"manual\">· 🔜 winget</span>",
+      "platform.verified": "✅ verified installer script",
+      "footer.aria": "Footer",
+      "footer.repository": "Repository",
+      "footer.releases": "Releases",
+      "footer.changelog": "Changelog",
+      "footer.checklist": "Release checklist",
+      "footer.issues": "Issues",
+      "footer.vietnamese": "Tiếng Việt",
+      "snippet.winget.unavailable": "# Not published to winget-pkgs yet - use the PowerShell or curl.exe tab.\n",
+      "snippet.winget.verify": "# winget checks the installer against the SHA-256 in its manifest before it runs.\n",
+      "snippet.win.update": "# Update refuses to run while VolumeControl is open - close it first.\n# Pin a release: add  -Version vX.Y.Z  to the last line.\n",
+      "snippet.win.uninstall": "# Removes the app; config.ini is preserved.\n",
+      "snippet.unix.update": "# Pin a release: put  VOLUMECTL_VERSION=vX.Y.Z  before  bash  on the last line.\n",
+      "snippet.unix.uninstall": "# Removes the app/binary; your config is preserved.\n",
+      "copy.failed.label": "Press Ctrl+C",
+      "copy.failed.status": "Copy failed. The command is selected; press Control C to copy.",
+      "copy.copied.label": "Copied",
+      "copy.copied.status": "Command copied to clipboard"
     },
     vi: {
       "nav.install": "Cài đặt",
@@ -762,9 +864,91 @@ curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-Volume
       "trust.item2": "<b>Bản phát hành chưa có chữ ký số.</b> Windows SmartScreen có thể cảnh báo khi chạy <code>VolumeControl_&lt;version&gt;_x64-setup.exe</code> lần đầu; cảnh báo này là bình thường cho đến khi bổ sung chứng chỉ Authenticode.",
       "trust.item3": "<b>Không pipe trực tiếp vào shell.</b> Mọi lệnh trên tải về trước, kiểm tra mã băm SHA-256, sau đó mới thực thi tệp cục bộ từ thư mục tạm — nội dung tải về không bao giờ chạy trực tiếp khi đang truyền.",
       "trust.item4": "<b>Phát hành bất biến.</b> Các tệp đã phát hành không bao giờ bị ghi đè; việc tải lại cùng một tag sẽ báo lỗi thay vì thay đổi nội dung tệp.",
-      "footer.tagline": "VolumeControl — Giấy phép MIT · xây dựng bằng Rust + Tauri"
+      "footer.tagline": "VolumeControl — Giấy phép MIT · xây dựng bằng Rust + Tauri",
+      "skip": "Chuyển đến nội dung",
+      "nav.aria": "Điều hướng chính",
+      "hero.pill": " · ưu tiên nguyên bản · giấy phép MIT",
+      "demo.aria": "Dùng thử phím tắt",
+      "demo.up.aria": "Tăng âm lượng 1 phần trăm",
+      "demo.down.aria": "Giảm âm lượng 1 phần trăm",
+      "demo.up10.aria": "Tăng âm lượng 10 phần trăm",
+      "demo.down10.aria": "Giảm âm lượng 10 phần trăm",
+      "demo.mute.aria": "Bật hoặc tắt tiếng",
+      "demo.reset.aria": "Đặt lại về 50 phần trăm",
+      "demo.mute": "tắt tiếng",
+      "demo.reset": "đặt lại 50%",
+      "demo.muted": "Đã tắt tiếng",
+      "demo.volume": "Âm lượng",
+      "demo.percent": "phần trăm",
+      "install.method.aria": "Phương thức cài đặt",
+      "install.action.aria": "Thao tác",
+      "install.action": "Thao tác",
+      "install.install": "cài đặt",
+      "install.update": "cập nhật",
+      "install.uninstall": "gỡ bỏ",
+      "install.soon": "sắp có",
+      "install.copy": "Sao chép",
+      "install.copy.aria": "Sao chép lệnh",
+      "install.noScript": "Bật JavaScript để xem lệnh cài đặt, hoặc làm theo các bước trong <a href=\"https://github.com/dt418/volume-control#installing-on-windows\">README</a>.",
+      "install.wingetNote": "<b>winget chưa khả dụng.</b> Gói đang được xem xét tại <a href=\"https://github.com/microsoft/winget-pkgs/pull/454508\" rel=\"noopener\">microsoft/winget-pkgs (PR #454508)</a> (đã qua kiểm tra Azure, đang chờ người kiểm duyệt). Dùng tab PowerShell hoặc curl.exe đến khi hợp nhất.",
+      "install.alt": "Muốn dùng gói cài đặt? <a href=\"https://github.com/dt418/volume-control/releases/latest\">.exe, .dmg, .deb, .rpm, .AppImage và kho lưu trữ</a> có trên trang phát hành; mọi tệp đều nằm trong <code>SHA256SUMS.txt</code>.",
+      "facts.root.title": "Thư mục cài đặt",
+      "facts.root.body": "Chỉ theo người dùng. Bootstrap từ chối mọi vị trí khác — không cần nâng quyền, không dùng Program Files.",
+      "facts.config.title": "Giữ nguyên cấu hình",
+      "facts.config.body": "Nằm ngoài thư mục cài đặt: cập nhật và gỡ bỏ vẫn giữ phím tắt và thiết lập.",
+      "facts.update.title": "Quy tắc cập nhật",
+      "facts.update.body": "Từ chối chạy khi VolumeControl đang mở. Không bao giờ ép dừng tiến trình — hãy đóng ứng dụng trước.",
+      "feature.hotkeys.title": "Phím tắt toàn cục",
+      "feature.hotkeys.body": "Phím tắt dựa trên RegisterHotKey với ánh xạ lại từng thao tác, đo độ trễ phím và tải lại cấu hình tức thời.",
+      "feature.overlay.title": "Overlay âm lượng",
+      "feature.overlay.body": "Overlay Win32 nguyên bản trên Windows với hiệu ứng mờ tùy chỉnh; HUD webview (336x88, luôn nổi) trên macOS/Linux. Bấm xuyên trên Windows, macOS và X11 — tương tác trên Wayland; hiệu ứng mờ chỉ dùng CSS.",
+      "feature.mixer.title": "Giao diện Mixer",
+      "feature.mixer.body": "Trộn âm lượng từng phiên bằng Tauri v2 trên WASAPI và PulseAudio — thao tác hệ thống cốt lõi theo bước ±1% / ±10%.",
+      "feature.tray.title": "Khay hệ thống",
+      "feature.tray.body": "Khay nguyên bản trên Windows, khay Tauri trên macOS/Linux — nhãn âm lượng trực tiếp, tắt tiếng/đặt lại, mixer/cài đặt/trợ giúp, cập nhật, tải lại, thoát; lỗi khay không bao giờ làm ứng dụng dừng. Thao tác nhấp menu-bar/appindicator vẫn cần kiểm chứng thủ công.",
+      "feature.settings.title": "Cài đặt &amp; Trợ giúp",
+      "feature.settings.body": "Ánh xạ lại mọi phím tắt, chỉnh thời gian overlay, bật/tắt tự khởi động — lưu trong tệp INI thuần có thể chỉnh sửa.",
+      "feature.reload.title": "Tải lại cấu hình trực tiếp",
+      "feature.reload.body": "Sửa <code>config.ini</code> khi đang chạy; lõi và giao diện nhận thay đổi mà không cần khởi động lại.",
+      "feature.languages.title": "Tiếng Anh &amp; <span lang=\"vi\">Tiếng Việt</span>",
+      "feature.languages.body": "Mixer, overlay, cài đặt và trợ giúp đều dùng được hai ngôn ngữ — chuyển từ khay hoặc Cài đặt.",
+      "feature.updates.title": "Kiểm tra cập nhật",
+      "feature.updates.body": "“Kiểm tra cập nhật” trong menu khay báo kết quả ngay tại chỗ, không cần mở Cài đặt.",
+      "platform.capability": "Khả năng",
+      "platform.volume": "Điều khiển âm lượng",
+      "platform.hotkeys": "Phím tắt toàn cục",
+      "platform.surfaces": "Mixer hệ thống / Cài đặt / Trợ giúp",
+      "platform.perApp": "Mixer từng ứng dụng",
+      "platform.noApi": "✖ không có API công khai",
+      "platform.overlayTray": "Overlay &amp; khay nguyên bản",
+      "platform.native": "✅ nguyên bản",
+      "platform.remote": "Lệnh cài đặt từ xa",
+      "platform.remoteWindows": "✅ PowerShell · curl.exe <span class=\"manual\">· 🔜 winget</span>",
+      "platform.verified": "✅ script cài đặt đã xác minh",
+      "footer.aria": "Chân trang",
+      "footer.repository": "Kho mã",
+      "footer.releases": "Bản phát hành",
+      "footer.changelog": "Nhật ký thay đổi",
+      "footer.checklist": "Danh sách kiểm tra phát hành",
+      "footer.issues": "Vấn đề",
+      "footer.vietnamese": "Tiếng Việt",
+      "snippet.winget.unavailable": "# Chưa phát hành trên winget-pkgs - dùng tab PowerShell hoặc curl.exe.\n",
+      "snippet.winget.verify": "# winget kiểm tra SHA-256 của trình cài đặt trong manifest trước khi chạy.\n",
+      "snippet.win.update": "# Cập nhật từ chối chạy khi VolumeControl đang mở - hãy đóng ứng dụng trước.\n# Ghim phiên bản phát hành: thêm  -Version vX.Y.Z  vào dòng cuối.\n",
+      "snippet.win.uninstall": "# Gỡ ứng dụng; config.ini được giữ lại.\n",
+      "snippet.unix.update": "# Ghim phiên bản phát hành: đặt  VOLUMECTL_VERSION=vX.Y.Z  trước  bash  ở dòng cuối.\n",
+      "snippet.unix.uninstall": "# Gỡ ứng dụng/tệp nhị phân; cấu hình được giữ lại.\n",
+      "copy.failed.label": "Nhấn Ctrl+C",
+      "copy.failed.status": "Không sao chép được. Lệnh đã được chọn; nhấn Control C để sao chép.",
+      "copy.copied.label": "Đã sao chép",
+      "copy.copied.status": "Đã sao chép lệnh vào bộ nhớ tạm"
     }
   };
+  function localized(key, fallback) {
+    var dict = I18N && (I18N[activeLang] || I18N.en);
+    return (dict && dict[key]) || fallback;
+  }
+
 
   var langBtn = document.getElementById("lang-btn");
   var savedLang = null;
@@ -775,17 +959,22 @@ curl.exe -fsSL "{{BASE}}/Install-VolumeControl.ps1" -o "$env:TEMP\Install-Volume
     activeLang = lang;
     try { localStorage.setItem("vc-lang", lang); } catch (e) {}
     document.documentElement.lang = lang;
+    var dict = I18N[lang] || I18N.en;
     if (langBtn) {
       langBtn.textContent = lang === "vi" ? "EN" : "VI";
       langBtn.setAttribute("title", lang === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt");
+      langBtn.setAttribute("aria-label", lang === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt");
     }
-    var dict = I18N[lang] || I18N.en;
     document.querySelectorAll("[data-i18n]").forEach(function (el) {
       var key = el.getAttribute("data-i18n");
-      if (dict[key]) {
-        el.innerHTML = dict[key];
-      }
+      if (dict[key]) el.innerHTML = dict[key];
     });
+    document.querySelectorAll("[data-i18n-aria]").forEach(function (el) {
+      var key = el.getAttribute("data-i18n-aria");
+      if (dict[key]) el.setAttribute("aria-label", dict[key]);
+    });
+    copyBtn.textContent = localized("install.copy", "Copy");
+    render();
   }
 
   if (langBtn) {

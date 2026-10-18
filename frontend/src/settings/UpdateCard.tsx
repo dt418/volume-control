@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { invoke, listen } from "../lib/ipc";
 import { useT } from "../lib/i18n";
+import pkg from "../../package.json";
 
 export interface UpdateInfoPayload {
   current_version: string;
@@ -50,7 +51,7 @@ export function UpdateCard() {
           <div className="flex flex-col gap-0.5">
             <span className="text-xs text-foreground/60">{tr("settings.updates.current")}</span>
             <span className="text-sm font-semibold font-mono">
-              {updateInfo?.current_version ? `v${updateInfo.current_version}` : "v0.1.7"}
+              {updateInfo?.current_version ? `v${updateInfo.current_version}` : `v${pkg.version}`}
             </span>
           </div>
           <button

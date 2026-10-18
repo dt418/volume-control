@@ -13,9 +13,14 @@ describe("UpdateCard", () => {
     vi.clearAllMocks();
   });
 
-  it("renders version display and check for updates button", () => {
+  it("shows package version before any update check", () => {
     render(<UpdateCard />);
-    expect(screen.getByText("Updates")).toBeInTheDocument();
+
+    expect(screen.getByText("v0.1.8")).toBeInTheDocument();
+  });
+
+  it("renders check for updates button", () => {
+    render(<UpdateCard />);
     expect(screen.getByRole("button", { name: "Check for updates" })).toBeInTheDocument();
   });
 
