@@ -21,14 +21,20 @@
       "area": "release",
       "title": "Release 0.1.7 with the bilingual UI",
       "user_visible_behavior": "The next tagged release carries the EN/VI interface, the tray update check, the faster startup path, the record merge drivers, and the format-lint lock fix on top of the v0.1.6 packaging set (Windows installer and archive, macOS zip and dmg, Linux tar.gz, deb, rpm and AppImage, plus the three installer scripts and SHA256SUMS.txt).",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
-        "Local: cargo fmt --all --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, and cargo test --workspace --no-default-features pass with the 0.1.7 version bump.",
-        "Local: bash scripts/test-release-workflow.sh, bash scripts/test-records-merge.sh, bash scripts/test-install-unix.sh, and the PowerShell installer suite pass.",
-        "CI (required before the tag): the pull request is green on Windows, macOS, and Ubuntu; the tag run then publishes and verifies all twelve assets."
+        "CI: PR #55 merged as 31679ce55497d12e4d63cd83a3796a2624534eb7 after run 39004662581 completed with conclusion success.",
+        "Release: tag run 39005424195 completed with conclusion success; public GitHub release v0.1.7 is not a draft and contains twelve assets (Windows installer/archive/bootstrap, macOS zip/dmg/installer, Linux tar.gz/deb/rpm/AppImage/installer, and SHA256SUMS.txt).",
+        "Installer integrity: the downloaded VolumeControl_0.1.7_x64-setup.exe SHA-256 is 541c57e8f7b57f571559278e167be4123923a2cfb22cb776791d84519e30b92b, matching SHA256SUMS.txt; winget validate --manifest for the generated 1.12 manifest passed.",
+        "Computer-use proof: Chrome rendered winget PR #454508 as open with title/version 0.1.7 and the published installer URL/SHA-256; all ten Microsoft validation checks and the CLA check subsequently completed successfully, while required moderator review remains external."
       ],
-      "evidence": [],
-      "notes": "The version bump touches the workspace manifests, src-tauri/tauri.conf.json, frontend/package.json and its lock file, and the CHANGELOG; the tag is created only after the merge commit is green."
+      "evidence": [
+        "Session 110 follow-up (2026-10-17): release notes were set on the public v0.1.7 release after PR #55 merge; release and asset API queries, downloaded checksum verification, local winget validation, and a visible GitHub PR inspection produced the verification above.",
+        "Winget PR #454508 replaces the pending 0.1.5 submission with the generated 0.1.7 manifests. All Microsoft validation and CLA checks completed successfully; moderator approval remains the external prerequisite for catalog publication.",
+        "Pre-push review: independent guard-core, gate-chain, and wiring/records reviewers inspected this records-only diff and reported no findings.",
+        "Full ship dry-run: after the documented ignored frontend build setup, bash scripts/ship.sh --dry-run passed its records guard, format/lint gate (including clippy and cargo test), records self-test, and format-lint smoke test."
+      ],
+      "notes": "The version bump touched the workspace manifests, src-tauri/tauri.conf.json, frontend/package.json and its lock file, and the CHANGELOG. The tagged release is complete; the independent winget catalog submission is fully validated but remains open for required external approval."
     },
     {
       "id": "vol-089",
@@ -173,11 +179,12 @@
       "priority": 83,
       "area": "testing",
       "title": "E2E stability: mixer focus guard + WebView2 isolation + zombie cleanup",
-      "user_visible_behavior": "The Windows Tauri E2E matrix stops flaking with \"No window could be found\" after consecutive app restarts: the mixer keeps its window open under the debug marker (auto-close-on-blur is production-only), each surface app gets an isolated WebView2 user-data folder so orphaned renderer processes from force-killed runs cannot corrupt the next webview, and the E2E wrapper kills leftover app instances before and after every run — which also removes the stale native-HUD ghost a killed E2E app can leave on the desktop.",
+      "user_visible_behavior": "The Windows Tauri E2E matrix stops flaking with \"No window could be found\": debug-marker surfaces ignore external CloseRequested events before embedded WebDriver attaches, the mixer also ignores production-only focus auto-close, each surface app gets an isolated WebView2 user-data folder, and the E2E wrapper removes leftover app instances before and after every run. Production window close behavior remains unchanged.",
       "status": "in_progress",
       "verification": [
         "TDD RED: mixer_auto_close_on_focus_loss_is_disabled_under_the_e2e_marker fails with E0425 (function missing) before implementation; GREEN after the helper lands (tauri 17/17).",
         "window_manager.rs: the Focused(false) auto-close is now gated on mixer_auto_close_on_focus_loss(e2e_debug) with e2e_debug = cfg!(debug_assertions) && VOLUMECTL_E2E_DEBUG=1 — the same marker that gates the overlay auto-hide timers; release builds behave exactly as before.",
+        "Session 112 regression: the existing Settings E2E failed red at POST /session because Windows sent CloseRequested and destroyed window-settings before WebDriver attached; the debug-only CloseRequested guard produced a green uninstrumented settings run (4/4).",
         "e2e/tauri/wdio.conf.ts: on win32 the app inherits WEBVIEW2_USER_DATA_FOLDER=<output>/webview2-<pid>, one folder per surface process.",
         "scripts/verify-tauri-e2e.ps1: pre-run and post-run cleanup kill leftover VolumeControl.exe processes (crashed/force-killed runs can no longer hold the embedded WebDriver port 4445 or leave a stuck HUD).",
         "Regression: the full all-matrix (mixer, runtime, windows, recovery, settings, help) passed 9/9 consecutive runs after the fixes (previously ~30-50% flake rate; the failure mode was a webview dying mid-spec 0.5 s after a tauri IPC JSON deserialization error, only after 4-5 app restarts in one run).",
@@ -186,9 +193,11 @@
       "evidence": [
         "Session 093 (2026-08-16): the flake was root-caused with temporary app-side instrumentation — webview_windows() showed the surface window alive, then empty 0.5 s after a [Tauri:Frontend:0] 'JSON error: invalid type: null, expected u32' IPC failure, exactly when the embedded WebDriver's execute/sync ran; a parallel process/port monitor proved no zombie app held port 4445, so the breakage was inside the WebView2 stack after repeated same-folder restarts. The mixer auto-close-on-blur was also a confirmed destroy path for mixer runs (the app spawns backgrounded and can lose focus before the session attaches).",
         "Session 093 (2026-08-16): 9/9 consecutive full-matrix Windows E2E runs green with no leftover VolumeControl processes; the earlier failure cadence was 4 failures across 11 runs (settings x3, help x1) plus the original mixer session failures in the ship gate.",
-        "Session 093 (2026-08-16): mandatory three-domain pre-push review — Domain A PASS; Domain B MEDIUM (pre-run kill raced with the long cargo build; the kill is now repeated immediately before the npm E2E spawn, verified live) and fixed with ps1 parse check; Domain C LOW (GUARDRAILS.md ship description updated to include the frontend build, Tauri WebDriver E2E gate, and tauri build --no-bundle; pre-existing feature_list priority inversions noted as known drift, not reordered)."
+        "Session 093 (2026-08-16): mandatory three-domain pre-push review — Domain A PASS; Domain B MEDIUM (pre-run kill raced with the long cargo build; the kill is now repeated immediately before the npm E2E spawn, verified live) and fixed with ps1 parse check; Domain C LOW (GUARDRAILS.md ship description updated to include the frontend build, Tauri WebDriver E2E gate, and tauri build --no-bundle; pre-existing feature_list priority inversions noted as known drift, not reordered).",
+        "Session 112 (2026-10-18): full ship passed Mixer, Runtime, Windows, and Recovery before Settings failed at WebDriver session creation. Fresh Settings-only red runs logged window-settings creation followed by Windows CloseRequested and Destroyed before the first session POST. The debug-marker guard prevents that external close; the final uninstrumented Settings run passed all four assertions.",
+        "Session 112 pre-push review: independent guard-core, gate-chain, and wiring/records reviewers inspected the ship push correction plus the debug-only CloseRequested guard and reported no findings."
       ],
-      "notes": "Harness-level fix; no production behavior changed (the mixer focus guard is debug-marker-only). Hosted CI keeps --virtual-audio; the local real-audio matrix is now stable enough to be the pre-ship gate."
+      "notes": "Harness-level fix; production behavior is unchanged because the CloseRequested and mixer-focus guards require debug assertions plus VOLUMECTL_E2E_DEBUG=1. Hosted CI keeps --virtual-audio; the local real-audio matrix is the pre-ship gate."
     },
     {
       "id": "vol-082",
@@ -816,8 +825,8 @@
       "priority": 15,
       "area": "tooling",
       "title": "Mandatory ship flow (scripts/ship.sh + ship.ps1)",
-      "user_visible_behavior": "Developer-facing: the supported path to commit + push is scripts/ship.sh (or scripts/ship.ps1 on Windows), which always runs the records guard (branch + staged), the full format-lint gate with tests, and both guardrail self-tests before committing. No flag can skip them; --force relaxes only git-hygiene warnings; --dry-run verifies without changing anything.",
-      "status": "passing",
+      "user_visible_behavior": "Developer-facing: the supported path to commit + push is scripts/ship.sh (or scripts/ship.ps1 on Windows), which always runs the records guard (branch + staged), the full format-lint gate with tests, and both guardrail self-tests before committing. No flag can skip them; --force relaxes only git-hygiene warnings; --dry-run verifies without changing anything. When --push sees a branch tracking the wrong remote ref, it pushes the current branch to origin and exits non-zero on any rejected push rather than claiming success.",
+      "status": "in_progress",
       "verification": [
         "Run `bash scripts/test-ship.sh` - all checks pass, exit 0.",
         "Run `bash scripts/ship.sh --dry-run` - all hard checks pass, exit 0, nothing changed.",
@@ -831,9 +840,11 @@
         "ship.ps1 -DryRun ran the complete flow end-to-end on Windows via Git Bash (records branch guard, full gate with tests, both self-tests) and exited 0.",
         "--force relaxes only the behind-origin/master and no-origin soft preconditions; the hard checks always run (verified by code path and the wiring assertions).",
         "CI checks job runs `bash scripts/test-ship.sh` so the ship wiring cannot rot unnoticed.",
-        "Session 013 (claude-progress.md) records this landing; the guard passed on this change's own staged set."
+        "Session 013 (claude-progress.md) records this landing; the guard passed on this change's own staged set.",
+        "Session 111 red reproduction (2026-10-17): records/v017-release tracked origin/main after worktree creation. The full `ship.sh --push` committed 534d40b, then Git rejected its implicit push because the upstream name differed; the old caller ignored that failure and printed `ship ok`.",
+        "Session 111 pre-push review: guard-core, gate-chain, and wiring/records reviews each reported no findings for the mismatched-upstream correction."
       ],
-      "notes": "Extends vol-014: the record-keeping guardrail is now wrapped by a mandatory ship gate that also enforces the format-lint gate and the guardrails' own self-tests."
+      "notes": "Extends vol-014: the record-keeping guardrail is now wrapped by a mandatory ship gate that also enforces the format-lint gate and the guardrails' own self-tests. The current correction is pending a real same-branch --push retry."
     },
     {
       "id": "vol-014",

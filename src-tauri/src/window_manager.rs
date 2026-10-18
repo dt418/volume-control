@@ -295,6 +295,14 @@ impl WindowManager {
             cfg!(debug_assertions) && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
         let app_handle = self.app.clone();
         window.on_window_event(move |event| {
+            // Embedded WebDriver attaches after startup. Windows can send an
+            // external close request before that session exists; retain the
+            // debug-only surface so it remains discoverable for the test.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if e2e_debug {
+                    api.prevent_close();
+                }
+            }
             // Mixer auto-closes on losing focus. Rust-level focus events are
             // reliable on Win32 and Wayland; JS blur is not (spec §9.3).
             if let tauri::WindowEvent::Focused(false) = event {
