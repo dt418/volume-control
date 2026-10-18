@@ -1,5 +1,37 @@
 # Progress Log
 
+## Session 115 (2026-10-18) - PR #57 Linux CI abort: HUD click-through before realize
+
+- Ask: PR #57's checks were red on `Ubuntu 24.04 (GTK4/libadwaita +
+  layer-shell)` and the required `Release gate`.
+- Classification: the release gate is downstream only — its env showed
+  `checks=success windows=success macos=success ubuntu=failure`. The Ubuntu
+  job on `origin/main` (run 39103837841, same `verify-tauri-e2e.sh --surface
+  all --virtual-audio`, same 7 specs) is green, so the branch regression was
+  real, not infra flake.
+- Root cause: the mixer spec's mute click makes the sink open the HUD window,
+  so the first `window-overlay` creation in the run fired the new
+  build-time `set_ignore_cursor_events(true)`. tao 0.35.3's Linux handler
+  (`platform_impl/linux/event_loop.rs:457`) unwraps the GdkWindow, which a
+  hidden builder window does not have: `thread 'main' panicked ... called
+  'Option::unwrap()' on a 'None' value`, then `panic in a function that
+  cannot unwind. aborting.` The process died, the embedded WebDriver died
+  with it, and wdio reported `ECONNREFUSED` on the next click.
+- Fix (`src-tauri/src/window_manager.rs`): the build-time call is gone;
+  `surface_ready_impl` sends the click-through request right after
+  `window.show()`. Same FIFO request channel, so `Visible(true)` (which
+  calls `show_all()` and realizes the GtkWindow) is handled first and the
+  GdkWindow exists for `CursorIgnoreEvents`. X11 input shape and the
+  Wayland no-op are unchanged, and macOS still gets click-through before the
+  user can interact.
+- Gates re-run locally: `cargo fmt --all --check`, `cargo clippy --workspace
+  --all-targets --no-default-features -- -D warnings`, `cargo test
+  --workspace --no-default-features` (all suites 0 failed), and
+  `sh scripts/check-tauri-deadlock.sh` (10/10 ok).
+- Records: the Session 114 evidence line that claimed an unconditional
+  creation-time call was corrected; this session's lines carry the CI
+  evidence from run 39105564354's uploaded artifact.
+
 ## Session 114 (2026-10-18) - macOS/Linux tray + HUD parity and docs truth
 
 - Ask: the docs support matrix still marked "Native overlay & tray" as
@@ -11,10 +43,11 @@
   vol-077 had never recorded that prerequisite.
 - Real code gap closed: the HUD was click-through on macOS only. tao 0.35.3
   implements `set_ignore_cursor_events` on Linux as a 1x1 GTK input-shape
-  region (`event_loop.rs:453-461`), so `window_manager.rs` now calls it
-  unconditionally on the non-Windows overlay path: Linux X11 gets real
-  click-through, Wayland stays interactive (GTK has no input-shape
-  protocol), and Windows is untouched (its overlay arm is unreachable).
+  region (`event_loop.rs:453-461`), so `window_manager.rs` applies it to the
+  overlay path: Linux X11 gets real click-through, Wayland stays interactive
+  (GTK has no input-shape protocol), and Windows is untouched (its overlay
+  arm is unreachable). Session 115 corrected *when* the request is sent —
+  building the window hid it, and a hidden GtkWindow has no GdkWindow.
 - Stale prose corrected wherever it still claimed the macOS/Linux tray/HUD
   did not exist: `native_headless.rs` module doc, `host_core.rs` module and
   `handle_action` docs plus the overlay debug log, and

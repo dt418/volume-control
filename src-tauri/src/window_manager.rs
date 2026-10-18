@@ -249,10 +249,9 @@ impl WindowManager {
         let window = builder.build().map_err(|e| e.to_string())?;
         if surface == SurfaceId::Overlay {
             let _ = window.set_focusable(false);
-            // Click-through HUD: macOS ignores cursor events outright, X11
-            // gets a 1x1 GTK input-shape region (tao), and on Wayland the
-            // input shape has no effect so the HUD stays interactive.
-            let _ = window.set_ignore_cursor_events(true);
+            // Click-through is applied in `surface_ready` once the window is
+            // shown: tao's Linux handler unwraps the GdkWindow, which does
+            // not exist until the builder window is realized.
         }
         log::debug!(
             "window_manager: created {} url={:?}",
@@ -345,7 +344,15 @@ impl WindowManager {
             log::warn!("window_manager: show {surface:?} failed: {e}");
             e.to_string()
         })?;
-        if surface != SurfaceId::Overlay {
+        if surface == SurfaceId::Overlay {
+            // Click-through HUD: macOS ignores cursor events outright, X11
+            // gets a 1x1 GTK input-shape region (tao), and on Wayland the
+            // input shape has no effect so the HUD stays interactive. The
+            // request must follow the first show(): tao's Linux handler
+            // unwraps the GdkWindow, which does not exist on the still
+            // hidden builder window, and a panic there aborts the process.
+            let _ = window.set_ignore_cursor_events(true);
+        } else {
             let _ = window.set_focus();
         }
         log::debug!("window_manager: open_impl {surface:?} done");
