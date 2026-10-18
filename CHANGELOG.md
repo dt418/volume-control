@@ -4,20 +4,24 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-10-18
+
 ### Added
 
-- The HUD overlay is click-through on Linux X11 in addition to Windows and
-  macOS; on Wayland it stays interactive because GTK exposes no input-shape
-  protocol there.
+- Update check and notification banner in the Settings surface with direct links to release notes.
+- One-shot CLI update check via `volumectl check-updates` reporting localized update status.
+- Tauri IPC bridge command `check_for_updates` and `state://update` event.
+- Winget deployment pipeline with REA static PE inspection (`deploy-winget.sh`, `deploy-winget.ps1`, `verify-installer-rea.mjs`).
+- Live step-by-step progress feedback for installer scripts (`[1/3] downloading`, `[2/3] verifying`, `[3/3] installing`).
+- Differential component updates preserving user configuration and skipping unchanged binaries.
+- Ergonomic 1-line installation commands on Windows and Unix.
+- Bilingual (English / Tiếng Việt) product landing site on GitHub Pages with responsive language toggle.
+- The HUD overlay is click-through on Linux X11 in addition to Windows and macOS; on Wayland it stays interactive.
 
 ### Fixed
 
-- The Windows bootstrap prints one result line per action — installed,
-  updated, removed, or already installed — instead of finishing silently.
-- A GUI install or update no longer blocks until the freshly launched app is
-  closed: the bootstrap waits for the installer process only, not its
-  descendants, so the NSIS finish page launching VolumeControl no longer pins
-  the command.
+- The Windows bootstrap prints one result line per action — installed, updated, removed, or already installed — instead of finishing silently.
+- A GUI install or update no longer blocks until the freshly launched app is closed: the bootstrap waits for the installer process only, not its descendants.
 
 ## [0.1.7] - 2026-10-17
 

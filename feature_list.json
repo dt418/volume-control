@@ -16,6 +16,27 @@
   },
   "features": [
     {
+      "id": "vol-102",
+      "priority": 102,
+      "area": "release",
+      "title": "Release v0.1.8 with bilingual landing page and update notifications",
+      "user_visible_behavior": "The v0.1.8 release delivers bilingual (EN/VI) support on the GitHub Pages landing site with a responsive language toggle, the in-app update check and notification banner, the volumectl check-updates CLI command, the REA-verified Winget deployment pipeline, and live installer progress feedback across all platforms.",
+      "status": "passing",
+      "verification": [
+        "bash scripts/test-release-workflow.sh passes all 44 contract checks.",
+        "sh scripts/check-tauri-deadlock.sh passes (10/10 ok).",
+        "npm --prefix frontend test passes all 18 test files, 108 tests.",
+        "cargo test --workspace --no-default-features passes all unit and integration tests."
+      ],
+      "evidence": [
+        "Session 121 (2026-10-18): Synchronized version 0.1.8 across workspace manifests (Cargo.toml, crates/volumectl, volumecontrol-tauri, tauri.conf.json, frontend package.json, package-lock.json, and Cargo.lock).",
+        "Promoted [Unreleased] notes into [0.1.8] in CHANGELOG.md.",
+        "Integrated full bilingual dictionary and language switcher into docs/index.html.",
+        "Worktree release/0.1.8 established at C:/Users/Thanh/orca/volume-control-v018-release."
+      ],
+      "notes": "Tag v0.1.8 will trigger the automated multi-platform desktop release workflow (.github/workflows/release.yml)."
+    },
+    {
       "id": "vol-101",
       "priority": 101,
       "area": "ui",

@@ -1,5 +1,19 @@
 # Progress Log
 
+## Session 121 (2026-10-18) - Release v0.1.8 with bilingual landing page and update notifications
+
+- Goal: integrate full bilingual (EN/VI) support into the GitHub Pages landing site with an interactive language switcher, synchronize project version 0.1.8 across all package manifests and changelog, and prepare release tag v0.1.8.
+- What landed:
+  - Worktree `release/0.1.8` established at `C:/Users/Thanh/orca/volume-control-v018-release` from `origin/main`.
+  - `docs/index.html`: integrated bilingual EN/VI dictionary, language toggle button in header, and responsive localized copy across hero, demo, remote install, feature cards, platform status, and trust boundaries.
+  - Synchronized version `0.1.8` across: root `Cargo.toml`, `crates/volumectl/Cargo.toml`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `frontend/package.json`, `frontend/package-lock.json`, and `Cargo.lock`.
+  - `CHANGELOG.md`: promoted `[Unreleased]` changes to `[0.1.8] - 2026-10-18` documenting update checks, winget REA verification, installer progress, and landing i18n.
+- Verification:
+  - `bash scripts/test-release-workflow.sh`: passed all 44 release workflow contract checks.
+  - `sh scripts/check-tauri-deadlock.sh`: 10/10 passed.
+  - `npm --prefix frontend test`: passed 18 test files, 108 tests.
+  - `cargo test --workspace --no-default-features`: passed 309 tests (292 lib + 17 tauri).
+
 ## Session 120 (2026-10-18) - Update check and notification in Settings, CLI, and IPC bridge
 
 - Goal: implement update check and notification features across the desktop application, CLI, and IPC bridge, allowing users to check for updates from Settings and receive notification banners when newer releases are available.
