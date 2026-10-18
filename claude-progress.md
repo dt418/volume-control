@@ -7,13 +7,17 @@
   - Worktree `feat/winget-deploy` established at `C:/Users/Thanh/orca/volume-control-winget-deploy` from `origin/main`.
   - Design doc and implementation plan: `docs/superpowers/specs/2026-10-18-winget-deployment-design.md` and `docs/superpowers/plans/2026-10-18-winget-deployment-plan.md`.
   - `scripts/verify-installer-rea.mjs`: static PE/NSIS binary verification tool inspecting DOS header, PE machine type (IMAGE_FILE_MACHINE_I386 0x14c for NSIS stub loader), GUI subsystem (0x0002), sections (.text, .rdata, .data, .ndata, .rsrc), NSIS marker (NullsoftInst at offset 52744, magic 0xEFBEADDE), elevation requirement (requestedExecutionLevel="asInvoker" matching Scope: user), switches (/S silent, /D directory), registry uninstaller key (Software\Microsoft\Windows\CurrentVersion\Uninstall\VolumeControl), x86_64 payload architecture, and uppercase SHA-256.
-  - `scripts/test-winget-deploy.sh`: regression test suite validating negative cases (missing file, empty file, invalid PE header, missing generator args, bad installer filename) and positive verification against release binary and manifest generation.
+  - `scripts/deploy-winget.sh` & `scripts/deploy-winget.ps1`: deployment orchestrator coordinating REA PE verification, manifest generation, `winget validate`, and PR body preparation.
+  - `scripts/test-winget-deploy.sh`: regression test suite validating deploy-winget arguments, tag format, missing installer handling, and manifest generation.
+  - `scripts/test-verify-installer-rea.mjs`: unit tests for REA static PE verification module.
   - `winget/dt418.VolumeControl/0.1.7/`: generated complete 1.12.0 manifest trio (`dt418.VolumeControl.yaml`, `dt418.VolumeControl.installer.yaml`, `dt418.VolumeControl.locale.en-US.yaml`).
   - Upstream tracking: audited PR #454508 on `microsoft/winget-pkgs` (state OPEN, MERGEABLE, Azure-Pipeline-Passed, Validation-Completed, CLA signed, awaiting community moderator approval for New-Package).
   - `docs/index.html`: updated winget note and comment to link directly to PR #454508 and reflect pending review status.
 - Verification:
   - `node scripts/verify-installer-rea.mjs VolumeControl_0.1.7_x64-setup.exe`: passed, SHA-256 matches 541C57E8F7B57F571559278E167BE4123923A2CFB22CB776791D84519E30B92B.
-  - `bash scripts/test-winget-deploy.sh`: passed 7/7 checks.
+  - `node scripts/test-verify-installer-rea.mjs`: passed 3/3 tests.
+  - `bash scripts/test-winget-deploy.sh`: passed smoke checks.
+  - `bash scripts/deploy-winget.sh v0.1.7 VolumeControl_0.1.7_x64-setup.exe output/winget`: completed end-to-end in 2.35s with all 4 phases passing.
   - `winget validate --manifest winget/dt418.VolumeControl/0.1.7`: passed ("Manifest validation succeeded.").
   - Local silent installation test: `/S /D=<dir>` extracted valid AMD64 (machine 0x8664) `VolumeControl.exe` and `uninstall.exe`.
 ## Session 115 (2026-10-18) - PR #57 Linux CI abort: HUD click-through before realize

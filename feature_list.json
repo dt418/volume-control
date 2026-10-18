@@ -24,7 +24,8 @@
       "status": "passing",
       "verification": [
         "node scripts/verify-installer-rea.mjs VolumeControl_0.1.7_x64-setup.exe passes all checks (PE machine 0x14c, GUI subsystem 0x2, sections .text/.rdata/.data/.ndata/.rsrc, NSIS marker NullsoftInst at offset 52744, switches /S and /D, requestedExecutionLevel asInvoker matching Scope: user, uninstaller registry key HKCU Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\VolumeControl, SHA-256 541C57E8F7B57F571559278E167BE4123923A2CFB22CB776791D84519E30B92B).",
-        "bash scripts/test-winget-deploy.sh passes all 7 tests (missing file rejection, empty file rejection, invalid header rejection, official v0.1.7 artifact verification, missing args rejection, wrong filename rejection, manifest trio generation).",
+        "bash scripts/test-winget-deploy.sh passes all smoke checks and node scripts/test-verify-installer-rea.mjs passes all 3 tests.",
+        "bash scripts/deploy-winget.sh v0.1.7 VolumeControl_0.1.7_x64-setup.exe output/winget runs end-to-end (REA check, manifest generation, winget validate, PR body preparation).",
         "winget validate --manifest winget/dt418.VolumeControl/0.1.7 returns 'Manifest validation succeeded.'",
         "Local installation verified: VolumeControl_0.1.7_x64-setup.exe /S silently installs VolumeControl.exe (AMD64 0x8664) and uninstall.exe.",
         "Upstream verification: PR #454508 on microsoft/winget-pkgs is MERGEABLE with Azure-Pipeline-Passed and Validation-Completed labels; CLA signed."

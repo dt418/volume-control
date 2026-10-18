@@ -20,13 +20,19 @@ fi
 
 node_path() {
   local p="$1"
+  if [[ "$p" =~ ^/mnt/([A-Za-z])/(.*)$ ]]; then
+    printf '%s:/%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    return
+  fi
   if command -v cygpath >/dev/null 2>&1; then
     cygpath -w "$p"
-  elif command -v wslpath >/dev/null 2>&1; then
-    wslpath -w "$p"
-  else
-    printf '%s' "$p"
+    return
   fi
+  if command -v wslpath >/dev/null 2>&1; then
+    wslpath -w "$p"
+    return
+  fi
+  printf '%s' "$p"
 }
 package_id="dt418.VolumeControl"
 
@@ -58,7 +64,7 @@ mkdir -p "$outdir"
 # Phase 1: REA Static PE Inspection
 echo "[1/4] Running REA PE installer verification..."
 dossier="$outdir/rea-verification.json"
-"$node_bin" "$script_dir/verify-installer-rea.mjs" "$(node_path "$installer")" --json > "$dossier"
+"$node_bin" "$(node_path "$script_dir/verify-installer-rea.mjs")" "$(node_path "$installer")" --json > "$dossier"
 sha256="$("$node_bin" -e "const d = JSON.parse(require('fs').readFileSync(process.argv[1])); console.log(d.sha256 || d.subject?.sha256);" "$(node_path "$dossier")")"
 echo "  REA verified SHA-256: $sha256"
 # Phase 2: Manifest Generation
