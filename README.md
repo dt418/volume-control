@@ -34,8 +34,10 @@ only for the Mixer, Settings, and Help panels.
 - **Media keys** (`Volume Up/Down/Mute`) keep the native Windows flyout — the
   app only stays in sync.
 - **Overlay**: bottom-right popup with threshold-colored bar (grey / green /
-  blue / orange-red) and the percentage; auto-hides after ~1.8 s;
-  click-through.
+  blue / orange-red) and the percentage; auto-hides after ~1.8 s. Native
+  Win32 HUD on Windows, webview HUD on macOS/Linux — click-through on
+  Windows, macOS, and Linux X11; stays interactive on Linux Wayland
+  (input-shape is a no-op there). Blur/vibrancy is CSS-only inside the webview.
 - **System tray**: live volume label, mute toggle, reset, exit.
 - **Settings-first configuration**: common options, appearance, blacklist,
   feedback, storage, and shortcuts can be changed directly in Settings. The
@@ -202,6 +204,11 @@ Common actions:
   force-terminates your process, so close the app first. Configuration at
   `%APPDATA%\volume-control\config.ini` lives outside the install root and is
   preserved by update and uninstall.
+- Every action ends with one result line — `installed VolumeControl <version>
+  into <root>`, `updated VolumeControl <version> at <root>`, `removed
+  VolumeControl from <root>`, or `VolumeControl <version> is already installed;
+  nothing to update`. The command returns as soon as the installer process
+  exits, even when the NSIS finish page launches the app.
 - Trust limits: releases are **unsigned**. `SHA256SUMS.txt` provides
   same-release SHA-256 **checksum** integrity only — a checksum is not code
   signing and proves nothing about who built the binary. Windows SmartScreen
@@ -235,7 +242,7 @@ surfaces:
 4. Test with the default combo: hold **⌘+⌥+↑ / ↓** (or **⌃+⌥+↑ / ↓**) —
    volume changes immediately and keeps repeating every 50 ms while held.
    `⌘/⌃+⌥+M` mutes, `⌘/⌃+⌥+R` resets to 50%.
-5. To quit: `pkill -x VolumeControl` (a menu-bar item is a follow-on task).
+5. To quit: use **Exit** in the menu-bar tray menu (`pkill -x VolumeControl` also works).
 
 Running the raw binary from a terminal shows a startup banner with the config
 path, the resolved modifier, and the permission state — useful for debugging.
@@ -246,7 +253,7 @@ path, the resolved modifier, and the permission state — useful for debugging.
 |------------------------|:-------:|:-----:|:-----:|
 | Volume control         | ✅ WASAPI | ✅ CoreAudio | ✅ PulseAudio |
 | Global hotkeys         | ✅ global-hotkey | ✅ global-hotkey | ✅ global-hotkey (X11) |
-| Overlay                | ✅ native Win32 | 🔜 host integration | 🔜 host integration |
+| Overlay                | ✅ native Win32 | ✅ webview HUD (click-through) | ✅ webview HUD (click-through; Wayland interactive) |
 | Mixer                  | ✅ Tauri + WASAPI sessions | ✅ Tauri surface / ✖ per-app audio (no public API) | ✅ Tauri + PulseAudio sink-inputs |
 | Settings window        | ✅ Tauri | ✅ Tauri | ✅ Tauri |
 | System tray            | ✅ tray-icon | ✅ Tauri tray (menu-bar — manual) | ✅ Tauri tray (appindicator — manual) |
@@ -254,8 +261,9 @@ path, the resolved modifier, and the permission state — useful for debugging.
 | Adaptive UI renderer   | ✅ native Win32 | ✅ AppKit (surfaces + smoke-tested) | ✅ GTK4/libadwaita (surfaces, CI-tested under Xvfb) |
 
 macOS and Linux run the cross-platform `global-hotkey` host with their native
-audio backends. Tauri Settings/Help/Mixer surfaces are cross-platform; per-app
-session enumeration and the native overlay/tray host remain Windows-first.
+audio backends. Tauri Settings/Help/Mixer surfaces are cross-platform; the
+Tauri tray and the webview HUD ship on macOS/Linux, while the native Win32
+HUD and native tray-icon remain Windows-only.
 The AppKit and GTK4/libadwaita renderers implement the same Signal Glass
 surface contract behind the shared `NativeRenderer` bridge.
 

@@ -249,12 +249,10 @@ impl WindowManager {
         let window = builder.build().map_err(|e| e.to_string())?;
         if surface == SurfaceId::Overlay {
             let _ = window.set_focusable(false);
-            // Click-through for the HUD overlay on macOS; on Windows/Linux
-            // the overlay stays interactive while unfocused.
-            #[cfg(target_os = "macos")]
-            {
-                let _ = window.set_ignore_cursor_events(true);
-            }
+            // Click-through HUD: macOS ignores cursor events outright, X11
+            // gets a 1x1 GTK input-shape region (tao), and on Wayland the
+            // input shape has no effect so the HUD stays interactive.
+            let _ = window.set_ignore_cursor_events(true);
         }
         log::debug!(
             "window_manager: created {} url={:?}",

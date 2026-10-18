@@ -1,10 +1,10 @@
 //! Platform renderer seam.
 //!
 //! Windows is the verified renderer and exposes its primitives here. macOS
-//! and Linux expose compile-safe seams that consume only shared [`crate::ui`]
-//! types; their native renderers (AppKit, GTK/libadwaita) are follow-on work
-//! and are not implemented in this plan. Shared code never sees a Windows
-//! import on any target.
+//! and Linux implement the same [`crate::ui::NativeRenderer`] contract and
+//! consume only shared [`crate::ui`] types: AppKit surface construction on
+//! macOS, GTK4/libadwaita on Linux (behind the `gtk-renderer` feature).
+//! Shared code never sees a Windows import on any target.
 
 /// Windows renderer primitives (verified implementation).
 #[cfg(target_os = "windows")]
@@ -17,16 +17,18 @@ pub mod windows;
 #[cfg(target_os = "windows")]
 pub use windows::primitives;
 
-/// macOS renderer seam (AppKit + CoreAudio follow-on work).
+/// macOS renderer (AppKit surface construction + CoreAudio backend).
 ///
-/// Compile-safe boundary consuming only shared [`crate::ui`] types; no AppKit
-/// or CoreAudio code exists yet.
+/// Compile-safe boundary consuming only shared [`crate::ui`] types; the AppKit
+/// surface code lives in this module's `renderer` submodule and the CoreAudio
+/// backend in `crate::audio_macos`.
 #[cfg(target_os = "macos")]
 pub mod macos;
 
-/// Linux renderer seam (GTK/libadwaita + PulseAudio/PipeWire follow-on work).
+/// Linux renderer (GTK4/libadwaita surface construction + PulseAudio backend).
 ///
-/// Compile-safe boundary consuming only shared [`crate::ui`] types; no GTK or
-/// PulseAudio/PipeWire code exists yet.
+/// Compile-safe boundary consuming only shared [`crate::ui`] types; the GTK
+/// surface code lives in this module's `canvas` submodule behind the
+/// `gtk-renderer` feature and the PulseAudio backend in `crate::audio_linux`.
 #[cfg(target_os = "linux")]
 pub mod linux;

@@ -227,8 +227,12 @@ try {
 
         $script:capturedInstallerArguments = @($ArgumentList)
         $script:capturedInstallerHasArgumentList = $PSBoundParameters.ContainsKey('ArgumentList')
+        $script:capturedInstallerWaitsForDescendants = $PSBoundParameters.ContainsKey('Wait')
+        $script:capturedInstallerPassThru = $PSBoundParameters.ContainsKey('PassThru')
         if ($null -ne $script:forcedProcessExitCode) {
-            return [pscustomobject]@{ ExitCode = $script:forcedProcessExitCode }
+            $failedProcess = [pscustomobject]@{ ExitCode = $script:forcedProcessExitCode }
+            $failedProcess | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { }
+            return $failedProcess
         }
         $startInfo = New-Object System.Diagnostics.ProcessStartInfo
         $startInfo.FileName = $FilePath
@@ -246,6 +250,8 @@ try {
     Start-Installer -InstallerPath $installerPath -InstallRoot $installRoot
     Assert-Equal $script:capturedInstallerArguments.Count 0 'GUI installer must receive no arguments'
     Assert-False $script:capturedInstallerHasArgumentList 'GUI installer must omit ArgumentList'
+    Assert-False $script:capturedInstallerWaitsForDescendants 'wait must not span descendants: NSIS launches VolumeControl'
+    Assert-True $script:capturedInstallerPassThru 'wait tracks the started process explicitly'
 
     Start-Installer -InstallerPath $installerPath -Silent -InstallRoot $installRoot
     Assert-Equal $script:capturedInstallerArguments.Count 2 'silent installer must receive two arguments'
@@ -264,7 +270,8 @@ try {
     Start-Uninstaller -UninstallerPath $uninstallerPath -Silent -InstallRoot $installRoot
     Assert-Equal $script:capturedInstallerArguments.Count 1 'silent uninstaller must receive one argument'
     Assert-Equal $script:capturedInstallerArguments[0] '/S' 'silent uninstaller argument'
-    Invoke-VolumeControlAction -Action uninstall -Silent -InstallRoot $installRoot
+    $uninstallOutput = @(Invoke-VolumeControlAction -Action uninstall -Silent -InstallRoot $installRoot 6>&1)
+    Assert-Equal ($uninstallOutput -join "`n") "removed VolumeControl from $installRoot" 'uninstall reports the result'
     Assert-True (Test-Path -LiteralPath $configPath -PathType Leaf) 'uninstall must preserve %APPDATA%\volume-control'
 
     Remove-Item function:global:Start-Process -Force
@@ -275,7 +282,6 @@ try {
     Remove-Item -LiteralPath $installedExecutable -Force
     Assert-Throws { Invoke-VolumeControlAction -Action update -Release $validRelease -InstallRoot $installRoot } 'standard executable is missing'
 
-    Copy-Item $installerPath $installedExecutable
     $actualInvokeVerifiedInstaller = (Get-Item function:Invoke-VerifiedInstaller).ScriptBlock
     $script:currentVersionLaunches = 0
     function Invoke-VerifiedInstaller {
@@ -283,19 +289,43 @@ try {
 
         $script:currentVersionLaunches += 1
     }
+
+    $installOutput = @(Invoke-VolumeControlAction -Action install -Release $validRelease -InstallRoot $installRoot 6>&1)
+    Assert-Equal ($installOutput -join "`n") "installed VolumeControl 1.2.3 into $installRoot" 'install reports the result'
+    Assert-Equal $script:currentVersionLaunches 1 'install launches the verified installer once'
+
+    Copy-Item $installerPath $installedExecutable
+    $script:installedFileVersion = '1.0.0'
     function global:Get-Item {
         [CmdletBinding()]
         param([string] $LiteralPath)
 
         if ($LiteralPath -ceq $installedExecutable) {
             return [pscustomobject]@{
-                VersionInfo = [pscustomobject]@{ FileVersion = '1.2.3' }
+                VersionInfo = [pscustomobject]@{ FileVersion = $script:installedFileVersion }
             }
         }
         return Microsoft.PowerShell.Management\Get-Item @PSBoundParameters
     }
-    Invoke-VolumeControlAction -Action update -Release $validRelease -InstallRoot $installRoot
-    Assert-Equal $script:currentVersionLaunches 0 'current release update must not launch installer'
+    function global:Get-Process {
+        [CmdletBinding()]
+        param([string] $Name)
+
+        if ($Name -ceq 'VolumeControl') {
+            return $null
+        }
+        return Microsoft.PowerShell.Management\Get-Process @PSBoundParameters
+    }
+
+    $updateOutput = @(Invoke-VolumeControlAction -Action update -Release $validRelease -InstallRoot $installRoot 6>&1)
+    Assert-Equal ($updateOutput -join "`n") "updated VolumeControl 1.2.3 at $installRoot" 'update reports the result'
+    Assert-Equal $script:currentVersionLaunches 2 'stale install launches the verified installer once more'
+
+    Remove-Item function:global:Get-Process -Force
+    $script:installedFileVersion = '1.2.3'
+    $currentOutput = @(Invoke-VolumeControlAction -Action update -Release $validRelease -InstallRoot $installRoot 6>&1)
+    Assert-Equal ($currentOutput -join "`n") 'VolumeControl 1.2.3 is already installed; nothing to update' 'current release reports the no-op'
+    Assert-Equal $script:currentVersionLaunches 2 'current release update must not launch installer'
     Remove-Item function:global:Get-Item -Force
     Set-Item function:Invoke-VerifiedInstaller -Value $actualInvokeVerifiedInstaller
 
