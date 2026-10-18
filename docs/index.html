@@ -93,13 +93,14 @@
   }
   nav .gh:hover { color: var(--on-accent); text-decoration: none; filter: brightness(1.08); }
 
-  .hero { padding: 84px 0 40px; text-align: center; }
+  .hero { padding: 64px 0 40px; text-align: center; }
   .pill {
     display: inline-flex; gap: 8px; align-items: center;
     border: 1px solid var(--border); background: var(--surface);
     color: var(--muted); border-radius: 999px; padding: 6px 14px;
     font-size: 13.5px; font-weight: 600; box-shadow: var(--shadow);
   }
+  .pill:hover { text-decoration: none; border-color: var(--accent); }
   .pill b { color: var(--link); }
   h1 {
     font-size: clamp(38px, 6vw, 64px); line-height: 1.06; margin: 22px 0 14px;
@@ -122,13 +123,43 @@
   .btn-ghost { color: var(--fg); background: var(--surface); border-color: var(--border); }
   .btn-ghost:hover { border-color: var(--accent); }
 
-  .keys { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 34px; }
-  kbd {
+  /* ── interactive overlay preview ─────────────────────────────── */
+  .demo { margin: 44px auto 0; max-width: 560px; }
+  .screen {
+    position: relative; aspect-ratio: 21 / 9; overflow: hidden;
+    border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow);
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--accent) 20%, var(--surface)),
+      color-mix(in srgb, var(--accent-2) 20%, var(--surface)));
+  }
+  .screen::after {            /* faux taskbar */
+    content: ""; position: absolute; inset: auto 0 0 0; height: 9%;
+    background: color-mix(in srgb, var(--fg) 14%, transparent);
+  }
+  .overlay {
+    position: absolute; right: 4%; bottom: 14%;
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px;
+    background: rgba(16, 19, 28, .9); color: #fff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+    opacity: .55; transition: opacity .25s;
+  }
+  .overlay.on { opacity: 1; }
+  .overlay svg { display: block; flex: none; }
+  .rail { width: clamp(100px, 28vw, 170px); height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .2); overflow: hidden; }
+  .rail i { display: block; height: 100%; width: 50%; border-radius: inherit; background: #27AE60; transition: width .12s, background-color .2s; }
+  .overlay output { font: 600 14px/1 ui-monospace, "Cascadia Mono", Consolas, monospace; min-width: 4.2ch; text-align: right; }
+  .demo-keys { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; margin-top: 18px; }
+  .demo-keys .lbl { flex-basis: 100%; text-align: center; color: var(--muted); font-size: 13.5px; margin-bottom: 2px; }
+  kbd, .key {
     font: 600 13px/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
     background: var(--surface); border: 1px solid var(--border); border-bottom-width: 3px;
     padding: 7px 10px; border-radius: 8px; color: var(--fg); box-shadow: var(--shadow);
   }
-  .keys .lbl { align-self: center; color: var(--muted); font-size: 13.5px; margin-right: 4px; }
+  .key { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+  .key small { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+  .key:hover { border-color: var(--accent); }
+  .key:active { transform: translateY(2px); border-bottom-width: 1px; }
+  .demo-note { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
 
   section { padding: 56px 0 8px; }
   h2 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -.6px; margin: 0 0 8px; }
@@ -409,9 +440,9 @@
         <li><b>Releases are unsigned.</b> Windows SmartScreen may warn on first
         run of <code>VolumeControl_&lt;version&gt;_x64-setup.exe</code>;
         that warning is expected until an Authenticode certificate is added.</li>
-        <li><b>No pipes into a shell.</b> The documented flows download first,
-        verify SHA-256, then execute the local copy from
-        <code>%TEMP%</code> — downloaded text never runs while it arrives.</li>
+        <li><b>No pipes into a shell.</b> Every command above downloads first,
+        verifies SHA-256, then executes the local copy from a fresh temporary
+        folder — downloaded text never runs while it arrives.</li>
         <li><b>Immutable releases.</b> Published assets are never overwritten;
         re-uploading an existing tag fails instead of mutating bytes.</li>
       </ul>
@@ -425,9 +456,12 @@
   <div class="wrap foot">
     <span>VolumeControl — MIT licensed · built with Rust + Tauri</span>
     <nav aria-label="Footer">
-      <a href="https://github.com/dt418/volume-control">Repository</a> ·
-      <a href="https://github.com/dt418/volume-control/releases">Releases</a> ·
+      <a href="https://github.com/dt418/volume-control">Repository</a>
+      <a href="https://github.com/dt418/volume-control/releases">Releases</a>
+      <a href="https://github.com/dt418/volume-control/blob/main/CHANGELOG.md">Changelog</a>
       <a href="https://github.com/dt418/volume-control/blob/main/docs/testing/cross-platform-release-checklist.md">Release checklist</a>
+      <a href="https://github.com/dt418/volume-control/issues">Issues</a>
+      <a lang="vi" hreflang="vi" href="https://github.com/dt418/volume-control/blob/main/README.vi.md">Tiếng Việt</a>
     </nav>
   </div>
 </footer>
@@ -594,6 +628,22 @@ if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not 
   if (WINGET_LIVE) wingetBadge.hidden = true;
 
   render();
+
+  /* ── latest release tag (progressive enhancement; keeps "v0.1.x" on any failure) ── */
+  (function () {
+    var el = document.getElementById("ver"), KEY = "vc-latest", cached = null;
+    if (!el || !window.fetch) return;
+    try { cached = JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch (e) {}
+    if (cached && Date.now() - cached.t < 3600000) { el.textContent = cached.tag; return; }
+    fetch("https://api.github.com/repos/dt418/volume-control/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (d) {
+        if (!/^v\d+\.\d+\.\d+$/.test(d.tag_name)) return;
+        el.textContent = d.tag_name;
+        try { sessionStorage.setItem(KEY, JSON.stringify({ tag: d.tag_name, t: Date.now() })); } catch (e) {}
+      })
+      .catch(function () {});
+  })();
 })();
 </script>
 
