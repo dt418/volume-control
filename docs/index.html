@@ -392,10 +392,9 @@
 
       <div class="note" id="winget-note" hidden>
         <span aria-hidden="true">ℹ</span>
-        <span><b>winget isn’t available yet.</b> The package hasn’t been published to
-        <a href="https://github.com/microsoft/winget-pkgs" rel="noopener">winget-pkgs</a>,
-        so this command will not resolve today — use the PowerShell or curl.exe tab.
-        (Maintainers: <code>scripts/generate-winget-manifest.sh</code> builds the manifest.)</span>
+        <span><b>winget isn’t available yet.</b> Package submission is in review on
+        <a href="https://github.com/microsoft/winget-pkgs/pull/454508" rel="noopener">microsoft/winget-pkgs (PR #454508)</a>
+        (Azure validation passed, pending moderator review). Use the PowerShell or curl.exe tab until merged.</span>
       </div>
     </div>
 
@@ -546,7 +545,7 @@ if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not 
 <script>
 (function () {
   var BASE = "https://github.com/dt418/volume-control/releases/latest/download";
-  var WINGET_LIVE = false;   // flip once dt418.VolumeControl is merged into winget-pkgs
+  var WINGET_LIVE = false;   // flip to true once PR #454508 merges into microsoft/winget-pkgs and winget CDN indexes dt418.VolumeControl
 
   var NOTES = {
     win: {
