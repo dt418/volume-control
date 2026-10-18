@@ -131,24 +131,28 @@ fail() {
 # Push the current branch. Soft preconditions apply here (see the header);
 # defined before use so the phase bodies below can call it.
 do_push() {
+    local current_branch upstream
     if "$GIT_BIN" rev-parse --verify --quiet origin >/dev/null 2>&1; then
         if "$GIT_BIN" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
             behind="$("$GIT_BIN" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
             if [ "${behind:-0}" -gt 0 ] && [ "$force_flag" = false ]; then
                 echo "error: HEAD is $behind commit(s) behind origin/main; pull first" >&2
                 echo "       (or re-run with --force to let git itself reject a non-fast-forward)" >&2
-                exit 1
+                return 1
             fi
         fi
-        if "$GIT_BIN" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+
+        current_branch="$("$GIT_BIN" branch --show-current)"
+        upstream="$("$GIT_BIN" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+        if [ -n "$current_branch" ] && [ "$upstream" = "origin/$current_branch" ]; then
             "$GIT_BIN" push
         else
-            echo "no upstream set for the current branch; pushing with -u origin HEAD"
+            echo "current branch has no matching origin upstream; pushing with -u origin HEAD"
             "$GIT_BIN" push -u origin HEAD
         fi
     else
         echo "error: no 'origin' remote configured; cannot push" >&2
-        exit 1
+        return 1
     fi
 }
 
@@ -263,7 +267,9 @@ staged_count="$("$GIT_BIN" diff --cached --name-only | wc -l | tr -d ' ')"
 if [ "$staged_count" -eq 0 ]; then
     if [ "$push_flag" = true ]; then
         echo "nothing new to commit; pushing existing commits"
-        do_push
+        if ! do_push; then
+            fail "push failed; commit remains local"
+        fi
         exit 0
     fi
     echo "nothing to commit - the working tree and index are clean."
@@ -281,8 +287,8 @@ if ! "$GIT_BIN" commit -m "$message"; then
     fail "the commit was rejected (see the hook output above)"
 fi
 
-if [ "$push_flag" = true ]; then
-    do_push
+if [ "$push_flag" = true ] && ! do_push; then
+    fail "push failed; commit remains local"
 fi
 
 echo

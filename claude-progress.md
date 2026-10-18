@@ -1,5 +1,40 @@
 # Progress Log
 
+## Session 112 (2026-10-18) - Windows Settings E2E close guard
+
+- Red: ship's Windows E2E gate passed Mixer, Runtime, Windows, and Recovery,
+  then Settings failed before test execution: `POST /session` reported `No
+  window could be found`. Fresh Settings-only runs reproduced it after the
+  PowerShell wrapper removed stale `VolumeControl.exe` processes.
+- Root cause: temporary E2E instrumentation recorded Windows
+  `CloseRequested`, `Destroyed`, then a non-explicit Tauri exit for
+  `window-settings` before WebDriver attached. The frontend creates the
+  window and calls `surface_ready`; production source has no Settings
+  auto-close path.
+- Correction: `window_manager.rs` now prevents `CloseRequested` only when
+  `cfg!(debug_assertions)` and `VOLUMECTL_E2E_DEBUG=1`. Production close
+  behavior is unchanged. The final uninstrumented
+  `verify-tauri-e2e.ps1 -Surface settings` run passed all four Settings
+  assertions.
+- Pre-push review: guard-core, gate-chain, and wiring/records reviewers
+  inspected both the mismatched-upstream correction and the debug-only
+  `CloseRequested` guard; all reported no findings.
+
+## Session 111 (2026-10-17) - Ship push fails closed on mismatched upstream
+
+- Red reproduction: a linked-worktree branch `records/v017-release` inherited
+  `origin/main` as its upstream. `scripts/ship.sh --push` completed every
+  verification step and committed `534d40b`, but its bare `git push` was
+  rejected by Git's `simple` policy; the script then incorrectly printed
+  `ship ok`.
+- Correction in progress: `do_push` now selects `git push -u origin HEAD`
+  whenever upstream is absent or does not equal `origin/<current-branch>`,
+  while both no-change and post-commit callers fail through `fail` if the
+  push returns non-zero. The next full `--push` invocation is the real
+  regression proof.
+- Pre-push review: guard-core, gate-chain, and wiring/records reviewers each
+  found no defect in the mismatched-upstream correction.
+
 ## Session 110 (2026-10-17) - Release 0.1.7
 
 - Version bump to 0.1.7 across the workspace manifests (`Cargo.toml`,
@@ -27,9 +62,8 @@
 - Winget PR [#454508](https://github.com/microsoft/winget-pkgs/pull/454508)
   now carries v0.1.7 (replacing its pending v0.1.5 submission). Computer-use
   opened the live Chrome page and confirmed its open title, version, installer
-  URL, and SHA-256. Microsoft checks 01–04 were successful at capture time;
-  remaining asynchronous checks and moderator approval are external and still
-  pending before catalog publication.
+  URL, and SHA-256. All ten Microsoft validation checks and the CLA check now
+  pass; catalog publication remains blocked only on external moderator review.
 - Pre-push review: independent guard-core, gate-chain, and wiring/records
   reviewers inspected this records-only diff; all reported no findings.
 - Full gate follow-up: the first `ship.sh --dry-run` exposed only the fresh
