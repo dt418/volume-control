@@ -16,6 +16,29 @@
   },
   "features": [
     {
+      "id": "vol-100",
+      "priority": 100,
+      "area": "release",
+      "title": "Winget deployment pipeline with REA static PE verification",
+      "user_visible_behavior": "Automated and reproducible Winget deployment pipeline for VolumeControl: REA static PE inspection verifies installer integrity, architecture, and resource sections; emits schema-valid 1.12.0 manifests; validates with winget CLI; and packages PR-ready submission bundles for microsoft/winget-pkgs.",
+      "status": "passing",
+      "verification": [
+        "node scripts/verify-installer-rea.mjs VolumeControl_0.1.7_x64-setup.exe passes all checks (PE machine 0x14c, GUI subsystem 0x2, sections .text/.rdata/.data/.ndata/.rsrc, NSIS marker NullsoftInst at offset 52744, switches /S and /D, requestedExecutionLevel asInvoker matching Scope: user, uninstaller registry key HKCU Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\VolumeControl, SHA-256 541C57E8F7B57F571559278E167BE4123923A2CFB22CB776791D84519E30B92B).",
+        "bash scripts/test-winget-deploy.sh passes all smoke checks and node scripts/test-verify-installer-rea.mjs passes all 3 tests.",
+        "bash scripts/deploy-winget.sh v0.1.7 VolumeControl_0.1.7_x64-setup.exe output/winget runs end-to-end (REA check, manifest generation, winget validate, PR body preparation).",
+        "winget validate --manifest winget/dt418.VolumeControl/0.1.7 returns 'Manifest validation succeeded.'",
+        "Local installation verified: VolumeControl_0.1.7_x64-setup.exe /S silently installs VolumeControl.exe (AMD64 0x8664) and uninstall.exe.",
+        "Upstream verification: PR #454508 on microsoft/winget-pkgs is MERGEABLE with Azure-Pipeline-Passed and Validation-Completed labels; CLA signed."
+      ],
+      "evidence": [
+        "Session 118 (2026-10-18): Implemented scripts/verify-installer-rea.mjs for static PE/NSIS binary inspection and scripts/test-winget-deploy.sh for deployment regression tests.",
+        "Generated schema-valid 1.12.0 manifests in winget/dt418.VolumeControl/0.1.7/ and validated via winget validate.",
+        "Audited upstream PR #454508 on microsoft/winget-pkgs; linked in docs/index.html with current pending review status.",
+        "Worktree feat/winget-deploy established at C:/Users/Thanh/orca/volume-control-winget-deploy."
+      ],
+      "notes": "Integrates REA binary inspection with Winget packaging to prevent submitting corrupted or mismatched installers to microsoft/winget-pkgs."
+    },
+    {
       "id": "vol-099",
       "priority": 99,
       "area": "tooling",
