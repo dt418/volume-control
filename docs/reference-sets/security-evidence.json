@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0",
+  "category": "security-evidence",
+  "description": "AgentShield security evidence, harness permissions, deadlock audit, and safety guardrails",
+  "securityPillars": [
+    {
+      "id": "tool-execution-guard",
+      "mechanism": ".claude/hooks/agent-safe-flow.sh",
+      "type": "PreToolUse bash hook",
+      "enforcement": "Blocks destructive git operations: push origin, push --force, reset --hard, clean -fd, branch -D, restore, checkout on paths, commit --no-verify, and gh pr merge --admin",
+      "verificationScript": "scripts/test-agent-safe-flow.sh",
+      "status": "active-and-tested"
+    },
+    {
+      "id": "tauri-deadlock-guard",
+      "mechanism": "scripts/check-tauri-deadlock.sh",
+      "type": "Static analysis regex gate",
+      "enforcement": "Prevents webview deadlock and unresponsive surfaces by verifying window creation, event listeners, and mutex handling in src-tauri",
+      "skillReference": ".claude/skills/tauri-deadlock-guard/SKILL.md",
+      "status": "active"
+    },
+    {
+      "id": "diff-hygiene-gate",
+      "mechanism": "scripts/ci-diff-check.sh",
+      "type": "CI and pre-push gate",
+      "enforcement": "Blocks forbidden paths (target/, .superpowers/, .claude/settings.local.json, .claude/worktrees/, config.json, *.log) and whitespace errors",
+      "status": "active"
+    },
+    {
+      "id": "mcp-least-privilege",
+      "mechanism": ".codex/config.toml",
+      "type": "MCP configuration isolation",
+      "enforcement": "All external MCP servers (github, context7, exa, memory, playwright, sequential-thinking) disabled by default. Credentials forbidden from repo commits.",
+      "status": "active"
+    }
+  ]
+}

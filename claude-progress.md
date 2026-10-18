@@ -3957,3 +3957,23 @@ fn get_window_pid_x11() -> Option<u32> {
   the paired records, and the diff-gate path scan finds no forbidden paths.
 - Branch refs (remote `fix/bootstrap-output-hud-parity` and the local
   worktree branch) stay in place per the user's choice.
+
+## Session 117 (2026-10-18) - Make repository work well with ECC Tools
+
+- Context & Problem: ECC Tools (`ecc-tools[bot]`) initialized repository configuration with generic TypeScript conventions (camelCase files, classes, named TS exports) in `.claude/skills/volume-control/SKILL.md` and `.claude/homunculus/instincts/inherited/volume-control-instincts.yaml`. Furthermore, `.claude/ecc-tools.json` had 0/7 reference-set readiness (`score: 0`), and untracked Codex agents (`planner.toml`, `implementer.toml`, `release-reviewer.toml`, `coordinator.toml`, `ORCHESTRATOR.md`).
+- Changes:
+  - Fixed `volume-control/SKILL.md` in both `.claude/skills/volume-control/SKILL.md` and `.agents/skills/volume-control/SKILL.md` (preserved byte-identical mirror): specified actual Rust 2021 + Tauri v2 + React 19 architecture, `snake_case` Rust files/functions, `PascalCase` types, test locations, Conventional Commits, and mandatory guardrails.
+  - Replaced hallucinated JS instincts in `.claude/homunculus/instincts/inherited/volume-control-instincts.yaml` with accurate Rust naming, record keeping, quality gates, and safe flow rules.
+  - Created all 7 ECC reference-set corpus files under `docs/reference-sets/`: `deep-analyzer-corpus.json`, `rag-evaluator.json`, `pr-salvage.json`, `discussion-triage.json`, `harness-compatibility.json`, `security-evidence.json`, and `ci-failure-modes.json`.
+  - Updated `.claude/ecc-tools.json`: elevated `referenceSetReadiness` score to 1.0 (7/7 ready with concrete evidence paths) and tracked all multi-agent Codex files and reference sets in `managedFiles`.
+  - Configured ECC plugin marketplace in `.claude/settings.json` alongside `superpowers`, preserving the `agent-safe-flow.sh` hook.
+  - Added `scripts/test-ecc-config.py` validator script verifying manifest integrity, reference-set readiness, mirror identity, and managed file existence.
+- Verification:
+  - `python scripts/test-ecc-config.py`: passed (all 7 reference sets ready, 0 errors).
+  - `python scripts/test-codex-config.py`: passed.
+  - `bash scripts/test-agent-safe-flow.sh`: 34/34 checks passed.
+  - `powershell.exe -ExecutionPolicy Bypass -File .agents/skills/format-lint/scripts/format-lint.ps1 -SkipTests`: Gate passed.
+  - `cargo fmt --all --check` & `git diff --check`: clean.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: passed with 0 warnings.
+  - `cargo test --workspace --no-default-features`: passed (354 passed, 8 suites).
+  - `bash scripts/check-records.sh --branch`: passed.

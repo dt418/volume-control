@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-18T15:48",
+  "last_updated": "2026-10-18T16:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,23 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-099",
+      "priority": 99,
+      "area": "tooling",
+      "title": "ECC Tools integration and reference-set baseline",
+      "user_visible_behavior": "Repository integrates cleanly with ECC Tools: accurate Rust/Tauri conventions in volume-control skills, updated homunculus instincts, full 7-item referenceSetReadiness (deep analyzer corpus, RAG evaluator, PR salvage, discussion triage, harness compatibility, security evidence, and CI failure modes), and a validation script scripts/test-ecc-config.py.",
+      "status": "passing",
+      "verification": [
+        "python scripts/test-ecc-config.py",
+        "python scripts/test-codex-config.py",
+        "bash scripts/test-agent-safe-flow.sh"
+      ],
+      "evidence": [
+        "scripts/test-ecc-config.py passes with all 7 reference sets ready and managed files present; test-codex-config.py passes; test-agent-safe-flow.sh 34/34 checks pass."
+      ],
+      "notes": "Customized repo-specific skills and reference sets so ECC Tools automated analysis, doctor, and audit checks succeed with 100% referenceSetReadiness."
+    },
     {
       "id": "vol-098",
       "priority": 98,

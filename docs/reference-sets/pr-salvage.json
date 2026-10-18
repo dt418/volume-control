@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "category": "pr-salvage",
+  "description": "PR salvage, conflict resolution, and stale review cases for automated queue triage",
+  "cases": [
+    {
+      "id": "salvage-redundant-trap-fix-pr45",
+      "scenario": "Branch carries changes already partially or wholly squashed into main",
+      "historicalContext": "PR #45 carried release-workflow git-path resolution and trap fixes already landed via PR #44 squash",
+      "action": "Inspect commit diff vs merge-base. If tree-identical or redundant, close with clear attribution to earlier landing.",
+      "safetyGate": "Verify no unique behavioral fixes or unlanded regression tests are lost before closing."
+    },
+    {
+      "id": "salvage-unreleased-changelog-pr57-pr59",
+      "scenario": "Merged PR left uncommitted documentation or changelog entries behind",
+      "historicalContext": "PR #57 merged without CHANGELOG.md unreleased entries. Salvaged via docs follow-up PR #59 with paired records.",
+      "action": "Extract unreleased changelog notes, create docs-only branch, pair with feature_list.json and claude-progress.md, and open clean PR.",
+      "safetyGate": "Check diff gate paths to ensure no compiled code is modified in docs-only branch."
+    },
+    {
+      "id": "salvage-record-merge-conflicts",
+      "scenario": "Merge conflict in feature_list.json or claude-progress.md across long-running branch",
+      "historicalContext": "Automated merge drivers (merge-records-json.sh and merge-records-md.sh) resolve additions by ID and heading block.",
+      "action": "Use local merge drivers or union feature array by feature ID and timestamp. Validate with bash scripts/test-records-merge.sh.",
+      "safetyGate": "Ensure JSON remains strictly valid and no existing feature IDs or evidences are dropped."
+    }
+  ]
+}

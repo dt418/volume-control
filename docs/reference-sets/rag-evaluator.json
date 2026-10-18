@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "1.0",
+  "category": "rag-evaluator",
+  "description": "Evaluation queries, relevance baselines, and gold-standard retrieval targets for volume-control RAG",
+  "queries": [
+    {
+      "query": "How are Windows audio endpoints and sessions controlled?",
+      "expectedRankings": [
+        "crates/volumectl/src/host_core.rs",
+        "src-tauri/src/native_win32.rs"
+      ],
+      "minRelevance": 0.85,
+      "domain": "audio-backend"
+    },
+    {
+      "query": "Why does Wayland overlay behave differently from X11 click-through?",
+      "expectedRankings": [
+        "CHANGELOG.md",
+        "crates/volumectl/src/ui/platform/mod.rs",
+        "src-tauri/src/window_manager.rs"
+      ],
+      "minRelevance": 0.8,
+      "domain": "linux-display-protocol"
+    },
+    {
+      "query": "What are the required checks before committing or shipping?",
+      "expectedRankings": [
+        "AGENTS.md",
+        "GUARDRAILS.md",
+        "scripts/format-lint.sh",
+        "scripts/ship.sh"
+      ],
+      "minRelevance": 0.9,
+      "domain": "quality-gate"
+    },
+    {
+      "query": "How is Tauri window deadlock prevented during IPC or window creation?",
+      "expectedRankings": [
+        "scripts/check-tauri-deadlock.sh",
+        ".claude/skills/tauri-deadlock-guard/SKILL.md",
+        "src-tauri/src/window_manager.rs"
+      ],
+      "minRelevance": 0.9,
+      "domain": "tauri-safety"
+    },
+    {
+      "query": "What is the record-keeping requirement for substantive changes?",
+      "expectedRankings": [
+        "scripts/check-records.sh",
+        "GUARDRAILS.md",
+        "docs/superpowers/specs/2026-08-08-record-keeping-guardrail-design.md"
+      ],
+      "minRelevance": 0.95,
+      "domain": "records-governance"
+    }
+  ]
+}

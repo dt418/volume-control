@@ -1,13 +1,13 @@
 # Instincts generated from https://github.com/dt418/volume-control
-# Generated: 2026-08-04T08:49:10.857Z
-# Version: 2.0
+# Updated: 2026-10-18T16:20:00.000Z
+# Version: 2.1
 # NOTE: This file supplements (does not replace) any existing curated instincts.
 # High-confidence manually curated instincts should be preserved alongside these.
 
 ---
 id: volume-control-commit-conventional
 trigger: "when writing a commit message"
-confidence: 0.85
+confidence: 0.95
 domain: git
 source: repo-analysis
 source_repo: https://github.com/dt418/volume-control
@@ -17,18 +17,17 @@ source_repo: https://github.com/dt418/volume-control
 
 ## Action
 
-Use conventional commit format with prefixes: feat, fix, docs, test
+Use conventional commit format with prefixes: feat, fix, docs, test, chore
 
 ## Evidence
 
-- 15 commits analyzed
-- Detected conventional commit pattern
-- Examples: docs: specify Signal Glass production UI, feat: expand Signal Glass semantic tokens
+- Detected conventional commit pattern in all workspace commits
+- Examples: feat: expand Signal Glass semantic tokens, fix: restore GDI font slot, docs: specify Signal Glass production UI
 
 ---
 id: volume-control-commit-length
 trigger: "when writing a commit message"
-confidence: 0.6
+confidence: 0.85
 domain: git
 source: repo-analysis
 source_repo: https://github.com/dt418/volume-control
@@ -38,114 +37,127 @@ source_repo: https://github.com/dt418/volume-control
 
 ## Action
 
-Keep commit messages concise (~46 characters)
+Keep commit subject concise (~50 characters) and in imperative mood
 
 ## Evidence
 
-- Average commit message length: 46 chars
-- Based on 15 commits
+- Average commit message length: 48-52 chars
+- Clean history with imperative verbs
 
 ---
-id: volume-control-naming-files
-trigger: "when creating a new file"
-confidence: 0.8
+id: volume-control-naming-rust
+trigger: "when creating or naming Rust files, modules, or functions"
+confidence: 0.95
 domain: code-style
 source: repo-analysis
 source_repo: https://github.com/dt418/volume-control
 ---
 
-# Volume Control Naming Files
+# Volume Control Naming Rust
 
 ## Action
 
-Use camelCase naming convention
+Use snake_case for Rust files, modules, functions, and methods; PascalCase for types, structs, traits, and enums; SCREAMING_SNAKE_CASE for constants
 
 ## Evidence
 
-- Analyzed file naming patterns in repository
-- Dominant pattern: camelCase
+- Rust 2021 conventions enforced by rustfmt and clippy across crates/volumectl and src-tauri
 
 ---
-id: volume-control-import-relative
-trigger: "when importing modules"
-confidence: 0.75
-domain: code-style
-source: repo-analysis
-source_repo: https://github.com/dt418/volume-control
----
-
-# Volume Control Import Relative
-
-## Action
-
-Use relative imports for project files
-
-## Evidence
-
-- Import analysis shows relative import pattern
-- Example: import { x } from '../lib/x'
-
----
-id: volume-control-export-style
-trigger: "when exporting from a module"
-confidence: 0.7
-domain: code-style
-source: repo-analysis
-source_repo: https://github.com/dt418/volume-control
----
-
-# Volume Control Export Style
-
-## Action
-
-Prefer named exports
-
-## Evidence
-
-- Export pattern analysis
-- Dominant style: named
-
----
-id: volume-control-test-separate
-trigger: "when writing tests"
-confidence: 0.8
-domain: testing
-source: repo-analysis
-source_repo: https://github.com/dt418/volume-control
----
-
-# Volume Control Test Separate
-
-## Action
-
-Place tests in the tests/ or __tests__/ directory, mirroring src structure
-
-## Evidence
-
-- Separate test directory pattern detected
-- Tests live in dedicated test folders
-
----
-id: volume-control-workflow-feature-development
-trigger: "when implementing a new feature"
+id: volume-control-naming-frontend
+trigger: "when creating React components or frontend files"
 confidence: 0.9
-domain: workflow
+domain: code-style
 source: repo-analysis
 source_repo: https://github.com/dt418/volume-control
 ---
 
-# Volume Control Workflow Feature Development
+# Volume Control Naming Frontend
 
 ## Action
 
-Follow the feature-development workflow:
-1. Add feature implementation
-2. Add tests for feature
-3. Update documentation
+Use PascalCase for React components and camelCase for hooks and utility functions in frontend/src/
 
 ## Evidence
 
-- Workflow detected from commit patterns
-- Frequency: ~20x per month
-- Files: 
+- React 19 + TypeScript component structure in frontend/src/
 
+---
+id: volume-control-record-keeping
+trigger: "when modifying substantive files"
+confidence: 0.98
+domain: governance
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Record Keeping
+
+## Action
+
+Every commit, PR, or merge changing substantive files (code, scripts, CI, hooks, skills) must update both feature_list.json and claude-progress.md
+
+## Evidence
+
+- Enforced by scripts/check-records.sh in pre-commit hook and CI
+- Detailed in GUARDRAILS.md and AGENTS.md
+
+---
+id: volume-control-quality-gate
+trigger: "before committing or proposing changes"
+confidence: 0.95
+domain: quality-gate
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Quality Gate
+
+## Action
+
+Run cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, and cargo test
+
+## Evidence
+
+- Root AGENTS.md format-and-lint gate
+- scripts/format-lint.sh and scripts/format-lint.ps1
+
+---
+id: volume-control-safe-flow
+trigger: "when executing git commands"
+confidence: 0.98
+domain: git-safety
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Safe Flow
+
+## Action
+
+Never run destructive git operations (push origin directly, push --force, reset --hard, clean -fd, checkout ., restore .); use scripts/ship.sh or scripts/ship.ps1
+
+## Evidence
+
+- .claude/hooks/agent-safe-flow.sh pre-tool bash hook blocks destructive git commands
+- Verified by scripts/test-agent-safe-flow.sh
+
+---
+id: volume-control-tauri-deadlock
+trigger: "when modifying src-tauri window creation or IPC event handling"
+confidence: 0.9
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/dt418/volume-control
+---
+
+# Volume Control Tauri Deadlock Guard
+
+## Action
+
+Never block on synchronous locks across webview boundaries or in window event handlers; run scripts/check-tauri-deadlock.sh
+
+## Evidence
+
+- .agents/skills/tauri-deadlock-guard/SKILL.md
+- scripts/check-tauri-deadlock.sh
