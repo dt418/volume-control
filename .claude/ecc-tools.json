@@ -5,58 +5,93 @@
   "generatedAt": "2026-08-04T08:49:09.536Z",
   "repo": "https://github.com/dt418/volume-control",
   "referenceSetReadiness": {
-    "score": 0,
-    "present": 0,
+    "score": 1.0,
+    "present": 7,
     "total": 7,
     "items": [
       {
         "id": "deep-analyzer-corpus",
         "label": "Deep analyzer corpus",
-        "status": "missing",
-        "evidence": [],
-        "recommendation": "Add analyzer fixture, golden, benchmark, or reference-set files that can catch analyzer regressions."
+        "status": "ready",
+        "evidence": [
+          "docs/reference-sets/deep-analyzer-corpus.json",
+          "scripts/test-fixtures/release-valid",
+          "scripts/test-fixtures/release-mismatch",
+          "scripts/format-lint-steps.json",
+          "crates/volumectl/tests"
+        ],
+        "recommendation": "Maintain analyzer fixture, golden, benchmark, or reference-set files that can catch analyzer regressions."
       },
       {
         "id": "rag-evaluator",
         "label": "RAG/evaluator comparison",
-        "status": "missing",
-        "evidence": [],
-        "recommendation": "Add retrieval or evaluator reference-set comparison fixtures with expected ranking behavior."
+        "status": "ready",
+        "evidence": [
+          "docs/reference-sets/rag-evaluator.json"
+        ],
+        "recommendation": "Maintain retrieval or evaluator reference-set comparison fixtures with expected ranking behavior."
       },
       {
         "id": "pr-salvage",
         "label": "PR salvage/review corpus",
-        "status": "missing",
-        "evidence": [],
-        "recommendation": "Add stale-PR, review-thread, reopen-flow, or salvage reference cases for queue cleanup automation."
+        "status": "ready",
+        "evidence": [
+          "docs/reference-sets/pr-salvage.json"
+        ],
+        "recommendation": "Maintain stale-PR, review-thread, reopen-flow, or salvage reference cases for queue cleanup automation."
       },
       {
         "id": "discussion-triage",
         "label": "Discussion triage corpus",
-        "status": "missing",
-        "evidence": [],
-        "recommendation": "Add public discussion triage fixtures, golden cases, or reference sets for informational, answered, and no-response classifications."
+        "status": "ready",
+        "evidence": [
+          "docs/reference-sets/discussion-triage.json"
+        ],
+        "recommendation": "Maintain public discussion triage fixtures, golden cases, or reference sets for informational, answered, and no-response classifications."
       },
       {
         "id": "harness-compatibility",
         "label": "Harness compatibility",
-        "status": "missing",
-        "evidence": [],
-        "recommendation": "Add cross-harness, adapter-compliance, or harness-audit evidence for Claude, Codex, OpenCode, Zed, dmux, and agent surfaces."
+        "status": "ready",
+        "evidence": [
+          "docs/reference-sets/harness-compatibility.json",
+          ".claude/settings.json",
+          ".claude/hooks/agent-safe-flow.sh",
+          ".codex/config.toml",
+          ".codex/AGENTS.md",
+          ".codex/ORCHESTRATOR.md",
+          "scripts/test-codex-config.py",
+          "scripts/test-agent-safe-flow.sh"
+        ],
+        "recommendation": "Maintain cross-harness, adapter-compliance, or harness-audit evidence for Claude, Codex, OpenCode, Zed, dmux, and agent surfaces."
       },
       {
         "id": "security-evidence",
         "label": "Security evidence",
-        "status": "missing",
-        "evidence": [],
-        "recommendation": "Attach security evidence such as SBOMs, SARIF, audit reports, or AgentShield evidence packs."
+        "status": "ready",
+        "evidence": [
+          "docs/reference-sets/security-evidence.json",
+          ".claude/hooks/agent-safe-flow.sh",
+          "scripts/check-tauri-deadlock.sh",
+          "scripts/ci-diff-check.sh",
+          ".codex/config.toml"
+        ],
+        "recommendation": "Maintain security evidence such as SBOMs, SARIF, audit reports, or AgentShield evidence packs."
       },
       {
         "id": "ci-failure-mode",
         "label": "CI failure-mode evidence",
-        "status": "missing",
-        "evidence": [],
-        "recommendation": "Add captured CI failure logs, dry-run fixtures, or troubleshooting docs for common workflow failure modes."
+        "status": "ready",
+        "evidence": [
+          "docs/reference-sets/ci-failure-modes.json",
+          "scripts/test-fixtures/release-wrong-platform",
+          "scripts/test-fixtures/release-missing-package",
+          "scripts/test-fixtures/release-missing-nsis",
+          "scripts/test-fixtures/release-duplicate-checksum",
+          "scripts/test-fixtures/release-bootstrap-mismatch",
+          "scripts/ci-diff-check.sh"
+        ],
+        "recommendation": "Maintain captured CI failure logs, dry-run fixtures, or troubleshooting docs for common workflow failure modes."
       }
     ]
   },
@@ -126,10 +161,22 @@
     ".claude/identity.json",
     ".codex/config.toml",
     ".codex/AGENTS.md",
+    ".codex/ORCHESTRATOR.md",
     ".codex/agents/explorer.toml",
     ".codex/agents/reviewer.toml",
     ".codex/agents/docs-researcher.toml",
-    ".claude/homunculus/instincts/inherited/volume-control-instincts.yaml"
+    ".codex/agents/planner.toml",
+    ".codex/agents/implementer.toml",
+    ".codex/agents/release-reviewer.toml",
+    ".codex/agents/coordinator.toml",
+    ".claude/homunculus/instincts/inherited/volume-control-instincts.yaml",
+    "docs/reference-sets/deep-analyzer-corpus.json",
+    "docs/reference-sets/rag-evaluator.json",
+    "docs/reference-sets/pr-salvage.json",
+    "docs/reference-sets/discussion-triage.json",
+    "docs/reference-sets/harness-compatibility.json",
+    "docs/reference-sets/security-evidence.json",
+    "docs/reference-sets/ci-failure-modes.json"
   ],
   "packageFiles": {
     "runtime-core": [
@@ -139,10 +186,22 @@
       ".claude/identity.json",
       ".codex/config.toml",
       ".codex/AGENTS.md",
+      ".codex/ORCHESTRATOR.md",
       ".codex/agents/explorer.toml",
       ".codex/agents/reviewer.toml",
       ".codex/agents/docs-researcher.toml",
-      ".claude/homunculus/instincts/inherited/volume-control-instincts.yaml"
+      ".codex/agents/planner.toml",
+      ".codex/agents/implementer.toml",
+      ".codex/agents/release-reviewer.toml",
+      ".codex/agents/coordinator.toml",
+      ".claude/homunculus/instincts/inherited/volume-control-instincts.yaml",
+      "docs/reference-sets/deep-analyzer-corpus.json",
+      "docs/reference-sets/rag-evaluator.json",
+      "docs/reference-sets/pr-salvage.json",
+      "docs/reference-sets/discussion-triage.json",
+      "docs/reference-sets/harness-compatibility.json",
+      "docs/reference-sets/security-evidence.json",
+      "docs/reference-sets/ci-failure-modes.json"
     ]
   },
   "moduleFiles": {
@@ -153,10 +212,22 @@
       ".claude/identity.json",
       ".codex/config.toml",
       ".codex/AGENTS.md",
+      ".codex/ORCHESTRATOR.md",
       ".codex/agents/explorer.toml",
       ".codex/agents/reviewer.toml",
       ".codex/agents/docs-researcher.toml",
-      ".claude/homunculus/instincts/inherited/volume-control-instincts.yaml"
+      ".codex/agents/planner.toml",
+      ".codex/agents/implementer.toml",
+      ".codex/agents/release-reviewer.toml",
+      ".codex/agents/coordinator.toml",
+      ".claude/homunculus/instincts/inherited/volume-control-instincts.yaml",
+      "docs/reference-sets/deep-analyzer-corpus.json",
+      "docs/reference-sets/rag-evaluator.json",
+      "docs/reference-sets/pr-salvage.json",
+      "docs/reference-sets/discussion-triage.json",
+      "docs/reference-sets/harness-compatibility.json",
+      "docs/reference-sets/security-evidence.json",
+      "docs/reference-sets/ci-failure-modes.json"
     ]
   },
   "files": [
@@ -192,6 +263,11 @@
     },
     {
       "moduleId": "runtime-core",
+      "path": ".codex/ORCHESTRATOR.md",
+      "description": "Orchestrator contract and multi-agent handoff documentation."
+    },
+    {
+      "moduleId": "runtime-core",
       "path": ".codex/agents/explorer.toml",
       "description": "Read-only explorer role config for Codex multi-agent work."
     },
@@ -207,8 +283,63 @@
     },
     {
       "moduleId": "runtime-core",
+      "path": ".codex/agents/planner.toml",
+      "description": "Read-only delivery planner role config for executable delivery plans."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": ".codex/agents/implementer.toml",
+      "description": "Implementation role config for approved workspace changes and tests."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": ".codex/agents/release-reviewer.toml",
+      "description": "Release gate reviewer role config for correctness, security, and platforms."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": ".codex/agents/coordinator.toml",
+      "description": "Delivery coordinator role config for work decomposition and handoffs."
+    },
+    {
+      "moduleId": "runtime-core",
       "path": ".claude/homunculus/instincts/inherited/volume-control-instincts.yaml",
       "description": "Continuous-learning instincts derived from repository patterns."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": "docs/reference-sets/deep-analyzer-corpus.json",
+      "description": "ECC deep analyzer benchmark fixtures for AST and codebase inspection."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": "docs/reference-sets/rag-evaluator.json",
+      "description": "ECC RAG evaluator golden queries and document ranking baselines."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": "docs/reference-sets/pr-salvage.json",
+      "description": "ECC PR salvage and review triage reference cases."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": "docs/reference-sets/discussion-triage.json",
+      "description": "ECC discussion and issue classification golden cases."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": "docs/reference-sets/harness-compatibility.json",
+      "description": "ECC cross-harness compatibility and adapter contracts."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": "docs/reference-sets/security-evidence.json",
+      "description": "ECC AgentShield security evidence, permission gates, and deadlock audit."
+    },
+    {
+      "moduleId": "runtime-core",
+      "path": "docs/reference-sets/ci-failure-modes.json",
+      "description": "ECC CI failure mode catalog and remediation reference sets."
     }
   ],
   "workflows": [],

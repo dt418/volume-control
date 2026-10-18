@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1.0",
+  "category": "discussion-triage",
+  "description": "Public discussion and issue triage classification reference cases",
+  "classifications": [
+    {
+      "id": "triage-wayland-clickthrough",
+      "category": "platform-limitation",
+      "symptom": "User reports HUD overlay captures mouse clicks instead of passing through on Wayland Linux",
+      "responseGuidance": "Explain that Wayland compositor protocols do not expose input-shape manipulation to GTK windows. Click-through works on Windows, macOS, and Linux X11.",
+      "evidenceReference": "CHANGELOG.md [Unreleased] notes and Session 116 log",
+      "autoLabel": "area:linux,platform:wayland"
+    },
+    {
+      "id": "triage-windows-powershell-policy",
+      "category": "installation-support",
+      "symptom": "Install-VolumeControl.ps1 execution blocked by default PowerShell ExecutionPolicy",
+      "responseGuidance": "Direct user to run with `powershell -ExecutionPolicy Bypass -File Install-VolumeControl.ps1` or use the NSIS setup installer.",
+      "evidenceReference": "packaging/Install-VolumeControl.ps1",
+      "autoLabel": "area:windows,installation"
+    },
+    {
+      "id": "triage-hotkey-conflict",
+      "category": "bug-or-configuration",
+      "symptom": "Global hotkey registration fails on Windows due to another running application",
+      "responseGuidance": "Check logs for RegisterHotKey error code 1409 (ERROR_HOTKEY_ALREADY_REGISTERED). Advise modifying hotkey configuration in SettingsSurface.",
+      "evidenceReference": "docs/global-hotkeys.md and src-tauri/src/native_win32.rs",
+      "autoLabel": "area:hotkeys,platform:windows"
+    },
+    {
+      "id": "triage-winget-404",
+      "category": "packaging-status",
+      "symptom": "winget install dt418.VolumeControl returns 404 or package not found",
+      "responseGuidance": "Inform user that Winget package submission is queued; WINGET_LIVE is currently false on the landing page. Direct to GitHub Releases installer.",
+      "evidenceReference": "Session 111 verification notes and packaging/generate-winget-manifest.sh",
+      "autoLabel": "area:packaging,winget"
+    }
+  ]
+}
