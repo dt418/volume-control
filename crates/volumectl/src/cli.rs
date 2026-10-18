@@ -12,8 +12,14 @@ pub fn run() -> Result<ExitCode, String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("get");
 
-    let device = crate::audio::default_backend().map_err(|e| e.to_string())?;
+    if cmd == "check-updates" {
+        let (config, _) = crate::config::load_with_notice();
+        let message = crate::updates::check_for_updates(config.language);
+        println!("{message}");
+        return Ok(ExitCode::SUCCESS);
+    }
 
+    let device = crate::audio::default_backend().map_err(|e| e.to_string())?;
     match cmd {
         "get" => {
             let state = device.get_state().map_err(|e| e.to_string())?;
@@ -36,7 +42,7 @@ pub fn run() -> Result<ExitCode, String> {
             Ok(ExitCode::SUCCESS)
         }
         other => Err(format!(
-            "unknown command '{other}' (try: get, set <0-100>, mute)"
+            "unknown command '{other}' (try: get, set <0-100>, mute, check-updates)"
         )),
     }
 }

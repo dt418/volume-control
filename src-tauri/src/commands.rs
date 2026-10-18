@@ -241,6 +241,25 @@ pub async fn surface_ready(app: AppHandle, window: WebviewWindow) -> Result<(), 
         .await
         .ok_or_else(|| "window manager closed".to_string())?
 }
+#[tauri::command]
+pub async fn check_for_updates(
+    app: AppHandle,
+    core: State<'_, Arc<Mutex<AppCore>>>,
+) -> Result<volumectl_lib::updates::UpdateInfo, String> {
+    let language = {
+        let core = core.lock().map_err(|e| e.to_string())?;
+        core.config().language
+    };
+
+    let info = tauri::async_runtime::spawn_blocking(move || {
+        volumectl_lib::updates::check_update_info(language)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    let _ = app.emit("state://update", &info);
+    Ok(info)
+}
 
 #[cfg(test)]
 mod tests {
