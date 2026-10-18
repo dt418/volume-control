@@ -14,7 +14,6 @@
   - `git diff --check`: passed.
   - `powershell.exe -ExecutionPolicy Bypass -File .agents/skills/format-lint/scripts/format-lint.ps1`: passed full format, diff, records, Clippy, and workspace-test gate.
 
-
 ## Session 121 (2026-10-18) - Release v0.1.8 with bilingual landing page and update notifications
 
 - Goal: integrate full bilingual (EN/VI) support into the GitHub Pages landing site with an interactive language switcher, synchronize project version 0.1.8 across all package manifests and changelog, and prepare release tag v0.1.8.
@@ -4047,3 +4046,17 @@ fn get_window_pid_x11() -> Option<u32> {
   - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: passed with 0 warnings.
   - `cargo test --workspace --no-default-features`: passed (354 passed, 8 suites).
   - `bash scripts/check-records.sh --branch`: passed.
+
+## Session 119 (2026-10-18) - Installer status feedback, differential update, and concise commands
+
+- Goal: provide live CLI progress feedback during installation, add differential component-level checking to avoid overwriting unchanged files during update, and make remote installation commands concise and easy to use.
+- What landed:
+  - `scripts/Install-VolumeControl.ps1`: added step-by-step progress feedback (`[1/3] downloading`, `[2/3] verifying SHA-256`, `[3/3] installing`) with CP1252-safe ASCII escape sequences in both English and Vietnamese; added component status reporting on update.
+  - `packaging/install-linux.sh`: added progress indicators (`progress.downloading`, `progress.verifying`, `progress.installing`); added differential update comparing binary and document SHA-256 to report unchanged components vs replaced components.
+  - `packaging/install-macos.sh`: added step progress indicators and differential component inspection on app bundle update.
+  - `docs/index.html`: simplified install snippets from verbose multi-line scripts to ergonomic one-liners using `& ([scriptblock]::Create((irm ...)))` on Windows and `curl | bash` on Unix, maintaining full SHA-256 verification and passing all 44 release workflow contract checks.
+- Verification:
+  - `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1`: passed all tests including pure ASCII check.
+  - `bash scripts/test-install-unix.sh`: passed all 22 checks.
+  - `bash scripts/test-release-workflow.sh`: passed all 44 contract checks.
+  - `node scripts/test-verify-installer-rea.mjs` and `bash scripts/test-winget-deploy.sh`: passed.
