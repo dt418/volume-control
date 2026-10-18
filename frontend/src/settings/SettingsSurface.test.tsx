@@ -300,8 +300,10 @@ describe("SettingsSurface", () => {
   it("updates conflict badges live from state://hotkeys events", async () => {
     let handler: ((payload: unknown) => void) | undefined;
     vi.mocked(ipc.listen).mockImplementation(
-      async (_event: string, cb: (payload: unknown) => void) => {
-        handler = cb;
+      async (event: string, cb: (payload: unknown) => void) => {
+        if (event === "state://hotkeys") {
+          handler = cb;
+        }
         return () => {};
       },
     );

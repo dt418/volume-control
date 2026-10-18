@@ -12,31 +12,45 @@ pub fn run() -> Result<ExitCode, String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("get");
 
-    let device = crate::audio::default_backend().map_err(|e| e.to_string())?;
-
-    match cmd {
-        "get" => {
-            let state = device.get_state().map_err(|e| e.to_string())?;
-            println!("{}%", state.percent());
-            Ok(ExitCode::SUCCESS)
-        }
-        "set" => {
-            let pct = args
-                .get(1)
-                .ok_or("usage: volumectl set <0-100>")?
-                .parse::<i32>()
-                .map_err(|_| "volume must be 0-100")?;
-            device
-                .set_volume(pct.clamp(0, 100) as f32 / 100.0)
-                .map_err(|e| e.to_string())?;
-            Ok(ExitCode::SUCCESS)
-        }
-        "mute" => {
-            device.toggle_mute().map_err(|e| e.to_string())?;
-            Ok(ExitCode::SUCCESS)
-        }
-        other => Err(format!(
-            "unknown command '{other}' (try: get, set <0-100>, mute)"
-        )),
+    if cmd == "check-updates" {
+        let (config, _) = crate::config::load_with_notice();
+        let message = crate::updates::check_for_updates(config.language);
+        println!("{message}");
+        return Ok(ExitCode::SUCCESS);
     }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let device = crate::audio::default_backend().map_err(|e| e.to_string())?;
+        match cmd {
+            "get" => {
+                let state = device.get_state().map_err(|e| e.to_string())?;
+                println!("{}%", state.percent());
+                Ok(ExitCode::SUCCESS)
+            }
+            "set" => {
+                let pct = args
+                    .get(1)
+                    .ok_or("usage: volumectl set <0-100>")?
+                    .parse::<i32>()
+                    .map_err(|_| "volume must be 0-100")?;
+                device
+                    .set_volume(pct.clamp(0, 100) as f32 / 100.0)
+                    .map_err(|e| e.to_string())?;
+                Ok(ExitCode::SUCCESS)
+            }
+            "mute" => {
+                device.toggle_mute().map_err(|e| e.to_string())?;
+                Ok(ExitCode::SUCCESS)
+            }
+            other => Err(format!(
+                "unknown command '{other}' (try: get, set <0-100>, mute, check-updates)"
+            )),
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    Err(format!(
+        "command '{cmd}' is not supported on Windows CLI (try: check-updates)"
+    ))
 }

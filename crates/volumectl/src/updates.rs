@@ -4,9 +4,72 @@
 //! The network call is a thin, isolated function; the version comparison is
 //! pure so it is fully unit-testable without a network.
 
+use serde::{Deserialize, Serialize};
+
 use crate::config::Language;
 use crate::locale;
 
+/// Structured update status information for UI surfaces and CLI.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdateInfo {
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub is_update_available: bool,
+    pub release_url: Option<String>,
+    pub message: String,
+}
+
+/// Pure version/status resolution from an explicit current version and latest tag result.
+pub fn resolve_update_info(
+    lang: Language,
+    current_version: &str,
+    latest: Result<String, String>,
+) -> UpdateInfo {
+    let s = locale::strings(lang);
+    match latest {
+        Ok(tag) => {
+            let newer = is_newer(&tag, current_version);
+            let message = if newer {
+                format!("{} {tag}", s.update_check_available_prefix)
+            } else {
+                s.update_check_up_to_date.to_string()
+            };
+            let release_url = if newer {
+                Some(format!(
+                    "https://github.com/dt418/volume-control/releases/tag/{tag}"
+                ))
+            } else {
+                None
+            };
+            UpdateInfo {
+                current_version: current_version.to_string(),
+                latest_version: Some(tag),
+                is_update_available: newer,
+                release_url,
+                message,
+            }
+        }
+        Err(error) => {
+            log::warn!("{error}");
+            UpdateInfo {
+                current_version: current_version.to_string(),
+                latest_version: None,
+                is_update_available: false,
+                release_url: None,
+                message: s.update_check_failed.to_string(),
+            }
+        }
+    }
+}
+
+/// Fetch the latest tag and return structured update info.
+pub fn check_update_info(lang: Language) -> Result<UpdateInfo, String> {
+    Ok(resolve_update_info(
+        lang,
+        env!("CARGO_PKG_VERSION"),
+        fetch_latest_tag(),
+    ))
+}
 /// GitHub API endpoint for the latest stable release.
 const RELEASES_LATEST_API: &str =
     "https://api.github.com/repos/dt418/volume-control/releases/latest";
@@ -57,17 +120,9 @@ pub fn fetch_latest_tag() -> Result<String, String> {
 /// Localized overlay message for the whole check (never panics, never
 /// propagates the raw error to the user).
 pub fn check_for_updates(lang: Language) -> String {
-    let s = locale::strings(lang);
-    match fetch_latest_tag() {
-        Ok(tag) if is_newer(&tag, env!("CARGO_PKG_VERSION")) => {
-            format!("{} {tag}", s.update_check_available_prefix)
-        }
-        Ok(_) => s.update_check_up_to_date.to_string(),
-        Err(error) => {
-            log::warn!("{error}");
-            s.update_check_failed.to_string()
-        }
-    }
+    check_update_info(lang)
+        .map(|info| info.message)
+        .unwrap_or_else(|e| e)
 }
 
 #[cfg(test)]
@@ -114,5 +169,21 @@ mod tests {
         );
         assert_ne!(en.update_check_failed, vi.update_check_failed);
         assert_ne!(en.update_check_in_progress, vi.update_check_in_progress);
+    }
+    #[test]
+    fn resolve_update_info_reports_available_and_up_to_date() {
+        let available = resolve_update_info(Language::En, "0.1.7", Ok("v0.1.8".into()));
+        assert!(available.is_update_available);
+        assert_eq!(available.latest_version.as_deref(), Some("v0.1.8"));
+        assert!(available.release_url.as_deref().unwrap().contains("v0.1.8"));
+
+        let up_to_date = resolve_update_info(Language::En, "0.1.7", Ok("v0.1.7".into()));
+        assert!(!up_to_date.is_update_available);
+        assert_eq!(up_to_date.latest_version.as_deref(), Some("v0.1.7"));
+        assert_eq!(up_to_date.release_url, None);
+
+        let err = resolve_update_info(Language::En, "0.1.7", Err("network error".into()));
+        assert!(!err.is_update_available);
+        assert_eq!(err.latest_version, None);
     }
 }

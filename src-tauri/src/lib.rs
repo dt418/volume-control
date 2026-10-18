@@ -12,10 +12,10 @@ use volumectl_lib::host_core::AppCore;
 use volumectl_lib::tray_common::TrayCommand;
 
 use commands::{
-    adjust_volume, close_surface, config_path, get_audio_sessions, get_autostart, get_bootstrap,
-    mute_session, open_config_location, open_surface, recommended_blacklist, reset_volume,
-    save_config, set_autostart, set_modifier, set_session_volume, set_volume, surface_ready,
-    toggle_mute, update_settings,
+    adjust_volume, check_for_updates, close_surface, config_path, get_audio_sessions,
+    get_autostart, get_bootstrap, mute_session, open_config_location, open_surface,
+    recommended_blacklist, reset_volume, save_config, set_autostart, set_modifier,
+    set_session_volume, set_volume, surface_ready, toggle_mute, update_settings,
 };
 use events_sink::TauriSink;
 use window_manager::{SurfaceId, WindowManager};
@@ -53,6 +53,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         open_surface,
         close_surface,
         surface_ready,
+        check_for_updates,
     ])
 }
 
@@ -382,6 +383,7 @@ pub fn run() -> tauri::Result<()> {
             open_surface,
             close_surface,
             surface_ready,
+            check_for_updates,
         ])
         .build(tauri::generate_context!())?
         .run(|_app, event| {
