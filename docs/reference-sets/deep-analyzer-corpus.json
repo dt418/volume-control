@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "1.0",
+  "category": "deep-analyzer-corpus",
+  "description": "Corpus benchmark fixtures for volume-control AST and code analysis",
+  "benchmarks": [
+    {
+      "id": "volumectl-crate-structure",
+      "target": "crates/volumectl",
+      "kind": "rust-library",
+      "entrypoints": [
+        "crates/volumectl/src/lib.rs",
+        "crates/volumectl/src/main.rs"
+      ],
+      "modules": [
+        "crates/volumectl/src/host_core.rs",
+        "crates/volumectl/src/ui/platform/mod.rs"
+      ],
+      "expectedExports": [
+        "VolumeController",
+        "AudioEndpoint",
+        "PlatformHost"
+      ],
+      "namingConvention": "snake_case_modules"
+    },
+    {
+      "id": "tauri-host-structure",
+      "target": "src-tauri",
+      "kind": "rust-tauri-app",
+      "entrypoints": [
+        "src-tauri/src/main.rs",
+        "src-tauri/src/lib.rs"
+      ],
+      "modules": [
+        "src-tauri/src/commands.rs",
+        "src-tauri/src/events_sink.rs",
+        "src-tauri/src/native_win32.rs",
+        "src-tauri/src/native_headless.rs",
+        "src-tauri/src/tauri_tray.rs",
+        "src-tauri/src/window_manager.rs"
+      ],
+      "tauriDeadlockGuard": true
+    },
+    {
+      "id": "frontend-structure",
+      "target": "frontend",
+      "kind": "react-typescript-vite",
+      "framework": "React 19",
+      "styling": "Tailwind CSS v4",
+      "components": [
+        "frontend/src/App.tsx",
+        "frontend/src/components"
+      ]
+    },
+    {
+      "id": "release-packaging-fixtures",
+      "target": "scripts/test-fixtures",
+      "kind": "release-metadata-and-packages",
+      "fixtures": [
+        "scripts/test-fixtures/release-valid",
+        "scripts/test-fixtures/release-valid-ubuntu",
+        "scripts/test-fixtures/release-valid-macos",
+        "scripts/test-fixtures/release-windows-valid",
+        "scripts/test-fixtures/release-mismatch",
+        "scripts/test-fixtures/release-duplicate-checksum",
+        "scripts/test-fixtures/release-bootstrap-mismatch"
+      ]
+    }
+  ]
+}

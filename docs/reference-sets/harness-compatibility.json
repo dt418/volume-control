@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "1.0",
+  "category": "harness-compatibility",
+  "description": "Cross-harness adapter compliance matrix and contracts across Claude Code, Codex CLI, OpenCode, Cursor, and Zed",
+  "harnesses": [
+    {
+      "name": "Claude Code",
+      "status": "first-class",
+      "configPaths": [
+        ".claude/settings.json",
+        ".claude/identity.json",
+        ".claude/ecc-tools.json"
+      ],
+      "skillsDir": ".claude/skills",
+      "hooks": [
+        ".claude/hooks/agent-safe-flow.sh"
+      ],
+      "hookVerification": "bash scripts/test-agent-safe-flow.sh",
+      "plugins": [
+        "superpowers@superpowers-marketplace",
+        "ecc@ecc"
+      ]
+    },
+    {
+      "name": "Codex CLI",
+      "status": "first-class",
+      "configPaths": [
+        ".codex/config.toml",
+        ".codex/AGENTS.md",
+        ".codex/ORCHESTRATOR.md"
+      ],
+      "agentsDir": ".codex/agents",
+      "skillsDir": ".agents/skills",
+      "pipelineRoles": [
+        "coordinator",
+        "planner",
+        "implementer",
+        "release_reviewer"
+      ],
+      "verification": "python scripts/test-codex-config.py"
+    },
+    {
+      "name": "OpenCode / Cursor / Zed",
+      "status": "compatible",
+      "rootInstructions": "AGENTS.md",
+      "guardrails": "GUARDRAILS.md",
+      "skillsBridge": ".agents/skills",
+      "safetyInvariants": [
+        "Never run destructive git commands (push -f, reset --hard, clean -fd)",
+        "Always pair substantive changes with record updates (scripts/check-records.sh)"
+      ]
+    }
+  ]
+}

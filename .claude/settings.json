@@ -1,6 +1,15 @@
 {
+  "extraKnownMarketplaces": {
+    "ecc": {
+      "source": {
+        "source": "github",
+        "repo": "affaan-m/ECC"
+      }
+    }
+  },
   "enabledPlugins": {
-    "superpowers@superpowers-marketplace": true
+    "superpowers@superpowers-marketplace": true,
+    "ecc@ecc": true
   },
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "900000",

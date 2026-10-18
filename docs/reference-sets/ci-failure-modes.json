@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.0",
+  "category": "ci-failure-mode",
+  "description": "Catalog of CI/CD failure modes, diagnosis rules, fixtures, and remediation workflows",
+  "failureModes": [
+    {
+      "id": "release-checksum-mismatch",
+      "symptom": "Release verification step fails with SHA256 checksum discrepancy",
+      "reproFixture": "scripts/test-fixtures/release-mismatch",
+      "verificationScript": "scripts/test-release-workflow.sh",
+      "remediation": "Regenerate SHA256SUMS.txt with `sha256sum * > SHA256SUMS.txt` after rebuilding all platform artifacts."
+    },
+    {
+      "id": "release-missing-artifact",
+      "symptom": "Packaging fails because expected installer or archive is missing from release directory",
+      "reproFixture": "scripts/test-fixtures/release-missing-package",
+      "remediation": "Check CI build matrix artifacts download step and ensure all platform target jobs finished successfully."
+    },
+    {
+      "id": "release-duplicate-checksum",
+      "symptom": "SHA256SUMS.txt contains duplicate file entries or hashes",
+      "reproFixture": "scripts/test-fixtures/release-duplicate-checksum",
+      "remediation": "Deduplicate SHA256SUMS.txt ensuring one canonical line per artifact."
+    },
+    {
+      "id": "record-check-failure",
+      "symptom": "CI or pre-commit hook reports 'missing record updates' (check-records.sh exit 1)",
+      "cause": "Substantive files (crates, scripts, CI, skills) changed without updating both feature_list.json and claude-progress.md",
+      "remediation": "Add an entry to claude-progress.md under current session and update feature_list.json last_updated timestamp and feature evidence array."
+    },
+    {
+      "id": "clippy-warnings-failure",
+      "symptom": "cargo clippy fails under `-D warnings` policy",
+      "cause": "Compiler warnings in workspace code or tests",
+      "remediation": "Fix warning at source; never suppress or weaken `-D warnings` policy per GUARDRAILS.md."
+    }
+  ]
+}
