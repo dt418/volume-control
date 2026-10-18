@@ -147,6 +147,11 @@
   }
   .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); background: var(--surface-2); }
   .tab:hover { color: var(--fg); }
+  .badge {
+    margin-left: 6px; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    letter-spacing: .3px; text-transform: uppercase;
+    color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  }
   .actions { display: flex; gap: 8px; padding: 14px 16px 4px; flex-wrap: wrap; align-items: center; }
   .actions .cap { color: var(--muted); font-size: 13px; font-weight: 600; margin-right: 4px; }
   .chip {
@@ -181,6 +186,7 @@
   }
   .note[hidden] { display: none; }
   .note b { color: var(--warn); }
+  .alt { margin: 14px 2px 0; color: var(--muted); font-size: 14px; }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
   .card {
@@ -272,7 +278,7 @@
 <div class="wrap">
 
   <div class="hero">
-    <span class="pill"><b>v0.1.x</b> · native-first · MIT licensed</span>
+    <a class="pill" href="https://github.com/dt418/volume-control/releases/latest"><b id="ver">v0.1.x</b> · native-first · MIT licensed</a>
     <h1>Volume control that feels<br><span class="grad">native everywhere</span></h1>
     <p class="sub">
       Global hotkeys, a real system tray, an on-screen volume overlay, and
@@ -280,7 +286,7 @@
       CoreAudio, and PulseAudio backends.
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="#install">Install in one command</a>
+      <a class="btn btn-primary" href="#install">Install VolumeControl</a>
       <a class="btn btn-ghost" href="https://github.com/dt418/volume-control/releases">View releases</a>
     </div>
     <div class="keys">
@@ -302,10 +308,10 @@
 
     <div class="install-card">
       <div class="tabs" role="tablist" aria-label="Install method">
-        <button class="tab" role="tab" id="tab-ps"     aria-controls="snippet-panel" aria-selected="true"  tabindex="0"  data-tab="ps">PowerShell · irm</button>
-        <button class="tab" role="tab" id="tab-curl"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="curl">curl</button>
+        <button class="tab" role="tab" id="tab-ps"     aria-controls="snippet-panel" aria-selected="true"  tabindex="0"  data-tab="ps">PowerShell</button>
+        <button class="tab" role="tab" id="tab-curl"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="curl">Windows · curl.exe</button>
         <button class="tab" role="tab" id="tab-unix"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="unix">macOS / Linux</button>
-        <button class="tab" role="tab" id="tab-winget" aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="winget">winget</button>
+        <button class="tab" role="tab" id="tab-winget" aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="winget">winget<span class="badge" id="winget-badge">soon</span></button>
       </div>
 
       <div class="actions" role="group" aria-label="Action">
@@ -320,24 +326,19 @@
         <pre id="snippet" tabindex="0"><code></code></pre>
       </div>
       <span class="sr-only" role="status" id="copy-status"></span>
+      <noscript><p class="note"><span>Enable JavaScript to see the install commands, or follow the steps in the <a href="https://github.com/dt418/volume-control#installing-on-windows">README</a>.</span></p></noscript>
 
       <div class="note" id="winget-note" hidden>
-        <span>ℹ</span>
-        <span><b>winget</b> becomes available once the manifest is published to
-        <a href="https://github.com/microsoft/winget-pkgs" rel="noopener">winget-pkgs</a>
-        for a release that ships the NSIS installer (first: <b>v0.1.5+</b>).
-        Until then use PowerShell or curl. Generate the ready-to-PR manifest
-        with <code>scripts/generate-winget-manifest.sh</code>.</span>
-      </div>
-      <div class="note" id="release-note">
-        <span>⚠</span>
-        <span><b>Bootstrap assets</b> (<code>Install-VolumeControl.ps1</code>,
-        <code>SHA256SUMS.txt</code>, <code>*_x64-setup.exe</code>) ship with
-        release <b>v0.1.5+</b>. Commands below target
-        <code>releases/latest/download/</code> and work once that release is
-        published.</span>
+        <span aria-hidden="true">ℹ</span>
+        <span><b>winget isn’t available yet.</b> The package hasn’t been published to
+        <a href="https://github.com/microsoft/winget-pkgs" rel="noopener">winget-pkgs</a>,
+        so this command will not resolve today — use the PowerShell or curl.exe tab.
+        (Maintainers: <code>scripts/generate-winget-manifest.sh</code> builds the manifest.)</span>
       </div>
     </div>
+
+    <p class="alt">Prefer a package? <a href="https://github.com/dt418/volume-control/releases/latest">.exe, .dmg, .deb, .rpm, .AppImage and archives</a>
+      are on the releases page, and every file is listed in <code>SHA256SUMS.txt</code>.</p>
 
     <div class="facts" style="margin-top:18px">
       <div class="fact">
@@ -372,6 +373,8 @@
       <div class="card"><div class="ico" aria-hidden="true">📦</div><h3>System tray</h3><p>Real tray icon with context menu, mute/reset actions, and app lifecycle that matches platform norms.</p></div>
       <div class="card"><div class="ico" aria-hidden="true">⚙️</div><h3>Settings &amp; Help</h3><p>Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
       <div class="card"><div class="ico" aria-hidden="true">🔄</div><h3>Live config reload</h3><p>Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🌐</div><h3>English &amp; <span lang="vi">Tiếng Việt</span></h3><p>Mixer, overlay, settings and help all speak both languages — switch from the tray or Settings.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⬆️</div><h3>Update check</h3><p>“Check for updates” in the tray menu reports the result inline, so you never have to open Settings to find out.</p></div>
     </div>
   </section>
 
@@ -384,9 +387,11 @@
         <tbody>
           <tr><th scope="row">Volume control</th><td class="yes">✅ WASAPI</td><td class="yes">✅ CoreAudio</td><td class="yes">✅ PulseAudio</td></tr>
           <tr><th scope="row">Global hotkeys</th><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
-          <tr><th scope="row">Mixer / Settings / Help</th><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
+          <tr><th scope="row">System mixer / Settings / Help</th><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
+          <tr><th scope="row">Per-app mixer</th><td class="yes">✅ WASAPI sessions</td><td class="manual">✖ no public API</td><td class="yes">✅ PulseAudio sink-inputs</td></tr>
           <tr><th scope="row">Native overlay &amp; tray</th><td class="yes">✅ native</td><td class="manual">🔜 host integration</td><td class="manual">🔜 host integration</td></tr>
-          <tr><th scope="row">Remote install commands</th><td class="yes">✅ irm · curl · winget</td><td class="yes">✅ curl installer</td><td class="yes">✅ curl installer</td></tr>
+          <!-- When dt418.VolumeControl lands in winget-pkgs: move winget into the ✅ list and set WINGET_LIVE = true in the script below. -->
+          <tr><th scope="row">Remote install commands</th><td class="yes">✅ PowerShell · curl.exe <span class="manual">· 🔜 winget</span></td><td class="yes">✅ verified installer script</td><td class="yes">✅ verified installer script</td></tr>
         </tbody>
       </table>
     </div>
@@ -427,70 +432,91 @@
   </div>
 </footer>
 
+<!-- Install snippets. Plain text on purpose: no JS escaping, easy to review, and
+     every flow is download → verify SHA-256 → run the local copy. -->
+
+<script type="text/plain" id="tpl-ps">
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $root | Out-Null
+$base = '{{BASE}}'
+Invoke-WebRequest "$base/Install-VolumeControl.ps1" -OutFile "$root/Install-VolumeControl.ps1"
+Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$root/SHA256SUMS.txt"
+$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
+$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
+if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
+</script>
+
+<script type="text/plain" id="tpl-curl">
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $root | Out-Null
+$base = '{{BASE}}'
+curl.exe -fsSL "$base/Install-VolumeControl.ps1" -o "$root/Install-VolumeControl.ps1"
+curl.exe -fsSL "$base/SHA256SUMS.txt" -o "$root/SHA256SUMS.txt"
+$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
+$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
+if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
+</script>
+
+<script type="text/plain" id="tpl-unix">
+(
+  set -euo pipefail
+  base="{{BASE}}"
+  case "$(uname -s)" in
+    Darwin) s=install-macos.sh ;;
+    Linux)  s=install-linux.sh ;;
+    *) echo "Unsupported OS" >&2; exit 1 ;;
+  esac
+  d="$(mktemp -d)"
+  curl -fsSL "$base/$s" -o "$d/$s"
+  curl -fsSL "$base/SHA256SUMS.txt" -o "$d/SHA256SUMS.txt"
+  want="$(awk -v f="$s" '$2 == f { print $1 }' "$d/SHA256SUMS.txt")"
+  have="$( (sha256sum "$d/$s" 2>/dev/null || shasum -a 256 "$d/$s") | awk '{ print $1 }' )"
+  [ -n "$want" ] && [ "$want" = "$have" ] || { echo "SHA-256 mismatch for $s" >&2; exit 1; }
+  bash "$d/$s" {{ACTION}}
+)
+</script>
+
 <script>
 (function () {
   var BASE = "https://github.com/dt418/volume-control/releases/latest/download";
+  var WINGET_LIVE = false;   // flip once dt418.VolumeControl is merged into winget-pkgs
 
-  function ps(action, pinned) {
-    var line = '& ([scriptblock]::Create((irm "' + BASE + '/Install-VolumeControl.ps1"))) -Action ' + action;
-    if (action === "update") {
-      return '# Fetch the verified bootstrap, then run it with arguments.\n' +
-             '# Optional pin: append  -Version v0.1.5\n' + line;
+  var NOTES = {
+    win: {
+      install: "",
+      update: "# Update refuses to run while VolumeControl is open - close it first.\n# Pin a release: add  -Version vX.Y.Z  to the last line.\n",
+      uninstall: "# Removes the app; config.ini is preserved.\n"
+    },
+    unix: {
+      install: "",
+      update: "# Pin a release: put  VOLUMECTL_VERSION=vX.Y.Z  before  bash  on the last line.\n",
+      uninstall: "# Removes the app/binary; your config is preserved.\n"
     }
-    if (action === "uninstall") {
-      return '# Runs the contained uninstaller; config.ini is preserved.\n' + line;
-    }
-    return '# Downloads the script, then executes it from memory — verify-friendly,\n' +
-           '# no pipe-into-shell: arguments bind exactly like a local file run.\n' + line;
-  }
-
-  function curl(action) {
-    var body =
-      '$base = "' + BASE + '"\n' +
-      '$root = Join-Path $env:TEMP "VolumeControl-bootstrap"\n' +
-      'New-Item -ItemType Directory -Force -Path $root | Out-Null\n' +
-      'curl.exe -fsSL "$base/Install-VolumeControl.ps1" -o "$root\\Install-VolumeControl.ps1"\n' +
-      'curl.exe -fsSL "$base/SHA256SUMS.txt" -o "$root\\SHA256SUMS.txt"\n' +
-      '$want = ((Get-Content "$root\\SHA256SUMS.txt" | Where-Object { $_ -like "*Install-VolumeControl.ps1" }) -split "\\s+")[0]\n' +
-      'if ((Get-FileHash "$root\\Install-VolumeControl.ps1").Hash -ine $want) { throw "SHA-256 mismatch" }\n';
-    if (action === "update") {
-      return body + '& "$root\\Install-VolumeControl.ps1" -Action update   # pin: -Version v0.1.5';
-    }
-    if (action === "uninstall") {
-      return body + '& "$root\\Install-VolumeControl.ps1" -Action uninstall';
-    }
-    return body + '& "$root\\Install-VolumeControl.ps1" -Action install';
-  }
-
-  function winget(action) {
-    if (action === "update") return "winget upgrade --id dt418.VolumeControl";
-    if (action === "uninstall") return "winget uninstall --id dt418.VolumeControl";
-    return "winget install --id dt418.VolumeControl";
-  }
-
-  function unix(action) {
-    // macOS and Linux ship their own verified installer next to the package;
-    // both verify SHA-256 against the release manifest before installing.
-    var body =
-      '# macOS: install-macos.sh   Linux: install-linux.sh\n' +
-      'curl -fsSL "' + BASE + '/install-macos.sh" | bash -s -- ' + action;
-    if (action === "update") {
-      return body + '   # pin a tag: VOLUMECTL_VERSION=v0.1.5 bash -s -- update';
-    }
-    if (action === "uninstall") {
-      return body + '   # removes the app/binary; config is preserved';
-    }
-    return body + '   # verifies SHA256SUMS.txt, then installs under $HOME';
-  }
-
-  var SNIPPETS = {
-    ps: ps,
-    curl: curl,
-    winget: winget,
-    unix: unix
   };
 
-  var state = { tab: "ps", action: "install" };
+  function tpl(id) {
+    return document.getElementById(id).textContent.replace(/^\n+|\n+$/g, "");
+  }
+  function fill(text, action) {
+    return text.replace(/\{\{BASE\}\}/g, BASE).replace(/\{\{ACTION\}\}/g, action);
+  }
+  function build(tab, action) {
+    if (tab === "winget") {
+      var verb = { install: "install", update: "upgrade", uninstall: "uninstall" }[action];
+      return (WINGET_LIVE ? "" : "# Not published to winget-pkgs yet - use the PowerShell or curl.exe tab.\n") +
+             "# winget checks the installer against the SHA-256 in its manifest before it runs.\n" +
+             "winget " + verb + " --id dt418.VolumeControl";
+    }
+    if (tab === "unix") return NOTES.unix[action] + fill(tpl("tpl-unix"), action);
+    return NOTES.win[action] + fill(tpl(tab === "curl" ? "tpl-curl" : "tpl-ps"), action);
+  }
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  var plat = String((navigator.userAgentData && navigator.userAgentData.platform) ||
+                    navigator.platform || navigator.userAgent || "").toLowerCase();
+  var state = { tab: /win/.test(plat) ? "ps" : /mac|linux/.test(plat) ? "unix" : "ps", action: "install" };
   var codeEl = document.querySelector("#snippet code");
   var wingetNote = document.getElementById("winget-note");
   var panel = document.getElementById("snippet-panel");
@@ -498,14 +524,11 @@
   var tabs = [].slice.call(tablist.querySelectorAll("[role=tab]"));
   var copyBtn = document.querySelector(".copy");
   var copyStatus = document.getElementById("copy-status");
+  var wingetBadge = document.getElementById("winget-badge");
 
   function render() {
-    var raw = SNIPPETS[state.tab](state.action);
-    var html = raw
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    html = html.replace(/(^|\n)(#[^\n]*)/g, '$1<span class="cm">$2</span>');
-    codeEl.innerHTML = html;
-    wingetNote.hidden = state.tab !== "winget";
+    codeEl.innerHTML = esc(build(state.tab, state.action)).replace(/(^|\n)(#[^\n]*)/g, '$1<span class="cm">$2</span>');
+    wingetNote.hidden = WINGET_LIVE || state.tab !== "winget";
     tabs.forEach(function (b) {
       var on = b.dataset.tab === state.tab;
       b.setAttribute("aria-selected", String(on));
@@ -567,6 +590,8 @@
       legacyCopy(text) ? copied() : copyFailed();
     }
   });
+
+  if (WINGET_LIVE) wingetBadge.hidden = true;
 
   render();
 })();
