@@ -16,6 +16,28 @@
   },
   "features": [
     {
+      "id": "vol-101",
+      "priority": 101,
+      "area": "ui",
+      "title": "Update check and notification in Settings, CLI, and IPC bridge",
+      "user_visible_behavior": "Users can check for updates directly from the Settings General section with a dedicated button and live status; when a newer release is detected, a prominent notification banner appears with the version tag, release notes link, and update command; CLI provides volumectl check-updates; and Tauri surfaces receive state://update events.",
+      "status": "passing",
+      "verification": [
+        "cargo test -p volumectl --lib updates passes (7 tests including resolve_update_info_reports_available_and_up_to_date).",
+        "cargo test -p volumecontrol-tauri passes (17 tests verifying check_for_updates registration and surface lifecycle).",
+        "npm --prefix frontend test passes (18 test files, 108 tests including UpdateCard and SettingsSurface).",
+        "Live smoke run: cargo run -p volumecontrol-tauri -- check-updates executed against GitHub release API and printed 'VolumeControl is up to date'."
+      ],
+      "evidence": [
+        "Session 120 (2026-10-18): Added UpdateInfo struct and check_update_info to crates/volumectl/src/updates.rs.",
+        "Added volumectl check-updates command in crates/volumectl/src/cli.rs.",
+        "Added check_for_updates Tauri command and state://update event in src-tauri/src/commands.rs and registered in src-tauri/src/lib.rs.",
+        "Created UpdateCard component in frontend/src/settings/UpdateCard.tsx with bilingual EN/VI support and mounted in GeneralSection.tsx.",
+        "Worktree feat/update-notifications established at C:/Users/Thanh/orca/volume-control-update-notifications."
+      ],
+      "notes": "Network calls use ureq with bounded 10s timeouts; semver comparison fails closed on malformed tags."
+    },
+    {
       "id": "vol-100",
       "priority": 100,
       "area": "release",

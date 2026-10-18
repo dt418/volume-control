@@ -6,7 +6,6 @@
 /// Tauri host starts (the GUI app on Windows, the hotkey+webview host on
 /// Linux/macOS). On Windows the binary is GUI-only, as before.
 fn main() -> std::process::ExitCode {
-    #[cfg(not(target_os = "windows"))]
     if std::env::args().nth(1).is_some() {
         return match volumectl_lib::cli::run() {
             Ok(code) => code,

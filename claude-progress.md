@@ -1,5 +1,25 @@
 # Progress Log
 
+## Session 120 (2026-10-18) - Update check and notification in Settings, CLI, and IPC bridge
+
+- Goal: implement update check and notification features across the desktop application, CLI, and IPC bridge, allowing users to check for updates from Settings and receive notification banners when newer releases are available.
+- What landed:
+  - Worktree `feat/update-notifications` established at `C:/Users/Thanh/orca/volume-control-update-notifications` from `origin/main`.
+  - `docs/superpowers/plans/2026-10-18-update-notifications.md`: comprehensive implementation plan covering backend API, CLI command, Tauri IPC, and frontend UI.
+  - `crates/volumectl/src/updates.rs`: added `UpdateInfo` struct, `resolve_update_info`, and `check_update_info` with pure semver comparison and bounded network timeouts.
+  - `crates/volumectl/src/cli.rs`: added `volumectl check-updates` CLI subcommand printing localized update messages to stdout.
+  - `src-tauri/src/commands.rs`: added `check_for_updates` Tauri command running on a blocking thread pool and emitting `state://update` event to open surface windows.
+  - `src-tauri/src/lib.rs`: registered `check_for_updates` in `commands::*` and `generate_handler!`.
+  - `frontend/src/lib/i18n.tsx`: added bilingual EN & VI translation strings for updates section, check buttons, loading states, up-to-date message, and available banners.
+  - `frontend/src/settings/UpdateCard.tsx`: new Settings component displaying current version, a "Check for updates" button, live loading state, and update alert banner with release notes link. Mounted in `GeneralSection.tsx`.
+  - `frontend/src/settings/UpdateCard.test.tsx`: unit tests covering rendering, update-available banner, and up-to-date status.
+- Verification:
+  - `cargo run -p volumecontrol-tauri -- check-updates`: live smoke test passed; successfully fetched latest release tag and output `VolumeControl is up to date`.
+  - `cargo test -p volumectl --lib updates`: passed 7 tests.
+  - `cargo test -p volumecontrol-tauri`: passed 17 tests.
+  - `npm --prefix frontend test`: passed 18 test files, 108 tests.
+  - `sh scripts/check-tauri-deadlock.sh`: 10/10 passed.
+
 ## Session 118 (2026-10-18) - Winget deployment pipeline with REA binary verification
 
 - Goal: automate and verify the Winget packaging and deployment pipeline for VolumeControl, using REA static PE inspection on the release installer, generating schema-valid 1.12.0 manifests, validating with winget CLI, and auditing upstream submission status.
