@@ -320,12 +320,28 @@
       <a class="btn btn-primary" href="#install">Install VolumeControl</a>
       <a class="btn btn-ghost" href="https://github.com/dt418/volume-control/releases">View releases</a>
     </div>
-    <div class="keys">
-      <span class="lbl">Try</span>
-      <kbd>Ctrl+Alt+↑ ↓</kbd><span class="lbl">±1%</span>
-      <kbd>+Shift</kbd><span class="lbl">±10%</span>
-      <kbd>M</kbd><span class="lbl">mute</span>
-      <kbd>R</kbd><span class="lbl">reset 50%</span>
+    <div class="demo">
+      <div class="screen" aria-hidden="true">
+        <div class="overlay" id="ov">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10v4h2.5L13 17V7l-3.5 3H7z" fill="currentColor"/>
+            <path d="M15.2 9.4a3.6 3.6 0 0 1 0 5.2M17.2 7.4a6.4 6.4 0 0 1 0 9.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <div class="rail"><i id="fill"></i></div>
+          <output id="pct">50%</output>
+        </div>
+      </div>
+      <p class="sr-only" role="status" id="demo-live"></p>
+      <div class="demo-keys" role="group" aria-label="Try the shortcuts">
+        <span class="lbl">Try it — hold <kbd>Ctrl</kbd> + <kbd>Alt</kbd> and press a key, or click:</span>
+        <button type="button" class="key" data-act="up"     aria-label="Volume up 1 percent"    aria-keyshortcuts="Control+Alt+ArrowUp"><span aria-hidden="true">↑</span><small>+1%</small></button>
+        <button type="button" class="key" data-act="down"   aria-label="Volume down 1 percent"  aria-keyshortcuts="Control+Alt+ArrowDown"><span aria-hidden="true">↓</span><small>−1%</small></button>
+        <button type="button" class="key" data-act="up10"   aria-label="Volume up 10 percent"   aria-keyshortcuts="Control+Alt+Shift+ArrowUp"><span aria-hidden="true">⇧↑</span><small>+10%</small></button>
+        <button type="button" class="key" data-act="down10" aria-label="Volume down 10 percent" aria-keyshortcuts="Control+Alt+Shift+ArrowDown"><span aria-hidden="true">⇧↓</span><small>−10%</small></button>
+        <button type="button" class="key" data-act="mute"   aria-label="Toggle mute"            aria-keyshortcuts="Control+Alt+M"><span aria-hidden="true">M</span><small>mute</small></button>
+        <button type="button" class="key" data-act="reset"  aria-label="Reset to 50 percent"    aria-keyshortcuts="Control+Alt+R"><span aria-hidden="true">R</span><small>reset 50%</small></button>
+      </div>
+      <p class="demo-note">Simulated in your browser - same colour bands and steps as the app's defaults. The real overlay is native.</p>
     </div>
   </div>
 
@@ -628,6 +644,52 @@ if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not 
   if (WINGET_LIVE) wingetBadge.hidden = true;
 
   render();
+
+  /* ── overlay preview: colour bands mirror core::volume_color_rgb, defaults 40 / 75 ── */
+  var ov = document.getElementById("ov"), bar = document.getElementById("fill"),
+      out = document.getElementById("pct"), live = document.getElementById("demo-live");
+  var vol = 50, muted = false, hideTimer;
+  function band(p, m) {
+    if (m || p === 0) return "#888888";
+    if (p <= 40) return "#27AE60";
+    if (p <= 75) return "#0078D4";
+    return "#E05C00";
+  }
+  function paint() {
+    bar.style.width = vol + "%";
+    bar.style.backgroundColor = band(vol, muted);
+    out.textContent = muted ? "Muted" : vol + "%";
+    live.textContent = muted ? "Muted" : "Volume " + vol + " percent";
+    ov.classList.add("on");
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function () { ov.classList.remove("on"); }, 1800);   // overlay_duration_ms default
+  }
+  function act(a) {
+    if (a === "up") vol = Math.min(100, vol + 1);
+    else if (a === "down") vol = Math.max(0, vol - 1);
+    else if (a === "up10") vol = Math.min(100, vol + 10);
+    else if (a === "down10") vol = Math.max(0, vol - 10);
+    else if (a === "mute") muted = !muted;
+    else if (a === "reset") vol = 50;
+    else return;
+    paint();
+  }
+  [].forEach.call(document.querySelectorAll(".key"), function (b) {
+    b.addEventListener("click", function () { act(b.dataset.act); });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (!e.altKey || !(e.ctrlKey || e.metaKey)) return;   // only Ctrl/⌘+Alt chords; plain arrows keep scrolling
+    var a = null;
+    if (e.code === "ArrowUp") a = e.shiftKey ? "up10" : "up";
+    else if (e.code === "ArrowDown") a = e.shiftKey ? "down10" : "down";
+    else if (e.code === "KeyM") a = "mute";
+    else if (e.code === "KeyR") a = "reset";
+    if (!a) return;
+    e.preventDefault();
+    act(a);
+  });
+  bar.style.backgroundColor = band(vol, muted);
+  bar.style.width = vol + "%";
 
   /* ── latest release tag (progressive enhancement; keeps "v0.1.x" on any failure) ── */
   (function () {
