@@ -113,6 +113,22 @@ $script:VolumeControlMessages = @{
         en = 'close VolumeControl before updating; bootstrap will not force-terminate it'
         vi = "h$([char]0x00E3)y $([char]0x0111)$([char]0x00F3)ng VolumeControl tr$([char]0x01B0)$([char]0x1EDB)c khi c$([char]0x1EAD)p nh$([char]0x1EAD)t; bootstrap s$([char]0x1EBD) kh$([char]0x00F4)ng bu$([char]0x1ED9)c k$([char]0x1EBF)t th$([char]0x00FA)c ti$([char]0x1EBF)n tr$([char]0x00EC)nh"
     }
+    'install.success' = @{
+        en = 'installed VolumeControl {0} into {1}'
+        vi = "$([char]0x0110)$([char]0x00E3) c$([char]0x00E0)i VolumeControl {0} v$([char]0x00E0)o {1}"
+    }
+    'update.success' = @{
+        en = 'updated VolumeControl {0} at {1}'
+        vi = "$([char]0x0110)$([char]0x00E3) c$([char]0x1EAD)p nh$([char]0x1EAD)t VolumeControl {0} t$([char]0x1EA1)i {1}"
+    }
+    'update.current' = @{
+        en = 'VolumeControl {0} is already installed; nothing to update'
+        vi = "VolumeControl {0} $([char]0x0111)$([char]0x00E3) $([char]0x0111)$([char]0x01B0)$([char]0x1EE3)c c$([char]0x00E0)i $([char]0x0111)$([char]0x1EB7)t, kh$([char]0x00F4)ng c$([char]0x1EA7)n c$([char]0x1EAD)p nh$([char]0x1EAD)t"
+    }
+    'uninstall.success' = @{
+        en = 'removed VolumeControl from {0}'
+        vi = "$([char]0x0110)$([char]0x00E3) g$([char]0x1EE1) VolumeControl kh$([char]0x1ECF)i {0}"
+    }
 }
 
 function Get-VolumeControlLanguage {
@@ -302,11 +318,16 @@ function Wait-ForSuccessfulProcess {
         [string[]] $ArgumentList = @()
     )
 
-    if ($ArgumentList.Count -eq 0) {
-        $process = Start-Process -FilePath $FilePath -PassThru -Wait
-    } else {
-        $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru -Wait
+    # Wait on the started process only. `Start-Process -Wait` also waits for
+    # descendants, and the NSIS finish page launches VolumeControl, so a GUI
+    # install would block until the user closed the freshly installed app.
+    $startParameters = @{ FilePath = $FilePath; PassThru = $true }
+    if ($ArgumentList.Count -gt 0) {
+        $startParameters.ArgumentList = $ArgumentList
     }
+
+    $process = Start-Process @startParameters
+    $process.WaitForExit()
     if ($process.ExitCode -ne 0) {
         throw (Get-VolumeControlMessage 'process.exit-code' $process.ExitCode)
     }
@@ -417,6 +438,7 @@ function Invoke-VolumeControlAction {
 
     if ($Action -ceq 'uninstall') {
         Start-Uninstaller -UninstallerPath $uninstaller -Silent:$Silent -InstallRoot $standardRoot
+        Write-Host (Get-VolumeControlMessage 'uninstall.success' $standardRoot)
         return
     }
 
@@ -431,6 +453,7 @@ function Invoke-VolumeControlAction {
             throw (Get-VolumeControlMessage 'install.refused-executable-exists' $installedExecutable)
         }
         Invoke-VerifiedInstaller -Release $Release -InstallRoot $standardRoot -Silent:$Silent
+        Write-Host (Get-VolumeControlMessage 'install.success' $Release.tag_name.Substring(1) $standardRoot)
         return
     }
 
@@ -441,6 +464,7 @@ function Invoke-VolumeControlAction {
     $selectedVersion = $Release.tag_name.Substring(1)
     $installedVersion = (Get-Item -LiteralPath $installedExecutable).VersionInfo.FileVersion
     if ($installedVersion -ceq $selectedVersion) {
+        Write-Host (Get-VolumeControlMessage 'update.current' $selectedVersion)
         return
     }
 
@@ -449,6 +473,7 @@ function Invoke-VolumeControlAction {
     }
 
     Invoke-VerifiedInstaller -Release $Release -InstallRoot $standardRoot -Silent:$Silent
+    Write-Host (Get-VolumeControlMessage 'update.success' $selectedVersion $standardRoot)
 }
 
 if ($MyInvocation.InvocationName -ne '.') {

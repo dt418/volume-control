@@ -317,9 +317,9 @@
     same Signal Glass design contract as the Win32 overlay.</p>
     <div class="grid">
       <div class="card"><div class="ico">⌨️</div><h3>Global hotkeys</h3><p>RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
-      <div class="card"><div class="ico">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay with adaptive rendering, fade duration you can tune, and zero page jank.</p></div>
+      <div class="card"><div class="ico">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay on Windows with tunable fade; webview HUD (336x88, always-on-top) on macOS/Linux. Click-through on Windows, macOS and X11 — interactive on Wayland; blur is CSS-only.</p></div>
       <div class="card"><div class="ico">🎚️</div><h3>Mixer surface</h3><p>Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.</p></div>
-      <div class="card"><div class="ico">📦</div><h3>System tray</h3><p>Real tray icon with context menu, mute/reset actions, and app lifecycle that matches platform norms.</p></div>
+      <div class="card"><div class="ico">📦</div><h3>System tray</h3><p>Native tray on Windows, Tauri tray on macOS/Linux — live volume label, mute/reset, mixer/settings/help, updates, reload, exit; a tray failure never kills the app. Menu-bar/appindicator clicks still need manual proof.</p></div>
       <div class="card"><div class="ico">⚙️</div><h3>Settings &amp; Help</h3><p>Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
       <div class="card"><div class="ico">🔄</div><h3>Live config reload</h3><p>Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
     </div>
@@ -334,7 +334,7 @@
         <tr><td class="os">Volume control</td><td class="yes">✅ WASAPI</td><td class="yes">✅ CoreAudio</td><td class="yes">✅ PulseAudio</td></tr>
         <tr><td class="os">Global hotkeys</td><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
         <tr><td class="os">Mixer / Settings / Help</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
-        <tr><td class="os">Native overlay &amp; tray</td><td class="yes">✅ native</td><td class="manual">🔜 host integration</td><td class="manual">🔜 host integration</td></tr>
+        <tr><td class="os">Native overlay &amp; tray</td><td class="yes">✅ native</td><td class="yes">✅ Tauri tray + HUD</td><td class="yes">✅ Tauri tray + HUD</td></tr>
         <tr><td class="os">Remote install commands</td><td class="yes">✅ irm · curl · winget</td><td class="yes">✅ curl installer</td><td class="yes">✅ curl installer</td></tr>
       </tbody>
     </table>
