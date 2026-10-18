@@ -1,27 +1,5 @@
 # Progress Log
 
-## Session 116 (2026-10-18) - Land the missing [Unreleased] changelog for PR #57
-
-- Ask: the user asked to merge PR #57; the merge had already landed on the
-  remote (`d5bbbcf`, 08:10:59Z, CI 39110465050 green, tree-identical to the
-  validated tip `992a0db`). Local `main` was fast-forwarded to it. The one
-  leftover was a CHANGELOG.md edit that existed nowhere else: the merge did
-  not include it and the PR branch never committed it.
-- What landed: CHANGELOG.md's [Unreleased] section now records the merged
-  behavior — HUD overlay click-through on Linux X11 (Wayland stays
-  interactive), the bootstrap's one result line per action, and the GUI
-  install/update no longer pinned by the NSIS finish page.
-- Process note: main protection (strict status checks, 1 approving review,
-  enforced on admins) blocks both direct pushes and self-approval, so the
-  entry travels as a docs-only follow-up PR from
-  `docs/changelog-unreleased-017`; its scope is CHANGELOG.md plus the two
-  records, so CI skips the Linux/macOS matrix.
-- Verification: `cargo fmt --all --check` clean, `git diff --check
-  origin/main HEAD` clean, `scripts/check-records.sh --branch` satisfied by
-  the paired records, and the diff-gate path scan finds no forbidden paths.
-- Branch refs (remote `fix/bootstrap-output-hud-parity` and the local
-  worktree branch) stay in place per the user's choice.
-
 ## Session 115 (2026-10-18) - PR #57 Linux CI abort: HUD click-through before realize
 
 - Ask: PR #57's checks were red on `Ubuntu 24.04 (GTK4/libadwaita +
@@ -3931,3 +3909,51 @@ fn get_window_pid_x11() -> Option<u32> {
 - Note: the unmerged PR #45 (`fix/release-workflow-git-path-resolution`)
   carries the same trap fix (`e6a67e6`) plus a HEAD-resolution block that is
   already on `main` through #44's squash, so it is redundant once this lands.
+
+## Session 111 (2026-10-18) - Landing page follow-ups: rate-limit fallback, verification, report
+
+- Added rate-limit resilient tag resolution to `packaging/install-linux.sh` and
+  `packaging/install-macos.sh`: try the GitHub JSON API first, fall back to the
+  `releases/latest` HTML redirect (no API quota), and surface the
+  `VOLUMECTL_VERSION` escape hatch in the error message.
+- Both scripts parse cleanly; `scripts/test-install-unix.sh` passes all checks.
+- Real Windows bootstrap verified: `Install-VolumeControl.ps1 -Action install
+  -Silent` installed v0.1.7 to `%LOCALAPPDATA%\VolumeControl` with matching
+  SHA-256; `-Action uninstall -Silent` removed all files.
+- macOS installer inspected: single-arch `volumecontrol-*-macos.zip`, SHA-256
+  verified flow, no architecture gate (`uname -m` not checked). No macOS host
+  available for live run; fixture test suite covers the install/uninstall paths.
+- winget-pkgs: `dt418.VolumeControl` still 404; landing page already gates on
+  `WINGET_LIVE = false`.
+- Report-only findings (not changed per task spec):
+  - README line 218 and `packaging/install-*.sh` headers still document
+    `curl | bash` / `irm | iex` pipe flows, contradicting the landing page.
+  - README platform table (line 259) labels macOS/Linux tray as "manual", but
+    `src-tauri/src/tauri_tray.rs` is live code on both platforms (state-managed
+    `TauriTray::create` in setup). The "manual" label refers to the release
+    checklist's evidence classification, not to functionality being absent.
+  - Installer scripts resolve the latest tag via `api.github.com` (60 req/hr
+    unauthenticated per IP). No 403 observed during this session, but the new
+    fallback mitigates the risk.
+
+## Session 116 (2026-10-18) - Land the missing [Unreleased] changelog for PR #57
+
+- Ask: the user asked to merge PR #57; the merge had already landed on the
+  remote (`d5bbbcf`, 08:10:59Z, CI 39110465050 green, tree-identical to the
+  validated tip `992a0db`). Local `main` was fast-forwarded to it. The one
+  leftover was a CHANGELOG.md edit that existed nowhere else: the merge did
+  not include it and the PR branch never committed it.
+- What landed: CHANGELOG.md's [Unreleased] section now records the merged
+  behavior — HUD overlay click-through on Linux X11 (Wayland stays
+  interactive), the bootstrap's one result line per action, and the GUI
+  install/update no longer pinned by the NSIS finish page.
+- Process note: main protection (strict status checks, 1 approving review,
+  enforced on admins) blocks both direct pushes and self-approval, so the
+  entry travels as a docs-only follow-up PR from
+  `docs/changelog-unreleased-017`; its scope is CHANGELOG.md plus the two
+  records, so CI skips the Linux/macOS matrix.
+- Verification: `cargo fmt --all --check` clean, `git diff --check
+  origin/main HEAD` clean, `scripts/check-records.sh --branch` satisfied by
+  the paired records, and the diff-gate path scan finds no forbidden paths.
+- Branch refs (remote `fix/bootstrap-output-hud-parity` and the local
+  worktree branch) stay in place per the user's choice.

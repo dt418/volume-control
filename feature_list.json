@@ -16,6 +16,22 @@
   },
   "features": [
     {
+      "id": "vol-098",
+      "priority": 98,
+      "area": "packaging",
+      "title": "Installer scripts: rate-limit resilient tag resolution",
+      "user_visible_behavior": "install-linux.sh and install-macos.sh resolve the latest release tag via the GitHub API, then fall back to the releases/latest HTML redirect when the API returns 403/429. The error message now names the rate limit and the VOLUMECTL_VERSION escape hatch.",
+      "status": "passing",
+      "verification": [
+        "bash -n packaging/install-linux.sh && bash -n packaging/install-macos.sh",
+        "sh scripts/test-install-unix.sh (all checks passed)"
+      ],
+      "evidence": [
+        "Both scripts parse cleanly. All install-script checks passed (13.52s wall time). Real Windows Install-VolumeControl.ps1 install and silent uninstall verified on this host."
+      ],
+      "notes": "The fallback uses curl -w '%{url_effective}' on the releases/latest redirect, which does not count against the API rate limit."
+    },
+    {
       "id": "vol-097",
       "priority": 97,
       "area": "release",

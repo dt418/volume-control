@@ -5,6 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VolumeControl — native-first volume control</title>
 <meta name="description" content="VolumeControl: global hotkeys, system tray, volume overlay, and Tauri Mixer/Settings/Help surfaces for Windows, macOS, and Linux. Install, update, and uninstall remotely with PowerShell, curl, or winget.">
+<link rel="canonical" href="https://dt418.github.io/volume-control/">
+<meta name="theme-color" content="#f7f8fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0e14" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='2' y1='2' x2='22' y2='22'%3E%3Cstop stop-color='%233b6cf6'/%3E%3Cstop offset='1' stop-color='%237a4df6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='2' y='2' width='20' height='20' rx='6' fill='url(%23g)'/%3E%3Cpath d='M7 10v4h2.5L13 17V7l-3.5 3H7z' fill='%23fff'/%3E%3Cpath d='M15.2 9.4a3.6 3.6 0 0 1 0 5.2M17.2 7.4a6.4 6.4 0 0 1 0 9.2' fill='none' stroke='%23fff' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="VolumeControl">
+<meta property="og:title" content="VolumeControl — native-first volume control">
+<meta property="og:description" content="Global hotkeys, a real system tray, an on-screen volume overlay, and Tauri Mixer / Settings / Help surfaces for Windows, macOS and Linux.">
+<meta property="og:url" content="https://dt418.github.io/volume-control/">
+<meta property="og:image" content="https://dt418.github.io/volume-control/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="VolumeControl — volume control that feels native everywhere">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   :root {
     color-scheme: light dark;
@@ -18,8 +33,10 @@
     --border: #e2e5ee;
     --accent: #3b6cf6;
     --accent-2: #7a4df6;
+    --link: #2f5ee0;
+    --on-accent: #ffffff;
     --ok: #12855a;
-    --warn: #9a6400;
+    --warn: #865800;
     --code-bg: #10141d;
     --code-fg: #e7ecf6;
     --code-muted: #8b93a7;
@@ -38,13 +55,16 @@
       --border: #262b38;
       --accent: #6f93ff;
       --accent-2: #a184ff;
+      --link: #6f93ff;
+      --on-accent: #0b0d14;
       --ok: #4fd39a;
       --warn: #e8b34b;
       --shadow: 0 10px 30px rgba(0, 0, 0, .35);
     }
   }
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-padding-top: 28px; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
   body {
     margin: 0;
     font: 16px/1.6 ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -53,9 +73,21 @@
     background-image: var(--bg-grad);
     background-attachment: fixed;
   }
-  a { color: var(--accent); text-decoration: none; }
+  a { color: var(--link); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 6px; }
   .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  .skip {
+    position: absolute; left: 12px; top: -60px; z-index: 100;
+    background: var(--surface); color: var(--fg); border: 1px solid var(--border);
+    padding: 10px 14px; border-radius: 10px; font-weight: 600;
+  }
+  .skip:focus { top: 10px; }
 
   header {
     position: sticky; top: 0; z-index: 50;
@@ -66,23 +98,25 @@
   .bar { display: flex; align-items: center; gap: 14px; height: 60px; }
   .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; color: var(--fg); }
   .logo svg { display: block; }
+  .logo:hover { text-decoration: none; }
   nav { margin-left: auto; display: flex; gap: 20px; align-items: center; }
   nav a { color: var(--muted); font-weight: 500; font-size: 14.5px; }
   nav a:hover { color: var(--fg); text-decoration: none; }
   nav .gh {
-    color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2));
     padding: 7px 14px; border-radius: 999px; font-weight: 600;
   }
-  nav .gh:hover { text-decoration: none; filter: brightness(1.08); }
+  nav .gh:hover { color: var(--on-accent); text-decoration: none; filter: brightness(1.08); }
 
-  .hero { padding: 84px 0 40px; text-align: center; }
+  .hero { padding: 64px 0 40px; text-align: center; }
   .pill {
     display: inline-flex; gap: 8px; align-items: center;
     border: 1px solid var(--border); background: var(--surface);
     color: var(--muted); border-radius: 999px; padding: 6px 14px;
     font-size: 13.5px; font-weight: 600; box-shadow: var(--shadow);
   }
-  .pill b { color: var(--accent); }
+  .pill:hover { text-decoration: none; border-color: var(--accent); }
+  .pill b { color: var(--link); }
   h1 {
     font-size: clamp(38px, 6vw, 64px); line-height: 1.06; margin: 22px 0 14px;
     letter-spacing: -1.5px;
@@ -91,24 +125,56 @@
     background: linear-gradient(100deg, var(--accent), var(--accent-2) 60%, #ff7ac6);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
+  @media (forced-colors: active) { h1 .grad { background: none; color: CanvasText; } }
   .sub { font-size: clamp(16px, 2vw, 19px); color: var(--muted); max-width: 680px; margin: 0 auto; }
   .cta { display: flex; gap: 14px; justify-content: center; margin-top: 30px; flex-wrap: wrap; }
   .btn {
     display: inline-block; padding: 12px 22px; border-radius: 12px; font-weight: 650;
     font-size: 15.5px; border: 1px solid transparent; cursor: pointer;
   }
-  .btn-primary { color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow); }
-  .btn-primary:hover { text-decoration: none; filter: brightness(1.08); }
+  .btn:hover { text-decoration: none; }
+  .btn-primary { color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow); }
+  .btn-primary:hover { filter: brightness(1.08); }
   .btn-ghost { color: var(--fg); background: var(--surface); border-color: var(--border); }
-  .btn-ghost:hover { text-decoration: none; border-color: var(--accent); }
+  .btn-ghost:hover { border-color: var(--accent); }
 
-  .keys { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 34px; }
-  kbd {
+  /* ── interactive overlay preview ─────────────────────────────── */
+  .demo { margin: 44px auto 0; max-width: 560px; }
+  .screen {
+    position: relative; aspect-ratio: 21 / 9; overflow: hidden;
+    border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow);
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--accent) 20%, var(--surface)),
+      color-mix(in srgb, var(--accent-2) 20%, var(--surface)));
+  }
+  .screen::after {            /* faux taskbar */
+    content: ""; position: absolute; inset: auto 0 0 0; height: 9%;
+    background: color-mix(in srgb, var(--fg) 14%, transparent);
+  }
+  .overlay {
+    position: absolute; right: 4%; bottom: 14%;
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px;
+    background: rgba(16, 19, 28, .9); color: #fff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+    opacity: .55; transition: opacity .25s;
+  }
+  .overlay.on { opacity: 1; }
+  .overlay svg { display: block; flex: none; }
+  .rail { width: clamp(100px, 28vw, 170px); height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .2); overflow: hidden; }
+  .rail i { display: block; height: 100%; width: 50%; border-radius: inherit; background: #27AE60; transition: width .12s, background-color .2s; }
+  .overlay output { font: 600 14px/1 ui-monospace, "Cascadia Mono", Consolas, monospace; min-width: 4.2ch; text-align: right; }
+  .demo-keys { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; margin-top: 18px; }
+  .demo-keys .lbl { flex-basis: 100%; text-align: center; color: var(--muted); font-size: 13.5px; margin-bottom: 2px; }
+  kbd, .key {
     font: 600 13px/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
     background: var(--surface); border: 1px solid var(--border); border-bottom-width: 3px;
     padding: 7px 10px; border-radius: 8px; color: var(--fg); box-shadow: var(--shadow);
   }
-  .keys .lbl { align-self: center; color: var(--muted); font-size: 13.5px; margin-right: 4px; }
+  .key { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+  .key small { font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12.5px; font-weight: 500; color: var(--muted); }
+  .key:hover { border-color: var(--accent); }
+  .key:active { transform: translateY(2px); border-bottom-width: 1px; }
+  .demo-note { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
 
   section { padding: 56px 0 8px; }
   h2 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -.6px; margin: 0 0 8px; }
@@ -121,20 +187,27 @@
   .tabs { display: flex; gap: 4px; padding: 12px 12px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .tab {
     border: 0; background: transparent; color: var(--muted);
-    font: 600 14.5px/1 inherit; padding: 11px 16px; cursor: pointer;
+    font-family: inherit; font-size: 14.5px; font-weight: 600; line-height: 1;
+    padding: 11px 16px; cursor: pointer;
     border-radius: 10px 10px 0 0; border-bottom: 2px solid transparent;
   }
   .tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); background: var(--surface-2); }
   .tab:hover { color: var(--fg); }
+  .badge {
+    margin-left: 6px; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    letter-spacing: .3px; text-transform: uppercase;
+    color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  }
   .actions { display: flex; gap: 8px; padding: 14px 16px 4px; flex-wrap: wrap; align-items: center; }
   .actions .cap { color: var(--muted); font-size: 13px; font-weight: 600; margin-right: 4px; }
   .chip {
     border: 1px solid var(--border); background: var(--surface-2); color: var(--muted);
-    font: 600 13.5px/1 inherit; padding: 8px 14px; border-radius: 999px; cursor: pointer;
+    font-family: inherit; font-size: 13.5px; font-weight: 600; line-height: 1;
+    padding: 8px 14px; border-radius: 999px; cursor: pointer;
   }
-  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .chip:hover { border-color: var(--accent); color: var(--fg); }
-  .chip[aria-pressed="true"]:hover { color: #fff; }
+  .chip[aria-pressed="true"]:hover { color: var(--on-accent); }
 
   .codebox { margin: 10px 16px 16px; background: var(--code-bg); border-radius: 12px; position: relative; }
   .codebox pre {
@@ -146,16 +219,20 @@
   .copy {
     position: absolute; top: 10px; right: 10px;
     border: 1px solid #2c3446; background: #1a2130; color: #cdd6ea;
-    font: 600 12.5px/1 inherit; padding: 7px 12px; border-radius: 8px; cursor: pointer;
+    font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1;
+    padding: 7px 12px; border-radius: 8px; cursor: pointer;
   }
   .copy:hover { border-color: var(--accent); color: #fff; }
+  .codebox :focus-visible { outline-color: #9db4ff; }
   .note {
     display: flex; gap: 10px; align-items: flex-start;
     margin: 0 16px 16px; padding: 12px 14px; border-radius: 10px; font-size: 14px;
     background: color-mix(in srgb, var(--warn) 12%, var(--surface));
     border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); color: var(--fg);
   }
+  .note[hidden] { display: none; }
   .note b { color: var(--warn); }
+  .alt { margin: 14px 2px 0; color: var(--muted); font-size: 14px; }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
   .card {
@@ -170,18 +247,25 @@
   .card h3 { margin: 0 0 6px; font-size: 16.5px; }
   .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
 
-  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .table-wrap {
+    overflow-x: auto; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+  }
+  table { width: 100%; min-width: 680px; border-collapse: collapse; }
   th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 14.5px; }
   thead th { background: var(--surface-2); font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-  tr:last-child td { border-bottom: 0; }
-  td.os { font-weight: 650; }
+  tbody th { font-weight: 650; }
+  thead th:first-child, tbody th { position: sticky; left: 0; z-index: 1; box-shadow: 1px 0 0 var(--border); }
+  tbody th { background: var(--surface); }
+  thead th:first-child { background: var(--surface-2); }
+  tr:last-child th, tr:last-child td { border-bottom: 0; }
   .yes { color: var(--ok); font-weight: 700; }
   .manual { color: var(--warn); font-weight: 650; }
 
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 4px; }
   .fact { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
   .fact .k { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .7px; font-weight: 700; }
-  .fact code { display: block; margin-top: 6px; font: 600 14px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--accent); word-break: break-all; }
+  .fact code { display: block; margin-top: 6px; font: 600 14px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--link); word-break: break-all; }
   .fact p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
 
   .trust {
@@ -195,10 +279,26 @@
 
   footer { margin-top: 70px; border-top: 1px solid var(--border); padding: 28px 0 44px; color: var(--muted); font-size: 14px; }
   .foot { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
-  .foot nav { margin: 0; }
+  .foot nav { margin: 0; flex-wrap: wrap; gap: 6px 14px; }
+  .foot nav a { color: var(--link); font-size: 14px; }
+
+  @media (max-width: 640px) {
+    .wrap { padding: 0 18px; }
+    .bar { gap: 10px; }
+    nav { gap: 14px; }
+    nav a.hide-sm { display: none; }
+    .hero { padding: 52px 0 24px; }
+    section { padding-top: 44px; }
+    .tab { padding: 10px 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
 </style>
 </head>
 <body>
+
+<a class="skip" href="#main">Skip to content</a>
 
 <header>
   <div class="wrap bar">
@@ -211,19 +311,20 @@
       </svg>
       VolumeControl
     </a>
-    <nav>
+    <nav aria-label="Primary">
       <a href="#install">Install</a>
-      <a href="#features">Features</a>
-      <a href="#platform">Platform</a>
+      <a class="hide-sm" href="#features">Features</a>
+      <a class="hide-sm" href="#platform">Platform</a>
       <a class="gh" href="https://github.com/dt418/volume-control" rel="noopener">GitHub</a>
     </nav>
   </div>
 </header>
 
+<main id="main">
 <div class="wrap">
 
   <div class="hero">
-    <span class="pill"><b>v0.1.x</b> · native-first · MIT licensed</span>
+    <a class="pill" href="https://github.com/dt418/volume-control/releases/latest"><b id="ver">v0.1.x</b> · native-first · MIT licensed</a>
     <h1>Volume control that feels<br><span class="grad">native everywhere</span></h1>
     <p class="sub">
       Global hotkeys, a real system tray, an on-screen volume overlay, and
@@ -231,15 +332,31 @@
       CoreAudio, and PulseAudio backends.
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="#install">Install in one command</a>
+      <a class="btn btn-primary" href="#install">Install VolumeControl</a>
       <a class="btn btn-ghost" href="https://github.com/dt418/volume-control/releases">View releases</a>
     </div>
-    <div class="keys">
-      <span class="lbl">Try</span>
-      <kbd>Ctrl+Alt+↑ ↓</kbd><span class="lbl">±1%</span>
-      <kbd>+Shift</kbd><span class="lbl">±10%</span>
-      <kbd>M</kbd><span class="lbl">mute</span>
-      <kbd>R</kbd><span class="lbl">reset 50%</span>
+    <div class="demo">
+      <div class="screen" aria-hidden="true">
+        <div class="overlay" id="ov">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M7 10v4h2.5L13 17V7l-3.5 3H7z" fill="currentColor"/>
+            <path d="M15.2 9.4a3.6 3.6 0 0 1 0 5.2M17.2 7.4a6.4 6.4 0 0 1 0 9.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          <div class="rail"><i id="fill"></i></div>
+          <output id="pct">50%</output>
+        </div>
+      </div>
+      <p class="sr-only" role="status" id="demo-live"></p>
+      <div class="demo-keys" role="group" aria-label="Try the shortcuts">
+        <span class="lbl">Try it — hold <kbd>Ctrl</kbd> + <kbd>Alt</kbd> and press a key, or click:</span>
+        <button type="button" class="key" data-act="up"     aria-label="Volume up 1 percent"    aria-keyshortcuts="Control+Alt+ArrowUp"><span aria-hidden="true">↑</span><small>+1%</small></button>
+        <button type="button" class="key" data-act="down"   aria-label="Volume down 1 percent"  aria-keyshortcuts="Control+Alt+ArrowDown"><span aria-hidden="true">↓</span><small>−1%</small></button>
+        <button type="button" class="key" data-act="up10"   aria-label="Volume up 10 percent"   aria-keyshortcuts="Control+Alt+Shift+ArrowUp"><span aria-hidden="true">⇧↑</span><small>+10%</small></button>
+        <button type="button" class="key" data-act="down10" aria-label="Volume down 10 percent" aria-keyshortcuts="Control+Alt+Shift+ArrowDown"><span aria-hidden="true">⇧↓</span><small>−10%</small></button>
+        <button type="button" class="key" data-act="mute"   aria-label="Toggle mute"            aria-keyshortcuts="Control+Alt+M"><span aria-hidden="true">M</span><small>mute</small></button>
+        <button type="button" class="key" data-act="reset"  aria-label="Reset to 50 percent"    aria-keyshortcuts="Control+Alt+R"><span aria-hidden="true">R</span><small>reset 50%</small></button>
+      </div>
+      <p class="demo-note">Simulated in your browser - same colour bands and steps as the app's defaults. The real overlay is native.</p>
     </div>
   </div>
 
@@ -252,11 +369,11 @@
     </p>
 
     <div class="install-card">
-      <div class="tabs" role="tablist" aria-label="Package tool">
-        <button class="tab" role="tab" id="tab-ps" aria-selected="true"  data-tab="ps">PowerShell · irm</button>
-        <button class="tab" role="tab" id="tab-curl" aria-selected="false" data-tab="curl">curl</button>
-        <button class="tab" role="tab" id="tab-unix" aria-selected="false" data-tab="unix">macOS / Linux</button>
-        <button class="tab" role="tab" id="tab-winget" aria-selected="false" data-tab="winget">winget</button>
+      <div class="tabs" role="tablist" aria-label="Install method">
+        <button class="tab" role="tab" id="tab-ps"     aria-controls="snippet-panel" aria-selected="true"  tabindex="0"  data-tab="ps">PowerShell</button>
+        <button class="tab" role="tab" id="tab-curl"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="curl">Windows · curl.exe</button>
+        <button class="tab" role="tab" id="tab-unix"   aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="unix">macOS / Linux</button>
+        <button class="tab" role="tab" id="tab-winget" aria-controls="snippet-panel" aria-selected="false" tabindex="-1" data-tab="winget">winget<span class="badge" id="winget-badge">soon</span></button>
       </div>
 
       <div class="actions" role="group" aria-label="Action">
@@ -266,28 +383,24 @@
         <button class="chip" data-action="uninstall" aria-pressed="false">uninstall</button>
       </div>
 
-      <div class="codebox">
+      <div class="codebox" id="snippet-panel" role="tabpanel" aria-labelledby="tab-ps">
         <button class="copy" type="button" aria-label="Copy command">Copy</button>
-        <pre id="snippet" role="region" aria-live="polite"><code></code></pre>
+        <pre id="snippet" tabindex="0"><code></code></pre>
       </div>
+      <span class="sr-only" role="status" id="copy-status"></span>
+      <noscript><p class="note"><span>Enable JavaScript to see the install commands, or follow the steps in the <a href="https://github.com/dt418/volume-control#installing-on-windows">README</a>.</span></p></noscript>
 
       <div class="note" id="winget-note" hidden>
-        <span>ℹ</span>
-        <span><b>winget</b> becomes available once the manifest is published to
-        <a href="https://github.com/microsoft/winget-pkgs" rel="noopener">winget-pkgs</a>
-        for a release that ships the NSIS installer (first: <b>v0.1.5+</b>).
-        Until then use PowerShell or curl. Generate the ready-to-PR manifest
-        with <code>scripts/generate-winget-manifest.sh</code>.</span>
-      </div>
-      <div class="note" id="release-note">
-        <span>⚠</span>
-        <span><b>Bootstrap assets</b> (<code>Install-VolumeControl.ps1</code>,
-        <code>SHA256SUMS.txt</code>, <code>*_x64-setup.exe</code>) ship with
-        release <b>v0.1.5+</b>. Commands below target
-        <code>releases/latest/download/</code> and work once that release is
-        published.</span>
+        <span aria-hidden="true">ℹ</span>
+        <span><b>winget isn’t available yet.</b> The package hasn’t been published to
+        <a href="https://github.com/microsoft/winget-pkgs" rel="noopener">winget-pkgs</a>,
+        so this command will not resolve today — use the PowerShell or curl.exe tab.
+        (Maintainers: <code>scripts/generate-winget-manifest.sh</code> builds the manifest.)</span>
       </div>
     </div>
+
+    <p class="alt">Prefer a package? <a href="https://github.com/dt418/volume-control/releases/latest">.exe, .dmg, .deb, .rpm, .AppImage and archives</a>
+      are on the releases page, and every file is listed in <code>SHA256SUMS.txt</code>.</p>
 
     <div class="facts" style="margin-top:18px">
       <div class="fact">
@@ -316,28 +429,34 @@
     <p class="lede">Every surface is native-first; the Tauri views share the
     same Signal Glass design contract as the Win32 overlay.</p>
     <div class="grid">
-      <div class="card"><div class="ico">⌨️</div><h3>Global hotkeys</h3><p>RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
-      <div class="card"><div class="ico">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay on Windows with tunable fade; webview HUD (336x88, always-on-top) on macOS/Linux. Click-through on Windows, macOS and X11 — interactive on Wayland; blur is CSS-only.</p></div>
-      <div class="card"><div class="ico">🎚️</div><h3>Mixer surface</h3><p>Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.</p></div>
-      <div class="card"><div class="ico">📦</div><h3>System tray</h3><p>Native tray on Windows, Tauri tray on macOS/Linux — live volume label, mute/reset, mixer/settings/help, updates, reload, exit; a tray failure never kills the app. Menu-bar/appindicator clicks still need manual proof.</p></div>
-      <div class="card"><div class="ico">⚙️</div><h3>Settings &amp; Help</h3><p>Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
-      <div class="card"><div class="ico">🔄</div><h3>Live config reload</h3><p>Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⌨️</div><h3>Global hotkeys</h3><p>RegisterHotKey-backed shortcuts with per-action remapping, key latency probes, and a live config reload.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🔊</div><h3>Volume overlay</h3><p>Native Win32 overlay on Windows with tunable fade; webview HUD (336x88, always-on-top) on macOS/Linux. Click-through on Windows, macOS and X11 — interactive on Wayland; blur is CSS-only.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🎚️</div><h3>Mixer surface</h3><p>Tauri v2 per-session mixing on WASAPI and PulseAudio — core system actions with ±1% / ±10% steps.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">📦</div><h3>System tray</h3><p>Native tray on Windows, Tauri tray on macOS/Linux — live volume label, mute/reset, mixer/settings/help, updates, reload, exit; a tray failure never kills the app. Menu-bar/appindicator clicks still need manual proof.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⚙️</div><h3>Settings &amp; Help</h3><p>Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🔄</div><h3>Live config reload</h3><p>Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">🌐</div><h3>English &amp; <span lang="vi">Tiếng Việt</span></h3><p>Mixer, overlay, settings and help all speak both languages — switch from the tray or Settings.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⬆️</div><h3>Update check</h3><p>“Check for updates” in the tray menu reports the result inline, so you never have to open Settings to find out.</p></div>
     </div>
   </section>
 
   <section id="platform">
-    <h2>Platform status</h2>
+    <h2 id="platform-title">Platform status</h2>
     <p class="lede">Honest coverage: what is fully proven where.</p>
-    <table>
-      <thead><tr><th>Capability</th><th>Windows</th><th>macOS</th><th>Linux</th></tr></thead>
-      <tbody>
-        <tr><td class="os">Volume control</td><td class="yes">✅ WASAPI</td><td class="yes">✅ CoreAudio</td><td class="yes">✅ PulseAudio</td></tr>
-        <tr><td class="os">Global hotkeys</td><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
-        <tr><td class="os">Mixer / Settings / Help</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
-        <tr><td class="os">Native overlay &amp; tray</td><td class="yes">✅ native</td><td class="yes">✅ Tauri tray + HUD</td><td class="yes">✅ Tauri tray + HUD</td></tr>
-        <tr><td class="os">Remote install commands</td><td class="yes">✅ irm · curl · winget</td><td class="yes">✅ curl installer</td><td class="yes">✅ curl installer</td></tr>
-      </tbody>
-    </table>
+    <div class="table-wrap" role="region" aria-labelledby="platform-title" tabindex="0">
+      <table>
+        <thead><tr><th scope="col">Capability</th><th scope="col">Windows</th><th scope="col">macOS</th><th scope="col">Linux</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Volume control</th><td class="yes">✅ WASAPI</td><td class="yes">✅ CoreAudio</td><td class="yes">✅ PulseAudio</td></tr>
+          <tr><th scope="row">Global hotkeys</th><td class="yes">✅ RegisterHotKey</td><td class="yes">✅ global-hotkey</td><td class="yes">✅ X11</td></tr>
+          <tr><th scope="row">System mixer / Settings / Help</th><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td><td class="yes">✅ Tauri v2</td></tr>
+          <tr><th scope="row">Per-app mixer</th><td class="yes">✅ WASAPI sessions</td><td class="manual">✖ no public API</td><td class="yes">✅ PulseAudio sink-inputs</td></tr>
+          <tr><th scope="row">Native overlay &amp; tray</th><td class="yes">✅ native</td><td class="yes">✅ Tauri tray + HUD</td><td class="yes">✅ Tauri tray + HUD</td></tr>
+          <!-- When dt418.VolumeControl lands in winget-pkgs: move winget into the ✅ list and set WINGET_LIVE = true in the script below. -->
+          <tr><th scope="row">Remote install commands</th><td class="yes">✅ PowerShell · curl.exe <span class="manual">· 🔜 winget</span></td><td class="yes">✅ verified installer script</td><td class="yes">✅ verified installer script</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <section id="trust">
@@ -352,9 +471,9 @@
         <li><b>Releases are unsigned.</b> Windows SmartScreen may warn on first
         run of <code>VolumeControl_&lt;version&gt;_x64-setup.exe</code>;
         that warning is expected until an Authenticode certificate is added.</li>
-        <li><b>No pipes into a shell.</b> The documented flows download first,
-        verify SHA-256, then execute the local copy from
-        <code>%TEMP%</code> — downloaded text never runs while it arrives.</li>
+        <li><b>No pipes into a shell.</b> Every command above downloads first,
+        verifies SHA-256, then executes the local copy from a fresh temporary
+        folder — downloaded text never runs while it arrives.</li>
         <li><b>Immutable releases.</b> Published assets are never overwritten;
         re-uploading an existing tag fails instead of mutating bytes.</li>
       </ul>
@@ -362,125 +481,246 @@
   </section>
 
 </div>
+</main>
 
 <footer>
   <div class="wrap foot">
     <span>VolumeControl — MIT licensed · built with Rust + Tauri</span>
-    <nav>
-      <a href="https://github.com/dt418/volume-control">Repository</a> ·
-      <a href="https://github.com/dt418/volume-control/releases">Releases</a> ·
+    <nav aria-label="Footer">
+      <a href="https://github.com/dt418/volume-control">Repository</a>
+      <a href="https://github.com/dt418/volume-control/releases">Releases</a>
+      <a href="https://github.com/dt418/volume-control/blob/main/CHANGELOG.md">Changelog</a>
       <a href="https://github.com/dt418/volume-control/blob/main/docs/testing/cross-platform-release-checklist.md">Release checklist</a>
+      <a href="https://github.com/dt418/volume-control/issues">Issues</a>
+      <a lang="vi" hreflang="vi" href="https://github.com/dt418/volume-control/blob/main/README.vi.md">Tiếng Việt</a>
     </nav>
   </div>
 </footer>
 
+<!-- Install snippets. Plain text on purpose: no JS escaping, easy to review, and
+     every flow is download → verify SHA-256 → run the local copy. -->
+
+<script type="text/plain" id="tpl-ps">
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $root | Out-Null
+$base = '{{BASE}}'
+Invoke-WebRequest "$base/Install-VolumeControl.ps1" -OutFile "$root/Install-VolumeControl.ps1"
+Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$root/SHA256SUMS.txt"
+$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
+$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
+if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
+</script>
+
+<script type="text/plain" id="tpl-curl">
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $root | Out-Null
+$base = '{{BASE}}'
+curl.exe -fsSL "$base/Install-VolumeControl.ps1" -o "$root/Install-VolumeControl.ps1"
+curl.exe -fsSL "$base/SHA256SUMS.txt" -o "$root/SHA256SUMS.txt"
+$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
+$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
+if ($actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
+</script>
+
+<script type="text/plain" id="tpl-unix">
+(
+  set -euo pipefail
+  base="{{BASE}}"
+  case "$(uname -s)" in
+    Darwin) s=install-macos.sh ;;
+    Linux)  s=install-linux.sh ;;
+    *) echo "Unsupported OS" >&2; exit 1 ;;
+  esac
+  d="$(mktemp -d)"
+  curl -fsSL "$base/$s" -o "$d/$s"
+  curl -fsSL "$base/SHA256SUMS.txt" -o "$d/SHA256SUMS.txt"
+  want="$(awk -v f="$s" '$2 == f { print $1 }' "$d/SHA256SUMS.txt")"
+  have="$( (sha256sum "$d/$s" 2>/dev/null || shasum -a 256 "$d/$s") | awk '{ print $1 }' )"
+  [ -n "$want" ] && [ "$want" = "$have" ] || { echo "SHA-256 mismatch for $s" >&2; exit 1; }
+  bash "$d/$s" {{ACTION}}
+)
+</script>
+
 <script>
 (function () {
   var BASE = "https://github.com/dt418/volume-control/releases/latest/download";
+  var WINGET_LIVE = false;   // flip once dt418.VolumeControl is merged into winget-pkgs
 
-  function ps(action, pinned) {
-    var line = '& ([scriptblock]::Create((irm "' + BASE + '/Install-VolumeControl.ps1"))) -Action ' + action;
-    if (action === "update") {
-      return '# Fetch the verified bootstrap, then run it with arguments.\n' +
-             '# Optional pin: append  -Version v0.1.5\n' + line;
+  var NOTES = {
+    win: {
+      install: "",
+      update: "# Update refuses to run while VolumeControl is open - close it first.\n# Pin a release: add  -Version vX.Y.Z  to the last line.\n",
+      uninstall: "# Removes the app; config.ini is preserved.\n"
+    },
+    unix: {
+      install: "",
+      update: "# Pin a release: put  VOLUMECTL_VERSION=vX.Y.Z  before  bash  on the last line.\n",
+      uninstall: "# Removes the app/binary; your config is preserved.\n"
     }
-    if (action === "uninstall") {
-      return '# Runs the contained uninstaller; config.ini is preserved.\n' + line;
-    }
-    return '# Downloads the script, then executes it from memory — verify-friendly,\n' +
-           '# no pipe-into-shell: arguments bind exactly like a local file run.\n' + line;
-  }
-
-  function curl(action) {
-    var body =
-      '$base = "' + BASE + '"\n' +
-      '$root = Join-Path $env:TEMP "VolumeControl-bootstrap"\n' +
-      'New-Item -ItemType Directory -Force -Path $root | Out-Null\n' +
-      'curl.exe -fsSL "$base/Install-VolumeControl.ps1" -o "$root\\Install-VolumeControl.ps1"\n' +
-      'curl.exe -fsSL "$base/SHA256SUMS.txt" -o "$root\\SHA256SUMS.txt"\n' +
-      '$want = ((Get-Content "$root\\SHA256SUMS.txt" | Where-Object { $_ -like "*Install-VolumeControl.ps1" }) -split "\\s+")[0]\n' +
-      'if ((Get-FileHash "$root\\Install-VolumeControl.ps1").Hash -ine $want) { throw "SHA-256 mismatch" }\n';
-    if (action === "update") {
-      return body + '& "$root\\Install-VolumeControl.ps1" -Action update   # pin: -Version v0.1.5';
-    }
-    if (action === "uninstall") {
-      return body + '& "$root\\Install-VolumeControl.ps1" -Action uninstall';
-    }
-    return body + '& "$root\\Install-VolumeControl.ps1" -Action install';
-  }
-
-  function winget(action) {
-    if (action === "update") return "winget upgrade --id dt418.VolumeControl";
-    if (action === "uninstall") return "winget uninstall --id dt418.VolumeControl";
-    return "winget install --id dt418.VolumeControl";
-  }
-
-  function unix(action) {
-    // macOS and Linux ship their own verified installer next to the package;
-    // both verify SHA-256 against the release manifest before installing.
-    var body =
-      '# macOS: install-macos.sh   Linux: install-linux.sh\n' +
-      'curl -fsSL "' + BASE + '/install-macos.sh" | bash -s -- ' + action;
-    if (action === "update") {
-      return body + '   # pin a tag: VOLUMECTL_VERSION=v0.1.5 bash -s -- update';
-    }
-    if (action === "uninstall") {
-      return body + '   # removes the app/binary; config is preserved';
-    }
-    return body + '   # verifies SHA256SUMS.txt, then installs under $HOME';
-  }
-
-  var SNIPPETS = {
-    ps: ps,
-    curl: curl,
-    winget: winget,
-    unix: unix
   };
 
-  var state = { tab: "ps", action: "install" };
+  function tpl(id) {
+    return document.getElementById(id).textContent.replace(/^\n+|\n+$/g, "");
+  }
+  function fill(text, action) {
+    return text.replace(/\{\{BASE\}\}/g, BASE).replace(/\{\{ACTION\}\}/g, action);
+  }
+  function build(tab, action) {
+    if (tab === "winget") {
+      var verb = { install: "install", update: "upgrade", uninstall: "uninstall" }[action];
+      return (WINGET_LIVE ? "" : "# Not published to winget-pkgs yet - use the PowerShell or curl.exe tab.\n") +
+             "# winget checks the installer against the SHA-256 in its manifest before it runs.\n" +
+             "winget " + verb + " --id dt418.VolumeControl";
+    }
+    if (tab === "unix") return NOTES.unix[action] + fill(tpl("tpl-unix"), action);
+    return NOTES.win[action] + fill(tpl(tab === "curl" ? "tpl-curl" : "tpl-ps"), action);
+  }
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  var plat = String((navigator.userAgentData && navigator.userAgentData.platform) ||
+                    navigator.platform || navigator.userAgent || "").toLowerCase();
+  var state = { tab: /win/.test(plat) ? "ps" : /mac|linux/.test(plat) ? "unix" : "ps", action: "install" };
   var codeEl = document.querySelector("#snippet code");
   var wingetNote = document.getElementById("winget-note");
+  var panel = document.getElementById("snippet-panel");
+  var tablist = document.querySelector("[role=tablist]");
+  var tabs = [].slice.call(tablist.querySelectorAll("[role=tab]"));
+  var copyBtn = document.querySelector(".copy");
+  var copyStatus = document.getElementById("copy-status");
+  var wingetBadge = document.getElementById("winget-badge");
 
   function render() {
-    var raw = SNIPPETS[state.tab](state.action);
-    var html = raw
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    html = html.replace(/(^|\n)(#[^\n]*)/g, '$1<span class="cm">$2</span>');
-    codeEl.innerHTML = html;
-    wingetNote.hidden = state.tab !== "winget";
-    document.querySelectorAll(".tab").forEach(function (b) {
-      b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
+    codeEl.innerHTML = esc(build(state.tab, state.action)).replace(/(^|\n)(#[^\n]*)/g, '$1<span class="cm">$2</span>');
+    wingetNote.hidden = WINGET_LIVE || state.tab !== "winget";
+    tabs.forEach(function (b) {
+      var on = b.dataset.tab === state.tab;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
     });
+    panel.setAttribute("aria-labelledby", "tab-" + state.tab);
     document.querySelectorAll(".chip").forEach(function (b) {
       b.setAttribute("aria-pressed", String(b.dataset.action === state.action));
     });
   }
 
-  document.querySelectorAll(".tab").forEach(function (b) {
+  tabs.forEach(function (b) {
     b.addEventListener("click", function () { state.tab = b.dataset.tab; render(); });
+  });
+  tablist.addEventListener("keydown", function (e) {
+    var i = tabs.indexOf(document.activeElement), n = null;
+    if (i < 0) return;
+    if (e.key === "ArrowRight") n = (i + 1) % tabs.length;
+    else if (e.key === "ArrowLeft") n = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === "Home") n = 0;
+    else if (e.key === "End") n = tabs.length - 1;
+    if (n === null) return;
+    e.preventDefault();
+    tabs[n].focus();
+    state.tab = tabs[n].dataset.tab;
+    render();
   });
   document.querySelectorAll(".chip").forEach(function (b) {
     b.addEventListener("click", function () { state.action = b.dataset.action; render(); });
   });
 
-  var copyBtn = document.querySelector(".copy");
+  var copyTimer;
+  function flash(label, spoken) {
+    copyBtn.textContent = label;
+    copyStatus.textContent = spoken;
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(function () { copyBtn.textContent = "Copy"; copyStatus.textContent = ""; }, 1800);
+  }
+  function legacyCopy(text) {
+    var ta = document.createElement("textarea"), ok = false;
+    ta.value = text; ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+  function selectSnippet() {
+    var r = document.createRange(); r.selectNodeContents(codeEl);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  function copyFailed() { selectSnippet(); flash("Press Ctrl+C", "Copy failed. The command is selected; press Control C to copy."); }
+  function copied() { flash("Copied", "Command copied to clipboard"); }
   copyBtn.addEventListener("click", function () {
     var text = codeEl.textContent;
-    function done() {
-      copyBtn.textContent = "Copied";
-      setTimeout(function () { copyBtn.textContent = "Copy"; }, 1400);
-    }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, done);
+      navigator.clipboard.writeText(text).then(copied, function () { legacyCopy(text) ? copied() : copyFailed(); });
     } else {
-      var ta = document.createElement("textarea");
-      ta.value = text; document.body.appendChild(ta); ta.select();
-      try { document.execCommand("copy"); } catch (e) {}
-      document.body.removeChild(ta); done();
+      legacyCopy(text) ? copied() : copyFailed();
     }
   });
 
+  if (WINGET_LIVE) wingetBadge.hidden = true;
+
   render();
+
+  /* ── overlay preview: colour bands mirror core::volume_color_rgb, defaults 40 / 75 ── */
+  var ov = document.getElementById("ov"), bar = document.getElementById("fill"),
+      out = document.getElementById("pct"), live = document.getElementById("demo-live");
+  var vol = 50, muted = false, hideTimer;
+  function band(p, m) {
+    if (m || p === 0) return "#888888";
+    if (p <= 40) return "#27AE60";
+    if (p <= 75) return "#0078D4";
+    return "#E05C00";
+  }
+  function paint() {
+    bar.style.width = vol + "%";
+    bar.style.backgroundColor = band(vol, muted);
+    out.textContent = muted ? "Muted" : vol + "%";
+    live.textContent = muted ? "Muted" : "Volume " + vol + " percent";
+    ov.classList.add("on");
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(function () { ov.classList.remove("on"); }, 1800);   // overlay_duration_ms default
+  }
+  function act(a) {
+    if (a === "up") vol = Math.min(100, vol + 1);
+    else if (a === "down") vol = Math.max(0, vol - 1);
+    else if (a === "up10") vol = Math.min(100, vol + 10);
+    else if (a === "down10") vol = Math.max(0, vol - 10);
+    else if (a === "mute") muted = !muted;
+    else if (a === "reset") vol = 50;
+    else return;
+    paint();
+  }
+  [].forEach.call(document.querySelectorAll(".key"), function (b) {
+    b.addEventListener("click", function () { act(b.dataset.act); });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (!e.altKey || !(e.ctrlKey || e.metaKey)) return;   // only Ctrl/⌘+Alt chords; plain arrows keep scrolling
+    var a = null;
+    if (e.code === "ArrowUp") a = e.shiftKey ? "up10" : "up";
+    else if (e.code === "ArrowDown") a = e.shiftKey ? "down10" : "down";
+    else if (e.code === "KeyM") a = "mute";
+    else if (e.code === "KeyR") a = "reset";
+    if (!a) return;
+    e.preventDefault();
+    act(a);
+  });
+  bar.style.backgroundColor = band(vol, muted);
+  bar.style.width = vol + "%";
+
+  /* ── latest release tag (progressive enhancement; keeps "v0.1.x" on any failure) ── */
+  (function () {
+    var el = document.getElementById("ver"), KEY = "vc-latest", cached = null;
+    if (!el || !window.fetch) return;
+    try { cached = JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch (e) {}
+    if (cached && Date.now() - cached.t < 3600000) { el.textContent = cached.tag; return; }
+    fetch("https://api.github.com/repos/dt418/volume-control/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (d) {
+        if (!/^v\d+\.\d+\.\d+$/.test(d.tag_name)) return;
+        el.textContent = d.tag_name;
+        try { sessionStorage.setItem(KEY, JSON.stringify({ tag: d.tag_name, t: Date.now() })); } catch (e) {}
+      })
+      .catch(function () {});
+  })();
 })();
 </script>
 

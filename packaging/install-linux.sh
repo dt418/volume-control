@@ -128,10 +128,22 @@ resolve_tag() {
     printf '%s' "$tag"
     return
   fi
-  local tag
-  tag="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$RELEASES_API" \
+  # Unauthenticated api.github.com calls share 60 requests/hour per IP, so a
+  # shared NAT can answer 403/429. Try the JSON API first, then fall back to
+  # the HTML redirect target of releases/latest (no API quota), and only then
+  # fail with a message that names both the limit and the VOLUMECTL_VERSION
+  # escape hatch.
+  local tag api_body location
+  api_body="$(curl -fsSL -H 'Accept: application/vnd.github+json' "$RELEASES_API" 2>/dev/null || true)"
+  tag="$(printf '%s' "$api_body" \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-  [[ -n "$tag" ]] || die "download.failed" "could not resolve the latest release"
+  if [[ -z "$tag" ]]; then
+    location="$(curl -fsSIL -o /dev/null -w '%{url_effective}' \
+      "$RELEASE_BASE_DEFAULT/latest" 2>/dev/null || true)"
+    case "$location" in */releases/tag/v[0-9]*.[0-9]*.[0-9]*) tag="${location##*/tag/}" ;; esac
+  fi
+  # A 403 body still parses to an empty tag and lands here.
+  [[ -n "$tag" ]] || die "download.failed" "could not resolve the latest release (api.github.com may be rate-limited; retry later or pin VOLUMECTL_VERSION=vX.Y.Z)"
   printf '%s' "$tag"
 }
 
