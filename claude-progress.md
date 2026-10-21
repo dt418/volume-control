@@ -4141,3 +4141,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - `bash scripts/test-install-unix.sh`: passed all 22 checks.
   - `bash scripts/test-release-workflow.sh`: passed all 44 contract checks.
   - `node scripts/test-verify-installer-rea.mjs` and `bash scripts/test-winget-deploy.sh`: passed.
+- Verification: `frontend/src/settings/UpdateCard.test.tsx` asserts `v0.1.9`; frontend suite passes after the 0.1.9 bump.
