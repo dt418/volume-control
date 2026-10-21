@@ -14,6 +14,10 @@
 - Task 3 (2026-10-21): show_mixer_event transport lock passed before and after the lock-order move (1 passed, 17 filtered); cargo test --workspace --no-default-features passed 360 tests.
 
 
+- Verification: Task 4 (2026-10-21): `npm --prefix frontend test -- MixerSurface`
+  passed 18 tests; `npm --prefix frontend test` passed 110 tests; `npm --prefix
+  frontend run build` passed.
+
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
 
 - Goal: continue the pending winget submission to the current release and repair

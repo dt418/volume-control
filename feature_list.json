@@ -25,7 +25,8 @@
       "verification": [
         "Task 1 (2026-10-21): cargo test -p volumectl --lib autostart passed 9 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 358 tests.",
         "Task 2 (2026-10-21): migration RED failed as expected (unresolved should_migrate); cargo test -p volumectl --lib autostart passed 10 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 359 tests.",
-        "Task 3 (2026-10-21): show_mixer_event transport lock passed before and after the lock-order move (1 passed, 17 filtered); cargo test --workspace --no-default-features passed 360 tests."
+        "Task 3 (2026-10-21): show_mixer_event transport lock passed before and after the lock-order move (1 passed, 17 filtered); cargo test --workspace --no-default-features passed 360 tests.",
+        "Task 4 (2026-10-21): npm --prefix frontend test -- MixerSurface passed 18 tests; npm --prefix frontend test passed 110 tests; npm --prefix frontend run build passed."
       ],
       "evidence": [
         "Session 124: fixes target the launch-mode, migration, core-lock, stale-close, NSIS, and version-drift findings from Session 123."
