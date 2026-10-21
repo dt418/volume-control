@@ -169,6 +169,19 @@ else
   report FAIL 'staged release assets must include exe installer and bootstrap script'
 fi
 
+# Task 5 contract: the NSIS installer terminates a running host before
+# replacing its executable during an update.
+hook="$repo/src-tauri/nsis/hooks.nsh"
+if [[ -f "$hook" ]] && \
+   contains "$repo/src-tauri/tauri.conf.json" \
+     '"installerHooks"[[:space:]]*:[[:space:]]*"nsis/hooks\.nsh"' && \
+   contains "$hook" '!macro[[:space:]]+NSIS_HOOK_PREINSTALL' && \
+   contains "$hook" 'taskkill\.exe" /IM VolumeControl\.exe'; then
+  report ok 'NSIS preinstall hook stops the running VolumeControl instance'
+else
+  report FAIL 'NSIS preinstall hook stops the running VolumeControl instance'
+fi
+
 # Task 4 contract: both READMEs document the safe local download-and-verify
 # bootstrap sequence (never a pipe-into-shell command) and state the trust
 # boundaries of unsigned, checksum-only release assets.

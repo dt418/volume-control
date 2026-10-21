@@ -20,6 +20,13 @@
 - Task 3 review fix (2026-10-21): Windows-gated fast_handle removes non-Windows unused-variable warning; cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed; show_mixer_event passed 1 test; cargo test --workspace --no-default-features passed 360 tests.
 
 
+- Verification: Task 5 (2026-10-21): `cargo fmt --all --check`, `git diff
+  --check`, `cargo clippy --workspace --all-targets --no-default-features -- -D
+  warnings`, `cargo test --workspace --no-default-features` (358 tests), `bash
+  scripts/check-tauri-deadlock.sh`, NSIS build, and silent-update runtime check
+  passed; `bash scripts/test-release-workflow.sh` NSIS contract passed but
+  retains its unrelated product-page contract failure.
+
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
 
 - Goal: continue the pending winget submission to the current release and repair
