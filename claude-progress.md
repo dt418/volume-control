@@ -1,5 +1,13 @@
 # Progress Log
 
+## Session 124 (2026-10-21) - Harden the desktop launch handoff for 0.1.9
+
+- Goal: eliminate the duplicate-background popup, first-login popup, core-lock
+  stall, stale mixer close, version-skew update, and tag/version drift found in
+  Session 123.
+- Plan: `docs/superpowers/plans/2026-10-21-desktop-launch-handoff-hardening.md`.
+- Evidence: filled task-by-task as each commit lands.
+
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
 
 - Goal: continue the pending winget submission to the current release and repair
