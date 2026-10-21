@@ -26,6 +26,11 @@
   scripts/check-tauri-deadlock.sh`, NSIS build, and silent-update runtime check
   passed; `bash scripts/test-release-workflow.sh` NSIS contract passed but
   retains its unrelated product-page contract failure.
+- Verification: Task 6 (2026-10-21): cargo check, fmt, diff, clippy, and cargo
+  test (360 tests) passed; check-version-sync accepted v0.1.9 and rejected
+  v0.1.8 plus unprefixed 0.1.9; release-workflow version-sync assertions passed,
+  while the pre-existing product-page command contract remained FAIL.
+
 
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
 

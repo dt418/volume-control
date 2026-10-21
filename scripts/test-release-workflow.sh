@@ -460,6 +460,18 @@ expect_failure "$missing_nsis_copy" "$expected_sha" windows 'missing NSIS fixtur
 expect_failure "$duplicate_checksum_copy" "$expected_sha" windows 'duplicate checksum fixture'
 expect_failure "$bootstrap_mismatch_copy" "$expected_sha" windows 'bootstrap digest mismatch fixture'
 
+current_tag="v$(sed -n 's/^  "version": "\([^"]*\)",$/\1/p' "$repo/src-tauri/tauri.conf.json" | head -n 1)"
+if bash "$repo/scripts/check-version-sync.sh" "$current_tag" >/dev/null 2>&1; then
+  report ok 'version sync accepts the checked-in app version'
+else
+  report FAIL 'version sync accepts the checked-in app version'
+fi
+if bash "$repo/scripts/check-version-sync.sh" v0.0.0 >/dev/null 2>&1; then
+  report FAIL 'version sync rejects a mismatched tag'
+else
+  report ok 'version sync rejects a mismatched tag'
+fi
+
 if [[ "$failures" -eq 0 ]]; then
   echo "All release workflow contract checks passed."
   exit 0
