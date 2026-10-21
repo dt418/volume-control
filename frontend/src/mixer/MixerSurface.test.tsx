@@ -93,12 +93,21 @@ describe("MixerSurface", () => {
     });
   });
 
-  it("closes the window when the Rust side emits close_mixer_request (blur auto-close)", async () => {
+  it("closes the window when the Rust side emits close_mixer_request while unfocused", async () => {
     await renderSurface();
-    // The surface subscribes to the Rust Focused(false) event.
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
     expect(listeners["close_mixer_request"]).toBeDefined();
     listeners["close_mixer_request"](null);
     expect(ipc.invoke).toHaveBeenCalledWith("close_surface", {
+      surface: "window-mixer",
+    });
+  });
+
+  it("ignores a stale close request after the mixer regains focus", async () => {
+    await renderSurface();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    listeners["close_mixer_request"](null);
+    expect(ipc.invoke).not.toHaveBeenCalledWith("close_surface", {
       surface: "window-mixer",
     });
   });

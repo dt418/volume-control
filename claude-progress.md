@@ -10,6 +10,9 @@
 - Verification: Task 1 (2026-10-21): `cargo test -p volumectl --lib autostart`
   passed 9 tests; `cargo check -p volumecontrol-tauri` passed; `cargo test
   --workspace --no-default-features` passed 358 tests.
+- Verification: Task 4 (2026-10-21): `npm --prefix frontend test -- MixerSurface`
+  passed 18 tests; `npm --prefix frontend test` passed 110 tests; `npm --prefix
+  frontend run build` passed.
 
 
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
