@@ -22,7 +22,9 @@
       "title": "Harden the desktop launch handoff and release 0.1.9",
       "user_visible_behavior": "Foreground launches always open the mixer, background launches stay tray-only, installer updates replace a running instance, and the 0.1.9 release cannot be tagged with mismatched version fields.",
       "status": "in_progress",
-      "verification": [],
+      "verification": [
+        "Task 1 (2026-10-21): cargo test -p volumectl --lib autostart passed 9 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 358 tests."
+      ],
       "evidence": [
         "Session 124: fixes target the launch-mode, migration, core-lock, stale-close, NSIS, and version-drift findings from Session 123."
       ],

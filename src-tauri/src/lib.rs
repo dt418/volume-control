@@ -236,6 +236,9 @@ pub fn run() -> tauri::Result<()> {
             }
             startup_mark!("setup begin");
 
+            let args = std::env::args().skip(1).collect::<Vec<_>>();
+            let background_launch = volumectl_lib::autostart::is_background_launch(&args);
+
             // Prevent two instances (mirrors the legacy host's named-mutex
             // guard: a second instance would double-apply hotkeys/wheel and
             // create a second tray icon). The check runs before any native
@@ -308,9 +311,6 @@ pub fn run() -> tauri::Result<()> {
             // alone sits in the overflow flyout, so clicking the icon looked
             // dead. The login autostart entry passes `--background` and stays
             // tray-only. The E2E verify marker owns its own surface choice.
-            let background_launch = std::env::args()
-                .skip(1)
-                .any(|arg| arg == volumectl_lib::autostart::BACKGROUND_FLAG);
             if !background_launch && std::env::var("VOLUMECTL_VERIFY_SURFACE").is_err() {
                 if let Err(error) = app.state::<WindowManager>().open(SurfaceId::Mixer) {
                     log::warn!("could not open the mixer on launch: {error}");

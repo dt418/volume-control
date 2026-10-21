@@ -10,9 +10,7 @@ fn main() -> std::process::ExitCode {
     // `--background` is a host launch mode (the login autostart registration
     // uses it), not a CLI verb: the host must start tray-only instead of the
     // one-shot CLI exiting before any window can open.
-    let host_launch = args.is_empty()
-        || (args.len() == 1 && args[0] == volumectl_lib::autostart::BACKGROUND_FLAG);
-    if !host_launch {
+    if !volumectl_lib::autostart::is_host_launch(&args) {
         return match volumectl_lib::cli::run() {
             Ok(code) => code,
             Err(e) => {

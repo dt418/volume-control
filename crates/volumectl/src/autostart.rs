@@ -23,6 +23,18 @@ pub struct AutostartStatus {
 /// argument and opens the mixer, so clicking the icon never looks dead.
 pub const BACKGROUND_FLAG: &str = "--background";
 
+/// True when any host argument requests the tray-only launch mode.
+pub fn is_background_launch(args: &[String]) -> bool {
+    args.iter().any(|arg| arg.as_str() == BACKGROUND_FLAG)
+}
+
+/// True when the argument list is a host launch rather than a CLI verb.
+/// An empty list is a foreground launch; only background-flag tokens are
+/// treated as host arguments, so `--background foo` stays a CLI invocation.
+pub fn is_host_launch(args: &[String]) -> bool {
+    args.is_empty() || args.iter().all(|arg| arg.as_str() == BACKGROUND_FLAG)
+}
+
 /// The Run-key command for the login entry, with the background flag.
 pub fn startup_command(executable: &Path) -> String {
     format!("{} {BACKGROUND_FLAG}", quote_command_path(executable))
@@ -371,6 +383,33 @@ pub fn ensure_background_flag() -> Result<(), String> {
 mod tests {
     use super::{has_background_flag, quote_command_path, startup_command};
     use std::path::Path;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn launch_mode_accepts_only_known_host_arguments() {
+        assert!(super::is_host_launch(&args(&[])));
+        assert!(super::is_host_launch(&args(&["--background"])));
+        assert!(super::is_host_launch(&args(&[
+            "--background",
+            "--background"
+        ])));
+        assert!(!super::is_host_launch(&args(&["get"])));
+        assert!(!super::is_host_launch(&args(&["--background", "get"])));
+    }
+
+    #[test]
+    fn background_launch_detects_the_flag_anywhere() {
+        assert!(!super::is_background_launch(&args(&[])));
+        assert!(super::is_background_launch(&args(&["--background"])));
+        assert!(super::is_background_launch(&args(&[
+            "--profile",
+            "--background"
+        ])));
+        assert!(!super::is_background_launch(&args(&["--background-lite"])));
+    }
 
     #[test]
     fn startup_command_appends_background_flag() {
