@@ -124,9 +124,9 @@ fn request_show_mixer() {
     }
 }
 
-/// Consume a pending show-mixer request. Auto-reset event + zero timeout: the
-/// signal is cleared only when this returns `true`, and the caller already
-/// holds the core lock, so an in-flight request is never lost.
+/// Consume a pending show-mixer request. Auto-reset event + zero timeout:
+/// the signal is cleared only when this returns `true`, preserving one pending
+/// request for the next poll.
 pub fn take_show_mixer_request() -> bool {
     let handle = SHOW_MIXER_EVENT_HANDLE.load(Ordering::Acquire);
     if handle == 0 {
@@ -269,4 +269,24 @@ unsafe extern "system" fn wheel_wndproc(
         return 0;
     }
     DefWindowProcW(hwnd, msg, wparam, lparam)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{create_show_mixer_event, request_show_mixer, take_show_mixer_request};
+
+    #[test]
+    fn show_mixer_event_is_auto_reset() {
+        create_show_mixer_event();
+        assert!(!take_show_mixer_request(), "fresh event must be clear");
+        request_show_mixer();
+        assert!(
+            take_show_mixer_request(),
+            "signalled event must be observed"
+        );
+        assert!(
+            !take_show_mixer_request(),
+            "auto-reset event must clear after one wait"
+        );
+    }
 }

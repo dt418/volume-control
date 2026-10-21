@@ -296,7 +296,7 @@ pub fn run() -> tauri::Result<()> {
                 }
             };
             let modifier = config.modifier;
-            let sink = Arc::new(TauriSink::new(handle));
+            let sink = Arc::new(TauriSink::new(handle.clone()));
             let core = AppCore::new_with_notice(audio, config, modifier, sink, config_notice)
                 .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             startup_mark!("audio + core");
@@ -338,28 +338,35 @@ pub fn run() -> tauri::Result<()> {
             // Fast poll (20 ms): drain the global-hotkey channel and the
             // wheel-bridge channel into AppCore.apply_hotkey.
             let fast_shared = shared.clone();
+            let fast_handle = handle.clone();
             #[cfg(target_os = "windows")]
             let fast_native = native.clone();
             std::thread::spawn(move || loop {
+                // A second launch must never wait for the core mutex: a sync
+                // Tauri command on the main thread can hold it while the
+                // window manager waits for the main thread. Dispatch the
+                // surface request first, with no core lock held.
+                #[cfg(target_os = "windows")]
+                if native_win32::take_show_mixer_request() {
+                    match fast_handle.try_state::<WindowManager>() {
+                        Some(manager) => {
+                            if let Err(error) = manager.open(SurfaceId::Mixer) {
+                                log::warn!("show-mixer request failed: {error}");
+                            }
+                        }
+                        None => log::warn!(
+                            "show-mixer request arrived before the window manager was managed"
+                        ),
+                    }
+                }
                 // Never queue an IPC command behind a poll: when a command
                 // holds the core (volume slider, bootstrap, tray action),
-                // skip this cycle instead of blocking. Commands are the
-                // interactive path — polls are best-effort by design.
+                // skip this cycle instead of blocking.
                 let Ok(mut core) = fast_shared.try_lock() else {
                     std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
                     continue;
                 };
                 core.poll_hotkeys();
-                #[cfg(target_os = "windows")]
-                if native_win32::take_show_mixer_request() {
-                    // A second launch (desktop icon while the tray host is
-                    // already running) asked for the mixer through the named
-                    // event: the process itself exits, so this is the only
-                    // visible response.
-                    core.handle_action(volumectl_lib::ui::AppAction::ShowSurface(
-                        volumectl_lib::ui::SurfaceId::Mixer,
-                    ));
-                }
                 #[cfg(target_os = "windows")]
                 while let Some(action) = fast_native.try_recv_wheel() {
                     core.apply_hotkey(action);
