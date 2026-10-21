@@ -17,6 +17,8 @@
 - Verification: Task 4 (2026-10-21): `npm --prefix frontend test -- MixerSurface`
   passed 18 tests; `npm --prefix frontend test` passed 110 tests; `npm --prefix
   frontend run build` passed.
+- Task 3 review fix (2026-10-21): Windows-gated fast_handle removes non-Windows unused-variable warning; cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed; show_mixer_event passed 1 test; cargo test --workspace --no-default-features passed 360 tests.
+
 
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
 

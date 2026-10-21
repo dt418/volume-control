@@ -338,6 +338,7 @@ pub fn run() -> tauri::Result<()> {
             // Fast poll (20 ms): drain the global-hotkey channel and the
             // wheel-bridge channel into AppCore.apply_hotkey.
             let fast_shared = shared.clone();
+            #[cfg(target_os = "windows")]
             let fast_handle = handle.clone();
             #[cfg(target_os = "windows")]
             let fast_native = native.clone();
