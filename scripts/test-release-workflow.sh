@@ -472,6 +472,45 @@ else
   report ok 'version sync rejects a mismatched tag'
 fi
 
+version_sync_fixture="$tmp_root/version-sync"
+mkdir -p "$version_sync_fixture/scripts"
+for version_file in \
+  Cargo.toml \
+  crates/volumectl/Cargo.toml \
+  src-tauri/Cargo.toml \
+  src-tauri/tauri.conf.json \
+  frontend/package.json \
+  frontend/package-lock.json; do
+  mkdir -p "$(dirname "$version_sync_fixture/$version_file")"
+  cp "$repo/$version_file" "$version_sync_fixture/$version_file"
+done
+cp "$repo/scripts/check-version-sync.sh" \
+  "$version_sync_fixture/scripts/check-version-sync.sh"
+
+if bash "$version_sync_fixture/scripts/check-version-sync.sh" "$current_tag" >/dev/null 2>&1; then
+  report ok 'version sync fixture accepts matching nested lockfile version'
+else
+  report FAIL 'version sync fixture accepts matching nested lockfile version'
+fi
+
+awk '
+  /^    "": \{$/ { in_root_package = 1 }
+  in_root_package && /^      "version": / {
+    sub(/"[^"]*"/, "\"0.0.0\"")
+    in_root_package = 0
+  }
+  { print }
+' "$version_sync_fixture/frontend/package-lock.json" \
+  > "$version_sync_fixture/frontend/package-lock.json.mutated"
+mv "$version_sync_fixture/frontend/package-lock.json.mutated" \
+  "$version_sync_fixture/frontend/package-lock.json"
+
+if bash "$version_sync_fixture/scripts/check-version-sync.sh" "$current_tag" >/dev/null 2>&1; then
+  report FAIL 'version sync rejects nested lockfile version drift'
+else
+  report ok 'version sync rejects nested lockfile version drift'
+fi
+
 if [[ "$failures" -eq 0 ]]; then
   echo "All release workflow contract checks passed."
   exit 0

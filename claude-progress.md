@@ -30,6 +30,12 @@
   test (360 tests) passed; check-version-sync accepted v0.1.9 and rejected
   v0.1.8 plus unprefixed 0.1.9; release-workflow version-sync assertions passed,
   while the pre-existing product-page command contract remained FAIL.
+- Verification: Task 6 review fix (2026-10-21): version sync now requires
+  exactly one frontend package-lock top-level version and one
+  packages[""].version; matching and mismatch checks passed, nested-lockfile
+  drift regression passed, fmt/diff/clippy passed, and only the pre-existing
+  product-page contract remained FAIL.
+
 
 
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
