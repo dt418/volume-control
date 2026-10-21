@@ -74,6 +74,10 @@ jobs:
         env:
           E2E_DRIVER_PROVIDER: embedded
         run: ./scripts/verify-tauri-e2e.ps1 -Surface all -OutputRoot output/tauri-e2e/release-windows -VirtualAudio
+      - name: Verify desktop launch handoff
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./scripts/verify-desktop-launch.ps1 -Binary target/debug/VolumeControl.exe -OutputRoot output/desktop-launch
       - name: Run macOS E2E gate
         if: matrix.platform == 'macos'
         shell: bash
