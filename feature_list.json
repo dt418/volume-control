@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-21T23:15",
+  "last_updated": "2026-10-22T00:05",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -33,7 +33,9 @@
         "Task 6 review fix (2026-10-21): version sync now requires exactly one frontend package-lock top-level version and one packages[\"\"].version; matching and mismatch checks passed, nested-lockfile drift regression passed, fmt/diff/clippy passed, and the only release-workflow failure remains the pre-existing product-page contract.",
         "Task 7 (2026-10-21): pre-fix 98d206a release binary failed as expected with Background launch showed the Volume Mixer after three PASS lines; current release binary produced five PASS lines. cargo fmt --all --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features (360 passed), and sh scripts/check-tauri-deadlock.sh passed.",
         "Task 7 review fix (2026-10-21): gate posts WM_CLOSE and proves the primary remains alive while the mixer becomes absent before a second foreground relaunch; every secondary process must exit 0. Fixed release binary passed five assertions; pre-fix 98d206a still failed duplicate-background after three PASS lines; cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed.",
-        "frontend/src/settings/UpdateCard.test.tsx now asserts v0.1.9, matching package.json and the 0.1.9 release."
+        "frontend/src/settings/UpdateCard.test.tsx now asserts v0.1.9, matching package.json and the 0.1.9 release.",
+        "Version gate hardening (2026-10-21): `bash scripts/check-version-sync.sh v0.1.9` -> `version sync ok: 0.1.9`; rejects v0.1.8 (exit 1) and unprefixed 0.1.9 (exit 2); checker now requires exactly one frontend package-lock top-level version, one packages[\"\"].version, one Cargo.lock `volumectl` version, and one `volumecontrol-tauri` version, using Bash 3.2-safe reads with no `mapfile`; fixtures reject Cargo.lock drift for both packages and the harness verifies the checker still works with mapfile disabled.",
+        "Product-page release contract repair (2026-10-21): `bash scripts/test-release-workflow.sh` -> `All release workflow contract checks passed.` (52 ok checks, 0 failures); the page contract now asserts the implemented download -> SHA-256 verify -> local-run flow (`Invoke-WebRequest`, `Get-FileHash`, `& \"$root/Install-VolumeControl.ps1\"`), plus `curl.exe` and `winget install`, replacing the stale `[scriptblock]::Create` token removed by the v0.1.8 page rewrite."
       ],
       "evidence": [
         "Session 124: fixes target the launch-mode, migration, core-lock, stale-close, NSIS, and version-drift findings from Session 123."

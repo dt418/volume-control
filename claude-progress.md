@@ -4143,3 +4143,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - `bash scripts/test-release-workflow.sh`: passed all 44 contract checks.
   - `node scripts/test-verify-installer-rea.mjs` and `bash scripts/test-winget-deploy.sh`: passed.
 - Verification: `frontend/src/settings/UpdateCard.test.tsx` asserts `v0.1.9`; frontend suite passes after the 0.1.9 bump.
+- Verification: Task 6/7 follow-up (2026-10-22): `scripts/check-version-sync.sh` now checks `Cargo.lock` app package versions and runs on Bash 3.2 (no `mapfile`); drift fixtures for both packages fail closed. `scripts/test-release-workflow.sh` passes 52/52 contract checks, including the repaired product-page contract for the download -> SHA-256 -> local-run snippets.

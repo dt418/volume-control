@@ -212,18 +212,18 @@ for readme in "$repo/README.md" "$repo/README.vi.md"; do
   fi
 done
 
-# Remote install surface: the product page documents irm, curl, and winget
-# flows without ever piping downloads into a shell, and the winget generator
-# emits a complete manifest trio whose InstallerSha256 matches real bytes.
+# Remote install surface: product-page templates download, verify, then run
+# a local bootstrap; curl and winget flows remain discoverable.
 page="$repo/docs/index.html"
 if [ -s "$page" ] && \
-   contains "$page" 'Install-VolumeControl\.ps1' && \
-   contains "$page" 'scriptblock\]::Create' && \
+   contains "$page" 'Invoke-WebRequest.*Install-VolumeControl\.ps1' && \
+   contains "$page" 'Get-FileHash.*Install-VolumeControl\.ps1' && \
+   contains "$page" '& "\$root/Install-VolumeControl\.ps1"' && \
    contains "$page" 'curl\.exe' && \
    contains "$page" 'winget install --id dt418\.VolumeControl'; then
-  report ok 'product page documents irm, curl, and winget remote commands'
+  report ok 'product page documents verified PowerShell, curl, and winget commands'
 else
-  report FAIL 'product page documents irm, curl, and winget remote commands'
+  report FAIL 'product page documents verified PowerShell, curl, and winget commands'
 fi
 
 if ! contains "$page" 'Invoke-Expression' && \
@@ -472,10 +472,43 @@ else
   report ok 'version sync rejects a mismatched tag'
 fi
 
+if ! (enable -n mapfile) 2>/dev/null; then
+  # Bash 3.2 (macOS) has no mapfile; the accept check above already ran the
+  # same script under that shell.
+  report ok 'version sync works without Bash mapfile'
+elif (
+  enable -n mapfile
+  source "$repo/scripts/check-version-sync.sh" "$current_tag"
+) >/dev/null 2>&1; then
+  report ok 'version sync works without Bash mapfile'
+else
+  report FAIL 'version sync works without Bash mapfile'
+fi
+
+mutate_cargo_lock_package_version() {
+  local fixture package_name output
+  fixture="$1"
+  package_name="$2"
+  output="$fixture/Cargo.lock.mutated"
+  awk -v package_name="$package_name" '
+    /^\[\[package\]\]$/ { in_target = 0 }
+    $0 == "name = \"" package_name "\"" { in_target = 1 }
+    in_target && /^version = "/ {
+      sub(/^version = "[^"]*"/, "version = \"0.0.0\"")
+      in_target = 0
+      changed = 1
+    }
+    { print }
+    END { if (!changed) exit 1 }
+  ' "$fixture/Cargo.lock" > "$output"
+  mv "$output" "$fixture/Cargo.lock"
+}
+
 version_sync_fixture="$tmp_root/version-sync"
 mkdir -p "$version_sync_fixture/scripts"
 for version_file in \
   Cargo.toml \
+  Cargo.lock \
   crates/volumectl/Cargo.toml \
   src-tauri/Cargo.toml \
   src-tauri/tauri.conf.json \
@@ -492,6 +525,12 @@ if bash "$version_sync_fixture/scripts/check-version-sync.sh" "$current_tag" >/d
 else
   report FAIL 'version sync fixture accepts matching nested lockfile version'
 fi
+
+for cargo_lock_fixture in \
+  "$tmp_root/version-sync-volumectl" \
+  "$tmp_root/version-sync-volumecontrol-tauri"; do
+  cp -R "$version_sync_fixture" "$cargo_lock_fixture"
+done
 
 awk '
   /^    "": \{$/ { in_root_package = 1 }
@@ -510,6 +549,17 @@ if bash "$version_sync_fixture/scripts/check-version-sync.sh" "$current_tag" >/d
 else
   report ok 'version sync rejects nested lockfile version drift'
 fi
+
+for cargo_lock_package in volumectl volumecontrol-tauri; do
+  cargo_lock_fixture="$tmp_root/version-sync-$cargo_lock_package"
+  if ! mutate_cargo_lock_package_version "$cargo_lock_fixture" "$cargo_lock_package"; then
+    report FAIL "version sync fixture mutates Cargo.lock $cargo_lock_package version"
+  elif bash "$cargo_lock_fixture/scripts/check-version-sync.sh" "$current_tag" >/dev/null 2>&1; then
+    report FAIL "version sync rejects Cargo.lock $cargo_lock_package version drift"
+  else
+    report ok "version sync rejects Cargo.lock $cargo_lock_package version drift"
+  fi
+done
 
 if [[ "$failures" -eq 0 ]]; then
   echo "All release workflow contract checks passed."
