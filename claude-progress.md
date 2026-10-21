@@ -10,6 +10,7 @@
 - Verification: Task 1 (2026-10-21): `cargo test -p volumectl --lib autostart`
   passed 9 tests; `cargo check -p volumecontrol-tauri` passed; `cargo test
   --workspace --no-default-features` passed 358 tests.
+- Task 2 (2026-10-21): migration RED failed as expected (unresolved should_migrate); cargo test -p volumectl --lib autostart passed 10 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 359 tests.
 
 
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon

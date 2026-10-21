@@ -67,11 +67,11 @@ static SHOW_MIXER_EVENT_HANDLE: AtomicIsize = AtomicIsize::new(0);
 
 /// Prevent two app instances (VolumePro's `#SingleInstance Force`
 /// equivalent). Mirrors the legacy host's named-mutex guard verbatim.
-/// Returns `false` when another instance already holds the mutex; that second
-/// launch first asks the running host to show the mixer, so double-clicking
-/// the desktop icon is never a no-op. The mutex handle is intentionally kept
-/// for the owning instance's lifetime.
-pub fn ensure_single_instance() -> bool {
+/// Returns `false` when another instance already holds the mutex. A foreground
+/// second launch asks the running host to show the mixer; a background launch
+/// exits tray-only. The mutex handle is intentionally kept for the owning
+/// instance's lifetime.
+pub fn ensure_single_instance(show_mixer: bool) -> bool {
     unsafe {
         let h = CreateMutexW(
             std::ptr::null(),
@@ -84,7 +84,9 @@ pub fn ensure_single_instance() -> bool {
         if GetLastError() == ERROR_ALREADY_EXISTS {
             CloseHandle(h);
             log::warn!("another VolumeControl instance is already running");
-            request_show_mixer();
+            if show_mixer {
+                request_show_mixer();
+            }
             return false;
         }
         create_show_mixer_event();

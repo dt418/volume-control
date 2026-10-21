@@ -237,7 +237,7 @@ pub fn run() -> tauri::Result<()> {
             startup_mark!("setup begin");
 
             let args = std::env::args().skip(1).collect::<Vec<_>>();
-            let background_launch = volumectl_lib::autostart::is_background_launch(&args);
+            let mut background_launch = volumectl_lib::autostart::is_background_launch(&args);
 
             // Prevent two instances (mirrors the legacy host's named-mutex
             // guard: a second instance would double-apply hotkeys/wheel and
@@ -247,7 +247,7 @@ pub fn run() -> tauri::Result<()> {
             let debug_e2e_instance = cfg!(debug_assertions)
                 && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
             #[cfg(target_os = "windows")]
-            if !debug_e2e_instance && !native_win32::ensure_single_instance() {
+            if !debug_e2e_instance && !native_win32::ensure_single_instance(!background_launch) {
                 log::warn!("another VolumeControl instance is already running");
                 std::process::exit(0);
             }
@@ -262,8 +262,9 @@ pub fn run() -> tauri::Result<()> {
 
             // Older autostart entries lack `--background`; without this an
             // upgraded user gets the mixer popping up at every sign-in.
-            if let Err(error) = volumectl_lib::autostart::ensure_background_flag() {
-                log::warn!("could not refresh the auto-start command: {error}");
+            match volumectl_lib::autostart::ensure_background_flag() {
+                Ok(migrated) => background_launch |= migrated,
+                Err(error) => log::warn!("could not refresh the auto-start command: {error}"),
             }
 
             // Tauri-managed tray (macOS/Linux only). Creation failure is

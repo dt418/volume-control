@@ -238,6 +238,10 @@ mod windows_registry {
             .unwrap_or(false)
     }
 
+    fn should_migrate(command: &str, executable: &Path) -> bool {
+        !has_background_flag(command) && command_matches_executable(command, executable)
+    }
+
     pub(super) fn status() -> Result<AutostartStatus, String> {
         let Some(key) = open_run_key(KEY_READ)? else {
             return Ok(AutostartStatus {
@@ -308,27 +312,28 @@ mod windows_registry {
 
     /// Rewrite an existing login entry that predates the background flag so
     /// an upgraded user does not get the mixer popping up at every sign-in.
-    /// No-op when autostart is disabled, already flagged, or points at a
-    /// different executable (never rewrite someone else's registration).
-    pub(super) fn ensure_background_flag() -> Result<(), String> {
+    /// Returns `true` only when this launch rewrote the value, which the host
+    /// uses to keep the current login launch tray-only.
+    pub(super) fn ensure_background_flag() -> Result<bool, String> {
         let Some(key) = open_run_key(KEY_READ)? else {
-            return Ok(());
+            return Ok(false);
         };
         let Some(command) = read_run_value(&key)? else {
-            return Ok(());
+            return Ok(false);
         };
         drop(key);
         let executable = std::env::current_exe()
             .map_err(|error| format!("could not determine current executable: {error}"))?;
-        if has_background_flag(&command) || !command_matches_executable(&command, &executable) {
-            return Ok(());
+        if !should_migrate(&command, &executable) {
+            return Ok(false);
         }
-        set_enabled(true).map(|_| ())
+        set_enabled(true)?;
+        Ok(true)
     }
 
     #[cfg(test)]
     mod tests {
-        use super::{command_matches_executable, command_token};
+        use super::{command_matches_executable, command_token, should_migrate};
         use std::path::Path;
 
         #[test]
@@ -354,6 +359,17 @@ mod windows_registry {
                 Path::new(r"C:\VolumeControl.exe"),
             ));
         }
+
+        #[test]
+        fn migration_targets_only_unflagged_matching_commands() {
+            let executable = Path::new(r"C:\VolumeControl.exe");
+            assert!(should_migrate(r#""C:\VolumeControl.exe""#, executable));
+            assert!(!should_migrate(
+                r#""C:\VolumeControl.exe" --background"#,
+                executable
+            ));
+            assert!(!should_migrate(r#""C:\Other.exe""#, executable));
+        }
     }
 }
 
@@ -370,13 +386,13 @@ pub fn set_enabled(enabled: bool) -> Result<AutostartStatus, String> {
 /// Ensure an existing login entry launches tray-only. Non-Windows hosts have
 /// no login registration, so this is a no-op there.
 #[cfg(windows)]
-pub fn ensure_background_flag() -> Result<(), String> {
+pub fn ensure_background_flag() -> Result<bool, String> {
     windows_registry::ensure_background_flag()
 }
 
 #[cfg(not(windows))]
-pub fn ensure_background_flag() -> Result<(), String> {
-    Ok(())
+pub fn ensure_background_flag() -> Result<bool, String> {
+    Ok(false)
 }
 
 #[cfg(test)]
