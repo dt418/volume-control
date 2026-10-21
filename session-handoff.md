@@ -1,5 +1,53 @@
 # Session Handoff
 
+## Session 123 (2026-10-21) - Winget 0.1.8 submission and desktop icon fix
+
+- Winget: PR microsoft/winget-pkgs#454508 updated to 0.1.8 (fork branch
+  `dt418.VolumeControl-0.1.5`, commit `8d38efec0`); installer SHA-256
+  `618C5BF93FCCEF59A91B013939A5628F82CCA93688399569330EBF454306B0BB` matches the
+  release `SHA256SUMS.txt`; `winget validate` passed. Repo `winget/` now tracks
+  `0.1.8` (the unpublished 0.1.7 manifest dir was removed).
+- Desktop icon: a no-argument launch opens the mixer, the login Run entry uses
+  `--background` (with automatic migration for old entries), and a second launch
+  signals the running primary through the named event
+  `Local\VolumeControl.ShowMixer` instead of exiting silently.
+- Verified: fmt, clippy `-D warnings`, workspace tests, live launch/handoff
+  smokes on `target/debug/VolumeControl.exe`, autostart registry migration smoke.
+- Note: installed v0.1.8 binaries keep the old behavior until the next release
+  ships this fix.
+
+## Session 121 (2026-10-18) - VolumeControl v0.1.8 release and bilingual landing page
+
+Branch `release/0.1.8` (worktree `volume-control-v018-release`) prepares the
+v0.1.8 release and completes the landing page bilingual localization:
+
+- `docs/index.html`: added responsive English/Vietnamese language toggle (`#lang-btn`),
+  complete dictionary covering hero, simulated overlay demo, remote installation
+  snippets, feature cards, platform matrix, and trust boundaries, with browser
+  detection and `localStorage` persistence.
+- Workspace bump: synchronized version `0.1.8` across workspace `Cargo.toml`,
+  `crates/volumectl/Cargo.toml`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`,
+  `frontend/package.json`, `frontend/package-lock.json`, and `Cargo.lock`.
+- `CHANGELOG.md`: updated `[0.1.8]` release section documenting update notifications,
+  CLI check-updates, Winget deployment pipeline, installer progress feedback,
+  and landing page i18n.
+- Record registered: `vol-102` in `feature_list.json` and session recorded in
+  `claude-progress.md`. PR #65 opened on GitHub with automated multi-platform CI.
+- Verified: `cargo fmt`, `git diff --check`, clippy `-D warnings`, workspace `cargo test`
+  (355 tests pass), `npm test` (18 files / 108 tests pass), `check-tauri-deadlock.sh` (10/10),
+  `test-release-workflow.sh` (44/44 pass), `test-check-records.sh` (35/35 pass).
+
+## Session 120 (2026-10-18) - Update check and notification in Settings, CLI, and IPC bridge
+
+PR #64 (`feat/update-notifications`) merged into `main` (`e732e11`):
+
+- `crates/volumectl/src/updates.rs`: added `UpdateInfo` struct, `resolve_update_info`,
+  and `check_update_info` with pure semver comparison and bounded timeouts.
+- `crates/volumectl/src/cli.rs`: added `volumectl check-updates` CLI subcommand.
+- `src-tauri/src/commands.rs`: added `check_for_updates` command emitting `state://update`.
+- `frontend/src/settings/UpdateCard.tsx`: new Settings component with bilingual EN/VI
+  strings, live loading state, and update alert banner linking to release notes.
+
 ## Session 110 (2026-10-17) - Merge main into the harness branch: record-id collision + WSL guard fix
 
 Branch `fix/release-workflow-git-path-resolution` (worktree

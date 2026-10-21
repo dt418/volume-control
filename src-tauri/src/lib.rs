@@ -257,6 +257,12 @@ pub fn run() -> tauri::Result<()> {
             let (config, config_notice) = volumectl_lib::config::load_with_notice();
             startup_mark!("config loaded");
 
+            // Older autostart entries lack `--background`; without this an
+            // upgraded user gets the mixer popping up at every sign-in.
+            if let Err(error) = volumectl_lib::autostart::ensure_background_flag() {
+                log::warn!("could not refresh the auto-start command: {error}");
+            }
+
             // Tauri-managed tray (macOS/Linux only). Creation failure is
             // non-fatal: keep the host alive with the webview surfaces.
             #[cfg(not(target_os = "windows"))]
@@ -297,6 +303,20 @@ pub fn run() -> tauri::Result<()> {
             app.manage(shared.clone());
             startup_mark!("state managed");
 
+            // A user launch (desktop/tray shortcut, Start menu, winget
+            // `winget install` completion) must show something: the tray icon
+            // alone sits in the overflow flyout, so clicking the icon looked
+            // dead. The login autostart entry passes `--background` and stays
+            // tray-only. The E2E verify marker owns its own surface choice.
+            let background_launch = std::env::args()
+                .skip(1)
+                .any(|arg| arg == volumectl_lib::autostart::BACKGROUND_FLAG);
+            if !background_launch && std::env::var("VOLUMECTL_VERIFY_SURFACE").is_err() {
+                if let Err(error) = app.state::<WindowManager>().open(SurfaceId::Mixer) {
+                    log::warn!("could not open the mixer on launch: {error}");
+                }
+            }
+
             // Diagnostic verification opens through the same WindowManager
             // path as production, but only after every command dependency is
             // managed so bootstrap can render a real surface.
@@ -329,6 +349,16 @@ pub fn run() -> tauri::Result<()> {
                     continue;
                 };
                 core.poll_hotkeys();
+                #[cfg(target_os = "windows")]
+                if native_win32::take_show_mixer_request() {
+                    // A second launch (desktop icon while the tray host is
+                    // already running) asked for the mixer through the named
+                    // event: the process itself exits, so this is the only
+                    // visible response.
+                    core.handle_action(volumectl_lib::ui::AppAction::ShowSurface(
+                        volumectl_lib::ui::SurfaceId::Mixer,
+                    ));
+                }
                 #[cfg(target_os = "windows")]
                 while let Some(action) = fast_native.try_recv_wheel() {
                     core.apply_hotkey(action);

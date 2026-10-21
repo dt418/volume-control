@@ -1,5 +1,45 @@
 # Progress Log
 
+## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
+
+- Goal: continue the pending winget submission to the current release and repair
+  the reported Windows bug where clicking the desktop shortcut did nothing.
+- Winget:
+  - Downloaded `VolumeControl_0.1.8_x64-setup.exe`, confirmed SHA-256
+    `618C5BF93FCCEF59A91B013939A5628F82CCA93688399569330EBF454306B0BB` against
+    the release `SHA256SUMS.txt`, generated the 1.12.0 manifest trio for `0.1.8`,
+    and `winget validate` reported `Manifest validation succeeded.`
+  - Updated `microsoft/winget-pkgs` PR #454508 (fork branch
+    `dt418.VolumeControl-0.1.5`, commit `8d38efec0`) from 0.1.7 to 0.1.8 and
+    retitled the PR; the repo `winget/` tree now tracks 0.1.8 instead of 0.1.7.
+- Desktop icon:
+  - Reproduced on the installed v0.1.8 build: the shortcut targets
+    `%LOCALAPPDATA%\VolumeControl\VolumeControl.exe` with no arguments; the
+    process stayed alive with no visible window (tray-resident, icon in the
+    overflow flyout), and a second launch exited silently via the mutex guard.
+  - `src-tauri/src/lib.rs`: a user launch now opens `SurfaceId::Mixer` after
+    state is managed; `VOLUMECTL_VERIFY_SURFACE` still owns the E2E choice.
+  - `src-tauri/src/main.rs`: `--background` routes to the host instead of the
+    one-shot CLI.
+  - `src-tauri/src/native_win32.rs`: the primary instance creates a named
+    auto-reset event (`Local\VolumeControl.ShowMixer`); a second launch signals
+    it before exiting, and the 20 ms poll calls `ShowSurface(Mixer)` under the
+    core lock.
+  - `crates/volumectl/src/autostart.rs`: the login Run entry writes
+    `"<exe>" --background`, and existing pre-flag entries are migrated on host
+    startup without touching registrations that point elsewhere.
+- Verification:
+  - `cargo fmt --all`, `cargo clippy --workspace --all-targets
+    --no-default-features -- -D warnings`, and `cargo test --workspace
+    --no-default-features` pass (17 tauri + 294 lib + supporting suites).
+  - Live smoke on `target/debug/VolumeControl.exe`: no-arg launch shows a
+    visible `Volume Mixer` window; `--background` stays windowless; a second
+    no-arg launch exits, the primary stays alive, and the primary then shows the
+    mixer.
+  - Live smoke: a pre-flag Run value was rewritten to include `--background`
+    and the scratch registry value removed afterwards.
+  - `winget validate --manifest .../0.1.8` passed.
+
 ## Session 122 (2026-10-18) - Address v0.1.8 release review feedback
 
 - Goal: repair selected review defects in the v0.1.8 landing page and Settings update card.

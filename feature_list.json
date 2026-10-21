@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-18T19:42",
+  "last_updated": "2026-10-21T19:58",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -1545,6 +1545,28 @@
         "Session 110 (2026-10-17, impact): scripts/format-lint.sh runs sh scripts/check-records.sh --staged, so the defect blocked the WSL Linux gate itself, not just ad-hoc guard runs."
       ],
       "notes": "Engaged only when git rev-parse --git-dir already fails, so ordinary checkouts and POSIX CI keep the ambient git environment; the conversion paths are wslpath (WSL) then cygpath (MSYS), matching scripts/test-release-workflow.sh."
+    },
+    {
+      "id": "vol-103",
+      "priority": 103,
+      "area": "windows-host",
+      "title": "Desktop icon launch opens the mixer (foreground and already-running cases)",
+      "user_visible_behavior": "Double-clicking the VolumeControl desktop/Start menu shortcut opens the Volume Mixer instead of leaving only an overflow tray icon. If VolumeControl is already running, the existing instance shows the mixer and the new process exits; the login auto-start entry stays tray-only via --background.",
+      "status": "passing",
+      "verification": [
+        "cargo check --workspace --all-targets --no-default-features and cargo clippy --workspace --all-targets --no-default-features -- -D warnings pass.",
+        "cargo test --workspace --no-default-features passes (17 tauri + 294 lib + supporting suites, including the new startup_command_appends_background_flag test).",
+        "Live smoke (target/debug/VolumeControl.exe, Windows 10): no-argument launch leaves the process alive with a visible 'Volume Mixer' Tauri window.",
+        "Live smoke (already-running handoff): --background launch produces no visible window; a second no-argument launch exits, the primary stays alive, and the primary then exposes a visible 'Volume Mixer' window.",
+        "Live smoke (autostart migration): a pre-flag Run value '\"C:\\...\\VolumeControl.exe\"' is rewritten to '\"C:\\...\\VolumeControl.exe\" --background' on host startup; the scratch value was removed afterwards."
+      ],
+      "evidence": [
+        "Session 123 (2026-10-21): reproduced the report on the installed v0.1.8 build - the desktop shortcut launched C:\\Users\\Thanh\\AppData\\Local\\VolumeControl\\VolumeControl.exe (no arguments) and the process stayed alive with an empty MainWindowTitle, because the host is tray-resident and the tray icon sits in the overflow flyout.",
+        "Root cause on Windows is two-fold: the mutex single-instance guard exited a second launch silently (no IPC), and a fresh launch opened no surface at all.",
+        "Fix: user launches open SurfaceId::Mixer after state is managed; the login Run entry passes --background and main.rs routes that flag to the host instead of the CLI; the primary creates a named auto-reset event (Local\\VolumeControl.ShowMixer) that a second launch signals before exiting, and the 20 ms fast poll calls AppAction::ShowSurface(Mixer) under the core lock.",
+        "Winget continuation (same session): microsoft/winget-pkgs PR #454508 was updated from 0.1.7 to 0.1.8 (fork branch dt418.VolumeControl-0.1.5, commit 8d38efec0) with the v0.1.8 installer URL and SHA-256 618C5BF93FCCEF59A91B013939A5628F82CCA93688399569330EBF454306B0BB; winget validate reports 'Manifest validation succeeded.'"
+      ],
+      "notes": "The named event is Windows-only; macOS/Linux still rely on their tray/hotkey surfaces. Old installed builds keep the old behavior until the next release ships this change."
     }
   ]
 }
