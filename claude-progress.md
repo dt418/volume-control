@@ -40,6 +40,7 @@
 
 - Task 7 (2026-10-21): pre-fix 98d206a release binary failed as expected with Background launch showed the Volume Mixer after three PASS lines; current release binary produced five PASS lines. cargo fmt --all --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features (360 passed), and sh scripts/check-tauri-deadlock.sh passed.
 - Task 7 review fix (2026-10-21): gate posts WM_CLOSE and proves the primary remains alive while the mixer becomes absent before a second foreground relaunch; every secondary process must exit 0. Fixed release binary passed five assertions; pre-fix 98d206a still failed duplicate-background after three PASS lines; cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed.
+- Task 8 release readiness (2026-10-21): PR #67 is OPEN/CLEAN at `ddc79a1`, 16 commits ahead; no `v0.1.9` release exists. PR #454508 currently references 0.1.8. Release actions await explicit approval; `scripts/validate-winget-manifest.sh` is missing and blocks required script validation. Full command sequence and live-state evidence: `.superpowers/sdd/2026-10-21-desktop-launch-handoff-hardening/task-8-report.md`.
 
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
 
