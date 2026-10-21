@@ -19,6 +19,7 @@
   frontend run build` passed.
 - Task 3 review fix (2026-10-21): Windows-gated fast_handle removes non-Windows unused-variable warning; cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed; show_mixer_event passed 1 test; cargo test --workspace --no-default-features passed 360 tests.
 - Task 7 (2026-10-21): pre-fix 98d206a release binary failed as expected with Background launch showed the Volume Mixer after three PASS lines; current release binary produced five PASS lines. cargo fmt --all --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features (360 passed), and sh scripts/check-tauri-deadlock.sh passed.
+- Task 7 review fix (2026-10-21): gate posts WM_CLOSE and proves the primary remains alive while the mixer becomes absent before a second foreground relaunch; every secondary process must exit 0. Fixed release binary passed five assertions; pre-fix 98d206a still failed duplicate-background after three PASS lines; cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed.
 
 
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon

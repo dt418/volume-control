@@ -77,20 +77,37 @@ function Wait-NoMixer([Diagnostics.Process]$Process, [int]$TimeoutMs) {
     } while ([DateTime]::UtcNow -lt $deadline)
 }
 
+function Wait-MixerClosed([Diagnostics.Process]$Process, [int]$TimeoutMs) {
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
+    do {
+        if ($Process.HasExited) { throw "Primary process exited while closing the mixer with code $($Process.ExitCode)." }
+        if ((Get-MixerWindow $Process.Id) -eq [IntPtr]::Zero) { return }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "Visible Volume Mixer did not close within $TimeoutMs ms."
+}
+
+
 try {
     Get-Process VolumeControl -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -eq $binaryPath } |
         Stop-Process -Force
 
     $primary = Start-Host
-    [void](Wait-MixerWindow $primary ($TimeoutSeconds * 1000))
+    $mixer = Wait-MixerWindow $primary ($TimeoutSeconds * 1000)
     Write-Host 'PASS foreground launch opens the mixer'
+
+    if (-not [Win32]::PostMessage($mixer, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)) {
+        throw 'Failed to close the Volume Mixer.'
+    }
+    Wait-MixerClosed $primary 5000
 
     $second = Start-Host
     if (-not $second.WaitForExit(5000)) { throw 'Second foreground launch did not exit.' }
+    if ($second.ExitCode -ne 0) { throw "Second foreground launch exited with code $($second.ExitCode)." }
     if ($primary.HasExited) { throw 'Primary exited after the second launch.' }
     [void](Wait-MixerWindow $primary 5000)
-    Write-Host 'PASS second foreground launch keeps the primary and the mixer'
+    Write-Host 'PASS second foreground launch keeps the primary and reopens the mixer'
 
     $primary | Stop-Process -Force
     $primary.WaitForExit(5000) | Out-Null
@@ -101,10 +118,13 @@ try {
 
     $backgroundSecond = Start-Host @('--background')
     if (-not $backgroundSecond.WaitForExit(5000)) { throw 'Second background launch did not exit.' }
+    if ($backgroundSecond.ExitCode -ne 0) { throw "Second background launch exited with code $($backgroundSecond.ExitCode)." }
     Wait-NoMixer $background 3000
     Write-Host 'PASS duplicate background launch stays windowless'
 
     $foreground = Start-Host
+    if (-not $foreground.WaitForExit(5000)) { throw 'Foreground wake-up launch did not exit.' }
+    if ($foreground.ExitCode -ne 0) { throw "Foreground wake-up launch exited with code $($foreground.ExitCode)." }
     [void](Wait-MixerWindow $background ($TimeoutSeconds * 1000))
     Write-Host 'PASS foreground launch wakes a background primary'
 } finally {
