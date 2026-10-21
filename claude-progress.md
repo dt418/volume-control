@@ -10,6 +10,12 @@
 - Verification: Task 1 (2026-10-21): `cargo test -p volumectl --lib autostart`
   passed 9 tests; `cargo check -p volumecontrol-tauri` passed; `cargo test
   --workspace --no-default-features` passed 358 tests.
+- Verification: Task 5 (2026-10-21): `cargo fmt --all --check`, `git diff
+  --check`, `cargo clippy --workspace --all-targets --no-default-features -- -D
+  warnings`, `cargo test --workspace --no-default-features` (358 tests), `bash
+  scripts/check-tauri-deadlock.sh`, NSIS build, and silent-update runtime check
+  passed; `bash scripts/test-release-workflow.sh` NSIS contract passed but
+  retains its unrelated product-page contract failure.
 
 
 ## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon

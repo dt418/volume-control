@@ -23,7 +23,8 @@
       "user_visible_behavior": "Foreground launches always open the mixer, background launches stay tray-only, installer updates replace a running instance, and the 0.1.9 release cannot be tagged with mismatched version fields.",
       "status": "in_progress",
       "verification": [
-        "Task 1 (2026-10-21): cargo test -p volumectl --lib autostart passed 9 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 358 tests."
+        "Task 1 (2026-10-21): cargo test -p volumectl --lib autostart passed 9 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 358 tests.",
+        "Task 5 (2026-10-21): `cargo fmt --all --check`, `git diff --check`, `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`, `cargo test --workspace --no-default-features` (358 tests), `bash scripts/check-tauri-deadlock.sh`, NSIS build, and silent-update runtime check passed; `bash scripts/test-release-workflow.sh` NSIS contract passed but retains its unrelated product-page contract failure."
       ],
       "evidence": [
         "Session 124: fixes target the launch-mode, migration, core-lock, stale-close, NSIS, and version-drift findings from Session 123."
