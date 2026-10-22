@@ -23,6 +23,10 @@
 - Pending: the upstream PR remains open and the package is not in the winget
   catalog; the CI schedule activates only after this commit lands on main.
   Record publication only after `winget show` and a catalog install succeed.
+- Schedule update: the CI watcher cron is now every 3 hours
+  (`0 */3 * * *`); `on.schedule` is parsed statically, so secrets/variables
+  cannot configure it. `workflow_dispatch` remains available for immediate
+  checks.
 
 ## Session 124 (2026-10-21) - Harden the desktop launch handoff for 0.1.9
 

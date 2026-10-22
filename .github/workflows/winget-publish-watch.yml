@@ -10,8 +10,11 @@
 name: Winget publish watch
 
 on:
+  # GitHub parses `on.schedule` statically; secrets and repository variables
+  # cannot change this cron expression. Edit the literal value here, or use
+  # workflow_dispatch for an immediate check.
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 */3 * * *"
   workflow_dispatch:
 
 permissions:

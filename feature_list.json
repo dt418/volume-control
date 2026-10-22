@@ -30,7 +30,7 @@
         "Review fixes verified: failed `gh api` output is discarded before the unauthenticated fallback; SandboxTest maps only a disposable temp directory and requires PowerShell 7 for authenticated runs; the merge checker uses an exact-version `winget show` instead of parsing a localized label."
       ],
       "evidence": [
-        "Session 125 (2026-10-22): added the mirrored `winget-publish` skill, manifest/shims/status helpers, scheduled validation and merge watchers, the 15-minute GitHub Actions watcher, the `.gitignore` skill exceptions, and the compressed `CLAUDE.md` guidance. Pre-push review found and fixed the API fallback, Sandbox host-write, PowerShell 7, localized-output, and documentation/records issues."
+        "Session 125 (2026-10-22): added the mirrored `winget-publish` skill, manifest/shims/status helpers, scheduled validation and merge watchers, the 3-hour GitHub Actions watcher (static cron; manual dispatch remains available), the `.gitignore` skill exceptions, and the compressed `CLAUDE.md` guidance. Pre-push review found and fixed the API fallback, Sandbox host-write, PowerShell 7, localized-output, and documentation/records issues."
       ],
       "notes": "Pinned to PR #454508 / 0.1.9. CI is not active until this commit lands on main; upstream moderation and catalog publication are still pending. The publication result must be appended only after `winget show` and a catalog-based install succeed."
     },

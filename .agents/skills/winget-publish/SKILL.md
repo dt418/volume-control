@@ -234,11 +234,12 @@ Before posting any ping, check the PR comments for the `winget-review-ping`
 marker and do not add a duplicate.
 
 For a machine-independent merge check, the repo's
-`.github/workflows/winget-publish-watch.yml` runs every 15 minutes, confirms
-the upstream PR is merged and the versioned manifest exists on winget-pkgs
-master, then disables its own schedule. CI cannot approve or merge the PR; the
-local `VolumeControl-WingetMergeWatch` task still verifies the Windows client
-catalog with `winget show`.
+`.github/workflows/winget-publish-watch.yml` runs every 3 hours (the cron
+expression is static; secrets and repository variables cannot change
+`on.schedule`), confirms the upstream PR is merged and the versioned manifest
+exists on winget-pkgs master, then disables its own schedule. CI cannot
+approve or merge the PR; the local `VolumeControl-WingetMergeWatch` task still
+verifies the Windows client catalog with `winget show`.
 
 The GitHub App reports validation through PR labels and comments. Do not rely
 on `gh pr checks` alone; its check-run list may only show CLA while the
