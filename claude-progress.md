@@ -1,5 +1,39 @@
 # Progress Log
 
+## Session 125 (2026-10-22) - Winget publication automation and pre-push review
+
+- Goal: finish the 0.1.9 winget submission workflow with local helpers, durable
+  watchers, and a machine-independent CI check; review the change set before
+  pushing.
+- Landed: mirrored `winget-publish` skill; manifest validate/show/install and
+  user shims; `check-winget-validation.ps1` and its 5-minute task;
+  `check-winget-merge.ps1` and its 10-minute task; status display; Windows
+  Sandbox wrapper; `.github/workflows/winget-publish-watch.yml`; compressed
+  `CLAUDE.md`; `.gitignore` exceptions.
+- Verification: PowerShell 5.1 parser accepted all nine new scripts;
+  validation checker returned green for PR #454508; merge checker returned
+  pending with expected version 0.1.9; `winget validate --manifest` succeeded;
+  workflow YAML parsed and the workflow-warning-auditor reported 0 findings.
+- Review: three-domain pre-push review found no unfixed P1 after corrections:
+  failed `gh api` stdout no longer contaminates the fallback; SandboxTest no
+  longer maps the repository writable and requires `pwsh` for authenticated
+  runs; the merge checker queries the exact version instead of parsing a
+  localized label; skill paths/records timing and the Linux privilege boundary
+  were corrected.
+  - Subagent review pass (2026-10-23): isolated `gh` stderr into temp files
+    in `check-winget-merge.ps1` and `check-winget-validation.ps1` to prevent
+    JSON parsing failures; handled case-insensitive `[Vv]ersion` in
+    `winget-publish-watch.yml`; added `-NonInteractive -WindowStyle Hidden`
+    to scheduled tasks in `install-winget-merge-task.ps1` and
+    `install-winget-validation-task.ps1`.
+- Pending: the upstream PR remains open and the package is not in the winget
+  catalog; the CI schedule activates only after this commit lands on main.
+  Record publication only after `winget show` and a catalog install succeed.
+- Schedule update: the CI watcher cron is now every 3 hours
+  (`0 */3 * * *`); `on.schedule` is parsed statically, so secrets/variables
+  cannot configure it. `workflow_dispatch` remains available for immediate
+  checks.
+
 ## Session 124 (2026-10-21) - Harden the desktop launch handoff for 0.1.9
 
 - Goal: eliminate the duplicate-background popup, first-login popup, core-lock
