@@ -51,6 +51,10 @@ export function MixerSurface() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     void listen<void>("close_mixer_request", () => {
+      // A close event can be queued while the window is losing focus and be
+      // delivered after a second launch has reopened it. Only close if the
+      // window is still unfocused.
+      if (document.hasFocus()) return;
       void invoke<void>("close_surface", { surface: "window-mixer" }).catch(() => {});
     }).then((u) => {
       unlisten = u;

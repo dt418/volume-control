@@ -16,7 +16,7 @@ describe("UpdateCard", () => {
   it("shows package version before any update check", () => {
     render(<UpdateCard />);
 
-    expect(screen.getByText("v0.1.8")).toBeInTheDocument();
+    expect(screen.getByText("v0.1.9")).toBeInTheDocument();
   });
 
   it("renders check for updates button", () => {

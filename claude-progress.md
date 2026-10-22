@@ -1,5 +1,87 @@
 # Progress Log
 
+## Session 124 (2026-10-21) - Harden the desktop launch handoff for 0.1.9
+
+- Goal: eliminate the duplicate-background popup, first-login popup, core-lock
+  stall, stale mixer close, version-skew update, and tag/version drift found in
+  Session 123.
+- Plan: `docs/superpowers/plans/2026-10-21-desktop-launch-handoff-hardening.md`.
+- Evidence: filled task-by-task as each commit lands.
+- Verification: Task 1 (2026-10-21): `cargo test -p volumectl --lib autostart`
+  passed 9 tests; `cargo check -p volumecontrol-tauri` passed; `cargo test
+  --workspace --no-default-features` passed 358 tests.
+- Task 2 (2026-10-21): migration RED failed as expected (unresolved should_migrate); cargo test -p volumectl --lib autostart passed 10 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 359 tests.
+- Task 3 (2026-10-21): show_mixer_event transport lock passed before and after the lock-order move (1 passed, 17 filtered); cargo test --workspace --no-default-features passed 360 tests.
+
+
+- Verification: Task 4 (2026-10-21): `npm --prefix frontend test -- MixerSurface`
+  passed 18 tests; `npm --prefix frontend test` passed 110 tests; `npm --prefix
+  frontend run build` passed.
+- Task 3 review fix (2026-10-21): Windows-gated fast_handle removes non-Windows unused-variable warning; cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed; show_mixer_event passed 1 test; cargo test --workspace --no-default-features passed 360 tests.
+
+
+- Verification: Task 5 (2026-10-21): `cargo fmt --all --check`, `git diff
+  --check`, `cargo clippy --workspace --all-targets --no-default-features -- -D
+  warnings`, `cargo test --workspace --no-default-features` (358 tests), `bash
+  scripts/check-tauri-deadlock.sh`, NSIS build, and silent-update runtime check
+  passed; `bash scripts/test-release-workflow.sh` NSIS contract passed but
+  retains its unrelated product-page contract failure.
+- Verification: Task 6 (2026-10-21): cargo check, fmt, diff, clippy, and cargo
+  test (360 tests) passed; check-version-sync accepted v0.1.9 and rejected
+  v0.1.8 plus unprefixed 0.1.9; release-workflow version-sync assertions passed,
+  while the pre-existing product-page command contract remained FAIL.
+- Verification: Task 6 review fix (2026-10-21): version sync now requires
+  exactly one frontend package-lock top-level version and one
+  packages[""].version; matching and mismatch checks passed, nested-lockfile
+  drift regression passed, fmt/diff/clippy passed, and only the pre-existing
+  product-page contract remained FAIL.
+
+
+
+- Task 7 (2026-10-21): pre-fix 98d206a release binary failed as expected with Background launch showed the Volume Mixer after three PASS lines; current release binary produced five PASS lines. cargo fmt --all --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features (360 passed), and sh scripts/check-tauri-deadlock.sh passed.
+- Task 7 review fix (2026-10-21): gate posts WM_CLOSE and proves the primary remains alive while the mixer becomes absent before a second foreground relaunch; every secondary process must exit 0. Fixed release binary passed five assertions; pre-fix 98d206a still failed duplicate-background after three PASS lines; cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed.
+- Task 8 release readiness (2026-10-21): PR #67 is OPEN/CLEAN at `ddc79a1`, 16 commits ahead; no `v0.1.9` release exists. PR #454508 currently references 0.1.8. Release actions await explicit approval; `scripts/validate-winget-manifest.sh` is missing and blocks required script validation. Full command sequence and live-state evidence: `.superpowers/sdd/2026-10-21-desktop-launch-handoff-hardening/task-8-report.md`.
+
+## Session 123 (2026-10-21) - Publish v0.1.8 to winget and fix the dead desktop icon
+
+- Goal: continue the pending winget submission to the current release and repair
+  the reported Windows bug where clicking the desktop shortcut did nothing.
+- Winget:
+  - Downloaded `VolumeControl_0.1.8_x64-setup.exe`, confirmed SHA-256
+    `618C5BF93FCCEF59A91B013939A5628F82CCA93688399569330EBF454306B0BB` against
+    the release `SHA256SUMS.txt`, generated the 1.12.0 manifest trio for `0.1.8`,
+    and `winget validate` reported `Manifest validation succeeded.`
+  - Updated `microsoft/winget-pkgs` PR #454508 (fork branch
+    `dt418.VolumeControl-0.1.5`, commit `8d38efec0`) from 0.1.7 to 0.1.8 and
+    retitled the PR; the repo `winget/` tree now tracks 0.1.8 instead of 0.1.7.
+- Desktop icon:
+  - Reproduced on the installed v0.1.8 build: the shortcut targets
+    `%LOCALAPPDATA%\VolumeControl\VolumeControl.exe` with no arguments; the
+    process stayed alive with no visible window (tray-resident, icon in the
+    overflow flyout), and a second launch exited silently via the mutex guard.
+  - `src-tauri/src/lib.rs`: a user launch now opens `SurfaceId::Mixer` after
+    state is managed; `VOLUMECTL_VERIFY_SURFACE` still owns the E2E choice.
+  - `src-tauri/src/main.rs`: `--background` routes to the host instead of the
+    one-shot CLI.
+  - `src-tauri/src/native_win32.rs`: the primary instance creates a named
+    auto-reset event (`Local\VolumeControl.ShowMixer`); a second launch signals
+    it before exiting, and the 20 ms poll calls `ShowSurface(Mixer)` under the
+    core lock.
+  - `crates/volumectl/src/autostart.rs`: the login Run entry writes
+    `"<exe>" --background`, and existing pre-flag entries are migrated on host
+    startup without touching registrations that point elsewhere.
+- Verification:
+  - `cargo fmt --all`, `cargo clippy --workspace --all-targets
+    --no-default-features -- -D warnings`, and `cargo test --workspace
+    --no-default-features` pass (17 tauri + 294 lib + supporting suites).
+  - Live smoke on `target/debug/VolumeControl.exe`: no-arg launch shows a
+    visible `Volume Mixer` window; `--background` stays windowless; a second
+    no-arg launch exits, the primary stays alive, and the primary then shows the
+    mixer.
+  - Live smoke: a pre-flag Run value was rewritten to include `--background`
+    and the scratch registry value removed afterwards.
+  - `winget validate --manifest .../0.1.8` passed.
+
 ## Session 122 (2026-10-18) - Address v0.1.8 release review feedback
 
 - Goal: repair selected review defects in the v0.1.8 landing page and Settings update card.
@@ -4060,3 +4142,5 @@ fn get_window_pid_x11() -> Option<u32> {
   - `bash scripts/test-install-unix.sh`: passed all 22 checks.
   - `bash scripts/test-release-workflow.sh`: passed all 44 contract checks.
   - `node scripts/test-verify-installer-rea.mjs` and `bash scripts/test-winget-deploy.sh`: passed.
+- Verification: `frontend/src/settings/UpdateCard.test.tsx` asserts `v0.1.9`; frontend suite passes after the 0.1.9 bump.
+- Verification: Task 6/7 follow-up (2026-10-22): `scripts/check-version-sync.sh` now checks `Cargo.lock` app package versions and runs on Bash 3.2 (no `mapfile`); drift fixtures for both packages fail closed. `scripts/test-release-workflow.sh` passes 52/52 contract checks, including the repaired product-page contract for the download -> SHA-256 -> local-run snippets.

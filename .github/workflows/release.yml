@@ -23,6 +23,7 @@ jobs:
     outputs:
       release_tag: ${{ steps.release-tag.outputs.release_tag }}
     steps:
+      - uses: actions/checkout@v7
       - name: Resolve and validate release tag
         id: release-tag
         shell: bash
@@ -73,6 +74,12 @@ jobs:
             exit 1
           fi
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+      - name: Verify tag matches the app version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release-tag.outputs.release_tag }}
+        run: bash scripts/check-version-sync.sh "$RELEASE_TAG"
+
 
   validate:
     name: Validate desktop artifacts

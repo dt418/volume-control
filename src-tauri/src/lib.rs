@@ -236,6 +236,9 @@ pub fn run() -> tauri::Result<()> {
             }
             startup_mark!("setup begin");
 
+            let args = std::env::args().skip(1).collect::<Vec<_>>();
+            let mut background_launch = volumectl_lib::autostart::is_background_launch(&args);
+
             // Prevent two instances (mirrors the legacy host's named-mutex
             // guard: a second instance would double-apply hotkeys/wheel and
             // create a second tray icon). The check runs before any native
@@ -244,7 +247,7 @@ pub fn run() -> tauri::Result<()> {
             let debug_e2e_instance = cfg!(debug_assertions)
                 && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
             #[cfg(target_os = "windows")]
-            if !debug_e2e_instance && !native_win32::ensure_single_instance() {
+            if !debug_e2e_instance && !native_win32::ensure_single_instance(!background_launch) {
                 log::warn!("another VolumeControl instance is already running");
                 std::process::exit(0);
             }
@@ -256,6 +259,13 @@ pub fn run() -> tauri::Result<()> {
             // Loaded before any surface so native trays build localized menus.
             let (config, config_notice) = volumectl_lib::config::load_with_notice();
             startup_mark!("config loaded");
+
+            // Older autostart entries lack `--background`; without this an
+            // upgraded user gets the mixer popping up at every sign-in.
+            match volumectl_lib::autostart::ensure_background_flag() {
+                Ok(migrated) => background_launch |= migrated,
+                Err(error) => log::warn!("could not refresh the auto-start command: {error}"),
+            }
 
             // Tauri-managed tray (macOS/Linux only). Creation failure is
             // non-fatal: keep the host alive with the webview surfaces.
@@ -286,7 +296,7 @@ pub fn run() -> tauri::Result<()> {
                 }
             };
             let modifier = config.modifier;
-            let sink = Arc::new(TauriSink::new(handle));
+            let sink = Arc::new(TauriSink::new(handle.clone()));
             let core = AppCore::new_with_notice(audio, config, modifier, sink, config_notice)
                 .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             startup_mark!("audio + core");
@@ -296,6 +306,17 @@ pub fn run() -> tauri::Result<()> {
             let shared = Arc::new(Mutex::new(core));
             app.manage(shared.clone());
             startup_mark!("state managed");
+
+            // A user launch (desktop/tray shortcut, Start menu, winget
+            // `winget install` completion) must show something: the tray icon
+            // alone sits in the overflow flyout, so clicking the icon looked
+            // dead. The login autostart entry passes `--background` and stays
+            // tray-only. The E2E verify marker owns its own surface choice.
+            if !background_launch && std::env::var("VOLUMECTL_VERIFY_SURFACE").is_err() {
+                if let Err(error) = app.state::<WindowManager>().open(SurfaceId::Mixer) {
+                    log::warn!("could not open the mixer on launch: {error}");
+                }
+            }
 
             // Diagnostic verification opens through the same WindowManager
             // path as production, but only after every command dependency is
@@ -318,12 +339,30 @@ pub fn run() -> tauri::Result<()> {
             // wheel-bridge channel into AppCore.apply_hotkey.
             let fast_shared = shared.clone();
             #[cfg(target_os = "windows")]
+            let fast_handle = handle.clone();
+            #[cfg(target_os = "windows")]
             let fast_native = native.clone();
             std::thread::spawn(move || loop {
+                // A second launch must never wait for the core mutex: a sync
+                // Tauri command on the main thread can hold it while the
+                // window manager waits for the main thread. Dispatch the
+                // surface request first, with no core lock held.
+                #[cfg(target_os = "windows")]
+                if native_win32::take_show_mixer_request() {
+                    match fast_handle.try_state::<WindowManager>() {
+                        Some(manager) => {
+                            if let Err(error) = manager.open(SurfaceId::Mixer) {
+                                log::warn!("show-mixer request failed: {error}");
+                            }
+                        }
+                        None => log::warn!(
+                            "show-mixer request arrived before the window manager was managed"
+                        ),
+                    }
+                }
                 // Never queue an IPC command behind a poll: when a command
                 // holds the core (volume slider, bootstrap, tray action),
-                // skip this cycle instead of blocking. Commands are the
-                // interactive path — polls are best-effort by design.
+                // skip this cycle instead of blocking.
                 let Ok(mut core) = fast_shared.try_lock() else {
                     std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
                     continue;

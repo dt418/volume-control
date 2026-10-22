@@ -4,6 +4,23 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-10-21
+
+### Fixed
+
+- Clicking the desktop or Start menu icon now opens the mixer. Previously the
+  app started tray-only (the icon lives in the overflow flyout), so a launch
+  looked like nothing happened.
+- Launching VolumeControl while it is already running now asks the existing
+  instance to show the mixer instead of the second process exiting silently.
+- The login auto-start entry launches tray-only (`--background`) and is
+  migrated automatically for users whose existing Run entry predates the flag.
+- The desktop/Start menu shortcut opens the mixer, including when another
+  VolumeControl process is already running.
+- Background launches (`--background`, including migrated login entries) no
+  longer open a surface.
+- Installer updates stop the running instance before replacing its executable.
+
 ## [0.1.8] - 2026-10-18
 
 ### Added

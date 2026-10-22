@@ -18,6 +18,35 @@ pub struct AutostartStatus {
     pub command: Option<String>,
 }
 
+/// Host launch mode used by the login autostart entry: start tray-resident
+/// without opening a surface. A user launch (desktop/tray shortcut) has no
+/// argument and opens the mixer, so clicking the icon never looks dead.
+pub const BACKGROUND_FLAG: &str = "--background";
+
+/// True when any host argument requests the tray-only launch mode.
+pub fn is_background_launch(args: &[String]) -> bool {
+    args.iter().any(|arg| arg.as_str() == BACKGROUND_FLAG)
+}
+
+/// True when the argument list is a host launch rather than a CLI verb.
+/// An empty list is a foreground launch; only background-flag tokens are
+/// treated as host arguments, so `--background foo` stays a CLI invocation.
+pub fn is_host_launch(args: &[String]) -> bool {
+    args.is_empty() || args.iter().all(|arg| arg.as_str() == BACKGROUND_FLAG)
+}
+
+/// The Run-key command for the login entry, with the background flag.
+pub fn startup_command(executable: &Path) -> String {
+    format!("{} {BACKGROUND_FLAG}", quote_command_path(executable))
+}
+
+/// True when a Run-key command already carries the background launch flag.
+pub fn has_background_flag(command: &str) -> bool {
+    command
+        .split_whitespace()
+        .any(|token| token == BACKGROUND_FLAG)
+}
+
 /// Quote one executable path as a standalone Windows command-line argument.
 ///
 /// This follows the Windows command-line escaping rules: embedded quotes are
@@ -67,7 +96,7 @@ pub fn set_enabled(_enabled: bool) -> Result<AutostartStatus, String> {
 
 #[cfg(windows)]
 mod windows_registry {
-    use super::{quote_command_path, AutostartStatus};
+    use super::{has_background_flag, startup_command, AutostartStatus};
     use std::{path::Path, ptr};
     use windows_sys::Win32::{
         Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS},
@@ -209,6 +238,10 @@ mod windows_registry {
             .unwrap_or(false)
     }
 
+    fn should_migrate(command: &str, executable: &Path) -> bool {
+        !has_background_flag(command) && command_matches_executable(command, executable)
+    }
+
     pub(super) fn status() -> Result<AutostartStatus, String> {
         let Some(key) = open_run_key(KEY_READ)? else {
             return Ok(AutostartStatus {
@@ -249,7 +282,7 @@ mod windows_registry {
         if enabled {
             let executable = std::env::current_exe()
                 .map_err(|error| format!("could not determine current executable: {error}"))?;
-            let command = quote_command_path(&executable);
+            let command = startup_command(&executable);
             let key = open_or_create_run_key()?;
             let value_name = wide(RUN_VALUE);
             let value = wide(&command);
@@ -277,9 +310,30 @@ mod windows_registry {
         status()
     }
 
+    /// Rewrite an existing login entry that predates the background flag so
+    /// an upgraded user does not get the mixer popping up at every sign-in.
+    /// Returns `true` only when this launch rewrote the value, which the host
+    /// uses to keep the current login launch tray-only.
+    pub(super) fn ensure_background_flag() -> Result<bool, String> {
+        let Some(key) = open_run_key(KEY_READ)? else {
+            return Ok(false);
+        };
+        let Some(command) = read_run_value(&key)? else {
+            return Ok(false);
+        };
+        drop(key);
+        let executable = std::env::current_exe()
+            .map_err(|error| format!("could not determine current executable: {error}"))?;
+        if !should_migrate(&command, &executable) {
+            return Ok(false);
+        }
+        set_enabled(true)?;
+        Ok(true)
+    }
+
     #[cfg(test)]
     mod tests {
-        use super::{command_matches_executable, command_token};
+        use super::{command_matches_executable, command_token, should_migrate};
         use std::path::Path;
 
         #[test]
@@ -305,6 +359,17 @@ mod windows_registry {
                 Path::new(r"C:\VolumeControl.exe"),
             ));
         }
+
+        #[test]
+        fn migration_targets_only_unflagged_matching_commands() {
+            let executable = Path::new(r"C:\VolumeControl.exe");
+            assert!(should_migrate(r#""C:\VolumeControl.exe""#, executable));
+            assert!(!should_migrate(
+                r#""C:\VolumeControl.exe" --background"#,
+                executable
+            ));
+            assert!(!should_migrate(r#""C:\Other.exe""#, executable));
+        }
     }
 }
 
@@ -318,10 +383,64 @@ pub fn set_enabled(enabled: bool) -> Result<AutostartStatus, String> {
     windows_registry::set_enabled(enabled)
 }
 
+/// Ensure an existing login entry launches tray-only. Non-Windows hosts have
+/// no login registration, so this is a no-op there.
+#[cfg(windows)]
+pub fn ensure_background_flag() -> Result<bool, String> {
+    windows_registry::ensure_background_flag()
+}
+
+#[cfg(not(windows))]
+pub fn ensure_background_flag() -> Result<bool, String> {
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::quote_command_path;
+    use super::{has_background_flag, quote_command_path, startup_command};
     use std::path::Path;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn launch_mode_accepts_only_known_host_arguments() {
+        assert!(super::is_host_launch(&args(&[])));
+        assert!(super::is_host_launch(&args(&["--background"])));
+        assert!(super::is_host_launch(&args(&[
+            "--background",
+            "--background"
+        ])));
+        assert!(!super::is_host_launch(&args(&["get"])));
+        assert!(!super::is_host_launch(&args(&["--background", "get"])));
+    }
+
+    #[test]
+    fn background_launch_detects_the_flag_anywhere() {
+        assert!(!super::is_background_launch(&args(&[])));
+        assert!(super::is_background_launch(&args(&["--background"])));
+        assert!(super::is_background_launch(&args(&[
+            "--profile",
+            "--background"
+        ])));
+        assert!(!super::is_background_launch(&args(&["--background-lite"])));
+    }
+
+    #[test]
+    fn startup_command_appends_background_flag() {
+        assert_eq!(
+            startup_command(Path::new(r"C:\Program Files\VolumeControl.exe")),
+            r#""C:\Program Files\VolumeControl.exe" --background"#,
+        );
+        assert!(has_background_flag(&startup_command(Path::new(
+            r"C:\VolumeControl.exe"
+        ))));
+        assert!(!has_background_flag(r#""C:\VolumeControl.exe""#));
+        assert!(!has_background_flag(
+            r#""C:\VolumeControl.exe" --background-lite"#
+        ));
+    }
 
     #[test]
     fn quote_command_path_wraps_paths_with_spaces() {

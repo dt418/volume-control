@@ -6,7 +6,11 @@
 /// Tauri host starts (the GUI app on Windows, the hotkey+webview host on
 /// Linux/macOS). On Windows the binary is GUI-only, as before.
 fn main() -> std::process::ExitCode {
-    if std::env::args().nth(1).is_some() {
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    // `--background` is a host launch mode (the login autostart registration
+    // uses it), not a CLI verb: the host must start tray-only instead of the
+    // one-shot CLI exiting before any window can open.
+    if !volumectl_lib::autostart::is_host_launch(&args) {
         return match volumectl_lib::cli::run() {
             Ok(code) => code,
             Err(e) => {

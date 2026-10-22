@@ -5,8 +5,10 @@
 //! window; its window proc converts the payload back to a [`HotkeyAction`]
 //! and pushes it into a channel the host poll thread drains.
 
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use volumectl_lib::audio::VolumeState;
 use volumectl_lib::config::Config;
@@ -17,10 +19,12 @@ use volumectl_lib::ui::UiCapabilities;
 use volumectl_lib::wheel_win32;
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM,
+    CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WAIT_OBJECT_0, WPARAM,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows_sys::Win32::System::Threading::CreateMutexW;
+use windows_sys::Win32::System::Threading::{
+    CreateEventW, CreateMutexW, OpenEventW, SetEvent, WaitForSingleObject, EVENT_MODIFY_STATE,
+};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     keybd_event, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_MENU,
 };
@@ -54,12 +58,20 @@ pub struct NativeWin32 {
 unsafe impl Send for NativeWin32 {}
 unsafe impl Sync for NativeWin32 {}
 
+/// Named auto-reset event the primary instance waits on. A second launch
+/// (desktop icon, Start menu, winget) signals it instead of exiting silently,
+/// so the already-running tray host can reveal the mixer.
+const SHOW_MIXER_EVENT_NAME: windows_sys::core::PCWSTR =
+    windows_sys::core::w!("Local\\VolumeControl.ShowMixer");
+static SHOW_MIXER_EVENT_HANDLE: AtomicIsize = AtomicIsize::new(0);
+
 /// Prevent two app instances (VolumePro's `#SingleInstance Force`
 /// equivalent). Mirrors the legacy host's named-mutex guard verbatim.
-/// Returns `false` when another instance already holds the mutex (the caller
-/// logs the warning and exits); the mutex handle is intentionally kept for
-/// the owning instance's lifetime.
-pub fn ensure_single_instance() -> bool {
+/// Returns `false` when another instance already holds the mutex. A foreground
+/// second launch asks the running host to show the mixer; a background launch
+/// exits tray-only. The mutex handle is intentionally kept for the owning
+/// instance's lifetime.
+pub fn ensure_single_instance(show_mixer: bool) -> bool {
     unsafe {
         let h = CreateMutexW(
             std::ptr::null(),
@@ -72,9 +84,56 @@ pub fn ensure_single_instance() -> bool {
         if GetLastError() == ERROR_ALREADY_EXISTS {
             CloseHandle(h);
             log::warn!("another VolumeControl instance is already running");
+            if show_mixer {
+                request_show_mixer();
+            }
             return false;
         }
+        create_show_mixer_event();
         true
+    }
+}
+
+/// Create the event the fast poll thread watches for "show the mixer" requests.
+fn create_show_mixer_event() {
+    unsafe {
+        let event = CreateEventW(std::ptr::null(), 0, 0, SHOW_MIXER_EVENT_NAME);
+        if event == 0 {
+            log::warn!("could not create the show-mixer event; second launches will stay silent");
+            return;
+        }
+        SHOW_MIXER_EVENT_HANDLE.store(event as isize, Ordering::SeqCst);
+    }
+}
+
+/// Ask the running primary instance to reveal the mixer. The event may not be
+/// created yet while the primary is still between the mutex and the event
+/// (startup microseconds), so retry briefly instead of dropping the request.
+fn request_show_mixer() {
+    unsafe {
+        for _ in 0..100 {
+            let event = OpenEventW(EVENT_MODIFY_STATE, 0, SHOW_MIXER_EVENT_NAME);
+            if event != 0 {
+                SetEvent(event);
+                CloseHandle(event);
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        log::warn!("running instance did not expose the show-mixer event");
+    }
+}
+
+/// Consume a pending show-mixer request. Auto-reset event + zero timeout:
+/// the signal is cleared only when this returns `true`, preserving one pending
+/// request for the next poll.
+pub fn take_show_mixer_request() -> bool {
+    let handle = SHOW_MIXER_EVENT_HANDLE.load(Ordering::Acquire);
+    if handle == 0 {
+        return false;
+    }
+    unsafe {
+        WaitForSingleObject(handle as windows_sys::Win32::Foundation::HANDLE, 0) == WAIT_OBJECT_0
     }
 }
 impl NativeWin32 {
@@ -210,4 +269,24 @@ unsafe extern "system" fn wheel_wndproc(
         return 0;
     }
     DefWindowProcW(hwnd, msg, wparam, lparam)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{create_show_mixer_event, request_show_mixer, take_show_mixer_request};
+
+    #[test]
+    fn show_mixer_event_is_auto_reset() {
+        create_show_mixer_event();
+        assert!(!take_show_mixer_request(), "fresh event must be clear");
+        request_show_mixer();
+        assert!(
+            take_show_mixer_request(),
+            "signalled event must be observed"
+        );
+        assert!(
+            !take_show_mixer_request(),
+            "auto-reset event must clear after one wait"
+        );
+    }
 }
