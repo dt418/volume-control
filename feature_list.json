@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-22T00:05",
+  "last_updated": "2026-10-22T12:25",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -21,7 +21,7 @@
       "area": "windows-host",
       "title": "Harden the desktop launch handoff and release 0.1.9",
       "user_visible_behavior": "Foreground launches always open the mixer, background launches stay tray-only, installer updates replace a running instance, and the 0.1.9 release cannot be tagged with mismatched version fields.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "Task 1 (2026-10-21): cargo test -p volumectl --lib autostart passed 9 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 358 tests.",
         "Task 2 (2026-10-21): migration RED failed as expected (unresolved should_migrate); cargo test -p volumectl --lib autostart passed 10 tests; cargo check -p volumecontrol-tauri passed; cargo test --workspace --no-default-features passed 359 tests.",
@@ -35,12 +35,14 @@
         "Task 7 review fix (2026-10-21): gate posts WM_CLOSE and proves the primary remains alive while the mixer becomes absent before a second foreground relaunch; every secondary process must exit 0. Fixed release binary passed five assertions; pre-fix 98d206a still failed duplicate-background after three PASS lines; cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed.",
         "frontend/src/settings/UpdateCard.test.tsx now asserts v0.1.9, matching package.json and the 0.1.9 release.",
         "Version gate hardening (2026-10-21): `bash scripts/check-version-sync.sh v0.1.9` -> `version sync ok: 0.1.9`; rejects v0.1.8 (exit 1) and unprefixed 0.1.9 (exit 2); checker now requires exactly one frontend package-lock top-level version, one packages[\"\"].version, one Cargo.lock `volumectl` version, and one `volumecontrol-tauri` version, using Bash 3.2-safe reads with no `mapfile`; fixtures reject Cargo.lock drift for both packages and the harness verifies the checker still works with mapfile disabled.",
-        "Product-page release contract repair (2026-10-21): `bash scripts/test-release-workflow.sh` -> `All release workflow contract checks passed.` (52 ok checks, 0 failures); the page contract now asserts the implemented download -> SHA-256 verify -> local-run flow (`Invoke-WebRequest`, `Get-FileHash`, `& \"$root/Install-VolumeControl.ps1\"`), plus `curl.exe` and `winget install`, replacing the stale `[scriptblock]::Create` token removed by the v0.1.8 page rewrite."
+        "Product-page release contract repair (2026-10-21): `bash scripts/test-release-workflow.sh` -> `All release workflow contract checks passed.` (52 ok checks, 0 failures); the page contract now asserts the implemented download -> SHA-256 verify -> local-run flow (`Invoke-WebRequest`, `Get-FileHash`, `& \"$root/Install-VolumeControl.ps1\"`), plus `curl.exe` and `winget install`, replacing the stale `[scriptblock]::Create` token removed by the v0.1.8 page rewrite.",
+        "Release 0.1.9 (2026-10-22): PR #67 squash-merged to main as 7560073; annotated tag v0.1.9 pushed; release workflow run 39776165994 completed successfully with Windows, macOS, and Ubuntu validation and published all 12 assets, including `VolumeControl_0.1.9_x64-setup.exe`.",
+        "Winget 0.1.9 (2026-10-22): downloaded installer SHA-256 `EFC3ACA3DCAFF9618C81A6257C6F1281E846E5DD28FCEA5252ACB99EA11F9509` matches the release `SHA256SUMS.txt`; generated the 1.12.0 manifest trio and `winget validate --manifest` reported `Manifest validation succeeded.`; fork commit f3c811921 updates PR #454508 to 0.1.9, and the repository `winget/` tree now carries 0.1.9."
       ],
       "evidence": [
         "Session 124: fixes target the launch-mode, migration, core-lock, stale-close, NSIS, and version-drift findings from Session 123."
       ],
-      "notes": "Completes PR #67 before the 0.1.9 tag; cross-platform single-instance is deferred to 0.1.10."
+      "notes": "0.1.9 released; winget PR #454508 updated to 0.1.9 and pending upstream moderation. Cross-platform single-instance is deferred to 0.1.10."
     },
     {
       "id": "vol-102",
