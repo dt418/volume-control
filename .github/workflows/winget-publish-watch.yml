@@ -1,0 +1,117 @@
+# Durable watcher for the VolumeControl winget package submission.
+#
+# The upstream winget-pkgs PR is reviewed by moderators on their schedule. This
+# workflow is independent of any developer machine: it checks the PR, then
+# confirms that the versioned manifest exists on winget-pkgs master. Once that
+# terminal state is reached it disables its own schedule. Client-side catalog
+# propagation can lag the manifest merge; the local VolumeControl-WingetMergeWatch
+# task still verifies `winget show` on Windows.
+
+name: Winget publish watch
+
+on:
+  # GitHub parses `on.schedule` statically; secrets and repository variables
+  # cannot change this cron expression. Edit the literal value here, or use
+  # workflow_dispatch for an immediate check.
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: winget-publish-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Check merge and manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check upstream PR and manifest
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: "454508"
+        run: |
+          set -euo pipefail
+
+          # GITHUB_TOKEN is scoped to this repository. Public winget-pkgs reads
+          # normally work with it, but fall back to unauthenticated GitHub API
+          # if the token cannot read the other repository.
+          api_get() {
+            local response
+            if response="$(gh api "$1" 2>/dev/null)"; then
+              printf '%s\n' "$response"
+              return 0
+            fi
+            curl -fsSL \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'User-Agent: volume-control-winget-watch' \
+              "https://api.github.com/$1"
+          }
+
+          pr="$(api_get "repos/microsoft/winget-pkgs/pulls/${PR_NUMBER}")"
+          state="$(jq -r '.state' <<<"$pr")"
+          merged="$(jq -r 'if .merged_at then "true" else "false" end' <<<"$pr")"
+          merged_at="$(jq -r '.merged_at // ""' <<<"$pr")"
+          version="$(jq -r '.title' <<<"$pr" | sed -n 's/.*[Vv]ersion \([0-9][0-9.]*\).*/\1/p')"
+
+          if [[ -z "$version" ]]; then
+            echo "::error::Could not parse package version from PR title"
+            exit 1
+          fi
+
+          manifest=false
+          terminal=false
+          if [[ "$merged" == "true" ]]; then
+            if api_get "repos/microsoft/winget-pkgs/contents/manifests/d/dt418/VolumeControl/${version}" >/dev/null 2>&1; then
+              manifest=true
+              terminal=true
+            else
+              echo "::notice::PR merged at ${merged_at}; manifest ${version} not on master yet"
+            fi
+          elif [[ "$state" == "closed" ]]; then
+            terminal=true
+            echo "::warning::PR closed without merge"
+          else
+            echo "::notice::PR is ${state}; waiting for moderator review"
+          fi
+
+          {
+            echo "state=${state}"
+            echo "merged=${merged}"
+            echo "manifest=${manifest}"
+            echo "terminal=${terminal}"
+            echo "version=${version}"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Winget publish watch"
+            echo ""
+            echo "- PR: https://github.com/microsoft/winget-pkgs/pull/${PR_NUMBER}"
+            echo "- State: ${state}"
+            echo "- Merged: ${merged} (${merged_at:-not merged})"
+            echo "- Version: ${version}"
+            echo "- Manifest on master: ${manifest}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Disable watcher after terminal state
+        if: steps.check.outputs.terminal == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          workflow_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows" \
+            --jq '.workflows[] | select(.name == "Winget publish watch") | .id')"
+          if [[ -z "$workflow_id" ]]; then
+            echo "::warning::Could not resolve workflow id; schedule remains enabled"
+            exit 0
+          fi
+          gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_id}/disable"
+          echo "Disabled workflow ${workflow_id} after terminal state"

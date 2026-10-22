@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T02:05",
+  "last_updated": "2026-10-23T04:45",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -1680,6 +1680,25 @@
         "Winget continuation (same session): microsoft/winget-pkgs PR #454508 was updated from 0.1.7 to 0.1.8 (fork branch dt418.VolumeControl-0.1.5, commit 8d38efec0) with the v0.1.8 installer URL and SHA-256 618C5BF93FCCEF59A91B013939A5628F82CCA93688399569330EBF454306B0BB; winget validate reports 'Manifest validation succeeded.'"
       ],
       "notes": "The named event is Windows-only; macOS/Linux still rely on their tray/hotkey surfaces. Old installed builds keep the old behavior until the next release ships this change."
+    },
+    {
+      "id": "vol-105",
+      "priority": 105,
+      "area": "tooling",
+      "title": "Winget submission monitoring and publication automation",
+      "user_visible_behavior": "Developers can validate and install the local manifest, inspect cached winget PR validation status, run self-disabling validation/merge watchers, and let CI confirm the upstream PR merge and manifest publication without depending on a developer machine.",
+      "status": "in_progress",
+      "verification": [
+        "Windows PowerShell 5.1 parser accepted all nine new winget/Sandbox scripts after the review fixes.",
+        "`scripts/check-winget-validation.ps1 -StateDir <temp>` returned green for PR #454508; `scripts/check-winget-merge.ps1 -StateDir <temp>` returned pending with expectedVersion 0.1.9.",
+        "`scripts/winget-manifest.ps1 validate` reported `Manifest validation succeeded.`; `scripts/winget-manifest.ps1 path` resolved the 0.1.9 manifest directory from outside the repository.",
+        "The new workflow YAML parses and the workflow-warning-auditor reports 0 findings; the current upstream PR is open and the master manifest endpoint returns 404.",
+        "Review fixes verified: failed `gh api` output is discarded before the unauthenticated fallback; SandboxTest maps only a disposable temp directory and requires PowerShell 7 for authenticated runs; the merge checker uses an exact-version `winget show` instead of parsing a localized label; subagent review pass (2026-10-23): isolated gh CLI stderr in temp files for check-winget-merge/check-winget-validation; case-insensitive [Vv]ersion in CI workflow; added -NonInteractive -WindowStyle Hidden to background scheduled tasks."
+      ],
+      "evidence": [
+        "Session 125 (2026-10-22): added the mirrored `winget-publish` skill, manifest/shims/status helpers, scheduled validation and merge watchers, the 3-hour GitHub Actions watcher (static cron; manual dispatch remains available), the `.gitignore` skill exceptions, and the compressed `CLAUDE.md` guidance. Pre-push review found and fixed the API fallback, Sandbox host-write, PowerShell 7, localized-output, and documentation/records issues."
+      ],
+      "notes": "Pinned to PR #454508 / 0.1.9. CI is not active until this commit lands on main; upstream moderation and catalog publication are still pending. The publication result must be appended only after `winget show` and a catalog-based install succeed."
     }
   ]
 }
