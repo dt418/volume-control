@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import * as ipc from "../lib/ipc";
 import { SystemOutputRow } from "./SystemOutputRow";
@@ -28,8 +28,11 @@ describe("SystemOutputRow", () => {
   it("renders Muted instead of a percent when muted", () => {
     render(<SystemOutputRow value={55} muted={true} thresholds={thresholds} />);
     expect(screen.getByTestId("system-output-value")).toHaveTextContent("Muted");
-    // The rail pairs the diamond shape cue with a visible `Muted` label.
-    expect(within(screen.getByTestId("signal-rail")).getByText("Muted")).toBeInTheDocument();
+    // The value label and the mute control both carry the muted state.
+    expect(screen.getByRole("button", { name: "Unmute system output" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("invokes toggle_mute when the Mute button is clicked", () => {

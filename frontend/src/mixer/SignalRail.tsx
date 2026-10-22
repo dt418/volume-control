@@ -40,9 +40,9 @@ interface SignalRailProps {
 
 /**
  * Threshold-aware Signal Rail (legacy parity): a track whose fill is colored
- * by the value's band, a circle thumb normally and an outline diamond plus a
- * `Muted` label when muted — the shape carries the muted state so it never
- * relies on color alone (spec §6.3).
+ * by the value's band, a circle thumb normally and an outline diamond when
+ * muted. The diamond carries the muted state without an absolutely positioned
+ * label that would overlap the surrounding card (spec §6.3).
  */
 export function SignalRail({ value, muted, thresholds }: SignalRailProps) {
   const clamped = Math.max(0, Math.min(100, value));
@@ -68,12 +68,6 @@ export function SignalRail({ value, muted, thresholds }: SignalRailProps) {
             className="rail-muted-diamond absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-foreground bg-background/88"
             style={{ left: `${clamped}%` }}
           />
-          <span
-            className="absolute -top-0.5 -translate-x-1/2 text-[9px] font-medium uppercase tracking-wide text-foreground/80"
-            style={{ left: `${clamped}%` }}
-          >
-            Muted
-          </span>
         </>
       ) : (
         <span

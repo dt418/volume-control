@@ -5,6 +5,7 @@ import { invoke } from "../lib/ipc";
 
 interface AppSliderProps {
   sessionId: string;
+  label: string;
   value: number;
   onError: (error: string) => void;
 }
@@ -15,7 +16,7 @@ interface AppSliderProps {
  * thumb while the user is dragging. Writes fire without awaiting; failures
  * (e.g. a stale session id) surface through `onError`.
  */
-export function AppSlider({ sessionId, value, onError }: AppSliderProps) {
+export function AppSlider({ sessionId, label, value, onError }: AppSliderProps) {
   const [localVal, setLocalVal] = useState(value);
   const isDragging = useRef(false);
 
@@ -36,7 +37,7 @@ export function AppSlider({ sessionId, value, onError }: AppSliderProps) {
       min={0}
       max={100}
       step={1}
-      aria-label={`Volume for session ${sessionId}`}
+      aria-label={label}
       onPointerDown={() => (isDragging.current = true)}
       onPointerUp={() => (isDragging.current = false)}
       onValueChange={([val]) => handleChange(val)}

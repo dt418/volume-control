@@ -7,18 +7,20 @@
 //! the published Win32 headers:
 //!
 //!   IMMDeviceEnumerator → GetDefaultAudioEndpoint
-//!   IMMDevice           → Activate(IID_IAudioClient)
-//!   IAudioClient        → GetService(IID_IAudioSessionManager2)
+//!   IMMDevice           → Activate(IID_IAudioSessionManager2)
 //!   IAudioSessionManager2 → GetSessionEnumerator
 //!   IAudioSessionEnumerator → GetCount / GetSession
 //!   IAudioSessionControl  → GetState / GetDisplayName
-//!   IAudioSessionControl2 → GetProcessId
+//!   IAudioSessionControl2 → GetProcessId / GetSessionInstanceIdentifier
 //!   ISimpleAudioVolume    → Get/SetMasterVolume, Get/SetMute
 //!
-//! A session's `id` is its process id as a string (the mixer frontend treats
-//! ids as opaque). Stale ids (process no longer has a session) return `Err`
-//! per spec §9.6; the caller re-emits `state://sessions` so the UI drops the
-//! dead row. No device / no sessions / COM failure → empty list, never panic.
+//! A session's `id` is its stable COM instance identifier (falling back to the
+//! process id only when the OS refuses the identifier). PIDs alone are not
+//! unique — one process may own several sessions — and Windows can move the
+//! system-sounds session between processes, which made the old PID ids go
+//! stale mid-session. Stale ids (session ended) return `Err` per spec §9.6;
+//! the caller re-emits `state://sessions` so the UI drops the dead row. No
+//! device / no sessions / COM failure → empty list, never panic.
 
 use std::ffi::c_void;
 
@@ -39,7 +41,6 @@ type HRESULT = i32;
 
 const CLSID_MMDEVICE_ENUMERATOR: GUID = GUID::from_u128(0xBCDE0395_E52F_467C_8E3D_C4579291692E);
 const IID_IMMDEVICE_ENUMERATOR: GUID = GUID::from_u128(0xA95664D2_9614_4F35_A746_DE8DB63617E6);
-const IID_IAUDIO_CLIENT: GUID = GUID::from_u128(0x1CB9AD4C_DBFA_4C32_B178_C2F568A703B2);
 const IID_IAUDIO_SESSION_MANAGER2: GUID = GUID::from_u128(0x77AA99A0_1BD6_484F_8BC7_2C654C9A9B6F);
 const IID_IAUDIO_SESSION_CONTROL2: GUID = GUID::from_u128(0xBFB7FF88_7239_4FC9_8FA2_07C950BE9C6D);
 const IID_ISIMPLE_AUDIO_VOLUME: GUID = GUID::from_u128(0x87CE5498_68D6_44E5_9215_6DA47EF883D8);
@@ -83,35 +84,6 @@ struct IMMDeviceVtbl {
     open_property_store: unsafe extern "system" fn(*mut c_void, u32, *mut *mut c_void) -> HRESULT,
     get_id: unsafe extern "system" fn(*mut c_void, *mut *const u16) -> HRESULT,
     get_state: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
-}
-
-#[repr(C)]
-struct IAudioClientVtbl {
-    query_interface:
-        unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
-    add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
-    release: unsafe extern "system" fn(*mut c_void) -> u32,
-    initialize: unsafe extern "system" fn(
-        *mut c_void,
-        u32,
-        u32,
-        i64,
-        i64,
-        *const c_void,
-        *const GUID,
-    ) -> HRESULT,
-    get_buffer_size: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
-    get_stream_latency: unsafe extern "system" fn(*mut c_void, *mut i64) -> HRESULT,
-    get_current_padding: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
-    is_format_supported:
-        unsafe extern "system" fn(*mut c_void, *const c_void, *mut *mut c_void) -> HRESULT,
-    get_mix_format: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> HRESULT,
-    get_device_period: unsafe extern "system" fn(*mut c_void, *mut i64, *mut i64) -> HRESULT,
-    start: unsafe extern "system" fn(*mut c_void) -> HRESULT,
-    stop: unsafe extern "system" fn(*mut c_void) -> HRESULT,
-    reset: unsafe extern "system" fn(*mut c_void) -> HRESULT,
-    set_event_handle: unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
-    get_service: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
 }
 
 #[repr(C)]
@@ -206,9 +178,39 @@ unsafe fn vtbl<T>(this: *const c_void) -> &'static T {
 
 // ── Pure helpers (unit-tested; no device required) ─────────────────────────
 
-/// The mixer-facing session id: the process id as a string.
+/// The mixer-facing session id: the process id as a string. This is only a
+/// fallback when the OS refuses `GetSessionInstanceIdentifier`.
 pub fn session_id(pid: u32) -> String {
     pid.to_string()
+}
+
+/// Prefer the COM session instance identifier over the process id. Unlike a
+/// PID it stays unique when one process owns multiple sessions, and it does
+/// not change when Windows moves the system-sounds session between processes.
+pub fn resolved_session_id(instance: &str, pid: u32) -> String {
+    let instance = instance.trim();
+    if instance.is_empty() {
+        session_id(pid)
+    } else {
+        instance.to_string()
+    }
+}
+
+/// Read and free a `CoTaskMemAlloc`-owned session instance identifier.
+unsafe fn session_instance_identifier(control2: *mut c_void) -> String {
+    if control2.is_null() {
+        return String::new();
+    }
+    let mut ptr: *mut u16 = std::ptr::null_mut();
+    let hr = (vtbl::<IAudioSessionControl2Vtbl>(control2).get_session_instance_identifier)(
+        control2, &mut ptr,
+    );
+    if hr < 0 || ptr.is_null() {
+        return String::new();
+    }
+    let value = wide_to_string(ptr);
+    CoTaskMemFree(ptr as *const c_void);
+    value
 }
 
 /// Final display name for a session: prefer the OS display name, then the
@@ -253,7 +255,7 @@ impl SessionsSource for WindowsSessions {
                     target,
                     std::ptr::null(),
                 );
-                if hr != 0 {
+                if hr < 0 {
                     return Err(format!("SetMasterVolume: 0x{hr:x}"));
                 }
                 Ok(())
@@ -268,11 +270,11 @@ impl SessionsSource for WindowsSessions {
                 let sv = vtbl::<ISimpleAudioVolumeVtbl>(simple);
                 let mut muted = 0_i32;
                 let hr = (sv.get_mute)(simple, &mut muted);
-                if hr != 0 {
+                if hr < 0 {
                     return Err(format!("GetMute: 0x{hr:x}"));
                 }
                 let hr = (sv.set_mute)(simple, if muted == 0 { 1 } else { 0 }, std::ptr::null());
-                if hr != 0 {
+                if hr < 0 {
                     return Err(format!("SetMute: 0x{hr:x}"));
                 }
                 Ok(())
@@ -283,13 +285,12 @@ impl SessionsSource for WindowsSessions {
 
 // ── COM acquisition / enumeration ──────────────────────────────────────────
 
-/// Owned COM chain for one enumeration round: enumerator → device → client →
+/// Owned COM chain for one enumeration round: enumerator → device →
 /// session manager → session enumerator. Released in reverse on drop, then
 /// the COM apartment is uninitialized iff this round initialized it (STA).
 struct SessionChain {
     enumerator: *mut c_void,
     device: *mut c_void,
-    client: *mut c_void,
     manager: *mut c_void,
     sessions: *mut c_void,
     /// STA apartment guard (see `com_guard`): the Tauri main thread must stay
@@ -315,7 +316,7 @@ impl SessionChain {
                 &IID_IMMDEVICE_ENUMERATOR,
                 &mut enumerator,
             );
-            if hr != 0 {
+            if hr < 0 {
                 return Err(format!("CoCreateInstance(MMDeviceEnumerator): 0x{hr:x}"));
             }
             let mut device: *mut c_void = std::ptr::null_mut();
@@ -325,43 +326,30 @@ impl SessionChain {
                 eConsole,
                 &mut device,
             );
-            if hr != 0 {
+            if hr < 0 {
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
                 return Err(format!("GetDefaultAudioEndpoint: 0x{hr:x}"));
             }
-            let mut client: *mut c_void = std::ptr::null_mut();
+            let mut manager: *mut c_void = std::ptr::null_mut();
             let hr = (vtbl::<IMMDeviceVtbl>(device).activate)(
                 device,
-                &IID_IAUDIO_CLIENT,
+                &IID_IAUDIO_SESSION_MANAGER2,
                 CLSCTX_ALL,
                 std::ptr::null_mut(),
-                &mut client,
-            );
-            if hr != 0 {
-                (vtbl::<IMMDeviceVtbl>(device).release)(device);
-                (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                return Err(format!("Activate(IAudioClient): 0x{hr:x}"));
-            }
-            let mut manager: *mut c_void = std::ptr::null_mut();
-            let hr = (vtbl::<IAudioClientVtbl>(client).get_service)(
-                client,
-                &IID_IAUDIO_SESSION_MANAGER2,
                 &mut manager,
             );
-            if hr != 0 {
-                (vtbl::<IAudioClientVtbl>(client).release)(client);
+            if hr < 0 {
                 (vtbl::<IMMDeviceVtbl>(device).release)(device);
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                return Err(format!("GetService(IAudioSessionManager2): 0x{hr:x}"));
+                return Err(format!("Activate(IAudioSessionManager2): 0x{hr:x}"));
             }
             let mut sessions: *mut c_void = std::ptr::null_mut();
             let hr = (vtbl::<IAudioSessionManager2Vtbl>(manager).get_session_enumerator)(
                 manager,
                 &mut sessions,
             );
-            if hr != 0 {
+            if hr < 0 {
                 (vtbl::<IAudioSessionManager2Vtbl>(manager).release)(manager);
-                (vtbl::<IAudioClientVtbl>(client).release)(client);
                 (vtbl::<IMMDeviceVtbl>(device).release)(device);
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
                 return Err(format!("GetSessionEnumerator: 0x{hr:x}"));
@@ -369,7 +357,6 @@ impl SessionChain {
             Ok(Self {
                 enumerator,
                 device,
-                client,
                 manager,
                 sessions,
                 com,
@@ -386,9 +373,6 @@ impl Drop for SessionChain {
             }
             if !self.manager.is_null() {
                 (vtbl::<IAudioSessionManager2Vtbl>(self.manager).release)(self.manager);
-            }
-            if !self.client.is_null() {
-                (vtbl::<IAudioClientVtbl>(self.client).release)(self.client);
             }
             if !self.device.is_null() {
                 (vtbl::<IMMDeviceVtbl>(self.device).release)(self.device);
@@ -408,12 +392,12 @@ unsafe fn enumerate_sessions(chain: &SessionChain) -> Vec<AudioSessionInfo> {
     let mut sessions = Vec::new();
     let evt = vtbl::<IAudioSessionEnumeratorVtbl>(chain.sessions);
     let mut count: i32 = 0;
-    if (evt.get_count)(chain.sessions, &mut count) != 0 {
+    if (evt.get_count)(chain.sessions, &mut count) < 0 {
         return sessions;
     }
     for i in 0..count {
         let mut control: *mut c_void = std::ptr::null_mut();
-        if (evt.get_session)(chain.sessions, i, &mut control) != 0 {
+        if (evt.get_session)(chain.sessions, i, &mut control) < 0 {
             continue;
         }
         let cv = vtbl::<IAudioSessionControlVtbl>(control);
@@ -440,6 +424,10 @@ unsafe fn enumerate_sessions(chain: &SessionChain) -> Vec<AudioSessionInfo> {
             let _ =
                 (vtbl::<IAudioSessionControl2Vtbl>(control2).get_process_id)(control2, &mut pid);
         }
+        let instance = session_instance_identifier(control2);
+        let system = !control2.is_null()
+            && (vtbl::<IAudioSessionControl2Vtbl>(control2).is_system_sounds_session)(control2)
+                == 0;
 
         let mut pct = 0.0_f32;
         let mut muted = 0_i32;
@@ -450,12 +438,31 @@ unsafe fn enumerate_sessions(chain: &SessionChain) -> Vec<AudioSessionInfo> {
         }
 
         let process_base = process_image_base(pid).unwrap_or_default();
+        let display_name = if system {
+            None
+        } else {
+            process_image_path(pid)
+                .and_then(|path| crate::host_core::friendly_executable_name(&path))
+                .or_else(|| {
+                    (!process_base.is_empty())
+                        .then(|| crate::host_core::friendly_process_name(&process_base))
+                })
+        };
+        let name = resolved_session_name(&display, &process_base, pid);
+        let process = if process_base.is_empty() {
+            name.clone()
+        } else {
+            process_base.clone()
+        };
         sessions.push(AudioSessionInfo {
-            id: session_id(pid),
-            name: resolved_session_name(&display, &process_base, pid),
+            id: resolved_session_id(&instance, pid),
+            name,
+            process,
+            display_name,
             pct: (pct.clamp(0.0, 1.0) * 100.0).round() as u8,
             muted: muted != 0,
             active: state == AUDIO_SESSION_STATE_ACTIVE,
+            system,
         });
 
         if !simple.is_null() {
@@ -479,12 +486,12 @@ where
     let evt = vtbl::<IAudioSessionEnumeratorVtbl>(chain.sessions);
     let mut count: i32 = 0;
     let hr = (evt.get_count)(chain.sessions, &mut count);
-    if hr != 0 {
+    if hr < 0 {
         return Err(format!("GetCount: 0x{hr:x}"));
     }
     for i in 0..count {
         let mut control: *mut c_void = std::ptr::null_mut();
-        if (evt.get_session)(chain.sessions, i, &mut control) != 0 {
+        if (evt.get_session)(chain.sessions, i, &mut control) < 0 {
             continue;
         }
         let cv = vtbl::<IAudioSessionControlVtbl>(control);
@@ -498,7 +505,8 @@ where
             let mut pid: u32 = 0;
             let _ =
                 (vtbl::<IAudioSessionControl2Vtbl>(control2).get_process_id)(control2, &mut pid);
-            matched = session_id(pid) == id;
+            let instance = session_instance_identifier(control2);
+            matched = resolved_session_id(&instance, pid) == id;
         }
 
         if matched {
@@ -542,7 +550,7 @@ unsafe fn wide_to_string(ptr: *const u16) -> String {
 
 /// Lowercase base name (e.g. `spotify.exe`) of a process, for sessions whose
 /// OS display name is empty. Mirrors `host_core::foreground_process`.
-fn process_image_base(pid: u32) -> Option<String> {
+fn process_image_path(pid: u32) -> Option<String> {
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if handle == 0 {
@@ -555,8 +563,23 @@ fn process_image_base(pid: u32) -> Option<String> {
         if ok == 0 {
             return None;
         }
-        let path = String::from_utf16_lossy(&buf[..len as usize]);
-        let base = path.rsplit('\\').next().unwrap_or(&path);
-        Some(base.to_lowercase())
+        Some(String::from_utf16_lossy(&buf[..len as usize]))
+    }
+}
+
+fn process_image_base(pid: u32) -> Option<String> {
+    let path = process_image_path(pid)?;
+    let base = path.rsplit('\\').next().unwrap_or(&path);
+    Some(base.to_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolved_session_id;
+
+    #[test]
+    fn session_ids_prefer_the_instance_identifier_and_fall_back_to_pid() {
+        assert_eq!(resolved_session_id("instance-1", 42), "instance-1");
+        assert_eq!(resolved_session_id("  ", 42), "42");
     }
 }

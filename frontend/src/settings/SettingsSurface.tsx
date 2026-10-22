@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { SurfaceCloseButton } from "../components/ui/surface-close-button";
+import { asAppLabelStyle } from "../lib/appLabel";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { asLanguage, LanguageProvider, translatorFor } from "../lib/i18n";
 import { invoke, listen } from "../lib/ipc";
@@ -33,6 +35,7 @@ const SECTION_FOR_FIELD: Record<string, SettingsSection> = {
   volume_step: "General",
   volume_step_large: "General",
   overlay_duration_ms: "General",
+  app_label_style: "General",
   modifier: "Hotkeys",
   "beep.enabled": "Feedback",
   "beep.blocked_freq": "Feedback",
@@ -57,6 +60,7 @@ function hydrateConfig(config: SettingsConfig): SettingsConfig {
   return {
     ...config,
     language: asLanguage(config.language),
+    app_label_style: asAppLabelStyle(config.app_label_style),
     hotkeys: config.hotkeys ?? bindingsForModifier(config.modifier),
   };
 }
@@ -78,6 +82,7 @@ function buildPatch(draft: SettingsConfig): Record<string, unknown> {
     color_thresholds: { ...draft.color_thresholds },
     blacklist: draft.blacklist,
     language: draft.language,
+    app_label_style: draft.app_label_style,
   };
 }
 
@@ -97,7 +102,13 @@ export function SettingsSurface() {
   const [autostartDisabled, setAutostartDisabled] = useState(false);
   const [configNotice, setConfigNotice] = useState<ConfigLoadNotice | null>(null);
   const language = asLanguage(draft?.language ?? config?.language);
-  const tr = translatorFor(language);
+  const tr = useMemo(() => translatorFor(language), [language]);
+
+  useEffect(() => {
+    const title = tr("app.window.settings");
+    document.title = title;
+    void invoke<void>("set_window_title", { title }).catch(() => {});
+  }, [tr]);
 
   useEffect(() => {
     let disposed = false;
@@ -216,17 +227,10 @@ export function SettingsSurface() {
         className="flex flex-shrink-0 items-start justify-between border-b border-foreground/10 pb-2"
       >
         <div>
-          <h1 className="text-base font-semibold">VolumeControl {tr("settings.title")}</h1>
+          <h1 className="text-base font-semibold">{tr("app.window.settings")}</h1>
           <p className="text-xs text-foreground/60">{tr("settings.subtitle")}</p>
         </div>
-        <button
-          type="button"
-          aria-label={tr("common.close")}
-          onClick={cancel}
-          className="rounded-md px-2 py-1 text-lg leading-none text-foreground/60 hover:bg-foreground/5 hover:text-foreground"
-        >
-          ×
-        </button>
+        <SurfaceCloseButton label={tr("common.close")} onClick={cancel} />
       </header>
 
       <div
@@ -269,7 +273,7 @@ export function SettingsSurface() {
                 <AppearanceSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
               )}
               {activeSection === "Blacklist" && (
-                <BlacklistEditor draft={draft} setDraft={updateDraft} />
+                <BlacklistEditor draft={draft} setDraft={updateDraft} saved={config.blacklist} />
               )}
               {activeSection === "Feedback" && (
                 <FeedbackSection draft={draft} setDraft={updateDraft} errors={fieldErrors} />
@@ -293,14 +297,14 @@ export function SettingsSurface() {
             type="button"
             onClick={reset}
             disabled={!dirty || !draft}
-            className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm disabled:opacity-40"
+            className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
           >
             {tr("common.reset")}
           </button>
           <button
             type="button"
             onClick={cancel}
-            className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm"
+            className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {tr("common.cancel")}
           </button>
@@ -308,7 +312,7 @@ export function SettingsSurface() {
             type="button"
             onClick={() => void save()}
             disabled={!dirty || saving || !draft}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-40"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-40"
           >
             {tr("common.saveChanges")}
           </button>

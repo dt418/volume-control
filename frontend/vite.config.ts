@@ -9,7 +9,12 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   build: {
-    rollupOptions: {
+    // Vite 8 runs Rolldown. The plugin-timing report is informational only:
+    // the measured hook here is Vite's own build-html transform, so there is
+    // no plugin we can remove to improve it. Disable that one check to keep
+    // release logs signal-only; real warnings stay enabled.
+    rolldownOptions: {
+      checks: { pluginTimings: false },
       input: {
         root: resolve(import.meta.dirname, "index.html"),
         mixer: resolve(import.meta.dirname, "src/mixer/index.html"),

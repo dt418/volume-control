@@ -12,6 +12,7 @@ failures=0
 
 check() {
   local label="$1" actual="$2"
+  actual="${actual%$'\r'}"
   if [ "$actual" != "$version" ]; then
     echo "FAIL $label: expected $version, got ${actual:-<empty>}" >&2
     failures=$((failures + 1))

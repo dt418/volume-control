@@ -17,7 +17,7 @@ describe("Settings surface", () => {
   });
 
   it("exposes all six sections and keeps Save disabled for a clean draft", async () => {
-    await expect($(selectors.surfaceTitle("settings"))).toHaveText("VolumeControl Settings");
+    await expect($(selectors.surfaceTitle("settings"))).toHaveText("Volume Control Settings");
     await expect($(selectors.header("settings"))).toBeDisplayed();
     await expect($(selectors.content("settings"))).toBeDisplayed();
     await expect($(selectors.footer("settings"))).toBeDisplayed();

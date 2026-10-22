@@ -1,6 +1,6 @@
 [package]
 name = "volumectl"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 description = "Native multiplatform volume controller with global hotkeys and overlay"
 license = "MIT"
@@ -10,6 +10,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 ureq = { workspace = true }
 log = { workspace = true }
+env_logger = { workspace = true }
 pretty_env_logger = { workspace = true }
 global-hotkey = { workspace = true }
 libpulse-sys = "1.23.0"
@@ -47,6 +48,8 @@ gtk4-layer-shell = { version = "0.3", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true }
+base64 = "0.22"
+png = "0.17"
 tray-icon = { workspace = true }
 muda = { workspace = true }
 

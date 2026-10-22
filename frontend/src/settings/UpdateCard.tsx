@@ -2,15 +2,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { invoke, listen } from "../lib/ipc";
 import { useT } from "../lib/i18n";
+import { notifyUpdate } from "../lib/notify";
+import type { UpdateInfoPayload } from "../lib/update";
 import pkg from "../../package.json";
-
-export interface UpdateInfoPayload {
-  current_version: string;
-  latest_version?: string;
-  is_update_available: boolean;
-  release_url?: string;
-  message: string;
-}
 
 export function UpdateCard() {
   const tr = useT();
@@ -21,6 +15,7 @@ export function UpdateCard() {
     let unlisten: (() => void) | undefined;
     void listen<UpdateInfoPayload>("state://update", (payload) => {
       setUpdateInfo(payload);
+      void notifyUpdate(payload);
     }).then((fn) => {
       unlisten = fn;
     });
@@ -32,8 +27,11 @@ export function UpdateCard() {
   const handleCheck = async () => {
     setChecking(true);
     try {
-      const result = await invoke<UpdateInfoPayload>("check_for_updates");
+      const result = await invoke<UpdateInfoPayload>("check_for_updates", {
+        force: true,
+      });
       setUpdateInfo(result);
+      void notifyUpdate(result);
     } catch {
       // Fail-soft: keep UI responsive
     } finally {
@@ -81,8 +79,12 @@ export function UpdateCard() {
               <div className="mt-1 flex items-center gap-3">
                 <a
                   href={updateInfo.release_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void invoke<void>("open_release", {
+                      url: updateInfo.release_url,
+                    }).catch(() => {});
+                  }}
                   className="text-xs text-accent underline hover:text-accent/80 font-medium"
                 >
                   {tr("settings.updates.viewRelease")}

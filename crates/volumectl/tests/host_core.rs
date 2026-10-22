@@ -437,6 +437,31 @@ fn update_settings_mutates_steps_and_appearance_without_writing_disk() {
 }
 
 #[test]
+fn update_settings_mutates_app_label_style_without_writing_disk() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = core_with(sink);
+
+    core.update_settings(volumectl_lib::host_core::SettingsPatch {
+        app_label_style: Some("friendly_and_process".into()),
+        ..Default::default()
+    })
+    .expect("known app label style is accepted");
+
+    assert_eq!(
+        core.bootstrap().config.app_label_style,
+        volumectl_lib::config::AppLabelStyle::FriendlyAndProcess
+    );
+
+    let err = core
+        .update_settings(volumectl_lib::host_core::SettingsPatch {
+            app_label_style: Some("bogus".into()),
+            ..Default::default()
+        })
+        .unwrap_err();
+    assert!(err.contains("app_label_style"), "unexpected error: {err}");
+}
+
+#[test]
 fn update_settings_mutates_autostart_preference_without_touching_registry() {
     let sink = Arc::new(RecordingSink::default());
     let mut core = core_with(sink);

@@ -58,9 +58,9 @@ pub fn strings(lang: Language) -> Strings {
             tray_reload: "Reload configuration",
             tray_check_updates: "Check for updates",
             tray_edit: "Open config file",
-            tray_exit: "Exit VolumeControl",
-            update_check_up_to_date: "VolumeControl is up to date",
-            update_check_available_prefix: "VolumeControl update available:",
+            tray_exit: "Exit Volume Control",
+            update_check_up_to_date: "Volume Control is up to date",
+            update_check_available_prefix: "Volume Control update available:",
             update_check_failed: "Update check failed",
             update_check_in_progress: "Checking for updates…",
             toast_editing_config: "Editing config — changes reload automatically",
@@ -73,7 +73,7 @@ pub fn strings(lang: Language) -> Strings {
             mixer_output_name: "System output volume",
             mixer_title: "Volume Mixer",
             settings_title: "Settings",
-            settings_subtitle: "Configure how VolumeControl behaves",
+            settings_subtitle: "Configure how Volume Control behaves",
             section_general: "General",
             section_hotkeys: "Hotkeys",
             section_appearance: "Appearance",
@@ -93,9 +93,9 @@ pub fn strings(lang: Language) -> Strings {
             tray_reload: "Tải lại cấu hình",
             tray_check_updates: "Kiểm tra cập nhật",
             tray_edit: "Mở file cấu hình",
-            tray_exit: "Thoát VolumeControl",
-            update_check_up_to_date: "VolumeControl đã là bản mới nhất",
-            update_check_available_prefix: "Đã có bản cập nhật VolumeControl:",
+            tray_exit: "Thoát Điều khiển âm lượng",
+            update_check_up_to_date: "Điều khiển âm lượng đã là bản mới nhất",
+            update_check_available_prefix: "Đã có bản cập nhật Điều khiển âm lượng:",
             update_check_failed: "Kiểm tra cập nhật thất bại",
             update_check_in_progress: "Đang kiểm tra cập nhật…",
             toast_editing_config: "Đang sửa cấu hình — thay đổi tự áp dụng",
@@ -108,7 +108,7 @@ pub fn strings(lang: Language) -> Strings {
             mixer_output_name: "Âm lượng đầu ra hệ thống",
             mixer_title: "Bộ trộn âm lượng",
             settings_title: "Cài đặt",
-            settings_subtitle: "Cấu hình cách VolumeControl hoạt động",
+            settings_subtitle: "Cấu hình cách Điều khiển âm lượng hoạt động",
             section_general: "Chung",
             section_hotkeys: "Phím tắt",
             section_appearance: "Giao diện",
@@ -205,8 +205,8 @@ mod tests {
         assert_ne!(en.settings_title, vi.settings_title);
         assert_ne!(en.toast_config_reloaded, vi.toast_config_reloaded);
         // Product name stays identical across languages.
-        assert_eq!(en.tray_exit, "Exit VolumeControl");
-        assert!(vi.tray_exit.contains("VolumeControl"));
+        assert_eq!(en.tray_exit, "Exit Volume Control");
+        assert!(vi.tray_exit.contains("Điều khiển âm lượng"));
     }
 
     #[test]

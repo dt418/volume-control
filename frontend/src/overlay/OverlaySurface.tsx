@@ -136,7 +136,7 @@ export function OverlaySurface() {
                 {tr("overlay.volume")}
               </span>
               <span className="text-2xl font-semibold tabular-nums text-foreground">
-                {pct}%
+                {muted ? tr("common.muted") : `${pct}%`}
               </span>
             </div>
             <SignalRail value={pct} muted={muted} thresholds={thresholds} />

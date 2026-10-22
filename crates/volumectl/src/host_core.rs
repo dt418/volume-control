@@ -47,6 +47,8 @@ pub struct SettingsPatch {
     pub color_thresholds: Option<ColorThresholdsPatch>,
     /// UI language: "en" | "vi".
     pub language: Option<String>,
+    /// App-name label style: "friendly" | "friendly_and_process" | "process".
+    pub app_label_style: Option<String>,
     /// Full-list replace for the blacklist (draft commits the whole list
     /// atomically; entries are normalized per-platform).
     pub blacklist: Option<Vec<String>>,
@@ -81,9 +83,64 @@ pub struct ColorThresholdsPatch {
 pub struct AudioSessionInfo {
     pub id: String,
     pub name: String,
+    /// Normalized executable/base process name, independent of the WASAPI
+    /// display name. Process-only labels use this value.
+    pub process: String,
+    /// Human-friendly product name resolved from the executable's version
+    /// information. `None` when the process has no readable version resource;
+    /// the UI then falls back to `name`.
+    pub display_name: Option<String>,
     pub pct: u8,
     pub muted: bool,
     pub active: bool,
+    /// True for Windows' PID-less "System Sounds" session. The mixer uses it
+    /// for the friendly label; it is never derived from the process id.
+    pub system: bool,
+}
+
+/// One user-facing process with a visible top-level window. The blacklist
+/// stores `process` (normalized for the platform); `title` is shown in the
+/// picker so two windows of the same executable are still distinguishable.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RunningApp {
+    pub process: String,
+    pub title: String,
+    /// Human-friendly product name resolved from the executable. `None` when
+    /// no executable path/version resource is available.
+    pub display_name: Option<String>,
+    /// `data:image/png;base64,...` shell icon, or `None` when extraction
+    /// failed. The picker falls back to an initial tile.
+    pub icon: Option<String>,
+}
+
+/// Merge one window's process into the picker list, keeping one row per
+/// process. The first non-empty window title is used.
+#[cfg(any(target_os = "windows", test))]
+fn merge_running_app(
+    apps: &mut Vec<RunningApp>,
+    process: String,
+    title: String,
+    display_name: Option<String>,
+    icon: Option<String>,
+) {
+    if process.is_empty() {
+        return;
+    }
+    if let Some(existing) = apps.iter_mut().find(|app| app.process == process) {
+        if existing.title.is_empty() && !title.is_empty() {
+            existing.title = title;
+        }
+        if existing.display_name.is_none() && display_name.is_some() {
+            existing.display_name = display_name;
+        }
+        return;
+    }
+    apps.push(RunningApp {
+        process,
+        title,
+        display_name,
+        icon,
+    });
 }
 
 /// Per-app audio session source behind [`AppCore`]'s session commands.
@@ -598,6 +655,11 @@ impl AppCore {
         let motion = patch.motion.as_deref().map(parse_motion).transpose()?;
         let accent = patch.accent.as_deref().map(parse_accent).transpose()?;
         let language = patch.language.as_deref().map(parse_language).transpose()?;
+        let app_label_style = patch
+            .app_label_style
+            .as_deref()
+            .map(parse_app_label_style)
+            .transpose()?;
 
         if let Some(hotkeys) = &patch.hotkeys {
             crate::config::validate_hotkeys(hotkeys).map_err(|e| e.to_string())?;
@@ -724,6 +786,9 @@ impl AppCore {
         }
         if let Some(lang) = language {
             self.config.language = lang;
+        }
+        if let Some(style) = app_label_style {
+            self.config.app_label_style = style;
         }
         Ok(())
     }
@@ -1090,6 +1155,15 @@ fn parse_language(s: &str) -> Result<crate::config::Language, String> {
     }
 }
 
+fn parse_app_label_style(s: &str) -> Result<crate::config::AppLabelStyle, String> {
+    match s {
+        "friendly" => Ok(crate::config::AppLabelStyle::Friendly),
+        "friendly_and_process" => Ok(crate::config::AppLabelStyle::FriendlyAndProcess),
+        "process" => Ok(crate::config::AppLabelStyle::Process),
+        other => Err(format!("app_label_style: unsupported value {other:?}")),
+    }
+}
+
 fn motion_str(m: MotionMode) -> &'static str {
     match m {
         MotionMode::Full => "Full",
@@ -1153,13 +1227,499 @@ pub(crate) fn hotkey_to_action(action: HotkeyAction, step: i16, step_large: i16)
     }
 }
 
-/// Lowercase base name (e.g. `code.exe`) of the foreground window's process.
+/// Full image path for a process. Returns `None` when the process is gone or
+/// access is denied.
 #[cfg(target_os = "windows")]
-fn foreground_process() -> Option<String> {
+fn process_path(pid: u32) -> Option<String> {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
     };
+
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle == 0 {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut len);
+        CloseHandle(handle);
+        if ok == 0 {
+            return None;
+        }
+        Some(String::from_utf16_lossy(&buf[..len as usize]))
+    }
+}
+
+/// Lowercase base name (e.g. `code.exe`) of a process, normalized for the
+/// blacklist.
+#[cfg(target_os = "windows")]
+fn process_base_name(pid: u32) -> Option<String> {
+    let path = process_path(pid)?;
+    let base = path.rsplit('\\').next().unwrap_or(&path);
+    if base.is_empty() {
+        None
+    } else {
+        Some(crate::config::normalize_blacklist_entry(base))
+    }
+}
+
+/// Turn `chrome.exe` into `Chrome` for executables without version metadata.
+pub fn friendly_process_name(process: &str) -> String {
+    let trimmed = process.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let stem = [".exe", ".app"]
+        .iter()
+        .find_map(|suffix| {
+            lower
+                .ends_with(suffix)
+                .then(|| &trimmed[..trimmed.len() - suffix.len()])
+        })
+        .unwrap_or(trimmed);
+    let mut chars = stem.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => trimmed.to_string(),
+    }
+}
+
+/// Read a version-resource string (`ProductName` / `FileDescription`) from an
+/// executable. The first translation listed by the resource is preferred,
+/// with the common US-English block as a fallback.
+#[cfg(target_os = "windows")]
+fn version_string(data: &[u8], key: &str) -> Option<String> {
+    use std::ffi::c_void;
+    use windows_sys::Win32::Storage::FileSystem::VerQueryValueW;
+
+    let mut translation_ptr: *mut c_void = std::ptr::null_mut();
+    let mut translation_len = 0u32;
+    let translation_query: Vec<u16> = "\\VarFileInfo\\Translation\0".encode_utf16().collect();
+    let mut language = 0x0409u16;
+    let mut codepage = 0x04B0u16;
+    if unsafe {
+        VerQueryValueW(
+            data.as_ptr() as *const c_void,
+            translation_query.as_ptr(),
+            &mut translation_ptr,
+            &mut translation_len,
+        )
+    } != 0
+        && translation_len >= 4
+        && !translation_ptr.is_null()
+    {
+        let words = unsafe { std::slice::from_raw_parts(translation_ptr as *const u16, 2) };
+        language = words[0];
+        codepage = words[1];
+    }
+
+    for block in [
+        format!("\\StringFileInfo\\{language:04X}{codepage:04X}\\{key}"),
+        format!("\\StringFileInfo\\040904B0\\{key}"),
+    ] {
+        let block: Vec<u16> = block.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut value_ptr: *mut c_void = std::ptr::null_mut();
+        let mut value_len = 0u32;
+        if unsafe {
+            VerQueryValueW(
+                data.as_ptr() as *const c_void,
+                block.as_ptr(),
+                &mut value_ptr,
+                &mut value_len,
+            )
+        } == 0
+            || value_ptr.is_null()
+        {
+            continue;
+        }
+        let raw =
+            unsafe { std::slice::from_raw_parts(value_ptr as *const u16, value_len as usize) };
+        let value: String = String::from_utf16_lossy(raw)
+            .trim_end_matches('\0')
+            .trim()
+            .to_string();
+        if !value.is_empty() {
+            return Some(value);
+        }
+    }
+    None
+}
+
+/// Human-friendly application name from an executable path. Returns `None`
+/// when the version resource is missing or only contains a generic Windows
+/// product label; callers can then fall back to the process name.
+#[cfg(target_os = "windows")]
+pub fn friendly_executable_name(path: &str) -> Option<String> {
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{GetFileVersionInfoSizeW, GetFileVersionInfoW};
+
+    let wide: Vec<u16> = std::ffi::OsStr::new(path)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut ignored = 0u32;
+    let size = unsafe { GetFileVersionInfoSizeW(wide.as_ptr(), &mut ignored) };
+    if size == 0 {
+        return None;
+    }
+    let mut data = vec![0u8; size as usize];
+    if unsafe { GetFileVersionInfoW(wide.as_ptr(), 0, size, data.as_mut_ptr() as *mut c_void) } == 0
+    {
+        return None;
+    }
+    for key in ["ProductName", "FileDescription"] {
+        if let Some(value) = version_string(&data, key) {
+            let generic = value.contains("Operating System")
+                || value.eq_ignore_ascii_case("Microsoft Windows")
+                || value.eq_ignore_ascii_case("Application");
+            if !generic {
+                return Some(value);
+            }
+        }
+    }
+    None
+}
+
+/// Extract the shell icon for an executable as a PNG data URL. Uses the
+/// 32-bit icon and drops GDI handles on every path; `None` on any failure so
+/// the UI can fall back to a letter tile.
+#[cfg(target_os = "windows")]
+fn executable_icon_data_url(path: &str) -> Option<String> {
+    use std::mem::{size_of, zeroed};
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};
+    use windows_sys::Win32::UI::WindowsAndMessaging::DestroyIcon;
+
+    unsafe {
+        let wide: Vec<u16> = std::ffi::OsStr::new(path)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut file_info: SHFILEINFOW = zeroed();
+        let result = SHGetFileInfoW(
+            wide.as_ptr(),
+            0,
+            &mut file_info,
+            size_of::<SHFILEINFOW>() as u32,
+            SHGFI_ICON | SHGFI_LARGEICON,
+        );
+        if result == 0 || file_info.hIcon == 0 {
+            return None;
+        }
+        let icon = file_info.hIcon;
+        let png = icon_to_png(icon);
+        DestroyIcon(icon);
+        png
+    }
+}
+
+/// Convert an HICON to a PNG data URL. Kept separate so cleanup of the icon
+/// itself stays in one place.
+#[cfg(target_os = "windows")]
+unsafe fn icon_to_png(icon: windows_sys::Win32::UI::WindowsAndMessaging::HICON) -> Option<String> {
+    use std::ffi::c_void;
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::Graphics::Gdi::{
+        CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, BITMAP, BITMAPINFO,
+        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HGDIOBJ,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetIconInfo, ICONINFO};
+
+    let mut info: ICONINFO = zeroed();
+    if GetIconInfo(icon, &mut info) == 0 {
+        return None;
+    }
+    let result = (|| {
+        if info.hbmColor == 0 {
+            return None;
+        }
+        let mut bitmap: BITMAP = zeroed();
+        if GetObjectW(
+            info.hbmColor as HGDIOBJ,
+            size_of::<BITMAP>() as i32,
+            &mut bitmap as *mut BITMAP as *mut c_void,
+        ) == 0
+        {
+            return None;
+        }
+        let width = bitmap.bmWidth;
+        let height = bitmap.bmHeight;
+        if width <= 0 || height <= 0 {
+            return None;
+        }
+        let mut pixels = vec![0u8; width as usize * height as usize * 4];
+        let mut bmi: BITMAPINFO = zeroed();
+        bmi.bmiHeader = BITMAPINFOHEADER {
+            biSize: size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: width,
+            biHeight: -height,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB,
+            ..zeroed()
+        };
+        let dc = CreateCompatibleDC(0);
+        if dc == 0 {
+            return None;
+        }
+        let lines = GetDIBits(
+            dc,
+            info.hbmColor,
+            0,
+            height as u32,
+            pixels.as_mut_ptr() as *mut c_void,
+            &mut bmi,
+            DIB_RGB_COLORS,
+        );
+        DeleteDC(dc);
+        if lines == 0 {
+            return None;
+        }
+        // DIB is BGRA. Some legacy icons carry no alpha; use an opaque tile
+        // rather than rendering an invisible image.
+        if !pixels.chunks_exact(4).any(|pixel| pixel[3] != 0) {
+            for pixel in pixels.chunks_exact_mut(4) {
+                pixel[3] = 255;
+            }
+        }
+        for pixel in pixels.chunks_exact_mut(4) {
+            pixel.swap(0, 2);
+        }
+
+        let mut out = Vec::new();
+        let mut encoder = png::Encoder::new(&mut out, width as u32, height as u32);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().ok()?;
+        writer.write_image_data(&pixels).ok()?;
+        drop(writer);
+        use base64::Engine as _;
+        Some(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(out)
+        ))
+    })();
+
+    if info.hbmColor != 0 {
+        DeleteObject(info.hbmColor as HGDIOBJ);
+    }
+    if info.hbmMask != 0 {
+        DeleteObject(info.hbmMask as HGDIOBJ);
+    }
+    result
+}
+
+/// Enumerate user-facing processes with a visible, titled top-level window.
+/// The list feeds the Settings blacklist app picker. Background services and
+/// the current VolumeControl process are excluded.
+#[cfg(target_os = "windows")]
+pub fn running_apps() -> Vec<RunningApp> {
+    use windows_sys::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+        IsWindowVisible,
+    };
+
+    struct Scan {
+        apps: Vec<RunningApp>,
+        current_pid: u32,
+    }
+
+    unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let scan = &mut *(lparam as *mut Scan);
+        if IsWindowVisible(hwnd) == 0 {
+            return 1;
+        }
+        let title_len = GetWindowTextLengthW(hwnd);
+        if title_len <= 0 {
+            return 1;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == 0 || pid == scan.current_pid {
+            return 1;
+        }
+        let Some(path) = process_path(pid) else {
+            return 1;
+        };
+        let base = path.rsplit('\\').next().unwrap_or(&path);
+        let process = crate::config::normalize_blacklist_entry(base);
+        let mut title = vec![0u16; title_len as usize + 1];
+        let copied = GetWindowTextW(hwnd, title.as_mut_ptr(), title.len() as i32);
+        if copied <= 0 {
+            return 1;
+        }
+        let title = String::from_utf16_lossy(&title[..copied as usize])
+            .trim()
+            .to_string();
+        let display_name =
+            friendly_executable_name(&path).unwrap_or_else(|| friendly_process_name(&process));
+        let icon = if scan.apps.iter().any(|app| app.process == process) {
+            None
+        } else {
+            executable_icon_data_url(&path)
+        };
+        merge_running_app(&mut scan.apps, process, title, Some(display_name), icon);
+        1
+    }
+
+    let mut scan = Scan {
+        apps: Vec::new(),
+        current_pid: std::process::id(),
+    };
+    unsafe {
+        EnumWindows(Some(collect), &mut scan as *mut Scan as isize);
+    }
+    scan.apps.sort_by(|a, b| {
+        a.process
+            .to_lowercase()
+            .cmp(&b.process.to_lowercase())
+            .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+    });
+    scan.apps
+}
+
+/// Non-Windows builds do not enumerate foreground windows; the picker stays
+/// available but reports no running applications.
+#[cfg(not(target_os = "windows"))]
+pub fn running_apps() -> Vec<RunningApp> {
+    Vec::new()
+}
+
+/// Resolve blacklist entries to icons/titles even when the app is not
+/// currently running. Installed executables are found through the per-user
+/// and machine `App Paths` registry keys; unresolved entries keep `None` and
+/// are rendered with the letter-tile fallback.
+#[cfg(target_os = "windows")]
+pub fn resolve_apps(processes: &[String]) -> Vec<RunningApp> {
+    let running = running_apps();
+    let mut result = Vec::new();
+    for raw in processes {
+        let process = crate::config::normalize_blacklist_entry(raw);
+        if process.is_empty() {
+            continue;
+        }
+        if let Some(app) = running.iter().find(|app| app.process == process) {
+            result.push(app.clone());
+            continue;
+        }
+        let path = installed_executable_path(&process);
+        let icon = path.as_deref().and_then(executable_icon_data_url);
+        let display_name = path
+            .as_deref()
+            .and_then(friendly_executable_name)
+            .unwrap_or_else(|| friendly_process_name(&process));
+        result.push(RunningApp {
+            process,
+            title: String::new(),
+            display_name: Some(display_name),
+            icon,
+        });
+    }
+    result
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn resolve_apps(processes: &[String]) -> Vec<RunningApp> {
+    processes
+        .iter()
+        .map(|process| RunningApp {
+            process: process.clone(),
+            title: String::new(),
+            display_name: Some(friendly_process_name(process)),
+            icon: None,
+        })
+        .collect()
+}
+
+/// Query the App Paths registry key for an installed executable. Expands
+/// `%VAR%` segments with the current process environment; a path that cannot
+/// be expanded is returned as-is and icon extraction simply fails soft.
+#[cfg(target_os = "windows")]
+fn installed_executable_path(process: &str) -> Option<String> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE,
+        KEY_READ, REG_EXPAND_SZ, REG_SZ,
+    };
+
+    unsafe fn read_value(hive: HKEY, subkey: &str) -> Option<String> {
+        let wide: Vec<u16> = subkey.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut key: HKEY = 0;
+        if RegOpenKeyExW(hive, wide.as_ptr(), 0, KEY_READ, &mut key) != ERROR_SUCCESS {
+            return None;
+        }
+        let mut kind = 0u32;
+        let mut len = 0u32;
+        let probe = RegQueryValueExW(
+            key,
+            std::ptr::null(),
+            std::ptr::null(),
+            &mut kind,
+            std::ptr::null_mut(),
+            &mut len,
+        );
+        if probe != ERROR_SUCCESS || (kind != REG_SZ && kind != REG_EXPAND_SZ) || len < 2 {
+            RegCloseKey(key);
+            return None;
+        }
+        let mut buf = vec![0u8; len as usize + 2];
+        let mut data_len = buf.len() as u32;
+        let result = RegQueryValueExW(
+            key,
+            std::ptr::null(),
+            std::ptr::null(),
+            &mut kind,
+            buf.as_mut_ptr(),
+            &mut data_len,
+        );
+        RegCloseKey(key);
+        if result != ERROR_SUCCESS {
+            return None;
+        }
+        let words = (data_len as usize / 2).min(buf.len() / 2);
+        let raw: Vec<u16> = buf[..words * 2]
+            .chunks_exact(2)
+            .map(|pair| u16::from_ne_bytes([pair[0], pair[1]]))
+            .take_while(|ch| *ch != 0)
+            .collect();
+        let mut value = String::from_utf16_lossy(&raw);
+        // Expand the common ProgramFiles-style variables without a second
+        // Win32 dependency. App Paths values are simple absolute paths.
+        for (name, replacement) in [
+            ("ProgramFiles", std::env::var("ProgramFiles").ok()),
+            ("ProgramFiles(x86)", std::env::var("ProgramFiles(x86)").ok()),
+            ("SystemRoot", std::env::var("SystemRoot").ok()),
+        ] {
+            if let Some(replacement) = replacement {
+                value = value.replace(&format!("%{name}%"), &replacement);
+            }
+        }
+        if value.is_empty() {
+            None
+        } else {
+            Some(value)
+        }
+    }
+
+    let mut subkeys = vec![
+        format!("Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\{process}"),
+        format!("Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths\\{process}"),
+    ];
+    for subkey in subkeys.drain(..) {
+        for hive in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+            if let Some(path) = unsafe { read_value(hive, &subkey) } {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+/// Lowercase base name (e.g. `code.exe`) of the foreground window's process.
+#[cfg(target_os = "windows")]
+fn foreground_process() -> Option<String> {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetWindowThreadProcessId,
     };
@@ -1174,20 +1734,7 @@ fn foreground_process() -> Option<String> {
         if pid == 0 {
             return None;
         }
-        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-        if handle == 0 {
-            return None;
-        }
-        let mut buf = [0u16; 1024];
-        let mut len = buf.len() as u32;
-        let ok = QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut len);
-        CloseHandle(handle);
-        if ok == 0 {
-            return None;
-        }
-        let path = String::from_utf16_lossy(&buf[..len as usize]);
-        let base = path.rsplit('\\').next().unwrap_or(&path);
-        Some(base.to_lowercase())
+        process_base_name(pid)
     }
 }
 
@@ -1501,6 +2048,68 @@ mod tests {
             AppAction::ReloadConfig
         );
         assert_eq!(tray_command_to_action(C::Exit), AppAction::Exit);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn executable_icon_is_a_png_data_url() {
+        let executable = std::env::current_exe().expect("current exe");
+        let icon = executable_icon_data_url(&executable.to_string_lossy())
+            .expect("shell icon for the test executable");
+        assert!(icon.starts_with("data:image/png;base64,"));
+        assert!(icon.len() > 100);
+    }
+
+    #[test]
+    fn friendly_process_names_title_case_the_executable() {
+        assert_eq!(friendly_process_name("chrome.exe"), "Chrome");
+        assert_eq!(friendly_process_name("Code.EXE"), "Code");
+        assert_eq!(friendly_process_name("firefox"), "Firefox");
+        assert_eq!(friendly_process_name(""), "");
+    }
+
+    #[test]
+    fn running_apps_merge_by_process_and_keep_first_title() {
+        let mut apps = Vec::new();
+        merge_running_app(
+            &mut apps,
+            "chrome.exe".into(),
+            "New Tab".into(),
+            Some("Google Chrome".into()),
+            None,
+        );
+        merge_running_app(
+            &mut apps,
+            "chrome.exe".into(),
+            "Other window".into(),
+            Some("Chrome fallback".into()),
+            None,
+        );
+        merge_running_app(
+            &mut apps,
+            "code.exe".into(),
+            String::new(),
+            Some("Visual Studio Code".into()),
+            None,
+        );
+        merge_running_app(&mut apps, String::new(), "ignored".into(), None, None);
+        assert_eq!(
+            apps,
+            vec![
+                RunningApp {
+                    process: "chrome.exe".into(),
+                    title: "New Tab".into(),
+                    display_name: Some("Google Chrome".into()),
+                    icon: None,
+                },
+                RunningApp {
+                    process: "code.exe".into(),
+                    title: String::new(),
+                    display_name: Some("Visual Studio Code".into()),
+                    icon: None,
+                },
+            ]
+        );
     }
 
     #[test]

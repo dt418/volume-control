@@ -75,6 +75,26 @@ export function GeneralSection({
               <option value="vi">{tr("app.languageVi")}</option>
             </select>
           </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span>{tr("settings.appLabelStyle")}</span>
+            <span className="text-xs text-foreground/60">
+              {tr("settings.appLabelStyleHelp")}
+            </span>
+            <select
+              aria-label={tr("settings.appLabelStyle")}
+              value={draft.app_label_style ?? "friendly"}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, app_label_style: e.target.value }))
+              }
+              className="rounded-md border border-foreground/20 bg-background px-2 py-1.5 text-sm"
+            >
+              <option value="friendly">{tr("settings.appLabelFriendly")}</option>
+              <option value="friendly_and_process">
+                {tr("settings.appLabelFriendlyAndProcess")}
+              </option>
+              <option value="process">{tr("settings.appLabelProcess")}</option>
+            </select>
+          </label>
           {GENERAL_FIELDS.map(({ key, labelKey, helpKey, min, max }) => (
             <label className="flex flex-col gap-1 text-sm" key={key}>
               <span>{tr(labelKey)}</span>

@@ -18,21 +18,21 @@ export function HelpFooter({
       <button
         type="button"
         onClick={onEditConfig}
-        className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm"
+        className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {tr("help.editConfig")}
       </button>
       <button
         type="button"
         onClick={onSettings}
-        className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm"
+        className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {tr("settings.title")}
       </button>
       <button
         type="button"
         onClick={onClose}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {tr("help.close")}
       </button>

@@ -152,6 +152,30 @@ impl Language {
     }
 }
 
+/// How application names are rendered in the mixer and blacklist picker.
+///
+/// `Friendly` shows the executable's product/file description (for example
+/// "Google Chrome"); `FriendlyAndProcess` appends the executable name;
+/// `Process` keeps the raw process name for users who need an exact match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AppLabelStyle {
+    #[default]
+    Friendly,
+    FriendlyAndProcess,
+    Process,
+}
+
+impl AppLabelStyle {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AppLabelStyle::Friendly => "friendly",
+            AppLabelStyle::FriendlyAndProcess => "friendly_and_process",
+            AppLabelStyle::Process => "process",
+        }
+    }
+}
+
 /// User-configurable global shortcuts.
 ///
 /// Values use the portable `global-hotkey` spelling (for example
@@ -248,6 +272,9 @@ pub struct Config {
     /// UI language for native surfaces and webviews (default English).
     #[serde(default)]
     pub language: Language,
+    /// How app names are shown in the mixer and app picker.
+    #[serde(default)]
+    pub app_label_style: AppLabelStyle,
 }
 
 /// Beep feedback settings (mirrors VolumePro's `[Beep]` section).
@@ -305,6 +332,7 @@ impl Default for Config {
             appearance: AppearanceConfig::default(),
             autostart: false,
             language: Language::default(),
+            app_label_style: AppLabelStyle::default(),
         }
     }
 }

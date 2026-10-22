@@ -57,10 +57,13 @@ pub fn build_session_info(
         .to_string();
     AudioSessionInfo {
         id: index.to_string(),
+        display_name: Some(crate::host_core::friendly_process_name(&name)),
+        process: name.clone(),
         name,
         pct: (volume_avg.saturating_mul(100) / PA_VOLUME_NORM).min(100) as u8,
         muted,
         active: !corked,
+        system: false,
     }
 }
 

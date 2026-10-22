@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Search } from "lucide-react";
+import { CircleHelp, Search, Settings, X } from "lucide-react";
 
+import { SurfaceCloseButton } from "../components/ui/surface-close-button";
+import { appLabel } from "../lib/appLabel";
 import { invoke, listen } from "../lib/ipc";
 import { translatorFor, LanguageProvider } from "../lib/i18n";
+import { notifyUpdate } from "../lib/notify";
 import { surfaceErrorMessage } from "../lib/surface";
+import type { UpdateInfoPayload } from "../lib/update";
 import { SessionRow } from "./SessionRow";
 import { SystemOutputRow } from "./SystemOutputRow";
 import { useSessions } from "./sessionStore";
@@ -21,6 +25,7 @@ export function MixerSurface() {
     muted,
     thresholds,
     language,
+    appLabelStyle,
     sessionsSupported,
     notice,
     error,
@@ -30,19 +35,54 @@ export function MixerSurface() {
     updateSession,
   } = useSessions();
   const [query, setQuery] = useState("");
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfoPayload | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   const tr = translatorFor(language);
+
+  // Check once per mixer mount and also honor update results emitted by the
+  // Settings card or tray. Fail-soft: no banner when the check cannot run.
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<UpdateInfoPayload>("state://update", (payload) => {
+      if (!disposed) {
+        setUpdateInfo(payload);
+        void notifyUpdate(payload);
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    void invoke<UpdateInfoPayload>("check_for_updates")
+      .then((payload) => {
+        if (!disposed && payload) {
+          setUpdateInfo(payload);
+          void notifyUpdate(payload);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  const close = useCallback(() => {
+    void invoke<void>("close_surface", { surface: "window-mixer" }).catch(() => {});
+  }, []);
+
+  const openSurface = useCallback((surface: "window-settings" | "window-help") => {
+    void invoke<void>("open_surface", { surface }).catch(() => {});
+  }, []);
 
   // Esc fallback for closing the frameless mixer window (spec §9.3); the Rust
   // side additionally closes it on Focused(false) for outside clicks.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        void invoke<void>("close_surface", { surface: "window-mixer" }).catch(() => {});
-      }
+      if (event.key === "Escape") close();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [close]);
 
   // The Rust WindowManager emits `close_mixer_request` when the window loses
   // focus (outside click / Alt+Tab) — WindowEvent::Focused(false) is reliable
@@ -60,24 +100,33 @@ export function MixerSurface() {
       unlisten = u;
     });
     return () => unlisten?.();
-  }, []);
+  }, [close]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return sessions;
-    return sessions.filter((s) => s.name.toLowerCase().includes(q));
-  }, [sessions, query]);
+    return sessions.filter((s) => {
+      const process = s.process ?? s.name;
+      const label = s.system
+        ? tr("mixer.systemSounds")
+        : appLabel(appLabelStyle, s.display_name, process);
+      return (
+        label.toLowerCase().includes(q) || process.toLowerCase().includes(q)
+      );
+    });
+  }, [appLabelStyle, sessions, query, tr]);
 
   const handleMute = useCallback(
     (id: string) => {
       const row = sessions.find((s) => s.id === id);
       const nextMuted = !row?.muted;
       updateSession(id, { muted: nextMuted }); // optimistic; backend does not re-emit on success
-      void invoke<void>("mute_session", { id }).catch(() => {
+      void invoke<void>("mute_session", { id }).catch((reason) => {
         updateSession(id, { muted: !nextMuted }); // revert on failure
+        setNotice(`${tr("mixer.muteFailed")}: ${surfaceErrorMessage(reason)}`);
       });
     },
-    [sessions, updateSession],
+    [sessions, updateSession, setNotice, tr],
   );
 
   const handleVolumeError = useCallback(
@@ -93,13 +142,42 @@ export function MixerSurface() {
     <LanguageProvider language={language}>
     <main data-surface="mixer" className="mixer-surface surface-shell h-dvh min-h-0 overflow-hidden glass-surface flex flex-col gap-1 p-2">
       <header data-testid="surface-header" className="flex flex-shrink-0 flex-col gap-2">
-        <h1 className="text-sm font-semibold">{tr("mixer.title")}</h1>
-        <div className="text-xs text-foreground/80">
-          {muted ? (
-            <span className="font-medium">{tr("common.muted")}</span>
-          ) : (
-            `${tr("common.volume")} ${volumePct}%`
-          )}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h1 className="truncate text-sm font-semibold">{tr("mixer.title")}</h1>
+            <span className="shrink-0 text-xs text-foreground/80">
+              {muted ? (
+                <span className="font-medium">{tr("common.muted")}</span>
+              ) : (
+                `${tr("common.volume")} ${volumePct}%`
+              )}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              aria-label={tr("settings.title")}
+              title={tr("settings.title")}
+              onClick={() => openSurface("window-settings")}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:bg-foreground/15"
+            >
+              <Settings aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label={tr("help.title")}
+              title={tr("help.title")}
+              onClick={() => openSurface("window-help")}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:bg-foreground/15"
+            >
+              <CircleHelp aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <SurfaceCloseButton
+              label={tr("mixer.close")}
+              title={`${tr("mixer.close")} (Esc)`}
+              onClick={close}
+            />
+          </div>
         </div>
 
       <div className="relative">
@@ -109,9 +187,55 @@ export function MixerSurface() {
           placeholder={tr("mixer.searchPlaceholder")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          className="w-full rounded-md border border-foreground/20 bg-background/88 py-1.5 pl-8 pr-3 text-xs outline-none placeholder:text-foreground/60 focus:border-accent focus:ring-2 focus:ring-accent/35"
+          className="w-full rounded-md border border-foreground/20 bg-background/88 py-1.5 pl-8 pr-8 text-xs outline-none placeholder:text-foreground/60 focus:border-accent focus:ring-2 focus:ring-accent/35"
         />
+        {query && (
+          <button
+            type="button"
+            aria-label={tr("mixer.clearSearch")}
+            title={tr("mixer.clearSearch")}
+            onClick={() => setQuery("")}
+            className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-foreground/60 hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <X aria-hidden="true" className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
+
+      {updateInfo?.is_update_available &&
+        updateInfo.release_url &&
+        !updateDismissed && (
+          <div
+            data-testid="update-banner"
+            role="status"
+            className="flex items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-2 py-1 text-[11px]"
+          >
+            <span className="min-w-0 flex-1 truncate font-medium">
+              {updateInfo.message}
+            </span>
+            <a
+              href={updateInfo.release_url}
+              onClick={(event) => {
+                event.preventDefault();
+                void invoke<void>("open_release", {
+                  url: updateInfo.release_url,
+                }).catch(() => {});
+              }}
+              className="shrink-0 text-accent underline hover:text-accent/80"
+            >
+              {tr("settings.updates.viewRelease")}
+            </a>
+            <button
+              type="button"
+              aria-label={tr("update.dismiss")}
+              title={tr("update.dismiss")}
+              onClick={() => setUpdateDismissed(true)}
+              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/60 hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <X aria-hidden="true" className="h-3 w-3" />
+            </button>
+          </div>
+        )}
 
       <SystemOutputRow
         value={volumePct}
@@ -156,19 +280,22 @@ export function MixerSurface() {
             {sessions.length === 0 ? tr("mixer.noSessions") : tr("mixer.noMatches")}
           </p>
         ) : (
-          filtered.map((session, index) => (
-            <motion.div
-              key={`${session.id}-${session.name}-${index}`}
-              layout
-              transition={{ duration: 0.15 }}
-            >
-              <SessionRow
-                session={session}
-                onMute={handleMute}
-                onVolumeError={handleVolumeError}
-              />
-            </motion.div>
-          ))
+          <ul className="space-y-2">
+            {filtered.map((session, index) => (
+              <motion.li
+                key={`${session.id}-${session.name}-${index}`}
+                layout
+                transition={{ duration: 0.15 }}
+              >
+                <SessionRow
+                  session={session}
+                  labelStyle={appLabelStyle}
+                  onMute={handleMute}
+                  onVolumeError={handleVolumeError}
+                />
+              </motion.li>
+            ))}
+          </ul>
         )}
       </div>
 

@@ -1,38 +1,86 @@
 # Progress Log
 
-## Session 125 (2026-10-22) - Winget publication automation and pre-push review
+## Session 127 (2026-10-23) - Friendly app names, update notifications, and release changelog
 
-- Goal: finish the 0.1.9 winget submission workflow with local helpers, durable
-  watchers, and a machine-independent CI check; review the change set before
-  pushing.
-- Landed: mirrored `winget-publish` skill; manifest validate/show/install and
-  user shims; `check-winget-validation.ps1` and its 5-minute task;
-  `check-winget-merge.ps1` and its 10-minute task; status display; Windows
-  Sandbox wrapper; `.github/workflows/winget-publish-watch.yml`; compressed
-  `CLAUDE.md`; `.gitignore` exceptions.
-- Verification: PowerShell 5.1 parser accepted all nine new scripts;
-  validation checker returned green for PR #454508; merge checker returned
-  pending with expected version 0.1.9; `winget validate --manifest` succeeded;
-  workflow YAML parsed and the workflow-warning-auditor reported 0 findings.
-- Review: three-domain pre-push review found no unfixed P1 after corrections:
-  failed `gh api` stdout no longer contaminates the fallback; SandboxTest no
-  longer maps the repository writable and requires `pwsh` for authenticated
-  runs; the merge checker queries the exact version instead of parsing a
-  localized label; skill paths/records timing and the Linux privilege boundary
-  were corrected.
-  - Subagent review pass (2026-10-23): isolated `gh` stderr into temp files
-    in `check-winget-merge.ps1` and `check-winget-validation.ps1` to prevent
-    JSON parsing failures; handled case-insensitive `[Vv]ersion` in
-    `winget-publish-watch.yml`; added `-NonInteractive -WindowStyle Hidden`
-    to scheduled tasks in `install-winget-merge-task.ps1` and
-    `install-winget-validation-task.ps1`.
-- Pending: the upstream PR remains open and the package is not in the winget
-  catalog; the CI schedule activates only after this commit lands on main.
-  Record publication only after `winget show` and a catalog install succeed.
-- Schedule update: the CI watcher cron is now every 3 hours
-  (`0 */3 * * *`); `on.schedule` is parsed statically, so secrets/variables
-  cannot configure it. `workflow_dispatch` remains available for immediate
-  checks.
+- Goal: replace executable names with product names in the mixer and
+  blacklist, make the label style configurable, and announce new releases
+  in-app, natively, and on the landing page.
+- What landed:
+  - Windows session enumeration reads `ProductName` / `FileDescription` from
+    the process executable and sends `display_name`; the mixer renders it
+    through the selected label style.
+  - The blacklist picker resolves icons and product names for running and
+    installed (not currently running) apps through App Paths.
+  - `app_label_style` (friendly, friendly + process, process) persists in
+    `config.ini` and is edited from Settings → General.
+  - Opening the mixer checks for updates, listens to `state://update`, and
+    shows a dismissible release banner.
+  - Tauri notification plugin support requests OS permission before sending
+    one native alert per release; macOS uses a native
+    `UNUserNotificationCenter` request because the Tauri desktop plugin
+    reports `granted` unconditionally.
+  - `docs/index.html` adds a latest-release banner and a GitHub-backed
+    changelog with bilingual labels.
+- Review fixes:
+  - Registered the notification plugin on the production builder and added
+    the non-Windows `running_apps` fallback.
+  - Automatic update checks share a 10-minute language-scoped process cache;
+    the Settings button forces a fresh check.
+  - Update links open through a validated native `open_release` command.
+  - Session payloads carry `process`, so friendly + process labels no longer
+    duplicate the display name.
+  - Fixed `icon_to_png`: `GetDIBits` now reads the color HBITMAP while unselected.
+  - Fixed landing page: `isStableRelease` rejects prereleases in fresh and cached data.
+  - Fixed Linux dead-code: `merge_running_app` gated with `#[cfg(any(target_os = "windows", test))]`.
+  - Fixed macOS compile: `request_notification_permission` uses `objc2::runtime::Bool` in completion block.
+  - Fixed E2E: updated `settings.e2e.ts` and `help.e2e.ts` expected title to `"Volume Control"`.
+  - Fixed `ensure_current`: avoids extra COM round-trip when slot is `None`.
+  - Pinned `@tauri-apps/api` to `2.11.1` and `@tauri-apps/plugin-notification` to `2.4.0` in `frontend/package.json` to match Rust crate major/minor versions and resolve `tauri build` mismatches.
+  - `cargo fmt --all --check`, `git diff --check`, `cargo clippy
+    --workspace --all-targets --no-default-features -- -D warnings`, and
+    `cargo test --workspace --no-default-features` passed.
+  - `npm --prefix frontend test` passed 126 tests; `npm --prefix frontend run
+    build` passed.
+  - Browser smoke covered the bilingual landing-page release banner and
+    changelog.
+- Records: `vol-108` and `vol-109` added as in-progress.
+
+## Session 126 (2026-10-22) - Recover Windows audio and make mixer controls discoverable
+
+- Goal: follow the current Windows default audio endpoint, recover after a
+  device disappears, restore per-app mixer sessions, add runtime file logging,
+  and fix the mixer's missing click-to-close affordance.
+- What landed:
+  - `audio_windows.rs` stores the IMMDevice id, re-acquires the default
+    endpoint when it changes, retries one failed call against a fresh
+    endpoint, and maps `AUDCLNT_E_DEVICE_INVALIDATED` / `E_NOTFOUND` to
+    `AudioError::DeviceLost`. Success checks accept `S_FALSE`.
+  - `audio_sessions_win32.rs` activates `IAudioSessionManager2` directly on
+    `IMMDevice`; `IAudioClient::GetService` returned `0x80004002` on this host.
+  - `lib.rs` tees Windows logs to
+    `%LOCALAPPDATA%\VolumeControl\logs\runtime.log` (2 MiB rotation).
+  - `SurfaceCloseButton` is shared by Mixer, Settings, and Help. The mixer
+    header now has Settings, Help, and Close actions; Escape still works.
+  - `SystemOutputRow` is one compact row with a threshold-colored slider and
+    icon mute/reset actions, leaving room for an app session in the fixed
+    400x224 mixer. Focus rings and slim scrollbars cover Settings/Help too.
+- Verification:
+  - `cargo fmt --all --check`, `git diff --check`,
+    `cargo clippy --workspace --all-targets --no-default-features -- -D
+    warnings`, and `cargo test --workspace --no-default-features` passed (362
+    tests); `sh scripts/check-tauri-deadlock.sh` passed 10/10.
+  - `npm --prefix frontend test` passed (18 files, 112 tests);
+    `npm --prefix frontend run build` passed.
+  - Endpoint smoke: default Realtek -> Intel + Ctrl+Alt+Up changed Intel
+    62% -> 63%, Realtek stayed 50%; switching back changed Realtek 50% -> 51%,
+    Intel stayed 63%.
+  - Temporary session smoke returned 2 sessions (`chrome.exe` plus system
+    sounds), proving the direct session-manager activation.
+  - Desktop launch produced the runtime log; the mixer screenshot showed the
+    new action cluster and one app row. A real mouse click on the close control
+    removed the mixer window while the tray process stayed alive.
+- Records: `vol-106` (audio recovery/sessions/logging) and `vol-107`
+  (discoverable mixer controls) added.
 
 ## Session 124 (2026-10-21) - Harden the desktop launch handoff for 0.1.9
 
@@ -4179,3 +4227,37 @@ fn get_window_pid_x11() -> Option<u32> {
 - Verification: `frontend/src/settings/UpdateCard.test.tsx` asserts `v0.1.9`; frontend suite passes after the 0.1.9 bump.
 - Verification: Task 6/7 follow-up (2026-10-22): `scripts/check-version-sync.sh` now checks `Cargo.lock` app package versions and runs on Bash 3.2 (no `mapfile`); drift fixtures for both packages fail closed. `scripts/test-release-workflow.sh` passes 52/52 contract checks, including the repaired product-page contract for the download -> SHA-256 -> local-run snippets.
 - Release 0.1.9 (2026-10-22): PR #67 merged as `7560073`; tag `v0.1.9`; release workflow `39776165994` succeeded on all three platforms. Winget 0.1.9 manifests generated, `winget validate` succeeded, installer SHA-256 `EFC3ACA3DCAFF9618C81A6257C6F1281E846E5DD28FCEA5252ACB99EA11F9509` matches `SHA256SUMS.txt`; PR #454508 updated to 0.1.9 (fork f3c811921) and the repo tree moved to 0.1.9.
+
+## Session 125 (2026-10-22) - Winget publication automation and pre-push review
+
+- Goal: finish the 0.1.9 winget submission workflow with local helpers, durable
+  watchers, and a machine-independent CI check; review the change set before
+  pushing.
+- Landed: mirrored `winget-publish` skill; manifest validate/show/install and
+  user shims; `check-winget-validation.ps1` and its 5-minute task;
+  `check-winget-merge.ps1` and its 10-minute task; status display; Windows
+  Sandbox wrapper; `.github/workflows/winget-publish-watch.yml`; compressed
+  `CLAUDE.md`; `.gitignore` exceptions.
+- Verification: PowerShell 5.1 parser accepted all nine new scripts;
+  validation checker returned green for PR #454508; merge checker returned
+  pending with expected version 0.1.9; `winget validate --manifest` succeeded;
+  workflow YAML parsed and the workflow-warning-auditor reported 0 findings.
+- Review: three-domain pre-push review found no unfixed P1 after corrections:
+  failed `gh api` stdout no longer contaminates the fallback; SandboxTest no
+  longer maps the repository writable and requires `pwsh` for authenticated
+  runs; the merge checker queries the exact version instead of parsing a
+  localized label; skill paths/records timing and the Linux privilege boundary
+  were corrected.
+  - Subagent review pass (2026-10-23): isolated `gh` stderr into temp files
+    in `check-winget-merge.ps1` and `check-winget-validation.ps1` to prevent
+    JSON parsing failures; handled case-insensitive `[Vv]ersion` in
+    `winget-publish-watch.yml`; added `-NonInteractive -WindowStyle Hidden`
+    to scheduled tasks in `install-winget-merge-task.ps1` and
+    `install-winget-validation-task.ps1`.
+- Pending: the upstream PR remains open and the package is not in the winget
+  catalog; the CI schedule activates only after this commit lands on main.
+  Record publication only after `winget show` and a catalog install succeed.
+- Schedule update: the CI watcher cron is now every 3 hours
+  (`0 */3 * * *`); `on.schedule` is parsed statically, so secrets/variables
+  cannot configure it. `workflow_dispatch` remains available for immediate
+  checks.

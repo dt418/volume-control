@@ -85,11 +85,117 @@ describe("MixerSurface", () => {
     expect(ipc.invoke).toHaveBeenCalledWith("mute_session", { id: "c" });
   });
 
+  it("labels System Sounds and mutes by its stable session id", async () => {
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") {
+        return {
+          ...bootstrap,
+          sessions: [
+            {
+              id: "system-instance",
+              name: "@%SystemRoot%\System32\AudioSrv.Dll,-202",
+              pct: 100,
+              muted: false,
+              active: false,
+              system: true,
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    await renderSurface();
+    expect(screen.getByText("System sounds")).toBeInTheDocument();
+    expect(screen.getByText("Notifications & alerts")).toBeInTheDocument();
+    const row = screen.getByTestId("session-row");
+    fireEvent.click(within(row).getByRole("button", { name: /mute/i }));
+    expect(ipc.invoke).toHaveBeenCalledWith("mute_session", {
+      id: "system-instance",
+    });
+  });
+
+  it("uses friendly session names and honors the process-only style", async () => {
+    const session = {
+      id: "chrome",
+      name: "Google Chrome",
+      process: "chrome.exe",
+      display_name: "Google Chrome",
+      pct: 50,
+      muted: false,
+      active: true,
+    };
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") {
+        return { ...bootstrap, config: { app_label_style: "friendly" }, sessions: [session] };
+      }
+      return {};
+    });
+    await renderSurface();
+    expect(screen.getByTestId("session-row")).toHaveTextContent("Google Chrome");
+    expect(screen.getByTestId("session-row")).not.toHaveTextContent("chrome.exe");
+
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") {
+        return {
+          ...bootstrap,
+          config: { app_label_style: "process" },
+          sessions: [session],
+        };
+      }
+      return {};
+    });
+    await renderSurface();
+    expect(screen.getAllByTestId("session-row").at(-1)).toHaveTextContent("chrome.exe");
+  });
+
+  it("shows and dismisses the in-app update banner", async () => {
+    vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
+      if (cmd === "get_bootstrap") return bootstrap;
+      if (cmd === "check_for_updates") {
+        return {
+          current_version: "0.1.10",
+          latest_version: "v0.1.11",
+          is_update_available: true,
+          release_url: "https://example.test/v0.1.11",
+          message: "Update available: v0.1.11",
+        };
+      }
+      return {};
+    });
+    await renderSurface();
+    const banner = await screen.findByTestId("update-banner");
+    expect(banner).toHaveTextContent("Update available: v0.1.11");
+    fireEvent.click(
+      within(banner).getByRole("button", { name: /dismiss update notification/i }),
+    );
+    expect(screen.queryByTestId("update-banner")).not.toBeInTheDocument();
+  });
+
   it("closes the window on Escape", async () => {
     await renderSurface();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(ipc.invoke).toHaveBeenCalledWith("close_surface", {
       surface: "window-mixer",
+    });
+  });
+
+  it("closes the window from the visible close control", async () => {
+    await renderSurface();
+    fireEvent.click(screen.getByRole("button", { name: "Close mixer" }));
+    expect(ipc.invoke).toHaveBeenCalledWith("close_surface", {
+      surface: "window-mixer",
+    });
+  });
+
+  it("opens Settings and Help from the header actions", async () => {
+    await renderSurface();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Help" }));
+    expect(ipc.invoke).toHaveBeenCalledWith("open_surface", {
+      surface: "window-settings",
+    });
+    expect(ipc.invoke).toHaveBeenCalledWith("open_surface", {
+      surface: "window-help",
     });
   });
 

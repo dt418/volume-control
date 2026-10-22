@@ -41,7 +41,7 @@ describe("SignalRail", () => {
     expect(container.querySelector(".rail-fill.band-gray")).not.toBeNull();
   });
 
-  it("renders a circle thumb normally and a diamond marker plus Muted label when muted", () => {
+  it("renders a circle thumb normally and a diamond marker when muted", () => {
     const { container, rerender } = render(
       <SignalRail value={55} muted={false} thresholds={thresholds} />,
     );
@@ -51,6 +51,5 @@ describe("SignalRail", () => {
     rerender(<SignalRail value={55} muted={true} thresholds={thresholds} />);
     expect(container.querySelector(".rail-muted-diamond")).not.toBeNull();
     expect(container.querySelector(".rail-thumb")).toBeNull();
-    expect(screen.getByText("Muted")).toBeInTheDocument();
   });
 });
