@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { SurfaceCloseButton } from "../components/ui/surface-close-button";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { asLanguage, LanguageProvider, translatorFor } from "../lib/i18n";
 import { invoke, listen } from "../lib/ipc";
@@ -219,14 +220,7 @@ export function SettingsSurface() {
           <h1 className="text-base font-semibold">VolumeControl {tr("settings.title")}</h1>
           <p className="text-xs text-foreground/60">{tr("settings.subtitle")}</p>
         </div>
-        <button
-          type="button"
-          aria-label={tr("common.close")}
-          onClick={cancel}
-          className="rounded-md px-2 py-1 text-lg leading-none text-foreground/60 hover:bg-foreground/5 hover:text-foreground"
-        >
-          ×
-        </button>
+        <SurfaceCloseButton label={tr("common.close")} onClick={cancel} />
       </header>
 
       <div
@@ -293,14 +287,14 @@ export function SettingsSurface() {
             type="button"
             onClick={reset}
             disabled={!dirty || !draft}
-            className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm disabled:opacity-40"
+            className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
           >
             {tr("common.reset")}
           </button>
           <button
             type="button"
             onClick={cancel}
-            className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm"
+            className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {tr("common.cancel")}
           </button>
@@ -308,7 +302,7 @@ export function SettingsSurface() {
             type="button"
             onClick={() => void save()}
             disabled={!dirty || saving || !draft}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-40"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-40"
           >
             {tr("common.saveChanges")}
           </button>

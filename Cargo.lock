@@ -4857,6 +4857,7 @@ dependencies = [
 name = "volumectl"
 version = "0.1.9"
 dependencies = [
+ "env_logger",
  "global-hotkey",
  "gtk4",
  "gtk4-layer-shell",

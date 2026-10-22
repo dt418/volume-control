@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-22T12:25",
+  "last_updated": "2026-10-22T23:40",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,46 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-106",
+      "priority": 106,
+      "area": "windows-host",
+      "title": "Recover Windows audio after default-device changes and restore per-app sessions",
+      "user_visible_behavior": "Hotkeys and the mixer follow the current default playback device instead of the endpoint captured at launch, recover after a device disappears, write runtime diagnostics to %LOCALAPPDATA%\\VolumeControl\\logs\\runtime.log, and list per-app audio sessions in the mixer.",
+      "status": "passing",
+      "verification": [
+        "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features (362 passed), and sh scripts/check-tauri-deadlock.sh (10/10).",
+        "Manual endpoint smoke: switch default from Realtek to Intel, send Ctrl+Alt+Up; Intel changes 62% -> 63% while Realtek stays 50%. Switch back to Realtek, send Ctrl+Alt+Up; Realtek changes 50% -> 51% while Intel stays 63%.",
+        "Temporary WindowsSessions smoke example returned 2 sessions (Chrome and system sounds) after switching to direct IMMDevice::Activate(IAudioSessionManager2); the example was removed after the run.",
+        "Desktop launch created %LOCALAPPDATA%\\VolumeControl\\logs\\runtime.log and wrote startup plus endpoint-recovery debug records."
+      ],
+      "evidence": [
+        "audio_windows.rs now compares the stored IMMDevice id with the current default on every operation, re-acquires on mismatch, retries once on a failed call, and maps AUDCLNT_E_DEVICE_INVALIDATED / E_NOTFOUND to AudioError::DeviceLost.",
+        "audio_sessions_win32.rs activates IAudioSessionManager2 directly on IMMDevice and treats non-negative HRESULTs (including S_FALSE) as success.",
+        "The runtime log is append-only, rotated once at 2 MiB, and tees to stderr."
+      ],
+      "notes": "The previous implementation pinned the startup endpoint and used IAudioClient::GetService, which returned E_NOINTERFACE (0x80004002) on this host."
+    },
+    {
+      "id": "vol-107",
+      "priority": 107,
+      "area": "frontend",
+      "title": "Add discoverable mixer controls and compact the system-output card",
+      "user_visible_behavior": "The frameless mixer now has clickable Settings, Help, and Close controls in its header, the system-output card is compact enough to leave a visible app-session row, and focus/scrollbar styling is consistent across Mixer, Settings, and Help.",
+      "status": "passing",
+      "verification": [
+        "npm --prefix frontend test: 18 files, 112 tests passed.",
+        "npm --prefix frontend run build: TypeScript validation and Vite production build passed.",
+        "Manual smoke: the 416x233 mixer capture shows Settings, Help, and Close controls plus one app row; clicking the close control at the captured coordinates removed the mixer window while the tray process remained alive.",
+        "Manual screenshots of Settings and Help confirmed the shared 32px close control renders without layout regressions."
+      ],
+      "evidence": [
+        "SurfaceCloseButton.tsx provides one accessible close control for Mixer, Settings, and Help.",
+        "MixerSurface.tsx adds a header action cluster and opens Settings/Help through open_surface; SystemOutputRow.tsx replaces the duplicate rail/slider pair with one threshold-colored slider and icon actions.",
+        "SectionNav and Settings/Help footers now expose focus-visible rings; .surface-scroll has a slim custom scrollbar."
+      ],
+      "notes": "Mixer geometry remains the legacy 400x224 contract; the vertical savings come from the header and system card."
+    },
     {
       "id": "vol-104",
       "priority": 104,

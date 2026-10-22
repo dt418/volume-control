@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Card, CardContent } from "../components/ui/card";
 import { Kbd } from "../components/ui/kbd";
+import { SurfaceCloseButton } from "../components/ui/surface-close-button";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import {
   asLanguage,
@@ -177,14 +178,7 @@ export function HelpSurface() {
               <h1 className="text-lg font-semibold">VolumeControl</h1>
               <p className="text-sm text-foreground/60">{tr("help.shortcuts")}</p>
             </div>
-            <button
-              type="button"
-              aria-label={tr("help.close")}
-              onClick={close}
-              className="rounded-md px-2 py-1 text-foreground/60 hover:bg-foreground/5 hover:text-foreground"
-            >
-              ×
-            </button>
+            <SurfaceCloseButton label={tr("help.close")} onClick={close} />
           </div>
         </header>
 

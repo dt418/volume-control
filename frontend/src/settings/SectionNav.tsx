@@ -42,10 +42,10 @@ export function SectionNav({
           key={section}
           aria-pressed={active === section}
           onClick={() => onSelect(section)}
-          className={`shrink-0 rounded-md px-3 py-2 text-left text-sm ${
+          className={`shrink-0 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
             active === section
               ? "bg-accent/15 text-accent"
-              : "text-foreground/70 hover:bg-foreground/5"
+              : "text-foreground/70 hover:bg-foreground/5 hover:text-foreground"
           }`}
         >
           {tr(SECTION_LABELS[section])}

@@ -1,5 +1,42 @@
 # Progress Log
 
+## Session 126 (2026-10-22) - Recover Windows audio and make mixer controls discoverable
+
+- Goal: follow the current Windows default audio endpoint, recover after a
+  device disappears, restore per-app mixer sessions, add runtime file logging,
+  and fix the mixer's missing click-to-close affordance.
+- What landed:
+  - `audio_windows.rs` stores the IMMDevice id, re-acquires the default
+    endpoint when it changes, retries one failed call against a fresh
+    endpoint, and maps `AUDCLNT_E_DEVICE_INVALIDATED` / `E_NOTFOUND` to
+    `AudioError::DeviceLost`. Success checks accept `S_FALSE`.
+  - `audio_sessions_win32.rs` activates `IAudioSessionManager2` directly on
+    `IMMDevice`; `IAudioClient::GetService` returned `0x80004002` on this host.
+  - `lib.rs` tees Windows logs to
+    `%LOCALAPPDATA%\VolumeControl\logs\runtime.log` (2 MiB rotation).
+  - `SurfaceCloseButton` is shared by Mixer, Settings, and Help. The mixer
+    header now has Settings, Help, and Close actions; Escape still works.
+  - `SystemOutputRow` is one compact row with a threshold-colored slider and
+    icon mute/reset actions, leaving room for an app session in the fixed
+    400x224 mixer. Focus rings and slim scrollbars cover Settings/Help too.
+- Verification:
+  - `cargo fmt --all --check`, `git diff --check`,
+    `cargo clippy --workspace --all-targets --no-default-features -- -D
+    warnings`, and `cargo test --workspace --no-default-features` passed (362
+    tests); `sh scripts/check-tauri-deadlock.sh` passed 10/10.
+  - `npm --prefix frontend test` passed (18 files, 112 tests);
+    `npm --prefix frontend run build` passed.
+  - Endpoint smoke: default Realtek -> Intel + Ctrl+Alt+Up changed Intel
+    62% -> 63%, Realtek stayed 50%; switching back changed Realtek 50% -> 51%,
+    Intel stayed 63%.
+  - Temporary session smoke returned 2 sessions (`chrome.exe` plus system
+    sounds), proving the direct session-manager activation.
+  - Desktop launch produced the runtime log; the mixer screenshot showed the
+    new action cluster and one app row. A real mouse click on the close control
+    removed the mixer window while the tray process stayed alive.
+- Records: `vol-106` (audio recovery/sessions/logging) and `vol-107`
+  (discoverable mixer controls) added.
+
 ## Session 124 (2026-10-21) - Harden the desktop launch handoff for 0.1.9
 
 - Goal: eliminate the duplicate-background popup, first-login popup, core-lock

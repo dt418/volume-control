@@ -4,6 +4,27 @@ All notable changes to VolumeControl are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows audio follows the current default playback device; switching output
+  no longer leaves hotkeys controlling the endpoint captured at launch.
+- A removed audio endpoint is re-acquired automatically instead of leaving the
+  backend degraded until restart.
+- The mixer lists per-app audio sessions again (`IAudioSessionManager2` is
+  activated directly on the device; the old `IAudioClient::GetService` path
+  returned `E_NOINTERFACE` on Windows 11).
+- The mixer has clickable Settings, Help, and Close controls; Escape remains
+  available as a keyboard shortcut.
+- Windows runtime diagnostics are written to
+  `%LOCALAPPDATA%\VolumeControl\logs\runtime.log`.
+
+### Changed
+
+- The mixer's system-output card is more compact, uses one threshold-colored
+  slider, and exposes mute/reset as icon actions, leaving room for app sessions.
+- Close controls, focus rings, and scrollbars are consistent across Mixer,
+  Settings, and Help.
+
 ## [0.1.9] - 2026-10-21
 
 ### Fixed

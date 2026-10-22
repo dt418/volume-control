@@ -7,10 +7,16 @@ import { cn } from "../../lib/utils";
  * Minimal shadcn-style Slider (Radix). Full shadcn/ui output can replace this
  * when the design system is fleshed out in later tasks.
  */
+interface SliderProps
+  extends React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> {
+  /** Optional fill class, used by the mixer to color by volume band. */
+  rangeClassName?: string;
+}
+
 const Slider = React.forwardRef<
   React.ComponentRef<typeof SliderPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>
->(({ className, "aria-label": ariaLabel, ...props }, ref) => (
+  SliderProps
+>(({ className, "aria-label": ariaLabel, rangeClassName, ...props }, ref) => (
   <SliderPrimitive.Root
     ref={ref}
     className={cn(
@@ -20,7 +26,7 @@ const Slider = React.forwardRef<
     {...props}
   >
     <SliderPrimitive.Track className="relative h-1.5 w-full grow overflow-hidden rounded-full bg-foreground/20">
-      <SliderPrimitive.Range className="absolute h-full bg-accent" />
+      <SliderPrimitive.Range className={cn("absolute h-full bg-accent", rangeClassName)} />
     </SliderPrimitive.Track>
     {/* `role="slider"` lives on the Thumb, so the accessible name must go
         there (Radix keeps Root aria-label off the slider role element). */}

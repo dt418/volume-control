@@ -93,6 +93,26 @@ describe("MixerSurface", () => {
     });
   });
 
+  it("closes the window from the visible close control", async () => {
+    await renderSurface();
+    fireEvent.click(screen.getByRole("button", { name: "Close mixer" }));
+    expect(ipc.invoke).toHaveBeenCalledWith("close_surface", {
+      surface: "window-mixer",
+    });
+  });
+
+  it("opens Settings and Help from the header actions", async () => {
+    await renderSurface();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Help" }));
+    expect(ipc.invoke).toHaveBeenCalledWith("open_surface", {
+      surface: "window-settings",
+    });
+    expect(ipc.invoke).toHaveBeenCalledWith("open_surface", {
+      surface: "window-help",
+    });
+  });
+
   it("closes the window when the Rust side emits close_mixer_request while unfocused", async () => {
     await renderSurface();
     vi.spyOn(document, "hasFocus").mockReturnValue(false);

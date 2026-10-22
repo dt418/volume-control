@@ -1,25 +1,32 @@
 //! Windows audio backend — WASAPI default render endpoint via raw COM.
 //!
 //! `windows-sys` exposes COM interfaces as opaque `*mut c_void` pointers, so
-//! this module hand-rolls the vtable layouts for the three interfaces we need:
+//! this module hand-rolls the vtable layouts for the interfaces we need:
 //!
 //!   IMMDeviceEnumerator → GetDefaultAudioEndpoint
-//!   IMMDevice           → Activate
+//!   IMMDevice           → GetId / Activate
 //!   IAudioEndpointVolume → scalar volume + mute get/set
 //!
 //! Vtable layouts follow the published Win32 headers (Microsoft Learn).
 //! HRESULTs are i32; return codes are checked and mapped to [`AudioError`].
+//!
+//! The backend follows the current default render endpoint instead of pinning
+//! the endpoint selected at startup. Every operation compares the stored
+//! device id with the current default; a mismatch re-acquires the endpoint.
+//! Failed calls additionally trigger one re-acquire + retry, covering device
+//! removal races that happen between the id check and the call.
 //!
 //! Calling convention: a vtable *field* is a function pointer, so calls are
 //! written `(vtbl::<I>(this).method)(this, args...)` — the extra parentheses
 //! call the pointer stored in the field.
 
 use std::ffi::c_void;
+use std::sync::Mutex;
 
 use windows_sys::core::{GUID, PCWSTR};
 use windows_sys::Win32::{
     Media::Audio::{eConsole, eRender, EDataFlow, ERole},
-    System::Com::{CoCreateInstance, CLSCTX_ALL},
+    System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_ALL},
 };
 
 use crate::audio::{AudioBackend, AudioError, VolumeState};
@@ -30,6 +37,11 @@ const IID_IAUDIO_ENDPOINT_VOLUME: GUID = GUID::from_u128(0x5CDF2C82_841E_4546_97
 
 #[allow(clippy::upper_case_acronyms)]
 type HRESULT = i32;
+
+/// `AUDCLNT_E_DEVICE_INVALIDATED` (audioclient.h): the endpoint was removed.
+const AUDCLNT_E_DEVICE_INVALIDATED: HRESULT = 0x8889_0004u32 as i32;
+/// `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)`: no default endpoint.
+const E_NOTFOUND: HRESULT = 0x8007_0490u32 as i32;
 
 // ── COM vtable layouts (IUnknown prefix then interface methods) ────────────
 
@@ -106,16 +118,46 @@ unsafe fn vtbl<T>(this: *const c_void) -> &'static T {
     &**(this as *const *const T)
 }
 
-/// WASAPI default-output volume controller.
-pub struct WindowsAudio {
-    /// IAudioEndpointVolume* (owned; Release on Drop).
-    endpoint: *mut c_void,
-    /// IMMDeviceEnumerator* — released before the endpoint on Drop.
-    enumerator: *mut c_void,
-    device: *mut c_void,
+fn io_error(operation: &str, hr: HRESULT) -> AudioError {
+    if hr == AUDCLNT_E_DEVICE_INVALIDATED || hr == E_NOTFOUND {
+        AudioError::DeviceLost
+    } else {
+        AudioError::Io(format!("{operation}: 0x{hr:x}"))
+    }
 }
 
-// COM refcounts make these safe to move across threads.
+/// Owned endpoint pair (IAudioEndpointVolume + IMMDevice) plus the device id
+/// used to detect default-device changes.
+struct Endpoint {
+    endpoint: *mut c_void,
+    device: *mut c_void,
+    device_id: Vec<u16>,
+}
+
+impl Drop for Endpoint {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.endpoint.is_null() {
+                (vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint).release)(self.endpoint);
+            }
+            if !self.device.is_null() {
+                (vtbl::<IMMDeviceVtbl>(self.device).release)(self.device);
+            }
+        }
+    }
+}
+
+/// WASAPI default-output volume controller.
+pub struct WindowsAudio {
+    /// IMMDeviceEnumerator* (owned; released on Drop).
+    enumerator: *mut c_void,
+    /// Current default endpoint. `None` between a failed release and the next
+    /// acquisition attempt.
+    current: Mutex<Option<Endpoint>>,
+}
+
+// COM refcounts make these safe to move across threads; `current` serializes
+// endpoint access.
 unsafe impl Send for WindowsAudio {}
 unsafe impl Sync for WindowsAudio {}
 
@@ -142,87 +184,187 @@ impl WindowsAudio {
                 &IID_IMMDEVICE_ENUMERATOR,
                 &mut enumerator,
             );
-            if hr != 0 {
+            if hr < 0 {
                 return Err(AudioError::Init(format!(
                     "CoCreateInstance(MMDeviceEnumerator): 0x{hr:x}"
                 )));
             }
 
-            let mut device: *mut c_void = std::ptr::null_mut();
-            let hr = (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).get_default_audio_endpoint)(
-                enumerator,
-                eRender,
-                eConsole,
-                &mut device,
-            );
-            if hr != 0 {
-                (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                return Err(AudioError::Io(format!("GetDefaultAudioEndpoint: 0x{hr:x}")));
-            }
-
-            let mut endpoint: *mut c_void = std::ptr::null_mut();
-            let hr = (vtbl::<IMMDeviceVtbl>(device).activate)(
-                device,
-                &IID_IAUDIO_ENDPOINT_VOLUME,
-                CLSCTX_ALL,
-                std::ptr::null_mut(),
-                &mut endpoint,
-            );
-            if hr != 0 {
-                (vtbl::<IMMDeviceVtbl>(device).release)(device);
-                (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                return Err(AudioError::Io(format!(
-                    "Activate(IAudioEndpointVolume): 0x{hr:x}"
-                )));
-            }
+            let current = match Self::acquire_default(enumerator) {
+                Ok(endpoint) => endpoint,
+                Err(error) => {
+                    (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
+                    return Err(error);
+                }
+            };
 
             Ok(Self {
-                endpoint,
                 enumerator,
-                device,
+                current: Mutex::new(Some(current)),
             })
+        }
+    }
+
+    /// Read the id of the current default render device. The id buffer is
+    /// allocated by COM and freed with `CoTaskMemFree`.
+    unsafe fn current_default_id(enumerator: *mut c_void) -> Result<Vec<u16>, AudioError> {
+        let mut device: *mut c_void = std::ptr::null_mut();
+        let hr = (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).get_default_audio_endpoint)(
+            enumerator,
+            eRender,
+            eConsole,
+            &mut device,
+        );
+        if hr < 0 {
+            return Err(io_error("GetDefaultAudioEndpoint", hr));
+        }
+        let id = Self::copy_device_id(device);
+        (vtbl::<IMMDeviceVtbl>(device).release)(device);
+        id
+    }
+
+    unsafe fn copy_device_id(device: *mut c_void) -> Result<Vec<u16>, AudioError> {
+        let mut id: PCWSTR = std::ptr::null();
+        let hr = (vtbl::<IMMDeviceVtbl>(device).get_id)(device, &mut id);
+        if hr < 0 {
+            return Err(io_error("GetId", hr));
+        }
+        if id.is_null() {
+            return Err(AudioError::Io("GetId returned a null id".into()));
+        }
+        let mut len = 0usize;
+        while *id.add(len) != 0 {
+            len += 1;
+        }
+        let value = std::slice::from_raw_parts(id, len + 1).to_vec();
+        CoTaskMemFree(id as *const c_void);
+        Ok(value)
+    }
+
+    unsafe fn acquire_default(enumerator: *mut c_void) -> Result<Endpoint, AudioError> {
+        let mut device: *mut c_void = std::ptr::null_mut();
+        let hr = (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).get_default_audio_endpoint)(
+            enumerator,
+            eRender,
+            eConsole,
+            &mut device,
+        );
+        if hr < 0 {
+            return Err(io_error("GetDefaultAudioEndpoint", hr));
+        }
+
+        let device_id = match Self::copy_device_id(device) {
+            Ok(id) => id,
+            Err(error) => {
+                (vtbl::<IMMDeviceVtbl>(device).release)(device);
+                return Err(error);
+            }
+        };
+
+        let mut endpoint: *mut c_void = std::ptr::null_mut();
+        let hr = (vtbl::<IMMDeviceVtbl>(device).activate)(
+            device,
+            &IID_IAUDIO_ENDPOINT_VOLUME,
+            CLSCTX_ALL,
+            std::ptr::null_mut(),
+            &mut endpoint,
+        );
+        if hr < 0 {
+            (vtbl::<IMMDeviceVtbl>(device).release)(device);
+            return Err(io_error("Activate(IAudioEndpointVolume)", hr));
+        }
+
+        Ok(Endpoint {
+            endpoint,
+            device,
+            device_id,
+        })
+    }
+
+    /// Drop the cached endpoint when the default changed, then acquire the
+    /// new default when needed.
+    fn ensure_current(&self, slot: &mut Option<Endpoint>) -> Result<(), AudioError> {
+        let default_id = unsafe { Self::current_default_id(self.enumerator) }?;
+        if let Some(existing) = slot.as_ref() {
+            if existing.device_id == default_id {
+                return Ok(());
+            }
+            log::warn!("default audio endpoint changed; re-acquiring");
+            *slot = None;
+        }
+        *slot = Some(unsafe { Self::acquire_default(self.enumerator) }?);
+        Ok(())
+    }
+
+    /// Run `op` against the current endpoint. A failed call drops the endpoint
+    /// and retries once against a freshly acquired default. This handles both
+    /// a default-device switch and a device disappearing between the id check
+    /// and the call.
+    fn with_endpoint<T>(
+        &self,
+        op: impl Fn(*mut c_void) -> Result<T, AudioError>,
+    ) -> Result<T, AudioError> {
+        let _com = Self::init_com()?;
+        let mut slot = self
+            .current
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_current(&mut slot)?;
+
+        let endpoint = slot
+            .as_ref()
+            .expect("ensure_current always installs an endpoint")
+            .endpoint;
+        match op(endpoint) {
+            Ok(value) => Ok(value),
+            Err(first_error) => {
+                log::warn!("audio endpoint call failed ({first_error}); re-acquiring default");
+                *slot = None;
+                self.ensure_current(&mut slot)?;
+                let endpoint = slot
+                    .as_ref()
+                    .expect("ensure_current always installs an endpoint")
+                    .endpoint;
+                op(endpoint)
+            }
         }
     }
 }
 
 impl AudioBackend for WindowsAudio {
     fn get_state(&self) -> Result<VolumeState, AudioError> {
-        let _com = Self::init_com()?;
-        unsafe {
-            let v = vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint);
+        self.with_endpoint(|endpoint| unsafe {
+            let v = vtbl::<IAudioEndpointVolumeVtbl>(endpoint);
             let mut vol = 0.0_f32;
-            let hr = (v.get_master_volume_level_scalar)(self.endpoint, &mut vol);
-            if hr != 0 {
-                return Err(AudioError::Io(format!(
-                    "GetMasterVolumeLevelScalar: 0x{hr:x}"
-                )));
+            let hr = (v.get_master_volume_level_scalar)(endpoint, &mut vol);
+            if hr < 0 {
+                return Err(io_error("GetMasterVolumeLevelScalar", hr));
             }
             let mut muted = 0_i32;
-            let hr = (v.get_mute)(self.endpoint, &mut muted);
-            if hr != 0 {
-                return Err(AudioError::Io(format!("GetMute: 0x{hr:x}")));
+            let hr = (v.get_mute)(endpoint, &mut muted);
+            if hr < 0 {
+                return Err(io_error("GetMute", hr));
             }
             Ok(VolumeState {
                 volume: vol,
                 muted: muted != 0,
             })
-        }
+        })
     }
 
     fn set_volume(&self, volume: f32) -> Result<(), AudioError> {
-        let _com = Self::init_com()?;
         let v = volume.clamp(0.0, 1.0);
-        unsafe {
-            let hr = (vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint)
-                .set_master_volume_level_scalar)(
-                self.endpoint, v, std::ptr::null()
+        self.with_endpoint(|endpoint| unsafe {
+            let hr = (vtbl::<IAudioEndpointVolumeVtbl>(endpoint).set_master_volume_level_scalar)(
+                endpoint,
+                v,
+                std::ptr::null(),
             );
-            if hr != 0 {
-                return Err(AudioError::Io(format!(
-                    "SetMasterVolumeLevelScalar: 0x{hr:x}"
-                )));
+            if hr < 0 {
+                return Err(io_error("SetMasterVolumeLevelScalar", hr));
             }
-        }
+            Ok(())
+        })?;
         // Raising the volume unmutes, matching VolumePro's behaviour.
         if v > 0.0 {
             let _ = self.set_mute(false);
@@ -231,7 +373,6 @@ impl AudioBackend for WindowsAudio {
     }
 
     fn toggle_mute(&self) -> Result<VolumeState, AudioError> {
-        let _com = Self::init_com()?;
         let mut state = self.get_state()?;
         state.muted = !state.muted;
         self.set_mute(state.muted)?;
@@ -239,33 +380,57 @@ impl AudioBackend for WindowsAudio {
     }
 
     fn set_mute(&self, muted: bool) -> Result<(), AudioError> {
-        let _com = Self::init_com()?;
-        unsafe {
-            let hr = (vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint).set_mute)(
-                self.endpoint,
+        self.with_endpoint(|endpoint| unsafe {
+            let hr = (vtbl::<IAudioEndpointVolumeVtbl>(endpoint).set_mute)(
+                endpoint,
                 muted as i32,
                 std::ptr::null(),
             );
-            if hr != 0 {
-                return Err(AudioError::Io(format!("SetMute: 0x{hr:x}")));
+            if hr < 0 {
+                return Err(io_error("SetMute", hr));
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 }
 
 impl Drop for WindowsAudio {
     fn drop(&mut self) {
+        let mut current = self
+            .current
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Endpoint::drop releases both COM interfaces.
+        *current = None;
         unsafe {
-            if !self.endpoint.is_null() {
-                (vtbl::<IAudioEndpointVolumeVtbl>(self.endpoint).release)(self.endpoint);
-            }
-            if !self.device.is_null() {
-                (vtbl::<IMMDeviceVtbl>(self.device).release)(self.device);
-            }
             if !self.enumerator.is_null() {
                 (vtbl::<IMMDeviceEnumeratorVtbl>(self.enumerator).release)(self.enumerator);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalidated_and_missing_devices_map_to_device_lost() {
+        assert!(matches!(
+            io_error("x", AUDCLNT_E_DEVICE_INVALIDATED),
+            AudioError::DeviceLost
+        ));
+        assert!(matches!(io_error("x", E_NOTFOUND), AudioError::DeviceLost));
+    }
+
+    #[test]
+    fn other_hresults_keep_the_operation_and_code() {
+        match io_error("GetMute", 0x8000_4005u32 as i32) {
+            AudioError::Io(message) => {
+                assert!(message.contains("GetMute"));
+                assert!(message.contains("80004005"));
+            }
+            other => panic!("unexpected error: {other:?}"),
         }
     }
 }

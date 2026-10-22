@@ -7,8 +7,7 @@
 //! the published Win32 headers:
 //!
 //!   IMMDeviceEnumerator → GetDefaultAudioEndpoint
-//!   IMMDevice           → Activate(IID_IAudioClient)
-//!   IAudioClient        → GetService(IID_IAudioSessionManager2)
+//!   IMMDevice           → Activate(IID_IAudioSessionManager2)
 //!   IAudioSessionManager2 → GetSessionEnumerator
 //!   IAudioSessionEnumerator → GetCount / GetSession
 //!   IAudioSessionControl  → GetState / GetDisplayName
@@ -39,7 +38,6 @@ type HRESULT = i32;
 
 const CLSID_MMDEVICE_ENUMERATOR: GUID = GUID::from_u128(0xBCDE0395_E52F_467C_8E3D_C4579291692E);
 const IID_IMMDEVICE_ENUMERATOR: GUID = GUID::from_u128(0xA95664D2_9614_4F35_A746_DE8DB63617E6);
-const IID_IAUDIO_CLIENT: GUID = GUID::from_u128(0x1CB9AD4C_DBFA_4C32_B178_C2F568A703B2);
 const IID_IAUDIO_SESSION_MANAGER2: GUID = GUID::from_u128(0x77AA99A0_1BD6_484F_8BC7_2C654C9A9B6F);
 const IID_IAUDIO_SESSION_CONTROL2: GUID = GUID::from_u128(0xBFB7FF88_7239_4FC9_8FA2_07C950BE9C6D);
 const IID_ISIMPLE_AUDIO_VOLUME: GUID = GUID::from_u128(0x87CE5498_68D6_44E5_9215_6DA47EF883D8);
@@ -83,35 +81,6 @@ struct IMMDeviceVtbl {
     open_property_store: unsafe extern "system" fn(*mut c_void, u32, *mut *mut c_void) -> HRESULT,
     get_id: unsafe extern "system" fn(*mut c_void, *mut *const u16) -> HRESULT,
     get_state: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
-}
-
-#[repr(C)]
-struct IAudioClientVtbl {
-    query_interface:
-        unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
-    add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
-    release: unsafe extern "system" fn(*mut c_void) -> u32,
-    initialize: unsafe extern "system" fn(
-        *mut c_void,
-        u32,
-        u32,
-        i64,
-        i64,
-        *const c_void,
-        *const GUID,
-    ) -> HRESULT,
-    get_buffer_size: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
-    get_stream_latency: unsafe extern "system" fn(*mut c_void, *mut i64) -> HRESULT,
-    get_current_padding: unsafe extern "system" fn(*mut c_void, *mut u32) -> HRESULT,
-    is_format_supported:
-        unsafe extern "system" fn(*mut c_void, *const c_void, *mut *mut c_void) -> HRESULT,
-    get_mix_format: unsafe extern "system" fn(*mut c_void, *mut *mut c_void) -> HRESULT,
-    get_device_period: unsafe extern "system" fn(*mut c_void, *mut i64, *mut i64) -> HRESULT,
-    start: unsafe extern "system" fn(*mut c_void) -> HRESULT,
-    stop: unsafe extern "system" fn(*mut c_void) -> HRESULT,
-    reset: unsafe extern "system" fn(*mut c_void) -> HRESULT,
-    set_event_handle: unsafe extern "system" fn(*mut c_void, *mut c_void) -> HRESULT,
-    get_service: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
 }
 
 #[repr(C)]
@@ -253,7 +222,7 @@ impl SessionsSource for WindowsSessions {
                     target,
                     std::ptr::null(),
                 );
-                if hr != 0 {
+                if hr < 0 {
                     return Err(format!("SetMasterVolume: 0x{hr:x}"));
                 }
                 Ok(())
@@ -268,11 +237,11 @@ impl SessionsSource for WindowsSessions {
                 let sv = vtbl::<ISimpleAudioVolumeVtbl>(simple);
                 let mut muted = 0_i32;
                 let hr = (sv.get_mute)(simple, &mut muted);
-                if hr != 0 {
+                if hr < 0 {
                     return Err(format!("GetMute: 0x{hr:x}"));
                 }
                 let hr = (sv.set_mute)(simple, if muted == 0 { 1 } else { 0 }, std::ptr::null());
-                if hr != 0 {
+                if hr < 0 {
                     return Err(format!("SetMute: 0x{hr:x}"));
                 }
                 Ok(())
@@ -283,13 +252,12 @@ impl SessionsSource for WindowsSessions {
 
 // ── COM acquisition / enumeration ──────────────────────────────────────────
 
-/// Owned COM chain for one enumeration round: enumerator → device → client →
+/// Owned COM chain for one enumeration round: enumerator → device →
 /// session manager → session enumerator. Released in reverse on drop, then
 /// the COM apartment is uninitialized iff this round initialized it (STA).
 struct SessionChain {
     enumerator: *mut c_void,
     device: *mut c_void,
-    client: *mut c_void,
     manager: *mut c_void,
     sessions: *mut c_void,
     /// STA apartment guard (see `com_guard`): the Tauri main thread must stay
@@ -315,7 +283,7 @@ impl SessionChain {
                 &IID_IMMDEVICE_ENUMERATOR,
                 &mut enumerator,
             );
-            if hr != 0 {
+            if hr < 0 {
                 return Err(format!("CoCreateInstance(MMDeviceEnumerator): 0x{hr:x}"));
             }
             let mut device: *mut c_void = std::ptr::null_mut();
@@ -325,43 +293,30 @@ impl SessionChain {
                 eConsole,
                 &mut device,
             );
-            if hr != 0 {
+            if hr < 0 {
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
                 return Err(format!("GetDefaultAudioEndpoint: 0x{hr:x}"));
             }
-            let mut client: *mut c_void = std::ptr::null_mut();
+            let mut manager: *mut c_void = std::ptr::null_mut();
             let hr = (vtbl::<IMMDeviceVtbl>(device).activate)(
                 device,
-                &IID_IAUDIO_CLIENT,
+                &IID_IAUDIO_SESSION_MANAGER2,
                 CLSCTX_ALL,
                 std::ptr::null_mut(),
-                &mut client,
-            );
-            if hr != 0 {
-                (vtbl::<IMMDeviceVtbl>(device).release)(device);
-                (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                return Err(format!("Activate(IAudioClient): 0x{hr:x}"));
-            }
-            let mut manager: *mut c_void = std::ptr::null_mut();
-            let hr = (vtbl::<IAudioClientVtbl>(client).get_service)(
-                client,
-                &IID_IAUDIO_SESSION_MANAGER2,
                 &mut manager,
             );
-            if hr != 0 {
-                (vtbl::<IAudioClientVtbl>(client).release)(client);
+            if hr < 0 {
                 (vtbl::<IMMDeviceVtbl>(device).release)(device);
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
-                return Err(format!("GetService(IAudioSessionManager2): 0x{hr:x}"));
+                return Err(format!("Activate(IAudioSessionManager2): 0x{hr:x}"));
             }
             let mut sessions: *mut c_void = std::ptr::null_mut();
             let hr = (vtbl::<IAudioSessionManager2Vtbl>(manager).get_session_enumerator)(
                 manager,
                 &mut sessions,
             );
-            if hr != 0 {
+            if hr < 0 {
                 (vtbl::<IAudioSessionManager2Vtbl>(manager).release)(manager);
-                (vtbl::<IAudioClientVtbl>(client).release)(client);
                 (vtbl::<IMMDeviceVtbl>(device).release)(device);
                 (vtbl::<IMMDeviceEnumeratorVtbl>(enumerator).release)(enumerator);
                 return Err(format!("GetSessionEnumerator: 0x{hr:x}"));
@@ -369,7 +324,6 @@ impl SessionChain {
             Ok(Self {
                 enumerator,
                 device,
-                client,
                 manager,
                 sessions,
                 com,
@@ -386,9 +340,6 @@ impl Drop for SessionChain {
             }
             if !self.manager.is_null() {
                 (vtbl::<IAudioSessionManager2Vtbl>(self.manager).release)(self.manager);
-            }
-            if !self.client.is_null() {
-                (vtbl::<IAudioClientVtbl>(self.client).release)(self.client);
             }
             if !self.device.is_null() {
                 (vtbl::<IMMDeviceVtbl>(self.device).release)(self.device);
@@ -408,12 +359,12 @@ unsafe fn enumerate_sessions(chain: &SessionChain) -> Vec<AudioSessionInfo> {
     let mut sessions = Vec::new();
     let evt = vtbl::<IAudioSessionEnumeratorVtbl>(chain.sessions);
     let mut count: i32 = 0;
-    if (evt.get_count)(chain.sessions, &mut count) != 0 {
+    if (evt.get_count)(chain.sessions, &mut count) < 0 {
         return sessions;
     }
     for i in 0..count {
         let mut control: *mut c_void = std::ptr::null_mut();
-        if (evt.get_session)(chain.sessions, i, &mut control) != 0 {
+        if (evt.get_session)(chain.sessions, i, &mut control) < 0 {
             continue;
         }
         let cv = vtbl::<IAudioSessionControlVtbl>(control);
@@ -479,12 +430,12 @@ where
     let evt = vtbl::<IAudioSessionEnumeratorVtbl>(chain.sessions);
     let mut count: i32 = 0;
     let hr = (evt.get_count)(chain.sessions, &mut count);
-    if hr != 0 {
+    if hr < 0 {
         return Err(format!("GetCount: 0x{hr:x}"));
     }
     for i in 0..count {
         let mut control: *mut c_void = std::ptr::null_mut();
-        if (evt.get_session)(chain.sessions, i, &mut control) != 0 {
+        if (evt.get_session)(chain.sessions, i, &mut control) < 0 {
             continue;
         }
         let cv = vtbl::<IAudioSessionControlVtbl>(control);

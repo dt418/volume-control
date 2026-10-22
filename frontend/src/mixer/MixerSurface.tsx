@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Search } from "lucide-react";
+import { CircleHelp, Search, Settings } from "lucide-react";
 
+import { SurfaceCloseButton } from "../components/ui/surface-close-button";
 import { invoke, listen } from "../lib/ipc";
 import { translatorFor, LanguageProvider } from "../lib/i18n";
 import { surfaceErrorMessage } from "../lib/surface";
@@ -32,17 +33,23 @@ export function MixerSurface() {
   const [query, setQuery] = useState("");
   const tr = translatorFor(language);
 
+  const close = useCallback(() => {
+    void invoke<void>("close_surface", { surface: "window-mixer" }).catch(() => {});
+  }, []);
+
+  const openSurface = useCallback((surface: "window-settings" | "window-help") => {
+    void invoke<void>("open_surface", { surface }).catch(() => {});
+  }, []);
+
   // Esc fallback for closing the frameless mixer window (spec §9.3); the Rust
   // side additionally closes it on Focused(false) for outside clicks.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        void invoke<void>("close_surface", { surface: "window-mixer" }).catch(() => {});
-      }
+      if (event.key === "Escape") close();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [close]);
 
   // The Rust WindowManager emits `close_mixer_request` when the window loses
   // focus (outside click / Alt+Tab) — WindowEvent::Focused(false) is reliable
@@ -60,7 +67,7 @@ export function MixerSurface() {
       unlisten = u;
     });
     return () => unlisten?.();
-  }, []);
+  }, [close]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -93,13 +100,42 @@ export function MixerSurface() {
     <LanguageProvider language={language}>
     <main data-surface="mixer" className="mixer-surface surface-shell h-dvh min-h-0 overflow-hidden glass-surface flex flex-col gap-1 p-2">
       <header data-testid="surface-header" className="flex flex-shrink-0 flex-col gap-2">
-        <h1 className="text-sm font-semibold">{tr("mixer.title")}</h1>
-        <div className="text-xs text-foreground/80">
-          {muted ? (
-            <span className="font-medium">{tr("common.muted")}</span>
-          ) : (
-            `${tr("common.volume")} ${volumePct}%`
-          )}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h1 className="truncate text-sm font-semibold">{tr("mixer.title")}</h1>
+            <span className="shrink-0 text-xs text-foreground/80">
+              {muted ? (
+                <span className="font-medium">{tr("common.muted")}</span>
+              ) : (
+                `${tr("common.volume")} ${volumePct}%`
+              )}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              aria-label={tr("settings.title")}
+              title={tr("settings.title")}
+              onClick={() => openSurface("window-settings")}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:bg-foreground/15"
+            >
+              <Settings aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label={tr("help.title")}
+              title={tr("help.title")}
+              onClick={() => openSurface("window-help")}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground/65 transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent active:bg-foreground/15"
+            >
+              <CircleHelp aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <SurfaceCloseButton
+              label={tr("mixer.close")}
+              title={`${tr("mixer.close")} (Esc)`}
+              onClick={close}
+            />
+          </div>
         </div>
 
       <div className="relative">
