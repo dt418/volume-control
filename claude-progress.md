@@ -35,6 +35,7 @@
   - Fixed macOS compile: `request_notification_permission` uses `objc2::runtime::Bool` in completion block.
   - Fixed E2E: updated `settings.e2e.ts` and `help.e2e.ts` expected title to `"Volume Control"`.
   - Fixed `ensure_current`: avoids extra COM round-trip when slot is `None`.
+  - Pinned `@tauri-apps/api` to `2.11.1` and `@tauri-apps/plugin-notification` to `2.4.0` in `frontend/package.json` to match Rust crate major/minor versions and resolve `tauri build` mismatches.
   - `cargo fmt --all --check`, `git diff --check`, `cargo clippy
     --workspace --all-targets --no-default-features -- -D warnings`, and
     `cargo test --workspace --no-default-features` passed.

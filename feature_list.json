@@ -47,7 +47,8 @@
         "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features, npm --prefix frontend test, and npm --prefix frontend run build.",
         "Browser smoke of docs/index.html in English and Vietnamese confirms the release banner and changelog render from the GitHub API.",
         "Review pass (2026-10-23): non-Windows `running_apps` fallback added; notification plugin registered in the production builder; macOS `request_notification_permission` uses UNUserNotificationCenter; automatic checks share a 10-minute language-scoped cache; `open_release` validates the release URL and opens it natively. Full frontend suite passed 126 tests and the production build passed; cargo test --workspace --no-default-features passed (304 volumectl lib tests plus workspace integration suites); cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed.",
-        "Browser RED-to-GREEN smoke (2026-10-23): mocked releases ordered as prerelease v9.9.9 then stable v1.0.0 showed v9.9.9 before the fix and v1.0.0 after it for both fresh fetch and an existing session cache."
+        "Browser RED-to-GREEN smoke (2026-10-23): mocked releases ordered as prerelease v9.9.9 then stable v1.0.0 showed v9.9.9 before the fix and v1.0.0 after it for both fresh fetch and an existing session cache.",
+        "Dependency alignment (2026-10-23): pinned @tauri-apps/api (2.11.1) and @tauri-apps/plugin-notification (2.4.0) to match Rust crate major/minor versions; confirmed tauri build succeeds without version-mismatch error."
       ],
       "evidence": [
         "Tauri notification plugin registered with notification:default capability; permission is requested before the first native alert.",
