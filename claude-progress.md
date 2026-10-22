@@ -29,7 +29,12 @@
   - Update links open through a validated native `open_release` command.
   - Session payloads carry `process`, so friendly + process labels no longer
     duplicate the display name.
-- Verification:
+  - Fixed `icon_to_png`: `GetDIBits` now reads the color HBITMAP while unselected.
+  - Fixed landing page: `isStableRelease` rejects prereleases in fresh and cached data.
+  - Fixed Linux dead-code: `merge_running_app` gated with `#[cfg(any(target_os = "windows", test))]`.
+  - Fixed macOS compile: `request_notification_permission` uses `objc2::runtime::Bool` in completion block.
+  - Fixed E2E: updated `settings.e2e.ts` and `help.e2e.ts` expected title to `"Volume Control"`.
+  - Fixed `ensure_current`: avoids extra COM round-trip when slot is `None`.
   - `cargo fmt --all --check`, `git diff --check`, `cargo clippy
     --workspace --all-targets --no-default-features -- -D warnings`, and
     `cargo test --workspace --no-default-features` passed.

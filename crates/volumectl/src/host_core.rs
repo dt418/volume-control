@@ -115,6 +115,7 @@ pub struct RunningApp {
 
 /// Merge one window's process into the picker list, keeping one row per
 /// process. The first non-empty window title is used.
+#[cfg(any(target_os = "windows", test))]
 fn merge_running_app(
     apps: &mut Vec<RunningApp>,
     process: String,
@@ -1420,8 +1421,8 @@ unsafe fn icon_to_png(icon: windows_sys::Win32::UI::WindowsAndMessaging::HICON) 
     use std::ffi::c_void;
     use std::mem::{size_of, zeroed};
     use windows_sys::Win32::Graphics::Gdi::{
-        CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject, BITMAP,
-        BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HGDIOBJ,
+        CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, BITMAP, BITMAPINFO,
+        BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HGDIOBJ,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetIconInfo, ICONINFO};
 
@@ -1462,7 +1463,6 @@ unsafe fn icon_to_png(icon: windows_sys::Win32::UI::WindowsAndMessaging::HICON) 
         if dc == 0 {
             return None;
         }
-        let old = SelectObject(dc, info.hbmColor as HGDIOBJ);
         let lines = GetDIBits(
             dc,
             info.hbmColor,
@@ -1472,7 +1472,6 @@ unsafe fn icon_to_png(icon: windows_sys::Win32::UI::WindowsAndMessaging::HICON) 
             &mut bmi,
             DIB_RGB_COLORS,
         );
-        SelectObject(dc, old);
         DeleteDC(dc);
         if lines == 0 {
             return None;

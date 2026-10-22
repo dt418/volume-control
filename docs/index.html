@@ -615,6 +615,9 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
   var BASE = "https://github.com/dt418/volume-control/releases/latest/download";
   var WINGET_LIVE = false;   // flip to true once PR #454508 merges into microsoft/winget-pkgs and winget CDN indexes dt418.VolumeControl
 
+  var savedLang = null;
+  try { savedLang = localStorage.getItem("vc-lang"); } catch (e) {}
+  var activeLang = savedLang || (/^vi/i.test(navigator.language || "") ? "vi" : "en");
   var NOTES = {
     win: {
       install: "",
@@ -847,6 +850,9 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       list.appendChild(details);
     });
   }
+  function isStableRelease(release) {
+    return release && !release.prerelease && /^v\d+\.\d+\.\d+$/.test(release.tag_name || "");
+  }
   function renderReleaseData(releases) {
     if (!Array.isArray(releases) || !releases.length) return;
     releaseCache = releases;
@@ -861,8 +867,11 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
     var KEY = "vc-releases", cached = null;
     try { cached = JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch (e) {}
     if (cached && Date.now() - cached.t < 3600000 && Array.isArray(cached.releases)) {
-      renderReleaseData(cached.releases);
-      return;
+      var cachedReleases = cached.releases.filter(isStableRelease);
+      if (cachedReleases.length) {
+        renderReleaseData(cachedReleases);
+        return;
+      }
     }
     fetch("https://api.github.com/repos/dt418/volume-control/releases?per_page=5", {
       headers: { Accept: "application/vnd.github+json" }
@@ -870,9 +879,7 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
       .then(function (data) {
         if (!Array.isArray(data)) return;
-        var releases = data.filter(function (release) {
-          return release && /^v\d+\.\d+\.\d+$/.test(release.tag_name || "");
-        });
+        var releases = data.filter(isStableRelease);
         if (!releases.length) return;
         renderReleaseData(releases);
         try { sessionStorage.setItem(KEY, JSON.stringify({ releases: releases, t: Date.now() })); } catch (e) {}
@@ -1107,9 +1114,6 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
 
 
   var langBtn = document.getElementById("lang-btn");
-  var savedLang = null;
-  try { savedLang = localStorage.getItem("vc-lang"); } catch (e) {}
-  var activeLang = savedLang || (/^vi/i.test(navigator.language || "") ? "vi" : "en");
 
   function applyLanguage(lang) {
     activeLang = lang;

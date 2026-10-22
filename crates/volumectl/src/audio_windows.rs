@@ -284,8 +284,8 @@ impl WindowsAudio {
     /// Drop the cached endpoint when the default changed, then acquire the
     /// new default when needed.
     fn ensure_current(&self, slot: &mut Option<Endpoint>) -> Result<(), AudioError> {
-        let default_id = unsafe { Self::current_default_id(self.enumerator) }?;
         if let Some(existing) = slot.as_ref() {
+            let default_id = unsafe { Self::current_default_id(self.enumerator) }?;
             if existing.device_id == default_id {
                 return Ok(());
             }

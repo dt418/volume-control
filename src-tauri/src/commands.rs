@@ -170,13 +170,14 @@ pub async fn request_notification_permission() -> Result<bool, String> {
     {
         return tauri::async_runtime::spawn_blocking(|| {
             use block2::RcBlock;
+            use objc2::runtime::Bool;
             use objc2_foundation::NSError;
             use objc2_user_notifications::{UNAuthorizationOptions, UNUserNotificationCenter};
             use std::sync::mpsc;
 
             let (tx, rx) = mpsc::channel();
-            let handler = RcBlock::new(move |granted: bool, _error: *mut NSError| {
-                let _ = tx.send(granted);
+            let handler = RcBlock::new(move |granted: Bool, _error: *mut NSError| {
+                let _ = tx.send(granted.as_bool());
             });
             let center = UNUserNotificationCenter::currentNotificationCenter();
             center.requestAuthorizationWithOptions_completionHandler(

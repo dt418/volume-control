@@ -18,7 +18,7 @@ describe("Help surface", () => {
 
   it("renders shortcut cards, status badges, and footer actions", async () => {
     const started = performance.now();
-    await expect($(selectors.surfaceTitle("help"))).toHaveText("VolumeControl");
+    await expect($(selectors.surfaceTitle("help"))).toHaveText("Volume Control");
     await expect($(selectors.header("help"))).toBeDisplayed();
     await expect($(selectors.content("help"))).toBeDisplayed();
     await expect($(selectors.footer("help"))).toBeDisplayed();

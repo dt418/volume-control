@@ -21,16 +21,18 @@
       "area": "ui",
       "title": "Show friendly, configurable application names in the mixer and blacklist",
       "user_visible_behavior": "Mixer sessions and the Settings app picker/blacklist show product names such as Google Chrome instead of chrome.exe. Settings offers friendly, friendly + process, or process-only labels; non-running blacklist entries are resolved through App Paths for icons and names.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features, npm --prefix frontend test, and npm --prefix frontend run build.",
-        "Review pass (2026-10-23): the session payload exposes the normalized process name separately from the display name; `app_label_style=both` now shows `Google Chrome (chrome.exe)` instead of duplicating the display name. Affected MixerSurface tests passed, and the full frontend suite passed 126 tests."
+        "Review pass (2026-10-23): the session payload exposes the normalized process name separately from the display name; `app_label_style=both` now shows `Google Chrome (chrome.exe)` instead of duplicating the display name. Affected MixerSurface tests passed, and the full frontend suite passed 126 tests.",
+        "Focused Windows smoke (2026-10-23): `cargo test -p volumectl executable_icon_is_a_png_data_url --no-default-features` passed after removing the color bitmap selection before `GetDIBits`."
       ],
       "evidence": [
         "Backend resolves ProductName/FileDescription version resources and falls back to a title-cased process name.",
         "app_label_style persists in config.ini and is exposed by the Settings General section.",
         "Mixer search, session rows, running-app picker, and blacklist rows share the same label formatter.",
-        "Session rows and the blacklist editor format labels from name + process + display_name so the combined style is distinct from friendly-only."
+        "Session rows and the blacklist editor format labels from name + process + display_name so the combined style is distinct from friendly-only.",
+        "The Win32 shell-icon path leaves the color HBITMAP unselected during `GetDIBits`, matching its documented precondition."
       ],
       "notes": "Default is friendly; process-only remains available for users who need exact executable matching."
     },
@@ -44,13 +46,15 @@
       "verification": [
         "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features, npm --prefix frontend test, and npm --prefix frontend run build.",
         "Browser smoke of docs/index.html in English and Vietnamese confirms the release banner and changelog render from the GitHub API.",
-        "Review pass (2026-10-23): non-Windows `running_apps` fallback added; notification plugin registered in the production builder; macOS `request_notification_permission` uses UNUserNotificationCenter; automatic checks share a 10-minute language-scoped cache; `open_release` validates the release URL and opens it natively. Full frontend suite passed 126 tests and the production build passed; cargo test --workspace --no-default-features passed (304 volumectl lib tests plus workspace integration suites); cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed."
+        "Review pass (2026-10-23): non-Windows `running_apps` fallback added; notification plugin registered in the production builder; macOS `request_notification_permission` uses UNUserNotificationCenter; automatic checks share a 10-minute language-scoped cache; `open_release` validates the release URL and opens it natively. Full frontend suite passed 126 tests and the production build passed; cargo test --workspace --no-default-features passed (304 volumectl lib tests plus workspace integration suites); cargo clippy --workspace --all-targets --no-default-features -- -D warnings passed.",
+        "Browser RED-to-GREEN smoke (2026-10-23): mocked releases ordered as prerelease v9.9.9 then stable v1.0.0 showed v9.9.9 before the fix and v1.0.0 after it for both fresh fetch and an existing session cache."
       ],
       "evidence": [
         "Tauri notification plugin registered with notification:default capability; permission is requested before the first native alert.",
         "Mixer listens to state://update and auto-checks; Settings shares the same update event and notification path.",
         "docs/index.html fetches the latest five releases, labels them bilingually, and uses textContent for release notes.",
-        "Update banners and the Settings card call the validated `open_release` command instead of relying on `target=\"_blank\"` popups in the Tauri webview."
+        "Update banners and the Settings card call the validated `open_release` command instead of relying on `target=\"_blank\"` popups in the Tauri webview.",
+        "docs/index.html applies one stable-release predicate to cached and fresh data: a stable semantic tag and `prerelease=false`."
       ],
       "notes": "Native notifications are best-effort and deduplicated per version in localStorage; automatic checks are cached for 10 minutes while the Settings button forces a fresh check."
     },
