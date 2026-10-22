@@ -11,12 +11,13 @@ vi.mock("../lib/ipc", () => ({
 describe("UpdateCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(ipc.invoke).mockResolvedValue({});
   });
 
   it("shows package version before any update check", () => {
     render(<UpdateCard />);
 
-    expect(screen.getByText("v0.1.9")).toBeInTheDocument();
+    expect(screen.getByText("v0.1.10")).toBeInTheDocument();
   });
 
   it("renders check for updates button", () => {
@@ -38,12 +39,19 @@ describe("UpdateCard", () => {
     fireEvent.click(btn);
 
     await waitFor(() => {
-      expect(ipc.invoke).toHaveBeenCalledWith("check_for_updates");
+      expect(ipc.invoke).toHaveBeenCalledWith("check_for_updates", {
+        force: true,
+      });
       expect(screen.getByText("New version available: v0.1.8")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "View release notes" })).toHaveAttribute(
+      const link = screen.getByRole("link", { name: "View release notes" });
+      expect(link).toHaveAttribute(
         "href",
         "https://github.com/dt418/volume-control/releases/tag/v0.1.8"
       );
+      fireEvent.click(link);
+      expect(ipc.invoke).toHaveBeenCalledWith("open_release", {
+        url: "https://github.com/dt418/volume-control/releases/tag/v0.1.8",
+      });
     });
   });
 
@@ -52,7 +60,7 @@ describe("UpdateCard", () => {
       current_version: "0.1.7",
       latest_version: "v0.1.7",
       is_update_available: false,
-      message: "VolumeControl is up to date",
+      message: "Volume Control is up to date",
     });
 
     render(<UpdateCard />);
@@ -60,7 +68,7 @@ describe("UpdateCard", () => {
     fireEvent.click(btn);
 
     await waitFor(() => {
-      expect(screen.getByText("VolumeControl is up to date")).toBeInTheDocument();
+      expect(screen.getByText("Volume Control is up to date")).toBeInTheDocument();
     });
   });
 });

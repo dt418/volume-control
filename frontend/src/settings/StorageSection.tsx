@@ -50,6 +50,7 @@ export function StorageSection({ notice }: { notice?: ConfigLoadNotice | null })
             {tr(NOTICE_KEYS[notice])}
           </p>
         )}
+        <p className="text-xs text-foreground/60">{tr("storage.uiOnly")}</p>
         <p className="break-all text-foreground/80">
           {path ?? tr("storage.loadingPath")}
         </p>

@@ -161,7 +161,9 @@ export function HelpSurface() {
   }, [onKeyDown]);
 
   useEffect(() => {
-    document.title = `VolumeControl ${tr("help.title")}`;
+    const title = tr("app.window.help");
+    document.title = title;
+    void invoke<void>("set_window_title", { title }).catch(() => {});
   }, [tr]);
 
   return (
@@ -175,7 +177,7 @@ export function HelpSurface() {
           <div aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-accent" />
           <div className="flex items-start justify-between px-4 pb-2 pt-6">
             <div>
-              <h1 className="text-lg font-semibold">VolumeControl</h1>
+              <h1 className="text-lg font-semibold">{tr("app.name")}</h1>
               <p className="text-sm text-foreground/60">{tr("help.shortcuts")}</p>
             </div>
             <SurfaceCloseButton label={tr("help.close")} onClick={close} />

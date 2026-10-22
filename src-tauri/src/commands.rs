@@ -1,13 +1,16 @@
 //! Tauri commands: the webview ↔ AppCore bridge. Every command returns
 //! `Result<T, String>` so IPC failures surface as inline toasts in the UI.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use volumectl_lib::autostart::AutostartStatus;
 use volumectl_lib::config::HotkeyModifier;
-use volumectl_lib::host_core::{AppCore, AudioSessionInfo, BootstrapPayload, SettingsPatch};
+use volumectl_lib::host_core::{
+    AppCore, AudioSessionInfo, BootstrapPayload, RunningApp, SettingsPatch,
+};
 use volumectl_lib::ui::AppAction;
 
 use crate::window_manager::{SurfaceId, WindowManager};
@@ -149,6 +152,90 @@ pub fn save_config(core: State<'_, Arc<Mutex<AppCore>>>) -> Result<(), String> {
     core.lock().map_err(|e| e.to_string())?.save_config()
 }
 
+/// Localized native window title for the current surface (Settings/Help).
+/// The frontend knows the active language; the OS titlebar must follow it.
+#[tauri::command]
+pub fn set_window_title(window: WebviewWindow, title: String) -> Result<(), String> {
+    window.set_title(&title).map_err(|error| error.to_string())
+}
+
+/// Ask the OS for notification authorization before the first alert.
+///
+/// The Tauri desktop notification plugin reports `granted` unconditionally on
+/// desktop, so macOS needs the native `UNUserNotificationCenter` request;
+/// Windows and Linux have no per-app permission prompt and return `true`.
+#[tauri::command]
+pub async fn request_notification_permission() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        return tauri::async_runtime::spawn_blocking(|| {
+            use block2::RcBlock;
+            use objc2_foundation::NSError;
+            use objc2_user_notifications::{UNAuthorizationOptions, UNUserNotificationCenter};
+            use std::sync::mpsc;
+
+            let (tx, rx) = mpsc::channel();
+            let handler = RcBlock::new(move |granted: bool, _error: *mut NSError| {
+                let _ = tx.send(granted);
+            });
+            let center = UNUserNotificationCenter::currentNotificationCenter();
+            center.requestAuthorizationWithOptions_completionHandler(
+                UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound,
+                &handler,
+            );
+            rx.recv_timeout(Duration::from_secs(30))
+                .map_err(|_| "notification permission request timed out".to_string())
+        })
+        .await
+        .map_err(|error| error.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    Ok(true)
+}
+
+#[tauri::command]
+pub fn running_apps() -> Result<Vec<RunningApp>, String> {
+    Ok(volumectl_lib::host_core::running_apps())
+}
+
+#[tauri::command]
+pub fn resolve_apps(processes: Vec<String>) -> Result<Vec<RunningApp>, String> {
+    Ok(volumectl_lib::host_core::resolve_apps(&processes))
+}
+
+/// Open a trusted GitHub release page in the user's default browser.
+///
+/// Wry does not reliably forward `target="_blank"` popups on every desktop,
+/// so the banner uses an explicit opener. The URL prefix check keeps this
+/// command from becoming a generic external-command launcher.
+#[tauri::command]
+pub fn open_release(url: String) -> Result<(), String> {
+    const RELEASE_PREFIX: &str = "https://github.com/dt418/volume-control/releases";
+    let tail = url
+        .strip_prefix(RELEASE_PREFIX)
+        .ok_or("open_release: only VolumeControl release URLs are allowed")?;
+    if !tail.is_empty() && !tail.starts_with('/') {
+        return Err("open_release: only VolumeControl release URLs are allowed".into());
+    }
+    let mut command = if cfg!(target_os = "windows") {
+        let mut command = std::process::Command::new("explorer");
+        command.arg(&url);
+        command
+    } else if cfg!(target_os = "macos") {
+        let mut command = std::process::Command::new("open");
+        command.arg(&url);
+        command
+    } else {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(&url);
+        command
+    };
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("open_release failed: {error}"))
+}
+
 #[tauri::command]
 pub fn get_audio_sessions(
     core: State<'_, Arc<Mutex<AppCore>>>,
@@ -179,7 +266,7 @@ pub fn set_session_volume(
 #[tauri::command]
 pub fn mute_session(
     app: AppHandle,
-    core: State<'_, Mutex<AppCore>>,
+    core: State<'_, Arc<Mutex<AppCore>>>,
     id: String,
 ) -> Result<(), String> {
     let mut core = core.lock().map_err(|e| e.to_string())?;
@@ -241,15 +328,54 @@ pub async fn surface_ready(app: AppHandle, window: WebviewWindow) -> Result<(), 
         .await
         .ok_or_else(|| "window manager closed".to_string())?
 }
+const UPDATE_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
+static UPDATE_CACHE: LazyLock<
+    Mutex<
+        Option<(
+            Instant,
+            volumectl_lib::config::Language,
+            volumectl_lib::updates::UpdateInfo,
+        )>,
+    >,
+> = LazyLock::new(|| Mutex::new(None));
+
+fn cached_update(
+    language: volumectl_lib::config::Language,
+) -> Option<volumectl_lib::updates::UpdateInfo> {
+    let guard = UPDATE_CACHE.lock().ok()?;
+    let (checked_at, cached_language, info) = guard.as_ref()?;
+    (checked_at.elapsed() < UPDATE_CACHE_TTL && *cached_language == language).then(|| info.clone())
+}
+
+fn store_update(
+    language: volumectl_lib::config::Language,
+    info: &volumectl_lib::updates::UpdateInfo,
+) {
+    if let Ok(mut guard) = UPDATE_CACHE.lock() {
+        *guard = Some((Instant::now(), language, info.clone()));
+    }
+}
+
+/// Check GitHub for the latest release. Automatic mixer checks share a
+/// process-wide 10-minute cache so reopening the mixer cannot exhaust the
+/// unauthenticated GitHub rate limit; the Settings button passes
+/// `force: true` for an explicit refresh.
 #[tauri::command]
 pub async fn check_for_updates(
     app: AppHandle,
     core: State<'_, Arc<Mutex<AppCore>>>,
+    force: Option<bool>,
 ) -> Result<volumectl_lib::updates::UpdateInfo, String> {
     let language = {
         let core = core.lock().map_err(|e| e.to_string())?;
         core.config().language
     };
+    if !force.unwrap_or(false) {
+        if let Some(info) = cached_update(language) {
+            let _ = app.emit("state://update", &info);
+            return Ok(info);
+        }
+    }
 
     let info = tauri::async_runtime::spawn_blocking(move || {
         volumectl_lib::updates::check_update_info(language)
@@ -257,6 +383,7 @@ pub async fn check_for_updates(
     .await
     .map_err(|e| e.to_string())??;
 
+    store_update(language, &info);
     let _ = app.emit("state://update", &info);
     Ok(info)
 }
@@ -264,6 +391,34 @@ pub async fn check_for_updates(
 #[cfg(test)]
 mod tests {
     use super::SurfaceId;
+
+    #[test]
+    fn release_opener_rejects_non_release_urls() {
+        assert!(super::open_release("https://example.com/v0.1.10".into()).is_err());
+        assert!(super::open_release(
+            "https://github.com/dt418/volume-control/releases-evil".into()
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn automatic_update_cache_is_language_scoped() {
+        let info = volumectl_lib::updates::UpdateInfo {
+            current_version: "0.1.10".into(),
+            latest_version: Some("v0.1.11".into()),
+            is_update_available: true,
+            release_url: Some(
+                "https://github.com/dt418/volume-control/releases/tag/v0.1.11".into(),
+            ),
+            message: "Update available".into(),
+        };
+        super::store_update(volumectl_lib::config::Language::En, &info);
+        assert_eq!(
+            super::cached_update(volumectl_lib::config::Language::En),
+            Some(info.clone())
+        );
+        assert!(super::cached_update(volumectl_lib::config::Language::Vi).is_none());
+    }
 
     /// The command layer resolves surface names through
     /// `SurfaceId::from_label`; these are the exact strings the webview

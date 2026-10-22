@@ -1,7 +1,8 @@
 //! Typed, human-readable INI persistence for [`crate::config::Config`].
 
 use crate::config::{
-    self, Config, ConfigError, ConfigValidationError, HotkeyBindings, HotkeyModifier, Language,
+    self, AppLabelStyle, Config, ConfigError, ConfigValidationError, HotkeyBindings,
+    HotkeyModifier, Language,
 };
 use crate::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
 use std::collections::HashSet;
@@ -119,6 +120,10 @@ pub fn parse_ini(text: &str) -> Result<Config, ConfigError> {
                 "language" => {
                     ensure_unique(&mut seen, section_name, key)?;
                     config.language = parse_language(value)?;
+                }
+                "app_label_style" => {
+                    ensure_unique(&mut seen, section_name, key)?;
+                    config.app_label_style = parse_app_label_style(value)?;
                 }
                 _ => unknown_key(section_name, key),
             },
@@ -252,6 +257,10 @@ pub fn serialize_ini(config: &Config) -> Result<String, ConfigError> {
     output.push_str(&format!("modifier={}\n", modifier_name(config.modifier)));
     output.push_str(&format!("autostart={}\n", config.autostart));
     output.push_str(&format!("language={}\n", config.language.as_str()));
+    output.push_str(&format!(
+        "app_label_style={}\n",
+        config.app_label_style.as_str()
+    ));
 
     let default_hotkeys = HotkeyBindings::default();
     let hotkeys = config.hotkeys.as_ref().unwrap_or(&default_hotkeys);
@@ -429,6 +438,18 @@ fn parse_language(value: &str) -> Result<Language, ConfigError> {
     }
 }
 
+fn parse_app_label_style(value: &str) -> Result<AppLabelStyle, ConfigError> {
+    match value {
+        "friendly" => Ok(AppLabelStyle::Friendly),
+        "friendly_and_process" => Ok(AppLabelStyle::FriendlyAndProcess),
+        "process" => Ok(AppLabelStyle::Process),
+        _ => Err(ini_error(
+            "app_label_style",
+            "must be friendly, friendly_and_process, or process",
+        )),
+    }
+}
+
 fn parse_theme(value: &str) -> Result<ThemeMode, ConfigError> {
     match value {
         "System" => Ok(ThemeMode::System),
@@ -578,7 +599,8 @@ mod tests {
     use super::*;
     use crate::{
         config::{
-            AppearanceConfig, BeepConfig, ColorThresholds, Config, HotkeyBindings, HotkeyModifier,
+            AppLabelStyle, AppearanceConfig, BeepConfig, ColorThresholds, Config, HotkeyBindings,
+            HotkeyModifier,
         },
         ui::{AccentMode, MaterialMode, MotionMode, ThemeMode},
     };
@@ -604,6 +626,7 @@ mod tests {
             modifier: HotkeyModifier::Alt,
             autostart: true,
             language: Language::Vi,
+            app_label_style: AppLabelStyle::FriendlyAndProcess,
             hotkeys: Some(HotkeyBindings::for_modifier(HotkeyModifier::Alt)),
             blacklist: vec!["game.exe".into(), "chat.exe".into()],
             color_thresholds: ColorThresholds {
@@ -711,6 +734,32 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn app_label_style_round_trips_through_ini() {
+        for (raw, expected) in [
+            ("friendly", AppLabelStyle::Friendly),
+            ("friendly_and_process", AppLabelStyle::FriendlyAndProcess),
+            ("process", AppLabelStyle::Process),
+        ] {
+            let text = format!(
+                "[general]\nvolume_step=1\nvolume_step_large=10\noverlay_duration_ms=1800\nmodifier=CtrlAlt\napp_label_style={raw}\n"
+            );
+            let decoded = parse_ini(&text).expect("app label style parses");
+            assert_eq!(decoded.app_label_style, expected);
+            let encoded = serialize_ini(&decoded).expect("serialize app label style");
+            assert!(
+                encoded.contains(&format!("app_label_style={raw}\n")),
+                "writer emits the selected app label style"
+            );
+        }
+        assert_eq!(
+            parse_ini("[general]\nvolume_step=1\nvolume_step_large=10\noverlay_duration_ms=1800\nmodifier=CtrlAlt\n")
+                .expect("missing label style uses default")
+                .app_label_style,
+            AppLabelStyle::Friendly
+        );
+    }
+
     #[test]
     fn language_selection_round_trips_through_ini() {
         for (raw, expected) in [("en", Language::En), ("vi", Language::Vi)] {

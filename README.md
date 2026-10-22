@@ -39,6 +39,16 @@ only for the Mixer, Settings, and Help panels.
   Windows, macOS, and Linux X11; stays interactive on Linux Wayland
   (input-shape is a no-op there). Blur/vibrancy is CSS-only inside the webview.
 - **System tray**: live volume label, mute toggle, reset, exit.
+- **Friendly app names**: the mixer and blacklist show product names
+  (`Google Chrome`) instead of executable names; Settings can switch to
+  friendly + process or process-only labels.
+- **Release announcements**: opening the mixer checks for updates, shows an
+  in-app banner, and asks for OS notification permission before sending a
+  native alert once per release. macOS shows a permission prompt on the first
+  available update; Windows and Linux honor the notification permission state
+  reported by the OS. A denial leaves the in-app banner working and is not
+  recorded, so the app can ask again after the system setting changes. The
+  landing page carries the latest release banner and a per-release changelog.
 - **Settings-first configuration**: common options, appearance, blacklist,
   feedback, storage, and shortcuts can be changed directly in Settings. The
   canonical on-disk format is the human-readable `config.ini`; the legacy
@@ -65,6 +75,8 @@ volume_step_large=10
 overlay_duration_ms=1800
 modifier=CtrlAlt
 autostart=false
+language=en
+app_label_style=friendly
 
 [hotkeys]
 volume_up=Ctrl+Alt+ArrowUp

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use tauri::{
     AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalRect, PhysicalSize, Position,
@@ -27,9 +28,9 @@ impl SurfaceId {
     pub fn title(&self) -> &'static str {
         match self {
             Self::Mixer => "Volume Mixer",
-            Self::Settings => "VolumeControl Settings",
-            Self::Help => "VolumeControl Help",
-            Self::Overlay => "VolumeControl Overlay",
+            Self::Settings => "Volume Control Settings",
+            Self::Help => "Volume Control Help",
+            Self::Overlay => "Volume Control Overlay",
         }
     }
 
@@ -128,6 +129,20 @@ pub fn place_surface(
     }
 }
 
+/// Surfaces that must not stack on top of each other. The Mixer is a
+/// transient always-on-top surface; Help and Settings are normal windows, so
+/// a topmost Mixer would cover them at the shared bottom-right placement.
+/// Close the conflict deterministically instead of relying on the Mixer's
+/// focus-loss event (which does not fire when a programmatic open fails to
+/// steal focus).
+fn closes_before_opening(surface: SurfaceId, existing: SurfaceId) -> bool {
+    matches!(
+        (surface, existing),
+        (SurfaceId::Help | SurfaceId::Settings, SurfaceId::Mixer)
+            | (SurfaceId::Mixer, SurfaceId::Help)
+    )
+}
+
 /// Owns the lazy lifecycle of the four webview surface windows. Windows are
 /// created on demand (`open`), destroyed on `close`, and never created in the
 /// Tauri builder (the app starts with zero webviews to protect idle RAM).
@@ -167,6 +182,14 @@ impl WindowManager {
             return Err(
                 "webview overlay is macOS/Linux-only; Windows uses the native HUD".to_string(),
             );
+        }
+        // The Mixer is always-on-top and shares the Help/Settings placement;
+        // close the conflicting surface before creating/showing the new one.
+        for existing in SurfaceId::all() {
+            if closes_before_opening(surface, existing) && self.is_open(existing) {
+                log::debug!("window_manager: closing {existing:?} before opening {surface:?}");
+                self.close_impl(existing)?;
+            }
         }
         if self.is_open(surface) {
             if let Some(window) = self.app.get_webview_window(surface.label()) {
@@ -291,6 +314,13 @@ impl WindowManager {
         let e2e_debug =
             cfg!(debug_assertions) && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
         let app_handle = self.app.clone();
+        // A foreground launch can fail to steal focus from Explorer (Windows
+        // foreground lock). Do not treat that initial unfocused state as
+        // "user clicked away": the mixer would open and instantly close, which
+        // is indistinguishable from a dead desktop icon. Auto-close only
+        // after the window has actually held focus at least once.
+        let ever_focused = Arc::new(AtomicBool::new(false));
+        let focused_once = ever_focused.clone();
         window.on_window_event(move |event| {
             // Embedded WebDriver attaches after startup. Windows can send an
             // external close request before that session exists; retain the
@@ -300,10 +330,16 @@ impl WindowManager {
                     api.prevent_close();
                 }
             }
+            if let tauri::WindowEvent::Focused(true) = event {
+                focused_once.store(true, Ordering::SeqCst);
+            }
             // Mixer auto-closes on losing focus. Rust-level focus events are
             // reliable on Win32 and Wayland; JS blur is not (spec §9.3).
             if let tauri::WindowEvent::Focused(false) = event {
-                if surface == SurfaceId::Mixer && mixer_auto_close_on_focus_loss(e2e_debug) {
+                if surface == SurfaceId::Mixer
+                    && focused_once.load(Ordering::SeqCst)
+                    && mixer_auto_close_on_focus_loss(e2e_debug)
+                {
                     let _ = app_handle.emit("close_mixer_request", ());
                 }
             }
@@ -485,6 +521,21 @@ mod tests {
         assert_eq!(SurfaceId::Help.entry(), "src/help/index.html");
         assert_eq!(SurfaceId::Overlay.label(), "window-overlay");
         assert_eq!(SurfaceId::Overlay.entry(), "src/overlay/index.html");
+    }
+
+    #[test]
+    fn help_and_settings_close_the_mixer_before_opening() {
+        assert!(closes_before_opening(SurfaceId::Help, SurfaceId::Mixer));
+        assert!(closes_before_opening(SurfaceId::Settings, SurfaceId::Mixer));
+        assert!(closes_before_opening(SurfaceId::Mixer, SurfaceId::Help));
+        // Settings may stay open while the mixer is toggled; closing it
+        // would discard an unsaved draft.
+        assert!(!closes_before_opening(
+            SurfaceId::Mixer,
+            SurfaceId::Settings
+        ));
+        assert!(!closes_before_opening(SurfaceId::Help, SurfaceId::Settings));
+        assert!(!closes_before_opening(SurfaceId::Mixer, SurfaceId::Overlay));
     }
 
     #[test]

@@ -13,9 +13,10 @@ use volumectl_lib::tray_common::TrayCommand;
 
 use commands::{
     adjust_volume, check_for_updates, close_surface, config_path, get_audio_sessions,
-    get_autostart, get_bootstrap, mute_session, open_config_location, open_surface,
-    recommended_blacklist, reset_volume, save_config, set_autostart, set_modifier,
-    set_session_volume, set_volume, surface_ready, toggle_mute, update_settings,
+    get_autostart, get_bootstrap, mute_session, open_config_location, open_release, open_surface,
+    recommended_blacklist, request_notification_permission, reset_volume, resolve_apps,
+    running_apps, save_config, set_autostart, set_modifier, set_session_volume, set_volume,
+    set_window_title, surface_ready, toggle_mute, update_settings,
 };
 use events_sink::TauriSink;
 use window_manager::{SurfaceId, WindowManager};
@@ -32,7 +33,8 @@ mod tauri_tray;
 mod window_manager;
 
 pub fn builder() -> tauri::Builder<tauri::Wry> {
-    let builder = register_debug_plugins(tauri::Builder::default());
+    let builder =
+        register_debug_plugins(tauri::Builder::default()).plugin(tauri_plugin_notification::init());
     install_menu_event_handler(builder).invoke_handler(tauri::generate_handler![
         get_bootstrap,
         get_autostart,
@@ -45,6 +47,11 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         update_settings,
         set_autostart,
         recommended_blacklist,
+        running_apps,
+        resolve_apps,
+        open_release,
+        request_notification_permission,
+        set_window_title,
         config_path,
         open_config_location,
         get_audio_sessions,
@@ -216,226 +223,237 @@ fn parse_verify_surface(value: &str) -> Result<Option<SurfaceId>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> tauri::Result<()> {
     volumectl_lib::init_logging();
-    install_menu_event_handler(register_debug_plugins(tauri::Builder::default()))
-        .setup(|app| {
-            // Startup stage trace (env-gated): `VOLUMECTL_STARTUP_TRACE=1`
-            // logs per-stage elapsed milliseconds so startup impact is
-            // measured, not guessed. The marks are cheap no-ops otherwise.
-            let startup_trace = std::env::var("VOLUMECTL_STARTUP_TRACE").as_deref() == Ok("1");
-            let startup_start = std::time::Instant::now();
-            macro_rules! startup_mark {
-                ($label:literal) => {
-                    if startup_trace {
-                        log::info!(
-                            "startup: {:<22} {} ms",
-                            $label,
-                            startup_start.elapsed().as_millis()
-                        );
-                    }
-                };
-            }
-            startup_mark!("setup begin");
-
-            let args = std::env::args().skip(1).collect::<Vec<_>>();
-            let mut background_launch = volumectl_lib::autostart::is_background_launch(&args);
-
-            // Prevent two instances (mirrors the legacy host's named-mutex
-            // guard: a second instance would double-apply hotkeys/wheel and
-            // create a second tray icon). The check runs before any native
-            // surface or managed state is created.
-            #[cfg(target_os = "windows")]
-            let debug_e2e_instance = cfg!(debug_assertions)
-                && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
-            #[cfg(target_os = "windows")]
-            if !debug_e2e_instance && !native_win32::ensure_single_instance(!background_launch) {
-                log::warn!("another VolumeControl instance is already running");
-                std::process::exit(0);
-            }
-            startup_mark!("single instance");
-
-            let handle = app.handle().clone();
-            app.manage(WindowManager::new(handle.clone()));
-
-            // Loaded before any surface so native trays build localized menus.
-            let (config, config_notice) = volumectl_lib::config::load_with_notice();
-            startup_mark!("config loaded");
-
-            // Older autostart entries lack `--background`; without this an
-            // upgraded user gets the mixer popping up at every sign-in.
-            match volumectl_lib::autostart::ensure_background_flag() {
-                Ok(migrated) => background_launch |= migrated,
-                Err(error) => log::warn!("could not refresh the auto-start command: {error}"),
-            }
-
-            // Tauri-managed tray (macOS/Linux only). Creation failure is
-            // non-fatal: keep the host alive with the webview surfaces.
-            #[cfg(not(target_os = "windows"))]
-            match tauri_tray::TauriTray::create(&handle, config.language) {
-                Ok(tray) => {
-                    app.manage(tray);
-                    log::info!("tray created");
-                }
-                Err(error) => log::warn!("tray unavailable; keeping host alive: {error}"),
-            }
-
-            // Native surfaces. Windows: HUD overlay + tray + wheel bridge.
-            // Linux/macOS: none (the headless host is AppCore alone).
-            #[cfg(target_os = "windows")]
-            let native = {
-                let native = Arc::new(native_win32::NativeWin32::new(config.language)?);
-                app.manage(native.clone());
-                native
-            };
-            startup_mark!("native surfaces");
-
-            let audio = match create_audio_backend() {
-                Ok(audio) => audio,
-                Err(error) => {
-                    log::warn!("audio backend unavailable; keeping host alive: {error}");
-                    Box::new(UnavailableAudio::new(error)) as Box<dyn AudioBackend>
+    install_menu_event_handler(
+        register_debug_plugins(tauri::Builder::default()).plugin(tauri_plugin_notification::init()),
+    )
+    .setup(|app| {
+        // Startup stage trace (env-gated): `VOLUMECTL_STARTUP_TRACE=1`
+        // logs per-stage elapsed milliseconds so startup impact is
+        // measured, not guessed. The marks are cheap no-ops otherwise.
+        let startup_trace = std::env::var("VOLUMECTL_STARTUP_TRACE").as_deref() == Ok("1");
+        let startup_start = std::time::Instant::now();
+        macro_rules! startup_mark {
+            ($label:literal) => {
+                if startup_trace {
+                    log::info!(
+                        "startup: {:<22} {} ms",
+                        $label,
+                        startup_start.elapsed().as_millis()
+                    );
                 }
             };
-            let modifier = config.modifier;
-            let sink = Arc::new(TauriSink::new(handle.clone()));
-            let core = AppCore::new_with_notice(audio, config, modifier, sink, config_notice)
-                .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
-            startup_mark!("audio + core");
+        }
+        startup_mark!("setup begin");
 
-            // AppCore is shared behind a Mutex so commands can mutate it and
-            // the poll threads can drain hotkeys/wheel/config concurrently.
-            let shared = Arc::new(Mutex::new(core));
-            app.manage(shared.clone());
-            startup_mark!("state managed");
+        let args = std::env::args().skip(1).collect::<Vec<_>>();
+        let background_launch = volumectl_lib::autostart::is_background_launch(&args);
 
-            // A user launch (desktop/tray shortcut, Start menu, winget
-            // `winget install` completion) must show something: the tray icon
-            // alone sits in the overflow flyout, so clicking the icon looked
-            // dead. The login autostart entry passes `--background` and stays
-            // tray-only. The E2E verify marker owns its own surface choice.
-            if !background_launch && std::env::var("VOLUMECTL_VERIFY_SURFACE").is_err() {
-                if let Err(error) = app.state::<WindowManager>().open(SurfaceId::Mixer) {
-                    log::warn!("could not open the mixer on launch: {error}");
-                }
+        // Prevent two instances (mirrors the legacy host's named-mutex
+        // guard: a second instance would double-apply hotkeys/wheel and
+        // create a second tray icon). The check runs before any native
+        // surface or managed state is created.
+        #[cfg(target_os = "windows")]
+        let debug_e2e_instance =
+            cfg!(debug_assertions) && std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1");
+        #[cfg(target_os = "windows")]
+        if !debug_e2e_instance && !native_win32::ensure_single_instance(!background_launch) {
+            log::warn!("another VolumeControl instance is already running");
+            std::process::exit(0);
+        }
+        startup_mark!("single instance");
+
+        let handle = app.handle().clone();
+        app.manage(WindowManager::new(handle.clone()));
+
+        // Loaded before any surface so native trays build localized menus.
+        let (config, config_notice) = volumectl_lib::config::load_with_notice();
+        startup_mark!("config loaded");
+
+        // Older autostart entries lack `--background`; migrate the Run
+        // key so future sign-ins stay tray-only. Do not fold the result
+        // into this process's launch mode: a desktop/Start-menu click
+        // uses the same empty argument list as an old login entry, and
+        // suppressing the mixer here makes the icon look dead.
+        // Worst case after an upgrade is one visible mixer at the next
+        // sign-in; the desktop icon must always open its surface.
+        if let Err(error) = volumectl_lib::autostart::ensure_background_flag() {
+            log::warn!("could not refresh the auto-start command: {error}");
+        }
+
+        // Tauri-managed tray (macOS/Linux only). Creation failure is
+        // non-fatal: keep the host alive with the webview surfaces.
+        #[cfg(not(target_os = "windows"))]
+        match tauri_tray::TauriTray::create(&handle, config.language) {
+            Ok(tray) => {
+                app.manage(tray);
+                log::info!("tray created");
             }
+            Err(error) => log::warn!("tray unavailable; keeping host alive: {error}"),
+        }
 
-            // Diagnostic verification opens through the same WindowManager
-            // path as production, but only after every command dependency is
-            // managed so bootstrap can render a real surface.
-            if let Ok(raw_surface) = std::env::var("VOLUMECTL_VERIFY_SURFACE") {
-                if let Some(surface) = parse_verify_surface(&raw_surface)? {
-                    log::info!("E2E verify marker opening {}", surface.label());
-                    if let Err(error) = app.state::<WindowManager>().open(surface) {
-                        log::error!(
-                            "E2E verify marker could not open {}: {error}",
-                            surface.label()
-                        );
-                        return Err(error.into());
-                    }
-                    log::info!("E2E verify marker opened {}", surface.label());
-                }
+        // Native surfaces. Windows: HUD overlay + tray + wheel bridge.
+        // Linux/macOS: none (the headless host is AppCore alone).
+        #[cfg(target_os = "windows")]
+        let native = {
+            let native = Arc::new(native_win32::NativeWin32::new(config.language)?);
+            app.manage(native.clone());
+            native
+        };
+        startup_mark!("native surfaces");
+
+        let audio = match create_audio_backend() {
+            Ok(audio) => audio,
+            Err(error) => {
+                log::warn!("audio backend unavailable; keeping host alive: {error}");
+                Box::new(UnavailableAudio::new(error)) as Box<dyn AudioBackend>
             }
+        };
+        let modifier = config.modifier;
+        let sink = Arc::new(TauriSink::new(handle.clone()));
+        let core = AppCore::new_with_notice(audio, config, modifier, sink, config_notice)
+            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+        startup_mark!("audio + core");
 
-            // Fast poll (20 ms): drain the global-hotkey channel and the
-            // wheel-bridge channel into AppCore.apply_hotkey.
-            let fast_shared = shared.clone();
+        // AppCore is shared behind a Mutex so commands can mutate it and
+        // the poll threads can drain hotkeys/wheel/config concurrently.
+        let shared = Arc::new(Mutex::new(core));
+        app.manage(shared.clone());
+        startup_mark!("state managed");
+
+        // A user launch (desktop/tray shortcut, Start menu, winget
+        // `winget install` completion) must show something: the tray icon
+        // alone sits in the overflow flyout, so clicking the icon looked
+        // dead. The login autostart entry passes `--background` and stays
+        // tray-only. The E2E verify marker owns its own surface choice.
+        if !background_launch && std::env::var("VOLUMECTL_VERIFY_SURFACE").is_err() {
+            if let Err(error) = app.state::<WindowManager>().open(SurfaceId::Mixer) {
+                log::warn!("could not open the mixer on launch: {error}");
+            }
+        }
+
+        // Diagnostic verification opens through the same WindowManager
+        // path as production, but only after every command dependency is
+        // managed so bootstrap can render a real surface.
+        if let Ok(raw_surface) = std::env::var("VOLUMECTL_VERIFY_SURFACE") {
+            if let Some(surface) = parse_verify_surface(&raw_surface)? {
+                log::info!("E2E verify marker opening {}", surface.label());
+                if let Err(error) = app.state::<WindowManager>().open(surface) {
+                    log::error!(
+                        "E2E verify marker could not open {}: {error}",
+                        surface.label()
+                    );
+                    return Err(error.into());
+                }
+                log::info!("E2E verify marker opened {}", surface.label());
+            }
+        }
+
+        // Fast poll (20 ms): drain the global-hotkey channel and the
+        // wheel-bridge channel into AppCore.apply_hotkey.
+        let fast_shared = shared.clone();
+        #[cfg(target_os = "windows")]
+        let fast_handle = handle.clone();
+        #[cfg(target_os = "windows")]
+        let fast_native = native.clone();
+        std::thread::spawn(move || loop {
+            // A second launch must never wait for the core mutex: a sync
+            // Tauri command on the main thread can hold it while the
+            // window manager waits for the main thread. Dispatch the
+            // surface request first, with no core lock held.
             #[cfg(target_os = "windows")]
-            let fast_handle = handle.clone();
-            #[cfg(target_os = "windows")]
-            let fast_native = native.clone();
-            std::thread::spawn(move || loop {
-                // A second launch must never wait for the core mutex: a sync
-                // Tauri command on the main thread can hold it while the
-                // window manager waits for the main thread. Dispatch the
-                // surface request first, with no core lock held.
-                #[cfg(target_os = "windows")]
-                if native_win32::take_show_mixer_request() {
-                    match fast_handle.try_state::<WindowManager>() {
-                        Some(manager) => {
-                            if let Err(error) = manager.open(SurfaceId::Mixer) {
-                                log::warn!("show-mixer request failed: {error}");
-                            }
+            if native_win32::take_show_mixer_request() {
+                match fast_handle.try_state::<WindowManager>() {
+                    Some(manager) => {
+                        if let Err(error) = manager.open(SurfaceId::Mixer) {
+                            log::warn!("show-mixer request failed: {error}");
                         }
-                        None => log::warn!(
-                            "show-mixer request arrived before the window manager was managed"
-                        ),
                     }
-                }
-                // Never queue an IPC command behind a poll: when a command
-                // holds the core (volume slider, bootstrap, tray action),
-                // skip this cycle instead of blocking.
-                let Ok(mut core) = fast_shared.try_lock() else {
-                    std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
-                    continue;
-                };
-                core.poll_hotkeys();
-                #[cfg(target_os = "windows")]
-                while let Some(action) = fast_native.try_recv_wheel() {
-                    core.apply_hotkey(action);
-                }
-                drop(core);
-                std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
-            });
-
-            // Slow poll (150 ms): live config reload (mtime watch) and the
-            // external audio-state sync (the reload path re-reads and
-            // publishes the confirmed state). Tauri dispatches tray menu
-            // commands through `on_menu_event` on the runtime event loop.
-            let slow_shared = shared.clone();
-            std::thread::spawn(move || loop {
-                // Same non-blocking contract as the fast poll: the audio
-                // probe (PulseAudio/CoreAudio/WASAPI get_state) can block on
-                // a slow or lost device, and the 150 ms cadence must never
-                // stall an in-flight command.
-                let Ok(mut core) = slow_shared.try_lock() else {
-                    std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
-                    continue;
-                };
-                core.reload_config_if_changed();
-                // External audio-state sync: volume changed outside the
-                // app (media keys, other apps) — keeps the tray tooltip
-                // and open webviews fresh (legacy 150 ms host timer).
-                core.sync_external_state();
-                drop(core);
-                std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
-            });
-
-            startup_mark!("poll threads");
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            get_bootstrap,
-            get_autostart,
-            adjust_volume,
-            set_volume,
-            toggle_mute,
-            reset_volume,
-            set_modifier,
-            save_config,
-            update_settings,
-            set_autostart,
-            recommended_blacklist,
-            config_path,
-            open_config_location,
-            get_audio_sessions,
-            set_session_volume,
-            mute_session,
-            open_surface,
-            close_surface,
-            surface_ready,
-            check_for_updates,
-        ])
-        .build(tauri::generate_context!())?
-        .run(|_app, event| {
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
-                if !EXIT_REQUESTED.load(Ordering::SeqCst) {
-                    // All webview surfaces closed (or the OS asked to close);
-                    // keep the tray host alive. The tray Exit command sets the
-                    // flag first, so a deliberate exit still terminates.
-                    log::debug!("all surfaces closed; keeping the tray host alive");
-                    api.prevent_exit();
+                    None => log::warn!(
+                        "show-mixer request arrived before the window manager was managed"
+                    ),
                 }
             }
+            // Never queue an IPC command behind a poll: when a command
+            // holds the core (volume slider, bootstrap, tray action),
+            // skip this cycle instead of blocking.
+            let Ok(mut core) = fast_shared.try_lock() else {
+                std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
+                continue;
+            };
+            core.poll_hotkeys();
+            #[cfg(target_os = "windows")]
+            while let Some(action) = fast_native.try_recv_wheel() {
+                core.apply_hotkey(action);
+            }
+            drop(core);
+            std::thread::sleep(Duration::from_millis(FAST_POLL_MS));
         });
+
+        // Slow poll (150 ms): live config reload (mtime watch) and the
+        // external audio-state sync (the reload path re-reads and
+        // publishes the confirmed state). Tauri dispatches tray menu
+        // commands through `on_menu_event` on the runtime event loop.
+        let slow_shared = shared.clone();
+        std::thread::spawn(move || loop {
+            // Same non-blocking contract as the fast poll: the audio
+            // probe (PulseAudio/CoreAudio/WASAPI get_state) can block on
+            // a slow or lost device, and the 150 ms cadence must never
+            // stall an in-flight command.
+            let Ok(mut core) = slow_shared.try_lock() else {
+                std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
+                continue;
+            };
+            core.reload_config_if_changed();
+            // External audio-state sync: volume changed outside the
+            // app (media keys, other apps) — keeps the tray tooltip
+            // and open webviews fresh (legacy 150 ms host timer).
+            core.sync_external_state();
+            drop(core);
+            std::thread::sleep(Duration::from_millis(SLOW_POLL_MS));
+        });
+
+        startup_mark!("poll threads");
+        Ok(())
+    })
+    .invoke_handler(tauri::generate_handler![
+        get_bootstrap,
+        get_autostart,
+        adjust_volume,
+        set_volume,
+        toggle_mute,
+        reset_volume,
+        set_modifier,
+        save_config,
+        update_settings,
+        set_autostart,
+        recommended_blacklist,
+        running_apps,
+        resolve_apps,
+        open_release,
+        request_notification_permission,
+        set_window_title,
+        config_path,
+        open_config_location,
+        get_audio_sessions,
+        set_session_volume,
+        mute_session,
+        open_surface,
+        close_surface,
+        surface_ready,
+        check_for_updates,
+    ])
+    .build(tauri::generate_context!())?
+    .run(|_app, event| {
+        if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            if !EXIT_REQUESTED.load(Ordering::SeqCst) {
+                // All webview surfaces closed (or the OS asked to close);
+                // keep the tray host alive. The tray Exit command sets the
+                // flag first, so a deliberate exit still terminates.
+                log::debug!("all surfaces closed; keeping the tray host alive");
+                api.prevent_exit();
+            }
+        }
+    });
     Ok(())
 }
 

@@ -2,7 +2,26 @@
 
 All notable changes to VolumeControl are documented here.
 
-## [Unreleased]
+## [0.1.10] - 2026-10-23
+
+### Added
+
+- The mixer and blacklist show friendly application names resolved from the
+  executable's version resource (`Google Chrome` instead of `chrome.exe`).
+- Settings → General can render friendly names, friendly names plus the
+  original process name, or process names only (`app_label_style` in
+  `config.ini`).
+- Blacklist entries now resolve icons and product names for installed apps
+  that are not running, using the Windows `App Paths` registry.
+- Opening the mixer checks for updates and shows a dismissible in-app release
+  banner.
+- Native update notifications use the OS notification center and request
+  permission before the first alert; macOS asks through
+  `UNUserNotificationCenter`, Windows and Linux continue without a prompt. One
+  alert is sent per release; a denied permission leaves the in-app banner
+  working.
+- The landing page shows the latest stable release banner and a bilingual
+  per-release changelog fetched from GitHub.
 
 ### Fixed
 
@@ -15,6 +34,8 @@ All notable changes to VolumeControl are documented here.
   returned `E_NOINTERFACE` on Windows 11).
 - The mixer has clickable Settings, Help, and Close controls; Escape remains
   available as a keyboard shortcut.
+- The update banner and Settings card open release notes through an explicit
+  native opener, so the link works inside the Tauri webview.
 - Windows runtime diagnostics are written to
   `%LOCALAPPDATA%\VolumeControl\logs\runtime.log`.
 

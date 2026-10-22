@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { asAppLabelStyle, type AppLabelStyle } from "../lib/appLabel";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
 import { asLanguage, translatorFor, type Language } from "../lib/i18n";
 import { invoke, listen } from "../lib/ipc";
@@ -8,14 +9,24 @@ import { DEFAULT_THRESHOLDS, type ColorThresholds } from "./SignalRail";
 export interface AudioSession {
   id: string;
   name: string;
+  /** Executable/base process name; absent on older payloads. */
+  process?: string;
+  /** Friendly product name resolved by the backend; absent on older payloads. */
+  display_name?: string;
   pct: number;
   muted: boolean;
   active: boolean;
+  /** Windows' System Sounds session (PID-less; label is UI-owned). */
+  system?: boolean;
 }
 
 export interface BootstrapPayload {
-  /** Serialized `Config`; only `color_thresholds` is consumed by the mixer. */
-  config?: { color_thresholds?: ColorThresholds; language?: string };
+  /** Serialized `Config`; the mixer consumes thresholds, language, labels. */
+  config?: {
+    color_thresholds?: ColorThresholds;
+    language?: string;
+    app_label_style?: string;
+  };
   volume_pct: number;
   muted: boolean;
   hotkey_status: unknown[];
@@ -59,6 +70,7 @@ export function useSessions() {
   const [muted, setMuted] = useState(false);
   const [thresholds, setThresholds] = useState<ColorThresholds>(DEFAULT_THRESHOLDS);
   const [language, setLanguage] = useState<Language>("en");
+  const [appLabelStyle, setAppLabelStyle] = useState<AppLabelStyle>("friendly");
   const [sessionsSupported, setSessionsSupported] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +137,7 @@ export function useSessions() {
         }
         setThresholds(b.config?.color_thresholds ?? DEFAULT_THRESHOLDS);
         setLanguage(bootstrapLanguage);
+        setAppLabelStyle(asAppLabelStyle(b.config?.app_label_style));
         setSessionsSupported(b.sessions_supported);
       })
       .catch((error) => {
@@ -148,6 +161,26 @@ export function useSessions() {
     setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }, []);
   const retry = useCallback(() => setBootstrapAttempt((attempt) => attempt + 1), []);
+
+  // Audio sessions are created/destroyed independently of the mixer, and the
+  // Windows system-sounds session can move to a new process. Refresh the
+  // opaque instance ids periodically so a slider never keeps writing to a
+  // dead id until the next error. Bootstrap and state://sessions remain the
+  // primary sources; this is a low-frequency safety net.
+  const refreshSessions = useCallback(async () => {
+    const next = await invoke<AudioSession[]>("get_audio_sessions");
+    setSessions(next ?? []);
+  }, []);
+
+  useEffect(() => {
+    if (!sessionsSupported) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refreshSessions().catch(() => {});
+      }
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [sessionsSupported, refreshSessions]);
   // Sorting is O(n log n) on every render; only re-sort when the list
   // actually changed (perf: state://volume events re-render the surface
   // frequently).
@@ -159,6 +192,7 @@ export function useSessions() {
     muted,
     thresholds,
     language,
+    appLabelStyle,
     sessionsSupported,
     notice,
     error,

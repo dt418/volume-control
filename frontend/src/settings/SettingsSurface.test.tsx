@@ -186,12 +186,16 @@ describe("SettingsSurface", () => {
     await renderSurface();
     const small = screen.getByLabelText(/^Volume step$/i) as HTMLInputElement;
     fireEvent.change(small, { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText(/^App name display$/i), {
+      target: { value: "process" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
       expect(ipc.invoke).toHaveBeenCalledWith("update_settings", {
         patch: expect.objectContaining({
           volume_step: 5,
           overlay_duration_ms: 1800,
+          app_label_style: "process",
           beep: expect.objectContaining({ enabled: true }),
           color_thresholds: expect.objectContaining({ green_up_to: 40 }),
         }),

@@ -39,7 +39,7 @@ impl Tray {
         // Live label (non-clickable), then volume actions, surface actions,
         // configuration actions, and Exit — grouped per spec §9. Menu ids are
         // stable and untranslated; only labels come from the locale table.
-        let vol_label = MenuItem::with_id("volume", "VolumeControl — --", false, None);
+        let vol_label = MenuItem::with_id("volume", "Volume Control — --", false, None);
         let sep1 = PredefinedMenuItem::separator();
         let mute_item = CheckMenuItem::with_id("mute", s.tray_mute, true, false, None);
         let reset_item = MenuItem::with_id("reset", s.tray_reset, true, None);
@@ -73,7 +73,7 @@ impl Tray {
         let tray = tray_icon::TrayIconBuilder::new()
             .with_menu(Box::new(menu))
             .with_icon(tray_icon::Icon::from_rgba(tray_icon_rgba(), 32, 32)?)
-            .with_tooltip("VolumeControl")
+            .with_tooltip("Volume Control")
             .build()?;
 
         Ok(Tray {
@@ -109,7 +109,7 @@ impl Tray {
     /// Refresh the volume label and mute check state.
     pub fn set_volume(&self, state: &VolumeState) {
         self.vol_label
-            .set_text(format!("VolumeControl — {}%", state.percent()));
+            .set_text(format!("Volume Control — {}%", state.percent()));
         self.mute_item.set_checked(state.muted);
     }
 

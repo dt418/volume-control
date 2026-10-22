@@ -33,7 +33,7 @@ beforeEach(() => {
 
 async function renderSurface() {
   render(<HelpSurface />);
-  await waitFor(() => expect(screen.getByText("VolumeControl")).toBeInTheDocument(), {
+  await waitFor(() => expect(screen.getByText("Volume Control")).toBeInTheDocument(), {
     timeout: 3000,
   });
 }
@@ -49,7 +49,7 @@ describe("HelpSurface", () => {
 
   it("renders the legacy header band with the close affordance", async () => {
     await renderSurface();
-    expect(screen.getByText("VolumeControl")).toBeInTheDocument();
+    expect(screen.getByText("Volume Control")).toBeInTheDocument();
     expect(screen.getByText("Keyboard shortcuts")).toBeInTheDocument();
     // Header × is aria-label "Close" (pointer-only, like legacy); the footer
     // also has a visible Close button.

@@ -19,6 +19,8 @@ export interface SettingsConfig {
   autostart?: boolean;
   /** UI language ("en" | "vi"); older payloads omit it and hydrate to "en". */
   language?: string;
+  /** App-name style; older payloads omit it and hydrate to "friendly". */
+  app_label_style?: string;
   modifier: string;
   /** Older bootstrap fixtures/configs may omit this; the surface hydrates it. */
   hotkeys?: HotkeyBindings;

@@ -39,8 +39,9 @@ impl TauriTray {
         // actions, configuration actions, and Exit — grouped per spec §9.
         // Menu ids stay untranslated; labels come from the locale table.
         let s = volumectl_lib::locale::strings(lang);
-        let vol_label = MenuItem::with_id(app, "volume", "VolumeControl — --", false, None::<&str>)
-            .map_err(|e| e.to_string())?;
+        let vol_label =
+            MenuItem::with_id(app, "volume", "Volume Control — --", false, None::<&str>)
+                .map_err(|e| e.to_string())?;
         let sep1 = PredefinedMenuItem::separator(app).map_err(|e| e.to_string())?;
         let mute_item = CheckMenuItem::with_id(app, "mute", s.tray_mute, true, false, None::<&str>)
             .map_err(|e| e.to_string())?;
@@ -93,7 +94,7 @@ impl TauriTray {
         let tray = TrayIconBuilder::with_id("main")
             .icon(icon)
             .menu(&menu)
-            .tooltip("VolumeControl")
+            .tooltip("Volume Control")
             .show_menu_on_left_click(true)
             .on_menu_event(|app, event| {
                 let Some(command) = TrayCommand::from_menu_id(event.id().as_ref()) else {
@@ -137,12 +138,12 @@ impl TauriTray {
     pub fn set_volume(&self, state: &VolumeState) {
         let _ = self
             .vol_label
-            .set_text(format!("VolumeControl — {}%", state.percent()));
+            .set_text(format!("Volume Control — {}%", state.percent()));
         let _ = self.mute_item.set_checked(state.muted);
         // Tooltips are unsupported by the Linux appindicator backend; ignore.
         if let Err(error) = self
             .tray
-            .set_tooltip(Some(format!("VolumeControl — {}%", state.percent())))
+            .set_tooltip(Some(format!("Volume Control — {}%", state.percent())))
         {
             log::debug!("tray tooltip update unsupported: {error}");
         }

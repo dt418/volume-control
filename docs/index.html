@@ -275,6 +275,44 @@
   .fact code { display: block; margin-top: 6px; font: 600 14px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--link); word-break: break-all; }
   .fact p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
 
+  .release-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 18px; padding: 11px 14px; border-radius: 12px;
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    color: var(--fg); font-size: 14px; font-weight: 600;
+  }
+  .release-banner[hidden] { display: none; }
+  .release-banner .dot {
+    width: 8px; height: 8px; border-radius: 999px; flex: none;
+    background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  .release-banner a { margin-left: auto; font-weight: 650; }
+  .release-list { display: flex; flex-direction: column; gap: 12px; }
+  .release-loading { color: var(--muted); font-size: 14px; margin: 0; }
+  .release {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+  }
+  .release summary {
+    display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
+    padding: 15px 18px; cursor: pointer; font-weight: 650;
+  }
+  .release summary:hover { color: var(--link); }
+  .release summary .tag {
+    font: 600 13px/1 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: var(--link); background: var(--surface-2); border: 1px solid var(--border);
+    padding: 4px 8px; border-radius: 7px;
+  }
+  .release summary time { margin-left: auto; color: var(--muted); font-size: 13px; font-weight: 500; }
+  .release-notes {
+    margin: 0; padding: 0 18px 16px; color: var(--muted);
+    font: 13px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    white-space: pre-wrap; overflow-wrap: anywhere; max-height: 26rem; overflow: auto;
+  }
+  .release-actions { padding: 0 18px 16px; }
+  .release-actions a { font-size: 13px; font-weight: 600; }
+
   .trust {
     background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--warn);
     border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow);
@@ -327,6 +365,7 @@
       <a class="hide-xs" href="#install" data-i18n="nav.install">Install</a>
       <a class="hide-sm" href="#features" data-i18n="nav.features">Features</a>
       <a class="hide-sm" href="#platform" data-i18n="nav.platform">Platform</a>
+      <a class="hide-sm" href="#updates" data-i18n="nav.updates">Updates</a>
       <button type="button" id="lang-btn" class="lang-toggle" aria-label="Change language">VI</button>
       <a class="gh" href="https://github.com/dt418/volume-control" rel="noopener">GitHub</a>
     </nav>
@@ -335,6 +374,12 @@
 
 <main id="main">
 <div class="wrap">
+
+  <div class="release-banner" id="release-banner" role="status" aria-live="polite" hidden>
+    <span class="dot" aria-hidden="true"></span>
+    <span id="release-banner-text"></span>
+    <a id="release-banner-link" href="https://github.com/dt418/volume-control/releases/latest" target="_blank" rel="noopener" data-i18n="updates.view">View release</a>
+  </div>
 
   <div class="hero">
     <a class="pill" href="https://github.com/dt418/volume-control/releases/latest"><b id="ver">v0.1.x</b><span data-i18n="hero.pill"> · native-first · MIT licensed</span></a>
@@ -448,7 +493,7 @@
       <div class="card"><div class="ico" aria-hidden="true">⚙️</div><h3 data-i18n="feature.settings.title">Settings &amp; Help</h3><p data-i18n="feature.settings.body">Remap every hotkey, tune overlay timing, toggle autostart — persisted to a plain INI you can edit.</p></div>
       <div class="card"><div class="ico" aria-hidden="true">🔄</div><h3 data-i18n="feature.reload.title">Live config reload</h3><p data-i18n="feature.reload.body">Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.</p></div>
       <div class="card"><div class="ico" aria-hidden="true">🌐</div><h3 data-i18n="feature.languages.title">English &amp; <span lang="vi">Tiếng Việt</span></h3><p data-i18n="feature.languages.body">Mixer, overlay, settings and help all speak both languages — switch from the tray or Settings.</p></div>
-      <div class="card"><div class="ico" aria-hidden="true">⬆️</div><h3 data-i18n="feature.updates.title">Update check</h3><p data-i18n="feature.updates.body">“Check for updates” in the tray menu reports the result inline, so you never have to open Settings to find out.</p></div>
+      <div class="card"><div class="ico" aria-hidden="true">⬆️</div><h3 data-i18n="feature.updates.title">Update checks &amp; notifications</h3><p data-i18n="feature.updates.body">Automatic checks show an in-app banner and, with OS notification permission, a native alert; the tray menu can check on demand.</p></div>
     </div>
   </section>
 
@@ -468,6 +513,14 @@
           <tr><th scope="row" data-i18n="platform.remote">Remote install commands</th><td class="yes" data-i18n="platform.remoteWindows">✅ PowerShell · curl.exe <span class="manual">· 🔜 winget</span></td><td class="yes" data-i18n="platform.verified">✅ verified installer script</td><td class="yes" data-i18n="platform.verified">✅ verified installer script</td></tr>
         </tbody>
       </table>
+    </div>
+  </section>
+
+  <section id="updates">
+    <h2 data-i18n="updates.title">Release notes</h2>
+    <p class="lede" data-i18n="updates.lede">What changed in each VolumeControl release. The banner always reflects the latest stable GitHub release.</p>
+    <div class="release-list" id="release-list">
+      <p class="release-loading" data-i18n="updates.loading">Loading release notes…</p>
     </div>
   </section>
 
@@ -724,20 +777,107 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
   bar.style.backgroundColor = band(vol, muted);
   bar.style.width = vol + "%";
 
-  /* ── latest release tag (progressive enhancement; keeps "v0.1.x" on any failure) ── */
+  /* ── latest release + changelog (progressive enhancement) ── */
+  var releaseCache = null;
+  var latestRelease = null;
+  function renderReleaseBanner() {
+    var banner = document.getElementById("release-banner");
+    var text = document.getElementById("release-banner-text");
+    var link = document.getElementById("release-banner-link");
+    if (!banner || !text || !link || !latestRelease) return;
+    text.textContent = localized("updates.latest", "Latest release") + " " + latestRelease.tag_name;
+    link.href = latestRelease.html_url || "https://github.com/dt418/volume-control/releases/latest";
+    banner.hidden = false;
+  }
+  function renderReleases() {
+    var list = document.getElementById("release-list");
+    if (!list) return;
+    list.textContent = "";
+    if (!releaseCache || !releaseCache.length) {
+      var failed = document.createElement("p");
+      failed.className = "release-loading";
+      failed.textContent = localized("updates.failed", "Release notes are unavailable right now.");
+      var fallback = document.createElement("a");
+      fallback.href = "https://github.com/dt418/volume-control/releases";
+      fallback.textContent = "GitHub releases";
+      failed.appendChild(document.createTextNode(" "));
+      failed.appendChild(fallback);
+      list.appendChild(failed);
+      return;
+    }
+    releaseCache.slice(0, 5).forEach(function (release, index) {
+      var details = document.createElement("details");
+      details.className = "release";
+      details.open = index === 0;
+      var summary = document.createElement("summary");
+      var tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = release.tag_name;
+      var name = document.createElement("span");
+      name.textContent = release.name || release.tag_name;
+      var time = document.createElement("time");
+      time.dateTime = release.published_at || "";
+      if (release.published_at) {
+        var date = new Date(release.published_at);
+        if (!Number.isNaN(date.getTime())) {
+          time.textContent = date.toLocaleDateString(activeLang === "vi" ? "vi-VN" : "en-US", {
+            year: "numeric", month: "short", day: "numeric"
+          });
+        }
+      }
+      summary.appendChild(tag);
+      summary.appendChild(name);
+      summary.appendChild(time);
+      details.appendChild(summary);
+      var notes = document.createElement("pre");
+      notes.className = "release-notes";
+      notes.textContent = release.body || localized("updates.noNotes", "No release notes provided.");
+      details.appendChild(notes);
+      if (release.html_url) {
+        var actions = document.createElement("div");
+        actions.className = "release-actions";
+        var link = document.createElement("a");
+        link.href = release.html_url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = localized("updates.view", "View release");
+        actions.appendChild(link);
+        details.appendChild(actions);
+      }
+      list.appendChild(details);
+    });
+  }
+  function renderReleaseData(releases) {
+    if (!Array.isArray(releases) || !releases.length) return;
+    releaseCache = releases;
+    latestRelease = releases[0];
+    var el = document.getElementById("ver");
+    if (el) el.textContent = latestRelease.tag_name;
+    renderReleaseBanner();
+    renderReleases();
+  }
   (function () {
-    var el = document.getElementById("ver"), KEY = "vc-latest", cached = null;
-    if (!el || !window.fetch) return;
+    if (!window.fetch) { renderReleases(); return; }
+    var KEY = "vc-releases", cached = null;
     try { cached = JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch (e) {}
-    if (cached && Date.now() - cached.t < 3600000) { el.textContent = cached.tag; return; }
-    fetch("https://api.github.com/repos/dt418/volume-control/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+    if (cached && Date.now() - cached.t < 3600000 && Array.isArray(cached.releases)) {
+      renderReleaseData(cached.releases);
+      return;
+    }
+    fetch("https://api.github.com/repos/dt418/volume-control/releases?per_page=5", {
+      headers: { Accept: "application/vnd.github+json" }
+    })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
-      .then(function (d) {
-        if (!/^v\d+\.\d+\.\d+$/.test(d.tag_name)) return;
-        el.textContent = d.tag_name;
-        try { sessionStorage.setItem(KEY, JSON.stringify({ tag: d.tag_name, t: Date.now() })); } catch (e) {}
+      .then(function (data) {
+        if (!Array.isArray(data)) return;
+        var releases = data.filter(function (release) {
+          return release && /^v\d+\.\d+\.\d+$/.test(release.tag_name || "");
+        });
+        if (!releases.length) return;
+        renderReleaseData(releases);
+        try { sessionStorage.setItem(KEY, JSON.stringify({ releases: releases, t: Date.now() })); } catch (e) {}
       })
-      .catch(function () {});
+      .catch(function () { renderReleases(); });
   })();
   /* ── bilingual landing page (EN / VI) ── */
   var I18N = {
@@ -745,6 +885,14 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       "nav.install": "Install",
       "nav.features": "Features",
       "nav.platform": "Platform",
+      "nav.updates": "Updates",
+      "updates.title": "Release notes",
+      "updates.lede": "What changed in each VolumeControl release. The banner always reflects the latest stable GitHub release.",
+      "updates.latest": "Latest release",
+      "updates.view": "View release",
+      "updates.loading": "Loading release notes…",
+      "updates.failed": "Release notes are unavailable right now.",
+      "updates.noNotes": "No release notes provided.",
       "hero.title": "Volume control that feels<br><span class=\"grad\">native everywhere</span>",
       "hero.sub": "Global hotkeys, a real system tray, an on-screen volume overlay, and Tauri v2 Mixer / Settings / Help surfaces — powered by WASAPI, CoreAudio, and PulseAudio backends.",
       "hero.installBtn": "Install VolumeControl",
@@ -811,8 +959,8 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       "feature.reload.body": "Edit <code>config.ini</code> while running; core and UI pick changes up without a restart.",
       "feature.languages.title": "English &amp; <span lang=\"vi\">Tiếng Việt</span>",
       "feature.languages.body": "Mixer, overlay, settings and help all speak both languages — switch from the tray or Settings.",
-      "feature.updates.title": "Update check",
-      "feature.updates.body": "“Check for updates” in the tray menu reports the result inline, so you never have to open Settings to find out.",
+      "feature.updates.title": "Update checks &amp; notifications",
+      "feature.updates.body": "Automatic checks show an in-app banner and, with OS notification permission, a native alert; the tray menu can check on demand.",
       "platform.capability": "Capability",
       "platform.volume": "Volume control",
       "platform.hotkeys": "Global hotkeys",
@@ -846,6 +994,14 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       "nav.install": "Cài đặt",
       "nav.features": "Tính năng",
       "nav.platform": "Nền tảng",
+      "nav.updates": "Cập nhật",
+      "updates.title": "Ghi chú phát hành",
+      "updates.lede": "Những thay đổi trong từng bản phát hành VolumeControl. Biểu ngữ luôn phản ánh bản phát hành ổn định mới nhất trên GitHub.",
+      "updates.latest": "Bản phát hành mới nhất",
+      "updates.view": "Xem bản phát hành",
+      "updates.loading": "Đang tải ghi chú phát hành…",
+      "updates.failed": "Hiện chưa tải được ghi chú phát hành.",
+      "updates.noNotes": "Không có ghi chú phát hành.",
       "hero.title": "Điều khiển âm lượng mang lại cảm giác<br><span class=\"grad\">nguyên bản mọi nơi</span>",
       "hero.sub": "Phím tắt toàn cục, khay hệ thống thực, overlay âm lượng trên màn hình, và giao diện Mixer / Cài đặt / Trợ giúp Tauri v2 — hỗ trợ WASAPI, CoreAudio và PulseAudio.",
       "hero.installBtn": "Cài đặt VolumeControl",
@@ -912,8 +1068,8 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       "feature.reload.body": "Sửa <code>config.ini</code> khi đang chạy; lõi và giao diện nhận thay đổi mà không cần khởi động lại.",
       "feature.languages.title": "Tiếng Anh &amp; <span lang=\"vi\">Tiếng Việt</span>",
       "feature.languages.body": "Mixer, overlay, cài đặt và trợ giúp đều dùng được hai ngôn ngữ — chuyển từ khay hoặc Cài đặt.",
-      "feature.updates.title": "Kiểm tra cập nhật",
-      "feature.updates.body": "“Kiểm tra cập nhật” trong menu khay báo kết quả ngay tại chỗ, không cần mở Cài đặt.",
+      "feature.updates.title": "Kiểm tra &amp; thông báo cập nhật",
+      "feature.updates.body": "Tự động kiểm tra và hiện biểu ngữ trong ứng dụng; nếu được cấp quyền thông báo của hệ điều hành, ứng dụng gửi thông báo gốc. Khay hệ thống vẫn cho phép kiểm tra thủ công.",
       "platform.capability": "Khả năng",
       "platform.volume": "Điều khiển âm lượng",
       "platform.hotkeys": "Phím tắt toàn cục",
@@ -974,6 +1130,8 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       if (dict[key]) el.setAttribute("aria-label", dict[key]);
     });
     copyBtn.textContent = localized("install.copy", "Copy");
+    renderReleaseBanner();
+    if (releaseCache) renderReleases();
     render();
   }
 

@@ -1,5 +1,44 @@
 # Progress Log
 
+## Session 127 (2026-10-23) - Friendly app names, update notifications, and release changelog
+
+- Goal: replace executable names with product names in the mixer and
+  blacklist, make the label style configurable, and announce new releases
+  in-app, natively, and on the landing page.
+- What landed:
+  - Windows session enumeration reads `ProductName` / `FileDescription` from
+    the process executable and sends `display_name`; the mixer renders it
+    through the selected label style.
+  - The blacklist picker resolves icons and product names for running and
+    installed (not currently running) apps through App Paths.
+  - `app_label_style` (friendly, friendly + process, process) persists in
+    `config.ini` and is edited from Settings → General.
+  - Opening the mixer checks for updates, listens to `state://update`, and
+    shows a dismissible release banner.
+  - Tauri notification plugin support requests OS permission before sending
+    one native alert per release; macOS uses a native
+    `UNUserNotificationCenter` request because the Tauri desktop plugin
+    reports `granted` unconditionally.
+  - `docs/index.html` adds a latest-release banner and a GitHub-backed
+    changelog with bilingual labels.
+- Review fixes:
+  - Registered the notification plugin on the production builder and added
+    the non-Windows `running_apps` fallback.
+  - Automatic update checks share a 10-minute language-scoped process cache;
+    the Settings button forces a fresh check.
+  - Update links open through a validated native `open_release` command.
+  - Session payloads carry `process`, so friendly + process labels no longer
+    duplicate the display name.
+- Verification:
+  - `cargo fmt --all --check`, `git diff --check`, `cargo clippy
+    --workspace --all-targets --no-default-features -- -D warnings`, and
+    `cargo test --workspace --no-default-features` passed.
+  - `npm --prefix frontend test` passed 126 tests; `npm --prefix frontend run
+    build` passed.
+  - Browser smoke covered the bilingual landing-page release banner and
+    changelog.
+- Records: `vol-108` and `vol-109` added as in-progress.
+
 ## Session 126 (2026-10-22) - Recover Windows audio and make mixer controls discoverable
 
 - Goal: follow the current Windows default audio endpoint, recover after a

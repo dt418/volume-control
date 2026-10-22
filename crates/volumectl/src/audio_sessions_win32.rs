@@ -11,13 +11,16 @@
 //!   IAudioSessionManager2 → GetSessionEnumerator
 //!   IAudioSessionEnumerator → GetCount / GetSession
 //!   IAudioSessionControl  → GetState / GetDisplayName
-//!   IAudioSessionControl2 → GetProcessId
+//!   IAudioSessionControl2 → GetProcessId / GetSessionInstanceIdentifier
 //!   ISimpleAudioVolume    → Get/SetMasterVolume, Get/SetMute
 //!
-//! A session's `id` is its process id as a string (the mixer frontend treats
-//! ids as opaque). Stale ids (process no longer has a session) return `Err`
-//! per spec §9.6; the caller re-emits `state://sessions` so the UI drops the
-//! dead row. No device / no sessions / COM failure → empty list, never panic.
+//! A session's `id` is its stable COM instance identifier (falling back to the
+//! process id only when the OS refuses the identifier). PIDs alone are not
+//! unique — one process may own several sessions — and Windows can move the
+//! system-sounds session between processes, which made the old PID ids go
+//! stale mid-session. Stale ids (session ended) return `Err` per spec §9.6;
+//! the caller re-emits `state://sessions` so the UI drops the dead row. No
+//! device / no sessions / COM failure → empty list, never panic.
 
 use std::ffi::c_void;
 
@@ -175,9 +178,39 @@ unsafe fn vtbl<T>(this: *const c_void) -> &'static T {
 
 // ── Pure helpers (unit-tested; no device required) ─────────────────────────
 
-/// The mixer-facing session id: the process id as a string.
+/// The mixer-facing session id: the process id as a string. This is only a
+/// fallback when the OS refuses `GetSessionInstanceIdentifier`.
 pub fn session_id(pid: u32) -> String {
     pid.to_string()
+}
+
+/// Prefer the COM session instance identifier over the process id. Unlike a
+/// PID it stays unique when one process owns multiple sessions, and it does
+/// not change when Windows moves the system-sounds session between processes.
+pub fn resolved_session_id(instance: &str, pid: u32) -> String {
+    let instance = instance.trim();
+    if instance.is_empty() {
+        session_id(pid)
+    } else {
+        instance.to_string()
+    }
+}
+
+/// Read and free a `CoTaskMemAlloc`-owned session instance identifier.
+unsafe fn session_instance_identifier(control2: *mut c_void) -> String {
+    if control2.is_null() {
+        return String::new();
+    }
+    let mut ptr: *mut u16 = std::ptr::null_mut();
+    let hr = (vtbl::<IAudioSessionControl2Vtbl>(control2).get_session_instance_identifier)(
+        control2, &mut ptr,
+    );
+    if hr < 0 || ptr.is_null() {
+        return String::new();
+    }
+    let value = wide_to_string(ptr);
+    CoTaskMemFree(ptr as *const c_void);
+    value
 }
 
 /// Final display name for a session: prefer the OS display name, then the
@@ -391,6 +424,10 @@ unsafe fn enumerate_sessions(chain: &SessionChain) -> Vec<AudioSessionInfo> {
             let _ =
                 (vtbl::<IAudioSessionControl2Vtbl>(control2).get_process_id)(control2, &mut pid);
         }
+        let instance = session_instance_identifier(control2);
+        let system = !control2.is_null()
+            && (vtbl::<IAudioSessionControl2Vtbl>(control2).is_system_sounds_session)(control2)
+                == 0;
 
         let mut pct = 0.0_f32;
         let mut muted = 0_i32;
@@ -401,12 +438,31 @@ unsafe fn enumerate_sessions(chain: &SessionChain) -> Vec<AudioSessionInfo> {
         }
 
         let process_base = process_image_base(pid).unwrap_or_default();
+        let display_name = if system {
+            None
+        } else {
+            process_image_path(pid)
+                .and_then(|path| crate::host_core::friendly_executable_name(&path))
+                .or_else(|| {
+                    (!process_base.is_empty())
+                        .then(|| crate::host_core::friendly_process_name(&process_base))
+                })
+        };
+        let name = resolved_session_name(&display, &process_base, pid);
+        let process = if process_base.is_empty() {
+            name.clone()
+        } else {
+            process_base.clone()
+        };
         sessions.push(AudioSessionInfo {
-            id: session_id(pid),
-            name: resolved_session_name(&display, &process_base, pid),
+            id: resolved_session_id(&instance, pid),
+            name,
+            process,
+            display_name,
             pct: (pct.clamp(0.0, 1.0) * 100.0).round() as u8,
             muted: muted != 0,
             active: state == AUDIO_SESSION_STATE_ACTIVE,
+            system,
         });
 
         if !simple.is_null() {
@@ -449,7 +505,8 @@ where
             let mut pid: u32 = 0;
             let _ =
                 (vtbl::<IAudioSessionControl2Vtbl>(control2).get_process_id)(control2, &mut pid);
-            matched = session_id(pid) == id;
+            let instance = session_instance_identifier(control2);
+            matched = resolved_session_id(&instance, pid) == id;
         }
 
         if matched {
@@ -493,7 +550,7 @@ unsafe fn wide_to_string(ptr: *const u16) -> String {
 
 /// Lowercase base name (e.g. `spotify.exe`) of a process, for sessions whose
 /// OS display name is empty. Mirrors `host_core::foreground_process`.
-fn process_image_base(pid: u32) -> Option<String> {
+fn process_image_path(pid: u32) -> Option<String> {
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if handle == 0 {
@@ -506,8 +563,23 @@ fn process_image_base(pid: u32) -> Option<String> {
         if ok == 0 {
             return None;
         }
-        let path = String::from_utf16_lossy(&buf[..len as usize]);
-        let base = path.rsplit('\\').next().unwrap_or(&path);
-        Some(base.to_lowercase())
+        Some(String::from_utf16_lossy(&buf[..len as usize]))
+    }
+}
+
+fn process_image_base(pid: u32) -> Option<String> {
+    let path = process_image_path(pid)?;
+    let base = path.rsplit('\\').next().unwrap_or(&path);
+    Some(base.to_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolved_session_id;
+
+    #[test]
+    fn session_ids_prefer_the_instance_identifier_and_fall_back_to_pid() {
+        assert_eq!(resolved_session_id("instance-1", 42), "instance-1");
+        assert_eq!(resolved_session_id("  ", 42), "42");
     }
 }
