@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-22T12:25",
+  "last_updated": "2026-10-22T15:00",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,25 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-105",
+      "priority": 105,
+      "area": "tooling",
+      "title": "Winget submission monitoring and publication automation",
+      "user_visible_behavior": "Developers can validate and install the local manifest, inspect cached winget PR validation status, run self-disabling validation/merge watchers, and let CI confirm the upstream PR merge and manifest publication without depending on a developer machine.",
+      "status": "in_progress",
+      "verification": [
+        "Windows PowerShell 5.1 parser accepted all nine new winget/Sandbox scripts after the review fixes.",
+        "`scripts/check-winget-validation.ps1 -StateDir <temp>` returned green for PR #454508; `scripts/check-winget-merge.ps1 -StateDir <temp>` returned pending with expectedVersion 0.1.9.",
+        "`scripts/winget-manifest.ps1 validate` reported `Manifest validation succeeded.`; `scripts/winget-manifest.ps1 path` resolved the 0.1.9 manifest directory from outside the repository.",
+        "The new workflow YAML parses and the workflow-warning-auditor reports 0 findings; the current upstream PR is open and the master manifest endpoint returns 404.",
+        "Review fixes verified: failed `gh api` output is discarded before the unauthenticated fallback; SandboxTest maps only a disposable temp directory and requires PowerShell 7 for authenticated runs; the merge checker uses an exact-version `winget show` instead of parsing a localized label."
+      ],
+      "evidence": [
+        "Session 125 (2026-10-22): added the mirrored `winget-publish` skill, manifest/shims/status helpers, scheduled validation and merge watchers, the 15-minute GitHub Actions watcher, the `.gitignore` skill exceptions, and the compressed `CLAUDE.md` guidance. Pre-push review found and fixed the API fallback, Sandbox host-write, PowerShell 7, localized-output, and documentation/records issues."
+      ],
+      "notes": "Pinned to PR #454508 / 0.1.9. CI is not active until this commit lands on main; upstream moderation and catalog publication are still pending. The publication result must be appended only after `winget show` and a catalog-based install succeed."
+    },
     {
       "id": "vol-104",
       "priority": 104,

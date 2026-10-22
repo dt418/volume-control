@@ -1,182 +1,35 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with this code repository.
+Guidance for Claude Code. Read `AGENTS.md`, `GUARDRAILS.md` for gates/safe flow; `README.md` for build/platform/module detail.
 
 ## Project overview
 
-VolumeControl is a Rust 2021 Cargo workspace (`rust-version = 1.82`) containing the
-`crates/volumectl` library and `volumectl` binary. It is a native volume controller
-with global hotkeys, native audio backends, host-owned confirmed state, and platform
-renderers. Windows has the complete Win32 tray/overlay host. macOS has CoreAudio,
-global-hotkey, and an AppKit host/renderer. Linux has PulseAudio, global-hotkey, a platform-neutral
-host reducer, and an optional GTK4/libadwaita host/renderer. The released app is a
-Tauri webview host (mixer/settings/help/overlay surfaces); macOS/Linux run a
-Tauri-managed tray (menu ids shared with the Windows native tray via
-`crates/volumectl/src/tray_common.rs`), the webview HUD overlay is macOS/Linux-only
-(Windows keeps its native Win32 HUD), and Linux mixer sessions come from
-PulseAudio sink-inputs (`audio_sessions_linux.rs`).
-
-Use `#[cfg(target_os = "...")]` for platform-specific code. Keep `init.sh` unchanged;
-the abandoned `init.ps1` bootstrap task must not be restored.
+VolumeControl: Rust 2021 workspace (`crates/volumectl`) + Tauri v2 host (`src-tauri`) + React/Vite frontend. Native volume controller: global hotkeys, WASAPI/CoreAudio/PulseAudio, host-owned confirmed state, tray/overlay/mixer/settings/help surfaces. Windows native Win32 host; macOS CoreAudio/AppKit; Linux PulseAudio + GTK4 or headless hotkey host. Platform code `#[cfg(target_os = "...")]`-gated. Keep `init.sh`; do not restore `init.ps1`.
 
 ## Commands
 
-Run the baseline bootstrap from the repository root:
+Bootstrap: `./init.sh`.
 
-```bash
-./init.sh
-```
+Windows builds: `scripts\win-build.bat build|run|test` (MSVC wrapper).
 
-Windows builds must use the MSVC environment wrapper:
+Canonical gate: `bash scripts/format-lint.sh` (`--skip-tests`, `--all-features` when appropriate); see `.agents/skills/format-lint/SKILL.md`. Full commands/platform packages: README "Building".
 
-```bat
-scripts\win-build.bat build
-scripts\win-build.bat run
-scripts\win-build.bat test
-```
-
-Common Rust checks and tests:
-
-```bash
-cargo fmt --all --check
-git diff --check
-cargo clippy --workspace --all-targets --no-default-features -- -D warnings
-cargo test --workspace --no-default-features
-cargo test -p volumectl <filter>
-cargo test -p volumectl --test linux_host_core
-cargo test -p volumectl --test macos_host_smoke
-```
-
-The canonical manifest-driven gate is authoritative for local and CI quality checks:
-
-```bash
-bash scripts/format-lint.sh
-bash scripts/format-lint.sh --skip-tests
-bash scripts/format-lint.sh --all-features
-bash scripts/check-tauri-deadlock.sh
-bash scripts/check-tauri-deadlock.ps1
-bash scripts/check-records.sh --staged
-bash scripts/check-records.sh --branch origin/main
-bash scripts/test-check-records.sh
-bash scripts/test-format-lint.sh
-bash scripts/test-ship.sh
-bash scripts/test-agent-safe-flow.sh
-bash scripts/ship.sh --dry-run
-```
-
-The pre-commit hook is intentionally lightweight; the full workspace test suite is
-run by the canonical gate and CI. `scripts/format-lint-steps.json` is the single
-source of truth for gate steps and forbidden paths. `AGENTS.md` and `GUARDRAILS.md`
-define the detailed enforcement and shipping rules. Use `rtk` prefixes according to
-the global Claude Code instructions when executing commands.
-
-Before touching `src-tauri` surface code (window creation, open/close/ready
-commands, the `tauri` dependency features), read
-`.agents/skills/tauri-deadlock-guard/SKILL.md` and run
-`scripts/check-tauri-deadlock.sh`. It enforces the two invariants that fixed the
-Session 077 production bugs: `custom-protocol` must stay in the `tauri`
-features (release webviews must load embedded assets, never `localhost:1420`),
-and every surface command must be async and marshalled onto the Tauri main
-thread (never call `WebviewWindowBuilder` from a sync command or a poll thread).
-
-Claude Code also loads the project-scoped `.claude/settings.json` PreToolUse hook.
-It blocks direct pushes, destructive git operations, `--no-verify`, and admin
-merge bypasses. Use `scripts/ship.sh --push` for the canonical push path; delete
-only an already-merged local branch with `git branch -d`, or let
-`gh pr merge <PR> --delete-branch` remove the remote branch after required checks.
-
-On macOS, the normal native checks are:
-
-```bash
-cargo build
-cargo test
-```
-
-Ubuntu/Debian GTK development needs the packages used by CI, including the X11
-libraries required by the global hotkey and X11 backends:
-
-```bash
-sudo apt-get install libgtk-4-dev libadwaita-1-dev libpulse-dev \
-  libx11-dev libxi-dev libxtst-dev xvfb
-```
-
-GTK host and X11 smoke checks:
-
-```bash
-cargo build --features gtk-renderer
-xvfb-run -a cargo test --features gtk-renderer
-xvfb-run -a cargo test -p volumectl \
-  --features gtk-renderer \
-  --test linux_host_smoke -- --nocapture
-```
-
-Wayland layer-shell is optional and depends on the distribution providing
-`libgtk4-layer-shell-dev`/`gtk4-layer-shell-0.pc`:
-
-```bash
-cargo build --features gtk-renderer,layer-shell
-```
-
-Missing optional layer-shell libraries or a Wayland compositor are environment
-skips, not passes. Xvfb proves only X11/GTK behavior. Missing PulseAudio/PipeWire
-runtime is audio-unavailable evidence, not a successful audio verification. The
-application must not install packages, invoke `sudo`, enable evdev grabbing, or
-require root/input-group privileges for Wayland hotkeys.
-
-## Startup behavior
-
-- Windows starts the native Win32 host.
-- macOS with no arguments starts `macos_app`; explicit `get`, `set <0-100>`, and
-  `mute` arguments use `cli`.
-- Linux with `gtk-renderer` and no arguments starts `linux_app`; explicit CLI
-  arguments still use `cli`.
-- Linux without GTK and no arguments starts the headless `hotkeys_global` host;
-  explicit CLI arguments still use `cli`.
-- Linux global hotkeys currently require X11. Wayland keeps GTK/audio/renderer
-  operation available while recording degraded hotkey capability.
+`src-tauri` surface changes: read `.agents/skills/tauri-deadlock-guard/SKILL.md`; run `bash scripts/check-tauri-deadlock.sh`. Project PreToolUse hook blocks direct pushes, destructive git, `--no-verify`; use `bash scripts/ship.sh --push`; delete merged branches only with `git branch -d` or `gh pr merge --delete-branch`.
 
 ## Architecture
 
-The shared host boundary is in `ui`: `AppState` is the confirmed state published by
-hosts, `AppAction` carries renderer/hotkey intent, `NativeRenderer` publishes state
-and accepts actions, and `HostHandle` routes actions without letting renderers mutate
-audio or configuration directly. Shared model, theme, capability, placement, and
-surface contracts live beside these interfaces.
+See README "Architecture" and `.agents/skills/volume-control/SKILL.md` for module map. Key seams:
 
-Audio uses `crate::audio::AudioBackend` with target adapters in `audio_windows.rs`
-(WASAPI), `audio_macos.rs` (CoreAudio), and `audio_linux.rs` (PulseAudio). Hotkey
-actions live in `crate::hotkeys`; the cross-platform listener and hold-repeat logic
-are in `hotkeys_global.rs`. Windows native `RegisterHotKey` wiring is owned by
-`app.rs`.
-
-Platform hosts own event loops, backend state, configuration reload, and confirmed
-state publication:
-
-- `app.rs` owns the Windows message loop, tray, overlay, mixer, settings, and help.
-- `macos_app.rs` owns the AppKit-main-thread loop, CoreAudio, global-hotkey actions, mtime
-  config reload, `MacosRenderer`, and explicit renderer teardown. Retina geometry
-  converts physical pixels to AppKit points exactly once using the backing scale.
-- `linux_host_core.rs` is the display-free reducer and test seam for audio, hotkeys,
-  actions, configuration reload, retries, and degraded state.
-- `linux_app.rs` owns GTK initialization, display capability detection, the GLib fast
-  and slow polls, renderer/action routing, recovery, and teardown. The GTK renderer
-  in `ui/platform/linux` uses Wayland layer-shell when available and X11/plain-window
-  fallbacks otherwise. `ui/platform/macos` contains the AppKit renderer.
-
-Configuration is typed INI under the platform user config directory (`config.ini`);
-legacy `config.json` is retained as a migration/recovery backup. Hosts use safe
-mtime reload: a valid parsed and normalized config replaces active state; malformed
-input leaves the current configuration intact. Audio failures preserve the last
-confirmed state and use bounded recovery rather than fabricating a zero volume.
+- `ui`: `AppState` confirmed state; `AppAction` renderer/hotkey intent; `NativeRenderer` publishes state; `HostHandle` routes actions. Renderers never mutate audio/config directly.
+- `audio`: `AudioBackend` + Windows/macOS/Linux adapters.
+- Hosts: `app.rs` (Win32), `macos_app.rs` (AppKit), `linux_host_core.rs` (display-free reducer), `linux_app.rs` (GTK).
+- Config: typed INI under user config dir; legacy JSON migrated; mtime reload keeps active config on malformed input.
+- Startup: Windows native host; macOS `macos_app`; Linux GTK with `gtk-renderer`, else headless hotkey host; explicit CLI args use `cli`.
+- Linux global hotkeys currently require X11. On Wayland, GTK/audio/renderer remain available while hotkeys are reported as degraded. Missing layer-shell/PulseAudio at runtime is an environment skip, not a pass. The application must not install packages, invoke `sudo`, enable evdev grabbing, or require root/input-group privileges for Wayland hotkeys.
 
 ## Working rules
 
-- Work on one unfinished feature at a time; keep `feature_list.json` honest.
-- Follow brainstorm/spec -> plan -> execute -> verify -> review (`pre-push-review`)
-  -> finish. Do not claim completion without fresh command output and exit-code
-  evidence.
-- Substantive changes to code, scripts, CI, hooks, skills, or this file update both
-  `feature_list.json` and `claude-progress.md` in the same change set.
-- Preserve tests and add records for blocked or environment-dependent verification.
-- Never bypass repository gates with `--no-verify` unless explicitly authorized.
-- Before stopping, leave a clean restart path and record remaining unverified work.
+- One unfinished feature at a time; keep `feature_list.json` honest.
+- brainstorm/spec -> plan -> execute -> verify -> review (`pre-push-review`) -> finish. No completion claim without fresh command output + exit-code evidence.
+- Substantive changes update `feature_list.json` + `claude-progress.md` same change set. Preserve tests; record blocked/environment-dependent verification.
+- Never bypass gates with `--no-verify` unless explicitly authorized. Before stop, leave clean restart path; record remaining unverified work.
