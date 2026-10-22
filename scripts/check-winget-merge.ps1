@@ -83,10 +83,18 @@ function Get-ExpectedVersion {
 
 try {
   $gh = Get-GhPath
-  $raw = & $gh pr view $PrNumber --repo microsoft/winget-pkgs `
-    --json state,mergedAt,mergeStateStatus,url,title,labels 2>&1
-  if ($LASTEXITCODE -ne 0) { throw "gh pr view failed ($LASTEXITCODE): $raw" }
-  $pr = $raw | ConvertFrom-Json
+  $errFile = [System.IO.Path]::GetTempFileName()
+  try {
+    $raw = & $gh pr view $PrNumber --repo microsoft/winget-pkgs `
+      --json state,mergedAt,mergeStateStatus,url,title,labels 2>$errFile
+    if ($LASTEXITCODE -ne 0) {
+      $err = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+      throw "gh pr view failed ($LASTEXITCODE): $err"
+    }
+  } finally {
+    Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+  }
+  $pr = ($raw -join "`n") | ConvertFrom-Json
 
   $version = Get-ExpectedVersion $pr
   $labels = @($pr.labels | ForEach-Object { $_.name })

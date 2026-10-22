@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-22T15:00",
+  "last_updated": "2026-10-23T04:45",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -27,7 +27,7 @@
         "`scripts/check-winget-validation.ps1 -StateDir <temp>` returned green for PR #454508; `scripts/check-winget-merge.ps1 -StateDir <temp>` returned pending with expectedVersion 0.1.9.",
         "`scripts/winget-manifest.ps1 validate` reported `Manifest validation succeeded.`; `scripts/winget-manifest.ps1 path` resolved the 0.1.9 manifest directory from outside the repository.",
         "The new workflow YAML parses and the workflow-warning-auditor reports 0 findings; the current upstream PR is open and the master manifest endpoint returns 404.",
-        "Review fixes verified: failed `gh api` output is discarded before the unauthenticated fallback; SandboxTest maps only a disposable temp directory and requires PowerShell 7 for authenticated runs; the merge checker uses an exact-version `winget show` instead of parsing a localized label."
+        "Review fixes verified: failed `gh api` output is discarded before the unauthenticated fallback; SandboxTest maps only a disposable temp directory and requires PowerShell 7 for authenticated runs; the merge checker uses an exact-version `winget show` instead of parsing a localized label; subagent review pass (2026-10-23): isolated gh CLI stderr in temp files for check-winget-merge/check-winget-validation; case-insensitive [Vv]ersion in CI workflow; added -NonInteractive -WindowStyle Hidden to background scheduled tasks."
       ],
       "evidence": [
         "Session 125 (2026-10-22): added the mirrored `winget-publish` skill, manifest/shims/status helpers, scheduled validation and merge watchers, the 3-hour GitHub Actions watcher (static cron; manual dispatch remains available), the `.gitignore` skill exceptions, and the compressed `CLAUDE.md` guidance. Pre-push review found and fixed the API fallback, Sandbox host-write, PowerShell 7, localized-output, and documentation/records issues."

@@ -20,6 +20,12 @@
   runs; the merge checker queries the exact version instead of parsing a
   localized label; skill paths/records timing and the Linux privilege boundary
   were corrected.
+  - Subagent review pass (2026-10-23): isolated `gh` stderr into temp files
+    in `check-winget-merge.ps1` and `check-winget-validation.ps1` to prevent
+    JSON parsing failures; handled case-insensitive `[Vv]ersion` in
+    `winget-publish-watch.yml`; added `-NonInteractive -WindowStyle Hidden`
+    to scheduled tasks in `install-winget-merge-task.ps1` and
+    `install-winget-validation-task.ps1`.
 - Pending: the upstream PR remains open and the package is not in the winget
   catalog; the CI schedule activates only after this commit lands on main.
   Record publication only after `winget show` and a catalog install succeed.

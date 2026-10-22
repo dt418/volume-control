@@ -49,7 +49,7 @@ if ($IntervalMinutes -lt 1) {
 }
 
 $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-$arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$checker`" -PingOnGreen -StopOnTerminal -TaskName `"$TaskName`""
+$arguments = "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$checker`" -PingOnGreen -StopOnTerminal -TaskName `"$TaskName`""
 
 $action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $repo
 $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(1)) `
