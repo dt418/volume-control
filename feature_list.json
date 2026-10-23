@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T15:02",
+  "last_updated": "2026-10-23T20:10",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,23 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-119",
+      "priority": 119,
+      "area": "tooling",
+      "title": "Integrated End-to-End Application Test Command (test-all)",
+      "user_visible_behavior": "Engineers and CI can execute scripts/test-all.sh (or scripts/test-all.ps1) to verify all 8 layers of the application end-to-end: format/diff, clippy, Rust workspace tests, frontend vitest, frontend production build, surface smoke capture, unix compatibility, and guardrail self-tests.",
+      "status": "passing",
+      "verification": [
+        "sh scripts/test-all.sh",
+        "git diff --check"
+      ],
+      "evidence": [
+        "scripts/test-all.sh executed all 8 phases cleanly.",
+        "Passed Rust workspace (380 tests), frontend (124 tests), and 3 Win32 desktop surface captures."
+      ],
+      "notes": "Added scripts/test-all.sh, scripts/test-all.ps1, updated GUARDRAILS.md."
+    },
     {
       "id": "vol-116",
       "priority": 116,
