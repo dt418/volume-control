@@ -16,6 +16,21 @@ Hard rules that must not be bypassed without explicit user approval.
   the checks it actually runs; the full gate and CI remain authoritative for
   workspace tests.
 
+## Full application integration testing
+
+- The canonical command to verify the entire application end-to-end is:
+  `bash scripts/test-all.sh` (or `powershell -File scripts/test-all.ps1` on Windows).
+- It executes all 8 layers:
+  1. Formatting & whitespace diff check (`cargo fmt`, `git diff --check`)
+  2. Rust workspace clippy (`cargo clippy -D warnings`)
+  3. Rust workspace test suite (`cargo test --workspace --no-default-features`)
+  4. Frontend unit & component suite (`npm test --prefix frontend`)
+  5. Frontend production build (`npm run build --prefix frontend`)
+  6. Real desktop surface smoke test (`scripts/smoke-test.sh` / `verify-tauri-surfaces.ps1`)
+  7. Cross-platform Unix compatibility invariants (`scripts/check-unix-compat.sh`)
+  8. Guardrails and enforcement stack self-tests (`check-records`, `format-lint`, `agent-safe-flow`)
+- All 8 phases must pass cleanly before opening a Pull Request or merging.
+
 ## Diff hygiene
 
 - Never commit forbidden paths: `target/`, `.superpowers/`,

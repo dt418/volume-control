@@ -1,5 +1,17 @@
 # Progress Log
 
+## Session 135 (2026-10-23) - Integrated End-to-End Application Test Command (test-all)
+
+- Goal: Provide a single canonical integration test command to verify the entire application across all 8 layers before shipping or PR.
+- What landed:
+  - `scripts/test-all.sh`: 8-phase full application integration test battery (formatting, clippy, Rust workspace unit/integration tests, frontend vitest, frontend build, real desktop surface smoke test, unix compatibility, guardrail self-tests).
+  - `scripts/test-all.ps1`: Windows PowerShell bridge to canonical integration test runner.
+  - `GUARDRAILS.md`: documented `scripts/test-all.sh` / `scripts/test-all.ps1` under "Full application integration testing".
+- Verification:
+  - `sh scripts/test-all.sh`: all 8 phases passed (380 Rust tests, 124 frontend tests, 3 Win32 surface captures).
+  - `git diff --check`: clean.
+- Records: registered `vol-119` in `feature_list.json` as `passing`.
+
 ## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
 
 - Goal: after shipping v0.1.11, close the gaps the installed 0.1.10 build exposed: the update banner showed no install choice, the native toast carried no action and was English-only.
