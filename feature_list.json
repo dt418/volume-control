@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T12:15",
+  "last_updated": "2026-10-23T14:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,26 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-114",
+      "priority": 114,
+      "area": "tooling",
+      "title": "Advance lifecycle-validation tags and harden cross-platform unix compatibility guards",
+      "user_visible_behavior": "Installer lifecycle validation workflows and harnesses default to v0.1.10 baseline and v0.1.11 candidate; check-unix-compat guards enforce actual General navigation clicks and distinguish outer-loop termination from conditional/continue break paths.",
+      "status": "passing",
+      "verification": [
+        "bash scripts/check-unix-compat.sh passed all checks.",
+        "powershell -ExecutionPolicy Bypass -File scripts/check-unix-compat.ps1 passed all checks.",
+        "bash scripts/test-check-unix-compat.sh passed all 10 regression tests.",
+        "cargo fmt --all --check, git diff --check, and cargo clippy --workspace --all-targets --no-default-features -- -D warnings clean."
+      ],
+      "evidence": [
+        ".github/workflows/installer-lifecycle.yml & desktop-validation.yml, scripts/verify-install-lifecycle.sh & .ps1 advanced to v0.1.10/v0.1.11.",
+        "scripts/check-unix-compat.sh & .ps1 track loop depth, continue paths, and General navigation clicks.",
+        "scripts/test-check-unix-compat.sh verifies single-line/multiline break rejection, conditional/nested break acceptance, continue-path acceptance, and General variable assignment rejection."
+      ],
+      "notes": "Addresses review feedback for PR #74."
+    },
     {
       "id": "vol-113",
       "priority": 113,

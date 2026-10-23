@@ -16,7 +16,7 @@ on:
         description: "Baseline release tag for lifecycle verification"
         required: false
         type: string
-        default: "v0.1.9"
+        default: "v0.1.10"
       run_installer_lifecycle:
         description: "Run installer lifecycle verification against packaged candidate"
         required: false

@@ -24,29 +24,110 @@ pass() {
 # `for sig in signals.forever()` followed by `break` inside the loop triggers clippy::never_loop.
 # Single-iteration signal handling should use `if let Some(sig) = signals.forever().next()`.
 if find src-tauri/src crates/volumectl/src -name '*.rs' -exec awk '
-  FNR == 1 { in_loop = 0; brace_depth = 0; seen_open = 0; found_break = 0 }
-  /for[[:space:]]+.*[[:space:]]+in[[:space:]]+.*signals\.forever\(\)/ {
-    in_loop = 1; brace_depth = 0; seen_open = 0; found_break = 0
-    idx = match($0, /for[[:space:]]+.*[[:space:]]+in[[:space:]]+.*signals\.forever\(\)/)
-    line = substr($0, idx)
-  }
-  in_loop {
-    if (!line) line = $0
-    sub(/\/\/.*$/, "", line)
+  FNR == 1 { in_loop = 0; brace_depth = 0; seen_open = 0; in_comment = 0; in_string = 0; has_continue = 0; inner_loop_sp = 0; pending_loop = 0 }
+  {
+    line = $0
+    idx = match(line, /for[[:space:]]+.*[[:space:]]+in[[:space:]]+.*signals\.forever\(\)/)
+    if (idx > 0) {
+      in_loop = 1
+      brace_depth = 0
+      seen_open = 0
+      has_continue = 0
+      inner_loop_sp = 0
+      pending_loop = 0
+      line = substr(line, idx)
+    }
+    if (!in_loop) next
+
     n = length(line)
     for (i = 1; i <= n; i++) {
       c = substr(line, i, 1)
-      if (c == "{") { brace_depth++; seen_open = 1 }
-      else if (c == "}") { brace_depth-- }
-    }
-    if (line ~ /([[:space:];{]|^)break([[:space:];]|$)/) { found_break = 1 }
-    if (seen_open && brace_depth <= 0) {
-      if (found_break) {
-        exit_code = 1
+      next_c = (i < n) ? substr(line, i + 1, 1) : ""
+
+      if (in_comment) {
+        if (c == "*" && next_c == "/") { in_comment = 0; i++ }
+        continue
       }
-      in_loop = 0
+
+      if (in_string) {
+        if (c == "\\") { i++; continue }
+        if (c == "\"") { in_string = 0 }
+        continue
+      }
+
+      if (c == "/" && next_c == "/") {
+        break
+      }
+
+      if (c == "/" && next_c == "*") {
+        in_comment = 1
+        i++
+        continue
+      }
+
+      if (c == "\"") {
+        in_string = 1
+        continue
+      }
+
+      if (c == "\047") {
+        if (next_c == "\\") { i += 3 } else { i += 2 }
+        continue
+      }
+
+      prev_c = (i == 1) ? " " : substr(line, i - 1, 1)
+
+      # Detect inner loop keyword
+      if (seen_open && prev_c ~ /[^a-zA-Z0-9_]/) {
+        if (substr(line, i, 4) == "for " || substr(line, i, 6) == "while " || substr(line, i, 5) == "loop ") {
+          pending_loop = 1
+        } else if (substr(line, i, 5) == "loop{") {
+          pending_loop = 1
+        }
+      }
+
+      if (c == "{") {
+        brace_depth++
+        seen_open = 1
+        if (pending_loop) {
+          inner_loop_sp++
+          inner_loop_stack[inner_loop_sp] = brace_depth
+          pending_loop = 0
+        }
+        continue
+      }
+
+      if (c == "}") {
+        if (inner_loop_sp > 0 && inner_loop_stack[inner_loop_sp] == brace_depth) {
+          inner_loop_sp--
+        }
+        brace_depth--
+        if (seen_open && brace_depth <= 0) {
+          in_loop = 0
+        }
+        continue
+      }
+
+      # Detect continue keyword targeting outer loop
+      if (seen_open && inner_loop_sp == 0 && substr(line, i, 8) == "continue") {
+        after_c = (i + 8 <= n) ? substr(line, i + 8, 1) : " "
+        if (prev_c ~ /[^a-zA-Z0-9_]/ && after_c ~ /[^a-zA-Z0-9_]/) {
+          has_continue = 1
+        }
+      }
+
+      # Unconditional break: outer loop depth (brace_depth == 1) without a prior continue path
+      if (brace_depth == 1 && substr(line, i, 5) == "break") {
+        after_c = (i + 5 <= n) ? substr(line, i + 5, 1) : " "
+        if (prev_c ~ /[^a-zA-Z0-9_]/ && after_c ~ /[^a-zA-Z0-9_]/) {
+          if (!has_continue) {
+            exit_code = 1
+            in_loop = 0
+            break
+          }
+        }
+      }
     }
-    line = ""
   }
   END { if (exit_code != 0) exit 1; exit 0 }
 ' {} +; then
@@ -72,20 +153,44 @@ if [ -f "e2e/tauri/specs/settings.e2e.ts" ]; then
     /displays the updates card with version and check control/ { in_test = 1; next }
     in_test && /^[[:space:]]*it\(/ { in_test = 0 }
     in_test {
-      if (/General/) {
-        if (!seen_card && !seen_wait) { seen_nav = 1 }
-      }
-      if (/update-card/) {
-        if (!seen_nav) { failed = 1; exit 1 }
-        seen_card = 1
-      }
-      if (/waitForDisplayed/) {
-        if (!seen_nav) { failed = 1; exit 1 }
-        seen_wait = 1
-      }
+      line = $0
+      if (line ~ /^[[:space:]]*\/\//) next
+      test_body = test_body "\n" line
     }
     END {
-      if (seen_nav && (seen_card || seen_wait) && !failed) exit 0
+      idx_card = index(test_body, "update-card")
+      idx_wait = index(test_body, "waitForDisplayed")
+      first_stop = -1
+      if (idx_card > 0 && idx_wait > 0) {
+        first_stop = (idx_card < idx_wait) ? idx_card : idx_wait
+      } else if (idx_card > 0) {
+        first_stop = idx_card
+      } else {
+        first_stop = idx_wait
+      }
+      if (first_stop <= 0) exit 1
+
+      pre_card = substr(test_body, 1, first_stop - 1)
+
+      # 1. Chained lookup and click: $(...button...General...).click()
+      if (pre_card ~ /\$([[:space:]]|\$)*\([^;]*(button[^;]*General|General[^;]*button)[^;]*\)[^;]*[.][[:space:]]*click[[:space:]]*[(]/) {
+        exit 0
+      }
+
+      # 2. Variable assignment then .click()
+      if (match(pre_card, /(const|let|var)[[:space:]]+[a-zA-Z0-9_]+[[:space:]]*=[^;]*\$([[:space:]]|\$)*\([^;]*(button[^;]*General|General[^;]*button)[^;]*\)/)) {
+        matched = substr(pre_card, RSTART, RLENGTH)
+        sub(/^[[:space:]]*(const|let|var)[[:space:]]+/, "", matched)
+        sub(/[[:space:]]*=.*$/, "", matched)
+        varname = matched
+        if (varname != "") {
+          pattern = varname "[[:space:]]*[.][[:space:]]*click[[:space:]]*[(]"
+          if (pre_card ~ pattern) {
+            exit 0
+          }
+        }
+      }
+
       exit 1
     }
   ' e2e/tauri/specs/settings.e2e.ts; then

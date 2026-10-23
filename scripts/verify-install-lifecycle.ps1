@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [string] $BaselineTag = 'v0.1.9',
-    [string] $TargetTag = 'v0.1.10',
+    [string] $BaselineTag = 'v0.1.10',
+    [string] $TargetTag = 'v0.1.11',
     [string] $CandidateDirectory,
     [string] $OutputRoot = 'output/install-lifecycle/windows',
     [switch] $Isolated,
