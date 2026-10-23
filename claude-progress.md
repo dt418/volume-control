@@ -15,10 +15,16 @@
   - `frontend/src/lib/i18n.tsx`: added bilingual EN/VI dictionary entries for Liquid Glass tokens and preview card.
   - `frontend/src/settings/AppearancePreview.tsx`: upgraded to real-time optical preview card displaying simulated glass surface, specular rim, and material/accent pill badges.
   - `frontend/src/lib/i18n.test.ts` & `frontend/src/settings/AppearancePreview.test.tsx`: verified bilingual resolution and preview card structure.
+  - `frontend/src/overlay/OverlaySurface.tsx`: upgraded volume overlay HUD to Liquid Glass capsule (`rounded-2xl glass-surface`), removed ad-hoc backdrop-blur-md.
+  - `frontend/src/overlay/OverlaySurface.test.tsx`: verified overlay-card renders with Liquid Glass capsule styling.
+  - `frontend/src/help/HelpSurface.tsx`: integrated `glass-surface` on main shell and `CardSm` on shortcut cards.
 - Verification:
-  - `npm --prefix frontend test`: 132 tests passed across 20 files.
+  - `npm --prefix frontend test`: 133 tests passed across 20 files.
+  - `npm --prefix frontend run build`: production build passed, CSS payload increase only +0.21 kB gzipped (budget ≤ 2.5 kB).
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: 0 warnings, clean.
+  - `cargo fmt --all --check`: clean.
   - `git diff --check`: clean.
-- Records: updated `vol-117` in `feature_list.json` as `in_progress`.
+- Records: updated `vol-117` in `feature_list.json` to `passing`.
 
 ## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
 
