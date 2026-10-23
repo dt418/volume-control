@@ -1,5 +1,16 @@
 # Progress Log
 
+## Session 135 (2026-10-23) - Rust/UI and Apple Liquid Glass Visual System Modernization
+
+- Goal: Implement Apple-style Liquid Glass optics and Rust/UI high-density component primitives across VolumeControl UI surfaces.
+- What landed:
+  - `frontend/src/styles.css`: implemented multi-stage Liquid Glass CSS tokens with 20px blur, 180% saturation, OKLab luminance tint, 1px specular rim highlight, and 18px squircle curvature.
+  - `frontend/src/styles.test.ts`: verified specular rim, 20px blur tokens, squircle curvature, and anti-blur multiplication preservation.
+- Verification:
+  - `npm --prefix frontend test`: 126 tests passed across 19 files.
+  - `git diff --check`: clean.
+- Records: registered `vol-117` in `feature_list.json` as `in_progress`.
+
 ## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
 
 - Goal: after shipping v0.1.11, close the gaps the installed 0.1.10 build exposed: the update banner showed no install choice, the native toast carried no action and was English-only.
