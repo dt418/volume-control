@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T15:02",
+  "last_updated": "2026-10-23T19:15",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,28 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-118",
+      "priority": 118,
+      "area": "guardrails",
+      "title": "Cross-Platform Smoke Test Guardrail, Pre-Push Hook, and Protected Main Enforcement",
+      "user_visible_behavior": "UI and feature changes must pass real cross-platform surface smoke testing. Direct commits and merges to main are blocked across all platforms; development is worktree-by-default and requires a GitHub Pull Request.",
+      "status": "passing",
+      "verification": [
+        "sh scripts/smoke-test.sh",
+        "bash scripts/test-ship.sh",
+        "bash scripts/test-agent-safe-flow.sh",
+        "cargo fmt --all --check",
+        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings"
+      ],
+      "evidence": [
+        "sh scripts/smoke-test.sh: passed on Windows (frontend tests + build + 3 Win32 surface captures).",
+        "bash scripts/test-ship.sh: all ship-flow smoke checks passed.",
+        "bash scripts/test-agent-safe-flow.sh: all agent safe-flow checks passed.",
+        "GitHub ruleset ID 25719841 (Protect main branch) active on refs/heads/main."
+      ],
+      "notes": "Installed .githooks/pre-push, updated .githooks/pre-commit, .claude/hooks/agent-safe-flow.sh, scripts/ship.sh, and GUARDRAILS.md."
+    },
     {
       "id": "vol-116",
       "priority": 116,

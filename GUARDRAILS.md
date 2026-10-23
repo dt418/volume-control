@@ -16,6 +16,32 @@ Hard rules that must not be bypassed without explicit user approval.
   the checks it actually runs; the full gate and CI remain authoritative for
   workspace tests.
 
+## Smoke testing & UI surface verification
+
+- Any commit, PR, or ship that changes user-visible features, frontend code
+  (`frontend/`), or UI surfaces (Mixer, Settings, Help, Overlay) must run the
+  real desktop surface smoke test:
+  `VOLUMECTL_E2E_DEBUG=1 pwsh -File scripts/verify-tauri-surfaces.ps1 -Binary target/debug/VolumeControl.exe`
+  (or platform equivalent).
+- The smoke test verifies process lifecycle, HWND visibility, legacy geometry
+  parity, and non-blank client area rendering with evidence saved under
+  `output/tauri-surface-evidence/`.
+- Record updates in `feature_list.json` and `claude-progress.md` must include
+  smoke test evidence for UI and feature changes.
+
+## Branching, Worktree & Pull Request integration
+
+- **Worktree by default**: All new feature and bugfix work must be developed
+  in an isolated git worktree under `.worktrees/<feature-name>`, never directly
+  on the root checkout or `main` branch.
+- **No direct merges into main**: Direct local or remote merges into `main`
+  (`git merge` while on `main`) are strictly prohibited upon task completion.
+- **Mandatory Pull Request (PR)**: All completed tasks must be integrated via
+  a GitHub Pull Request (`gh pr create`), gated by CI status checks and GitHub
+  branch protection rulesets.
+- **Protected main branch**: Branch protection rules are permanently active
+  for `main` (deletion blocked, force-push blocked, pull request required).
+
 ## Diff hygiene
 
 - Never commit forbidden paths: `target/`, `.superpowers/`,

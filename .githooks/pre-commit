@@ -6,6 +6,18 @@
 
 set -e
 
+# Worktree-first guard: direct commits to main are forbidden on all platforms.
+current_branch="$(git branch --show-current 2>/dev/null || true)"
+if [ "$current_branch" = "main" ]; then
+  staged_code="$(git diff --cached --name-only 2>/dev/null | grep -Ev '^(docs/|README|\.gitignore)' || true)"
+  if [ -n "$staged_code" ]; then
+    echo "[pre-commit] ERROR: Direct commits to 'main' are prohibited across all platforms." >&2
+    echo "             New tasks must be developed in an isolated worktree on a feature branch." >&2
+    echo "             Run: git worktree add .worktrees/<name> -b feat/<name>" >&2
+    exit 1
+  fi
+fi
+
 # Record-keeping guard: substantive changes must stage updates to
 # feature_list.json and claude-progress.md (see scripts/check-records.sh).
 echo "[pre-commit] check record updates (feature_list.json + claude-progress.md)"

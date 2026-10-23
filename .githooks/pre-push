@@ -1,0 +1,46 @@
+#!/usr/bin/env sh
+#
+# pre-push - Git pre-push hook enforcing repository guardrails before any push.
+# Installed by scripts/install-hooks.sh / scripts/install-hooks.ps1.
+#
+set -e
+
+remote="$1"
+url="$2"
+
+# 1. Main branch protection: forbid pushing directly to refs/heads/main
+while read -r local_ref local_sha remote_ref remote_sha; do
+    if [ "$remote_ref" = "refs/heads/main" ]; then
+        echo "[pre-push] ERROR: Direct push to 'main' is strictly prohibited by guardrails." >&2
+        echo "           All changes must be pushed to a feature branch and merged via Pull Request." >&2
+        echo "           See GUARDRAILS.md (Branching, Worktree & Pull Request integration)." >&2
+        exit 1
+    fi
+done
+
+# 2. Format and whitespace checks before push
+echo "[pre-push] checking git diff whitespace..."
+if ! git diff --check origin/main..HEAD 2>/dev/null; then
+    echo "[pre-push] ERROR: Trailing whitespace or whitespace errors detected in branch diff." >&2
+    exit 1
+fi
+
+# 3. Check records rule on branch
+if command -v sh >/dev/null 2>&1; then
+    echo "[pre-push] checking records guard vs origin/main..."
+    if ! sh scripts/check-records.sh --branch origin/main; then
+        echo "[pre-push] ERROR: Records guard failed. Substantive changes must update feature_list.json and claude-progress.md." >&2
+        exit 1
+    fi
+fi
+
+# 4. Smoke test check: if frontend or UI changed, run cross-platform smoke test
+if git diff --name-only origin/main..HEAD 2>/dev/null | grep -Eq '^(frontend/|src-tauri/src/window_manager\.rs|crates/volumectl/src/ui/)'; then
+    echo "[pre-push] UI/frontend changes detected. Running cross-platform smoke test..."
+    if ! sh scripts/smoke-test.sh; then
+        echo "[pre-push] ERROR: Cross-platform smoke test failed. Fix before pushing." >&2
+        exit 1
+    fi
+fi
+echo "[pre-push] Guardrails pre-push check OK."
+exit 0
