@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { UpdateCard } from "./UpdateCard";
 import * as ipc from "../lib/ipc";
+import pkg from "../../package.json";
 import type { UpdateStatePayload } from "../lib/update";
 
 vi.mock("../lib/ipc", () => ({
@@ -28,7 +29,7 @@ describe("UpdateCard", () => {
 
   it("shows package version before any update check", () => {
     render(<UpdateCard />);
-    expect(screen.getByText("v0.1.10")).toBeInTheDocument();
+    expect(screen.getByText(`v${pkg.version}`)).toBeInTheDocument();
   });
 
   it("renders check for updates button", () => {

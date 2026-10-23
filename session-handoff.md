@@ -1,5 +1,17 @@
 # Session Handoff
 
+## Session 131 (2026-10-23) - VolumeControl v0.1.11 version bump and release preparation
+
+- Summary: Bumped version from 0.1.10 to 0.1.11 across all package manifests and lock files, updated CHANGELOG.md, verified version sync, and prepared tag v0.1.11 for release publishing.
+- Changes:
+  - `Cargo.toml`, `crates/volumectl/Cargo.toml`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `frontend/package.json`, `frontend/package-lock.json`, and `Cargo.lock`: bumped to 0.1.11.
+  - `CHANGELOG.md`: added `[0.1.11] - 2026-10-23` release section.
+- Verification:
+  - `bash scripts/check-version-sync.sh v0.1.11`: confirmed version sync ok: 0.1.11 across all 7 targets.
+  - `cargo check --workspace --no-default-features`: passed.
+  - `npm --prefix frontend test`: 124 tests passed across 19 files.
+- Records: `vol-113` registered and marked passing in `feature_list.json`.
+
 ## Session 129 (2026-10-23) - Reliable update notifications, background downloads, and transactional installation lifecycle
 
 - Summary: Implemented host-owned UpdateManager coordinator, background streaming downloads with SHA-256 verification, user confirmation modal/panel in Settings UpdateCard, graceful process shutdown without force-kill (Local\VolumeControl.Exit and SIGTERM), and transactional installation lifecycle across Windows, Linux, and macOS.

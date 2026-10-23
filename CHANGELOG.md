@@ -2,6 +2,20 @@
 
 All notable changes to VolumeControl are documented here.
 
+## [0.1.11] - 2026-10-23
+
+### Added
+
+- Host-owned `UpdateManager` coordinator replaces frontend polling: 15-second initial delay, 6-hour periodic checks, coalesces concurrent check requests, and functions during windowless `--background` execution.
+- Background release package downloading with streaming SHA-256 verification into application cache.
+- Native desktop notifications through host-managed `tauri_plugin_notification` with persistent deduplication in `update-state.json`.
+- Explicit confirmation in Settings UpdateCard before update installation with version details, restart warning, and Later option.
+- Graceful shutdown without force-termination (`taskkill /F`, `TerminateProcess`, SIGKILL) via `Local\VolumeControl.Exit` on Windows and SIGTERM signal handling on Unix.
+- Transactional installation lifecycles with install receipts (`install-receipt.txt`), file locks, atomic swap, and automatic rollback on failure across Windows, Linux, and macOS.
+- Offline prepared apply mode (`-PreparedDirectory` / `--prepared-dir`) and offline uninstaller operation.
+- Cross-platform installer lifecycle verification test harnesses (`verify-install-lifecycle.ps1`, `verify-install-lifecycle.sh`) wired into GitHub Actions.
+- Automated cross-platform Unix compatibility guard (`check-unix-compat.sh`, `check-unix-compat.ps1`) and skill to prevent Linux/macOS CI compilation and E2E state leakage.
+
 ## [0.1.10] - 2026-10-23
 
 ### Added

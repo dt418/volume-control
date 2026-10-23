@@ -5201,7 +5201,7 @@ dependencies = [
 
 [[package]]
 name = "volumecontrol-tauri"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "block2",
  "log",
@@ -5236,7 +5236,7 @@ dependencies = [
 
 [[package]]
 name = "volumectl"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "base64 0.22.1",
  "env_logger",

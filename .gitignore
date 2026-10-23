@@ -103,6 +103,8 @@ src-tauri/gen
 # Project-authored skills are whitelisted below (keep them versioned).
 .agents/skills/*
 .claude/skills/*
+!.agents/skills/cross-platform-unix-guard/
+!.claude/skills/cross-platform-unix-guard/
 !.agents/skills/brainstorming/
 !.claude/skills/brainstorming/
 !.agents/skills/dispatching-parallel-agents/

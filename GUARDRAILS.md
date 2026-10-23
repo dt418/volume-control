@@ -22,6 +22,18 @@ Hard rules that must not be bypassed without explicit user approval.
   `.claude/worktrees/`, `config.json`, or `*.log` (see
   `scripts/ci-diff-check.sh`).
 
+## Cross-platform Unix compatibility
+
+- Conditionally-compiled parameters across target cfgs must be underscored
+  (e.g. `_version: &str`) or suppressed with `let _ = ...;` so `-D warnings`
+  does not break Unix builds with unused-variables.
+- Signal handler threads on Unix must not loop with a single-iteration `break`
+  over `signals.forever()`; use `if let Some(sig) = signals.forever().next()`.
+- Multi-section surface E2E tests (`e2e/tauri/specs/settings.e2e.ts`) must
+  explicitly navigate to the target section instead of assuming initial tab state.
+- Run `bash scripts/check-unix-compat.sh` (or `powershell -File scripts/check-unix-compat.ps1`)
+  when `src-tauri` or `e2e/tauri` changes.
+
 ## Record keeping
 
 - Every commit, PR, and merge that changes substantive files (code, scripts,

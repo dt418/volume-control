@@ -403,6 +403,11 @@ if [ -f .agents/skills/windows-host/SKILL.md ] && \
 else
     report FAIL 'windows-host skill: .agents/.claude mirrors differ (resync .claude/skills/windows-host/)'
 fi
+if cmp -s .agents/skills/cross-platform-unix-guard/SKILL.md .claude/skills/cross-platform-unix-guard/SKILL.md; then
+    report ok 'cross-platform-unix-guard skill: .agents/.claude mirrors are byte-identical'
+else
+    report FAIL 'cross-platform-unix-guard skill: .agents/.claude mirrors differ (resync .claude/skills/cross-platform-unix-guard/)'
+fi
 
 if [ "$failures" -eq 0 ]; then
     echo "All record-keeping guard checks passed."
