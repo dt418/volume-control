@@ -13,6 +13,7 @@
   - `npm --prefix frontend test`: 124 tests passed across 19 files.
   - Restored `notification:default` in `src-tauri/capabilities/default.json` to prevent frontend runtime permission errors in E2E tests.
   - Refined `scripts/check-unix-compat.sh` & `.ps1` regex and AST parsing.
+  - Merged `origin/main` into `release/0.1.11` resolving `AGENTS.md` and unix-compat script conflicts.
 - Records: registered `vol-113` in `feature_list.json` and marked passing.
 
 ## Session 130 (2026-10-23) - Cross-platform Unix compatibility guard, gates, and skill
