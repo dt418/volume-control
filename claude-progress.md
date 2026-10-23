@@ -15,6 +15,7 @@
   - `docs/index.html`: updated `tpl-ps`, `tpl-curl`, and `tpl-unix` snippets with immutable tag resolution and graceful shutdown notes.
   - `scripts/verify-install-lifecycle.ps1` & `.sh`: cross-platform lifecycle verification harnesses.
   - `.github/workflows/installer-lifecycle.yml` & `desktop-validation.yml`: wired native lifecycle validation with `baseline_tag` and `run_installer_lifecycle` inputs.
+  - Fixed: moved readiness marker polling into `tauri::async_runtime::spawn_blocking` off the async worker thread, silenced Unix unused variable, and selected General tab in settings E2E before checking update card.
 - Verification:
   - `cargo fmt --all --check`: clean (0 diff).
   - `git diff --check`: clean (0 whitespace errors).

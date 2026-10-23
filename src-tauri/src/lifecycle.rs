@@ -27,10 +27,9 @@ pub fn install_signal_handlers(app: AppHandle) -> Result<(), String> {
     std::thread::Builder::new()
         .name("unix-signal-handler".into())
         .spawn(move || {
-            for sig in signals.forever() {
+            if let Some(sig) = signals.forever().next() {
                 log::info!("received termination signal: {sig}, exiting gracefully");
                 request_exit(&app);
-                break;
             }
         })
         .map_err(|e| format!("failed to spawn signal thread: {e}"))?;
@@ -281,10 +280,10 @@ pub async fn launch_prepared_apply(
     _manifest_path: &Path,
     version: &str,
 ) -> Result<(), String> {
+    let _ = version;
     let prepared_dir = asset_path
         .parent()
         .ok_or_else(|| "asset has no parent directory".to_string())?;
-
     let cache_dir = app
         .path()
         .app_cache_dir()
