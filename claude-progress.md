@@ -6,6 +6,7 @@
 - What landed:
   - Bumped version from `0.1.10` to `0.1.11` across `Cargo.toml`, `crates/volumectl/Cargo.toml`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `frontend/package.json`, `frontend/package-lock.json`, and `Cargo.lock`.
   - Updated `CHANGELOG.md` with `[0.1.11] - 2026-10-23` documenting UpdateManager, background downloads, explicit confirmation, graceful shutdown, and transactional installers.
+  - Updated `frontend/src/settings/UpdateCard.test.tsx` to assert `v${pkg.version}` dynamically across version bumps.
 - Verification:
   - `bash scripts/check-version-sync.sh v0.1.11`: confirmed version sync ok across all 7 targets.
   - `cargo check --workspace --no-default-features`: clean.
