@@ -62,6 +62,26 @@ if printf '%s' "$tool_command" | grep -Eq "${git_prefix}reset[^;&|]*--hard([[:sp
     echo "BLOCKED: destructive git operation detected; preserve the worktree and use a targeted, reviewable change." >&2
     exit 2
 fi
+# Block direct git merge into main across all platforms.
+if printf '%s' "$tool_command" | grep -Eq "${git_prefix}merge([[:space:]]|$)"; then
+    current_branch="$(git branch --show-current 2>/dev/null || true)"
+    if [ "$current_branch" = "main" ]; then
+        echo "BLOCKED: direct git merge into main is prohibited; changes must be integrated via Pull Request." >&2
+        exit 2
+    fi
+fi
+
+# Block direct code commits on main across all platforms.
+if printf '%s' "$tool_command" | grep -Eq "${git_prefix}commit([[:space:]]|$)"; then
+    current_branch="$(git branch --show-current 2>/dev/null || true)"
+    if [ "$current_branch" = "main" ]; then
+        staged_code="$(git diff --cached --name-only 2>/dev/null | grep -Ev '^(docs/|README|\.gitignore)' || true)"
+        if [ -n "$staged_code" ]; then
+            echo "BLOCKED: direct commit on main is prohibited; work must happen in a worktree on a feature branch." >&2
+            exit 2
+        fi
+    fi
+fi
 
 # The legacy `git checkout <file>` form is destructive only when the target is
 # an existing worktree path. Check that concrete case without overblocking

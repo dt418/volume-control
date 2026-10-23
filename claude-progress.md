@@ -1,5 +1,24 @@
 # Progress Log
 
+## Session 135 (2026-10-23) - Cross-Platform Smoke Test Guardrail, Pre-Push Hook, and Protected Main Enforcement
+
+- Goal: Add cross-platform surface smoke test requirement to guardrails, prevent direct commits/merges to main, enforce worktree-by-default, and activate main branch protection rules.
+- What landed:
+  - `GUARDRAILS.md`: added "Smoke testing & UI surface verification" and "Branching, Worktree & Pull Request integration" sections.
+  - `scripts/smoke-test.sh` & `scripts/smoke-test.ps1`: cross-platform smoke test runner covering Windows (Win32 surface capture), macOS (AppKit smoke), and Linux (GTK4/libadwaita smoke under Xvfb).
+  - `.githooks/pre-push`: native git push hook blocking direct push to main, verifying whitespace diff, checking records guard, and running cross-platform smoke tests on UI/frontend changes.
+  - `.githooks/pre-commit`: updated to block direct code commits on main across all platforms.
+  - `.claude/hooks/agent-safe-flow.sh`: updated to block direct git merge into main and direct code commits on main.
+  - `scripts/ship.sh`: updated to refuse shipping directly on main, run cross-platform surface smoke tests, and prompt for Pull Request creation upon push.
+  - GitHub Ruleset ID `25719841`: activated on `refs/heads/main` requiring Pull Requests, blocking deletion, and blocking force-pushes.
+- Verification:
+  - `sh scripts/smoke-test.sh`: passed.
+  - `bash scripts/test-ship.sh`: passed.
+  - `bash scripts/test-agent-safe-flow.sh`: passed.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: clean.
+  - `git diff --check`: clean.
+- Records: registered `vol-118` in `feature_list.json` as `passing`.
+
 ## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
 
 - Goal: after shipping v0.1.11, close the gaps the installed 0.1.10 build exposed: the update banner showed no install choice, the native toast carried no action and was English-only.

@@ -150,11 +150,25 @@ do_push() {
             echo "current branch has no matching origin upstream; pushing with -u origin HEAD"
             "$GIT_BIN" push -u origin HEAD
         fi
+        echo
+        echo "=========================================================="
+        echo "Branch '$current_branch' pushed successfully."
+        echo "Per guardrails, all changes must be merged via Pull Request."
+        if command -v gh >/dev/null 2>&1; then
+            echo "To create a PR: gh pr create --base main --head \"$current_branch\""
+        fi
+        echo "=========================================================="
     else
         echo "error: no 'origin' remote configured; cannot push" >&2
         return 1
     fi
 }
+
+# Guardrail check: shipping directly on main is strictly prohibited across all platforms.
+current_branch="$("$GIT_BIN" branch --show-current 2>/dev/null || true)"
+if [ "$current_branch" = "main" ]; then
+    fail "shipping directly on 'main' is prohibited by guardrails; work must happen in an isolated worktree on a feature branch, integrated via Pull Request"
+fi
 
 echo "[1/7] records guard (branch change set vs origin/main)"
 if "$GIT_BIN" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
@@ -190,6 +204,12 @@ if ! bash "$repo_root/scripts/test-format-lint.sh"; then
     fail "the format-lint smoke test reported failures above"
 fi
 
+
+# ---- Phase 4b: cross-platform surface smoke test ----------------------------
+echo "[4b/7] cross-platform surface smoke test"
+if ! sh "$repo_root/scripts/smoke-test.sh"; then
+    fail "cross-platform surface smoke test failed (scripts/smoke-test.sh)"
+fi
 # ---- dry-run: verified, change nothing ---------------------------------------
 if [ "$dry_run" = true ]; then
     echo
