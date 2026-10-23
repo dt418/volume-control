@@ -1,5 +1,20 @@
 # Progress Log
 
+## Session 128 (2026-10-23) - Release v0.1.10 and winget 0.1.10 manifests
+
+- Goal: publish release v0.1.10 with verified multi-platform artifacts and generate the 0.1.10 winget manifest trio.
+- What landed:
+  - Git tag `v0.1.10` pushed to GitHub; Release workflow `39879023938` ran across Windows, Ubuntu, and macOS runners.
+  - Published 12 assets on GitHub Release v0.1.10: Windows NSIS installer, macOS DMG, Ubuntu deb/rpm/AppImage packages, Unix install scripts, PowerShell bootstrap, and SHA256SUMS.txt.
+  - Generated winget manifests for `dt418.VolumeControl` version `0.1.10` using `scripts/generate-winget-manifest.sh`.
+  - Installer SHA-256 `B313CBFBB2872AEFA34621A7CE1E8661A896DB7953870E6AA120716B76A077FD` verified against release `SHA256SUMS.txt`.
+  - Repo `winget/` directory migrated to `0.1.10` (removed 0.1.9).
+- Verification:
+  - `gh release view v0.1.10` confirmed all 12 assets published and non-draft.
+  - `winget validate --manifest winget/dt418.VolumeControl/0.1.10/` succeeded.
+  - Full workspace format, lint, and records guard checks passed.
+- Records: `vol-110` added and marked passing; `vol-109` marked passing.
+
 ## Session 127 (2026-10-23) - Friendly app names, update notifications, and release changelog
 
 - Goal: replace executable names with product names in the mixer and

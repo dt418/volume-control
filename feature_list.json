@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T04:45",
+  "last_updated": "2026-10-23T05:58",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,25 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-110",
+      "priority": 110,
+      "area": "release",
+      "title": "VolumeControl v0.1.10 release and winget 0.1.10 submission manifests",
+      "user_visible_behavior": "v0.1.10 published with Windows NSIS installer, macOS DMG, and Ubuntu deb/rpm/AppImage packages; winget manifest trio 0.1.10 validated with sha256 checksum matching SHA256SUMS.txt.",
+      "status": "passing",
+      "verification": [
+        "Release workflow 39879023938 succeeded on all three platforms (Windows NSIS, macOS DMG, Ubuntu deb/rpm/AppImage).",
+        "gh release view v0.1.10 confirms 12 release assets published with verified SHA256SUMS.txt.",
+        "Installer SHA-256 B313CBFBB2872AEFA34621A7CE1E8661A896DB7953870E6AA120716B76A077FD matches release SHA256SUMS.txt.",
+        "winget validate --manifest winget/dt418.VolumeControl/0.1.10/ reported Manifest validation succeeded."
+      ],
+      "evidence": [
+        "GitHub Release v0.1.10 published at https://github.com/dt418/volume-control/releases/tag/v0.1.10.",
+        "winget/dt418.VolumeControl/0.1.10/ manifest trio written and validated."
+      ],
+      "notes": "Winget PR submission to microsoft/winget-pkgs can now be updated with the 0.1.10 manifest trio."
+    },
     {
       "id": "vol-108",
       "priority": 108,
@@ -42,7 +61,7 @@
       "area": "release",
       "title": "Announce releases in-app, natively, and on the landing page",
       "user_visible_behavior": "Opening the mixer checks for updates and shows an in-app release banner. When an update exists, the app requests OS notification permission and sends a native notification once per release. The landing page shows the latest stable release banner plus a per-release changelog fetched from GitHub.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features, npm --prefix frontend test, and npm --prefix frontend run build.",
         "Browser smoke of docs/index.html in English and Vietnamese confirms the release banner and changelog render from the GitHub API.",
