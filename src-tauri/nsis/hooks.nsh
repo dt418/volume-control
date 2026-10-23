@@ -2,9 +2,6 @@
 ; Overrides the default force-kill behavior with graceful exit requests.
 ; Never force-kills or calls TerminateProcess.
 
-!macro CheckIfAppIsRunning
-  ; Overridden: prevent upstream RmForceShutdown / force-kill fallback
-!macroend
 
 !macro NSIS_HOOK_PREINSTALL
   DetailPrint "Requesting graceful shutdown of VolumeControl if running..."

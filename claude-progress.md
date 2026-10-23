@@ -8,6 +8,7 @@
   - `scripts/verify-install-lifecycle.sh` & `verify-install-lifecycle.ps1`: updated default baseline to `v0.1.10` and target candidate to `v0.1.11`.
   - `scripts/check-unix-compat.sh` & `check-unix-compat.ps1`: refined signal loop scanner to track outer loop depth, inner loops, and continue paths; refined settings E2E isolation check to match actual General button lookup and `.click()` sequence.
   - `scripts/test-check-unix-compat.sh`: added regression tests for conditional break, nested loop break, continue-path before break, and unclicked General token rejection.
+  - `src-tauri/nsis/hooks.nsh`: removed duplicate `CheckIfAppIsRunning` macro to resolve makensis duplicate definition error.
 - Verification:
   - `bash scripts/test-check-unix-compat.sh`: passed all 10 regression tests.
   - `powershell -ExecutionPolicy Bypass -File scripts/check-unix-compat.ps1`: passed all gates.
