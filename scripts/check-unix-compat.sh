@@ -22,17 +22,43 @@ pass() {
 
 # 1. Signal hook never_loop check.
 # `for sig in signals.forever()` followed by `break` inside the loop triggers clippy::never_loop.
-# The correct pattern is `if let Some(sig) = signals.forever().next()`.
-if grep -rn "for .* in signals\.forever()" src-tauri/src crates/volumectl/src 2>/dev/null | grep -q .; then
-  fail "found 'for ... in signals.forever()' loop; use 'if let Some(...) = signals.forever().next()' to prevent clippy::never_loop on Unix"
-else
+# Single-iteration signal handling should use `if let Some(sig) = signals.forever().next()`.
+if find src-tauri/src crates/volumectl/src -name '*.rs' -exec awk '
+  FNR == 1 { in_loop = 0; brace_depth = 0; seen_open = 0; found_break = 0 }
+  /for[[:space:]]+.*[[:space:]]+in[[:space:]]+.*signals\.forever\(\)/ {
+    in_loop = 1; brace_depth = 0; seen_open = 0; found_break = 0
+    idx = match($0, /for[[:space:]]+.*[[:space:]]+in[[:space:]]+.*signals\.forever\(\)/)
+    line = substr($0, idx)
+  }
+  in_loop {
+    if (!line) line = $0
+    sub(/\/\/.*$/, "", line)
+    n = length(line)
+    for (i = 1; i <= n; i++) {
+      c = substr(line, i, 1)
+      if (c == "{") { brace_depth++; seen_open = 1 }
+      else if (c == "}") { brace_depth-- }
+    }
+    if (line ~ /([[:space:];{]|^)break([[:space:];]|$)/) { found_break = 1 }
+    if (seen_open && brace_depth <= 0) {
+      if (found_break) {
+        exit_code = 1
+      }
+      in_loop = 0
+    }
+    line = ""
+  }
+  END { if (exit_code != 0) exit 1; exit 0 }
+' {} +; then
   pass "signal handlers avoid clippy::never_loop pattern"
+else
+  fail "found 'for ... in signals.forever()' loop with terminating break; use 'if let Some(...) = signals.forever().next()' to prevent clippy::never_loop on Unix"
 fi
 
 # 2. Check launch_prepared_apply parameter version suppression.
 # On Unix, version is not passed to the bash updater; it must be suppressed or underscored to prevent -D unused-variables.
 if grep -q "pub async fn launch_prepared_apply" src-tauri/src/lifecycle.rs 2>/dev/null; then
-  if grep -A 8 "pub async fn launch_prepared_apply" src-tauri/src/lifecycle.rs | grep -qE "(_version: &str|let _ = version;)"; then
+  if grep -A 10 "pub async fn launch_prepared_apply" src-tauri/src/lifecycle.rs | grep -qE "(([[:space:]]|,|^|\()_version:[[:space:]]*&str|([[:space:]]|^)let[[:space:]]+_[[:space:]]*=[[:space:]]*version;)"; then
     pass "launch_prepared_apply version parameter properly suppressed for Unix builds"
   else
     fail "launch_prepared_apply version parameter is unused on Unix and must be underscored (_version) or suppressed (let _ = version;)"
@@ -40,10 +66,30 @@ if grep -q "pub async fn launch_prepared_apply" src-tauri/src/lifecycle.rs 2>/de
 fi
 
 # 3. Check E2E Settings spec section isolation.
-# Any test searching for [data-testid='update-card'] must first navigate to the General section.
+# Any test searching for [data-testid='update-card'] must first navigate to the General section before looking up or waiting for the card.
 if [ -f "e2e/tauri/specs/settings.e2e.ts" ]; then
-  if grep -A 5 "displays the updates card with version and check control" e2e/tauri/specs/settings.e2e.ts | grep -q "General"; then
-    pass "settings.e2e.ts updates card test explicitly selects General section"
+  if awk '
+    /displays the updates card with version and check control/ { in_test = 1; next }
+    in_test && /^[[:space:]]*it\(/ { in_test = 0 }
+    in_test {
+      if (/General/) {
+        if (!seen_card && !seen_wait) { seen_nav = 1 }
+      }
+      if (/update-card/) {
+        if (!seen_nav) { failed = 1; exit 1 }
+        seen_card = 1
+      }
+      if (/waitForDisplayed/) {
+        if (!seen_nav) { failed = 1; exit 1 }
+        seen_wait = 1
+      }
+    }
+    END {
+      if (seen_nav && (seen_card || seen_wait) && !failed) exit 0
+      exit 1
+    }
+  ' e2e/tauri/specs/settings.e2e.ts; then
+    pass "settings.e2e.ts updates card test explicitly selects General section before update-card lookup or wait"
   else
     fail "settings.e2e.ts updates card test must explicitly select General section before waiting for [data-testid='update-card']"
   fi
