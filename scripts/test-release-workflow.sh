@@ -169,17 +169,22 @@ else
   report FAIL 'staged release assets must include exe installer and bootstrap script'
 fi
 
-# Task 5 contract: the NSIS installer terminates a running host before
-# replacing its executable during an update.
+# Task 5 contract: the NSIS installer asks a running host to exit through the
+# Local\VolumeControl.Exit event before replacing its executable, and never
+# force-kills it.
 hook="$repo/src-tauri/nsis/hooks.nsh"
 if [[ -f "$hook" ]] && \
    contains "$repo/src-tauri/tauri.conf.json" \
      '"installerHooks"[[:space:]]*:[[:space:]]*"nsis/hooks\.nsh"' && \
    contains "$hook" '!macro[[:space:]]+NSIS_HOOK_PREINSTALL' && \
-   contains "$hook" 'taskkill\.exe" /IM VolumeControl\.exe'; then
-  report ok 'NSIS preinstall hook stops the running VolumeControl instance'
+   contains "$hook" '!macro[[:space:]]+NSIS_HOOK_PREUNINSTALL' && \
+   contains "$hook" 'Local\\VolumeControl\.Exit' && \
+   ! contains "$hook" 'taskkill' && \
+   ! contains "$hook" 'Stop-Process[[:space:]]+-Force' && \
+   ! contains "$hook" 'TerminateProcess\('; then
+  report ok 'NSIS hooks request a graceful VolumeControl exit and never force-kill'
 else
-  report FAIL 'NSIS preinstall hook stops the running VolumeControl instance'
+  report FAIL 'NSIS hooks request a graceful VolumeControl exit and never force-kill'
 fi
 
 # Task 4 contract: both READMEs document the safe local download-and-verify
