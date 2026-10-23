@@ -9,7 +9,6 @@
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-hide",
-    "core:window:allow-show",
-    "notification:default"
+    "core:window:allow-show"
   ]
 }

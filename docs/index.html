@@ -566,47 +566,69 @@
      every flow is download → verify SHA-256 → run the local copy. -->
 
 <script type="text/plain" id="tpl-ps">
-$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
-$base = '{{BASE}}'
-Invoke-WebRequest "$base/Install-VolumeControl.ps1" -OutFile "$root/Install-VolumeControl.ps1" -ErrorAction Stop
-Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$root/SHA256SUMS.txt" -ErrorAction Stop
-$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
-$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
-if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
-& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
+try {
+    $repo = 'dt418/volume-control'
+    $rel = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ Accept = 'application/vnd.github+json' } -ErrorAction Stop
+    $tag = $rel.tag_name
+    $base = "https://github.com/$repo/releases/download/$tag"
+    Invoke-WebRequest "$base/Install-VolumeControl.ps1" -OutFile "$root/Install-VolumeControl.ps1" -ErrorAction Stop
+    Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$root/SHA256SUMS.txt" -ErrorAction Stop
+    $matches = @(Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+Install-VolumeControl\.ps1$' })
+    if ($matches.Count -ne 1) { throw 'SHA256SUMS.txt has no canonical entry for Install-VolumeControl.ps1' }
+    $expected = ($matches[0] -split '\s+')[0].ToLowerInvariant()
+    $actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+    & "$root/Install-VolumeControl.ps1" -Action {{ACTION}} -Version $tag
+} finally {
+    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
 </script>
 
 <script type="text/plain" id="tpl-curl">
-$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid())
+$root = Join-Path $env:TEMP ("VolumeControl-bootstrap-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
-$base = '{{BASE}}'
-curl.exe -fsSL "$base/Install-VolumeControl.ps1" -o "$root/Install-VolumeControl.ps1"
-if ($LASTEXITCODE -ne 0) { throw 'Failed to download Install-VolumeControl.ps1' }
-curl.exe -fsSL "$base/SHA256SUMS.txt" -o "$root/SHA256SUMS.txt"
-if ($LASTEXITCODE -ne 0) { throw 'Failed to download SHA256SUMS.txt' }
-$expected = ((Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -like '*Install-VolumeControl.ps1' }) -split '\s+')[0]
-$actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash
-if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
-& "$root/Install-VolumeControl.ps1" -Action {{ACTION}}
+try {
+    $repo = 'dt418/volume-control'
+    $rel = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ Accept = 'application/vnd.github+json' } -ErrorAction Stop
+    $tag = $rel.tag_name
+    $base = "https://github.com/$repo/releases/download/$tag"
+    curl.exe -fsSL "$base/Install-VolumeControl.ps1" -o "$root/Install-VolumeControl.ps1"
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to download Install-VolumeControl.ps1' }
+    curl.exe -fsSL "$base/SHA256SUMS.txt" -o "$root/SHA256SUMS.txt"
+    if ($LASTEXITCODE -ne 0) { throw 'Failed to download SHA256SUMS.txt' }
+    $matches = @(Get-Content "$root/SHA256SUMS.txt" | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+Install-VolumeControl\.ps1$' })
+    if ($matches.Count -ne 1) { throw 'SHA256SUMS.txt has no canonical entry for Install-VolumeControl.ps1' }
+    $expected = ($matches[0] -split '\s+')[0].ToLowerInvariant()
+    $actual = (Get-FileHash "$root/Install-VolumeControl.ps1" -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) { throw 'Install-VolumeControl.ps1 SHA-256 does not match SHA256SUMS.txt' }
+    & "$root/Install-VolumeControl.ps1" -Action {{ACTION}} -Version $tag
+} finally {
+    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
 </script>
 
 <script type="text/plain" id="tpl-unix">
 (
   set -euo pipefail
-  base="{{BASE}}"
   case "$(uname -s)" in
     Darwin) s=install-macos.sh ;;
     Linux)  s=install-linux.sh ;;
     *) echo "Unsupported OS" >&2; exit 1 ;;
   esac
   d="$(mktemp -d)"
+  trap 'rm -rf "$d"' EXIT
+  repo="dt418/volume-control"
+  tag="$(curl -fsSL -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$repo/releases/latest" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  [ -n "$tag" ] || { echo "Could not resolve latest release" >&2; exit 1; }
+  base="https://github.com/$repo/releases/download/$tag"
   curl -fsSL "$base/$s" -o "$d/$s"
   curl -fsSL "$base/SHA256SUMS.txt" -o "$d/SHA256SUMS.txt"
-  want="$(awk -v f="$s" '$2 == f { print $1 }' "$d/SHA256SUMS.txt")"
+  want="$(awk -v f="$s" '$0 ~ /^[0-9a-fA-F]{64}[[:space:]]+[^\\/]+$/ && $2 == f { count++; digest=$1 } END { if (count == 1) print digest }' "$d/SHA256SUMS.txt")"
   have="$( (sha256sum "$d/$s" 2>/dev/null || shasum -a 256 "$d/$s") | awk '{ print $1 }' )"
-  [ -n "$want" ] && [ "$want" = "$have" ] || { echo "SHA-256 mismatch for $s" >&2; exit 1; }
-  bash "$d/$s" {{ACTION}}
+  [ -n "$want" ] && [ "$(printf %s "$want" | tr '[:upper:]' '[:lower:]')" = "$(printf %s "$have" | tr '[:upper:]' '[:lower:]')" ] || { echo "SHA-256 mismatch for $s" >&2; exit 1; }
+  VOLUMECTL_VERSION="$tag" bash "$d/$s" {{ACTION}}
 )
 </script>
 
@@ -621,7 +643,7 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
   var NOTES = {
     win: {
       install: "",
-      update: "# Update refuses to run while VolumeControl is open - close it first.\n# Pin a release: add  -Version vX.Y.Z  to the last line.\n",
+      update: "# Requests graceful exit of running VolumeControl before updating.\n# Pin a release: add  -Version vX.Y.Z  to the last line.\n",
       uninstall: "# Removes the app; config.ini is preserved.\n"
     },
     unix: {
@@ -988,7 +1010,7 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       "footer.vietnamese": "Tiếng Việt",
       "snippet.winget.unavailable": "# Not published to winget-pkgs yet - use the PowerShell or curl.exe tab.\n",
       "snippet.winget.verify": "# winget checks the installer against the SHA-256 in its manifest before it runs.\n",
-      "snippet.win.update": "# Update refuses to run while VolumeControl is open - close it first.\n# Pin a release: add  -Version vX.Y.Z  to the last line.\n",
+      "snippet.win.update": "# Requests graceful exit of running VolumeControl before updating.\n# Pin a release: add  -Version vX.Y.Z  to the last line.\n",
       "snippet.win.uninstall": "# Removes the app; config.ini is preserved.\n",
       "snippet.unix.update": "# Pin a release: put  VOLUMECTL_VERSION=vX.Y.Z  before  bash  on the last line.\n",
       "snippet.unix.uninstall": "# Removes the app/binary; your config is preserved.\n",
@@ -1097,7 +1119,7 @@ if (-not $expected -or $actual -ine $expected) { throw 'Install-VolumeControl.ps
       "footer.vietnamese": "Tiếng Việt",
       "snippet.winget.unavailable": "# Chưa phát hành trên winget-pkgs - dùng tab PowerShell hoặc curl.exe.\n",
       "snippet.winget.verify": "# winget kiểm tra SHA-256 của trình cài đặt trong manifest trước khi chạy.\n",
-      "snippet.win.update": "# Cập nhật từ chối chạy khi VolumeControl đang mở - hãy đóng ứng dụng trước.\n# Ghim phiên bản phát hành: thêm  -Version vX.Y.Z  vào dòng cuối.\n",
+      "snippet.win.update": "# Yêu cầu đóng VolumeControl an toàn trước khi cập nhật.\n# Ghim phiên bản phát hành: thêm  -Version vX.Y.Z  vào dòng cuối.\n",
       "snippet.win.uninstall": "# Gỡ ứng dụng; config.ini được giữ lại.\n",
       "snippet.unix.update": "# Ghim phiên bản phát hành: đặt  VOLUMECTL_VERSION=vX.Y.Z  trước  bash  ở dòng cuối.\n",
       "snippet.unix.uninstall": "# Gỡ ứng dụng/tệp nhị phân; cấu hình được giữ lại.\n",

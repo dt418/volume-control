@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T05:58",
+  "last_updated": "2026-10-23T10:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,31 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-111",
+      "priority": 111,
+      "area": "updater",
+      "title": "Reliable update notifications, background downloads, and transactional installation lifecycle",
+      "user_visible_behavior": "Automatic update checks and notifications coordinate through host-owned UpdateManager with 15-second initial delay and 6-hour interval without requiring webview mount. Updates download in background with SHA-256 validation; installation requires explicit user confirmation in Settings UpdateCard; Windows/Linux/macOS installers support graceful process shutdown via Local\\VolumeControl.Exit and SIGTERM, transactional replacement, atomic swap/rollback, and intact no-op without force termination.",
+      "status": "passing",
+      "verification": [
+        "cargo fmt --all --check, git diff --check, cargo clippy --workspace --all-targets --no-default-features -- -D warnings, cargo test --workspace --no-default-features (380 tests passed).",
+        "npm --prefix frontend test (20 test files, 128 tests passed).",
+        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1 passed under Windows PowerShell 5.1 and PowerShell 7.",
+        "bash scripts/test-install-unix.sh passed 23 checks for Linux and macOS installer lifecycle.",
+        "sh scripts/check-tauri-deadlock.sh passed all invariants.",
+        "scripts/verify-install-lifecycle.sh verified candidate lifecycle in isolated WSL Ubuntu-24.04 environment."
+      ],
+      "evidence": [
+        "crates/volumectl/src/updates.rs: fetch_latest_release with ReleaseInfo, strict semver validation, and error propagation.",
+        "src-tauri/src/update_manager.rs: host-owned UpdateManager with UpdateState, 15s delay, 6h period, coalescing, and background download.",
+        "src-tauri/src/lifecycle.rs: Local\\VolumeControl.Exit event, signal-hook for Unix SIGTERM, streaming hash verification, offline prepared apply.",
+        "scripts/Install-VolumeControl.ps1, packaging/install-linux.sh, packaging/install-macos.sh: graceful shutdown, install receipts, locks, transactional backup/rollback.",
+        "frontend/src/settings/UpdateCard.tsx: confirmation panel with restart warning, Confirm and Later actions, revision tracking.",
+        "docs/index.html: updated tpl-ps, tpl-curl, tpl-unix snippets with immutable tag resolution and graceful shutdown notes."
+      ],
+      "notes": "Verified across Windows, Linux, and macOS without publishing a new release or overwriting published assets."
+    },
     {
       "id": "vol-110",
       "priority": 110,

@@ -1,8 +1,9 @@
 //! Tauri commands: the webview ↔ AppCore bridge. Every command returns
 //! `Result<T, String>` so IPC failures surface as inline toasts in the UI.
 
-use std::sync::{Arc, LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
+
+use crate::update_manager::{UpdateManager, UpdateState};
 
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
@@ -161,38 +162,6 @@ pub fn set_window_title(window: WebviewWindow, title: String) -> Result<(), Stri
 
 /// Ask the OS for notification authorization before the first alert.
 ///
-/// The Tauri desktop notification plugin reports `granted` unconditionally on
-/// desktop, so macOS needs the native `UNUserNotificationCenter` request;
-/// Windows and Linux have no per-app permission prompt and return `true`.
-#[tauri::command]
-pub async fn request_notification_permission() -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        return tauri::async_runtime::spawn_blocking(|| {
-            use block2::RcBlock;
-            use objc2::runtime::Bool;
-            use objc2_foundation::NSError;
-            use objc2_user_notifications::{UNAuthorizationOptions, UNUserNotificationCenter};
-            use std::sync::mpsc;
-
-            let (tx, rx) = mpsc::channel();
-            let handler = RcBlock::new(move |granted: Bool, _error: *mut NSError| {
-                let _ = tx.send(granted.as_bool());
-            });
-            let center = UNUserNotificationCenter::currentNotificationCenter();
-            center.requestAuthorizationWithOptions_completionHandler(
-                UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound,
-                &handler,
-            );
-            rx.recv_timeout(Duration::from_secs(30))
-                .map_err(|_| "notification permission request timed out".to_string())
-        })
-        .await
-        .map_err(|error| error.to_string())?;
-    }
-    #[cfg(not(target_os = "macos"))]
-    Ok(true)
-}
 
 #[tauri::command]
 pub fn running_apps() -> Result<Vec<RunningApp>, String> {
@@ -329,64 +298,31 @@ pub async fn surface_ready(app: AppHandle, window: WebviewWindow) -> Result<(), 
         .await
         .ok_or_else(|| "window manager closed".to_string())?
 }
-const UPDATE_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
-static UPDATE_CACHE: LazyLock<
-    Mutex<
-        Option<(
-            Instant,
-            volumectl_lib::config::Language,
-            volumectl_lib::updates::UpdateInfo,
-        )>,
-    >,
-> = LazyLock::new(|| Mutex::new(None));
-
-fn cached_update(
-    language: volumectl_lib::config::Language,
-) -> Option<volumectl_lib::updates::UpdateInfo> {
-    let guard = UPDATE_CACHE.lock().ok()?;
-    let (checked_at, cached_language, info) = guard.as_ref()?;
-    (checked_at.elapsed() < UPDATE_CACHE_TTL && *cached_language == language).then(|| info.clone())
-}
-
-fn store_update(
-    language: volumectl_lib::config::Language,
-    info: &volumectl_lib::updates::UpdateInfo,
-) {
-    if let Ok(mut guard) = UPDATE_CACHE.lock() {
-        *guard = Some((Instant::now(), language, info.clone()));
-    }
-}
-
-/// Check GitHub for the latest release. Automatic mixer checks share a
-/// process-wide 10-minute cache so reopening the mixer cannot exhaust the
-/// unauthenticated GitHub rate limit; the Settings button passes
-/// `force: true` for an explicit refresh.
+/// Schedule or join an update check. Returns the current snapshot immediately.
 #[tauri::command]
-pub async fn check_for_updates(
-    app: AppHandle,
-    core: State<'_, Arc<Mutex<AppCore>>>,
-    force: Option<bool>,
-) -> Result<volumectl_lib::updates::UpdateInfo, String> {
-    let language = {
-        let core = core.lock().map_err(|e| e.to_string())?;
-        core.config().language
-    };
-    if !force.unwrap_or(false) {
-        if let Some(info) = cached_update(language) {
-            let _ = app.emit("state://update", &info);
-            return Ok(info);
-        }
-    }
+pub async fn check_for_updates(app: AppHandle, force: Option<bool>) -> Result<UpdateState, String> {
+    let manager = app
+        .try_state::<Arc<UpdateManager>>()
+        .ok_or_else(|| "update manager not initialized".to_string())?;
+    Ok(manager.request_check(force.unwrap_or(false)))
+}
 
-    let info = tauri::async_runtime::spawn_blocking(move || {
-        volumectl_lib::updates::check_update_info(language)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
+/// Read the current update snapshot without initiating any network activity.
+#[tauri::command]
+pub async fn get_update_state(app: AppHandle) -> Result<UpdateState, String> {
+    let manager = app
+        .try_state::<Arc<UpdateManager>>()
+        .ok_or_else(|| "update manager not initialized".to_string())?;
+    Ok(manager.snapshot())
+}
 
-    store_update(language, &info);
-    let _ = app.emit("state://update", &info);
-    Ok(info)
+/// Install the verified ready update after user confirmation.
+#[tauri::command]
+pub async fn install_update(app: AppHandle, expected_version: String) -> Result<(), String> {
+    let manager = app
+        .try_state::<Arc<UpdateManager>>()
+        .ok_or_else(|| "update manager not initialized".to_string())?;
+    manager.install(&expected_version).await
 }
 
 #[cfg(test)]
@@ -400,25 +336,6 @@ mod tests {
             "https://github.com/dt418/volume-control/releases-evil".into()
         )
         .is_err());
-    }
-
-    #[test]
-    fn automatic_update_cache_is_language_scoped() {
-        let info = volumectl_lib::updates::UpdateInfo {
-            current_version: "0.1.10".into(),
-            latest_version: Some("v0.1.11".into()),
-            is_update_available: true,
-            release_url: Some(
-                "https://github.com/dt418/volume-control/releases/tag/v0.1.11".into(),
-            ),
-            message: "Update available".into(),
-        };
-        super::store_update(volumectl_lib::config::Language::En, &info);
-        assert_eq!(
-            super::cached_update(volumectl_lib::config::Language::En),
-            Some(info.clone())
-        );
-        assert!(super::cached_update(volumectl_lib::config::Language::Vi).is_none());
     }
 
     /// The command layer resolves surface names through

@@ -100,7 +100,17 @@ const EN = {
   "settings.updates.checkBtn": "Check for updates",
   "settings.updates.checking": "Checking for updates…",
   "settings.updates.upToDate": "Volume Control is up to date",
-  "settings.updates.available": "New version available",
+  "settings.updates.available": "New version available: {0}",
+  "settings.updates.downloading": "Downloading update in background…",
+  "settings.updates.ready": "Version {0} is ready to install",
+  "settings.updates.installRestart": "Install and restart",
+  "settings.updates.confirmInstall": "Confirm installation",
+  "settings.updates.confirmBody": "VolumeControl will restart to apply version {0}. Unsaved session changes will be preserved.",
+  "settings.updates.later": "Later",
+  "settings.updates.retry": "Retry check",
+  "settings.updates.installFailed": "Update failed: {0}",
+  "settings.updates.managedExternally": "This installation is managed externally. Please update via your package manager.",
+  "settings.updates.viewUpdate": "View update",
   "settings.updates.viewRelease": "View release notes",
   "update.dismiss": "Dismiss update notification",
 
@@ -320,7 +330,17 @@ const VI: Record<TranslationKey, string> = {
   "settings.updates.checkBtn": "Kiểm tra cập nhật",
   "settings.updates.checking": "Đang kiểm tra cập nhật…",
   "settings.updates.upToDate": "Điều khiển âm lượng đã là bản mới nhất",
-  "settings.updates.available": "Có phiên bản mới",
+  "settings.updates.available": "Có phiên bản mới: {0}",
+  "settings.updates.downloading": "Đang tải bản cập nhật ngầm…",
+  "settings.updates.ready": "Phiên bản {0} đã sẵn sàng cài đặt",
+  "settings.updates.installRestart": "Cài đặt và khởi động lại",
+  "settings.updates.confirmInstall": "Xác nhận cài đặt",
+  "settings.updates.confirmBody": "VolumeControl sẽ khởi động lại để áp dụng phiên bản {0}. Cấu hình sẽ được giữ nguyên.",
+  "settings.updates.later": "Để sau",
+  "settings.updates.retry": "Thử lại",
+  "settings.updates.installFailed": "Cập nhật thất bại: {0}",
+  "settings.updates.managedExternally": "Bản cài đặt này được quản lý bên ngoài. Vui lòng cập nhật qua trình quản lý gói.",
+  "settings.updates.viewUpdate": "Xem cập nhật",
   "settings.updates.viewRelease": "Xem ghi chú phát hành",
   "update.dismiss": "Đóng thông báo cập nhật",
 
@@ -454,11 +474,19 @@ const DICTIONARIES: Record<Language, Record<TranslationKey, string>> = {
   vi: VI,
 };
 
-export type Translator = (key: TranslationKey) => string;
+export type Translator = (key: TranslationKey, ...args: (string | number)[]) => string;
 
 export function translatorFor(language: Language): Translator {
   const table = DICTIONARIES[language] ?? EN;
-  return (key) => table[key] ?? EN[key];
+  return (key, ...args) => {
+    let str = table[key] ?? EN[key] ?? key;
+    if (args.length > 0) {
+      args.forEach((val, idx) => {
+        str = str.replace(new RegExp(`\\{${idx}\\}`, "g"), String(val));
+      });
+    }
+    return str;
+  };
 }
 
 const LanguageContext = createContext<Language>("en");

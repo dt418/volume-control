@@ -1,5 +1,32 @@
 # Progress Log
 
+## Session 129 (2026-10-23) - Reliable update notifications, background downloads, and transactional installation lifecycle
+
+- Goal: implement host-owned update checking and coordination, background downloads with SHA-256 verification, user confirmation before installation, graceful process shutdown without force-kill, and transactional multiplatform installer lifecycles.
+- What landed:
+  - `crates/volumectl/src/updates.rs`: added `fetch_latest_release` with `ReleaseInfo` / `ReleaseAsset`, non-draft/non-prerelease filtering, strict semver validation, and discovery error propagation.
+  - `src-tauri/src/update_manager.rs`: added host-owned `UpdateManager` with `UpdateState` (Idle, Checking, Available, Downloading, Ready, Installing, Error), 15s initial delay, 6h periodic checks, request coalescing, and background download streaming.
+  - `src-tauri/src/lifecycle.rs`: added graceful shutdown coordination via `Local\VolumeControl.Exit` on Windows and `signal-hook` SIGTERM on Unix, native notifications via `tauri_plugin_notification`, deduplication in `update-state.json`, and offline prepared apply launcher.
+  - `src-tauri/src/native_win32.rs` & `src-tauri/src/main.rs`: wired `Local\VolumeControl.Exit` event in single-instance and fast poll loop, added `--quit` handler and `--version` before host routing with parent console attachment on Windows.
+  - `src-tauri/nsis/hooks.nsh`: overrode `CheckIfAppIsRunning` to eliminate upstream force-kill fallback, and replaced taskkill with graceful exit requests in preinstall/preuninstall hooks.
+  - `scripts/Install-VolumeControl.ps1`: added `-PreparedDirectory`, `-ParentProcessId`, `-Restart`, `-StopOnly`, mutex-like file lock, install receipt (`install-receipt.txt`), transactional backup/rollback, and graceful shutdown without force-kill.
+  - `packaging/install-linux.sh` & `packaging/install-macos.sh`: added offline uninstall, lock directories, install receipts, lipo architecture validation, transactional staging/rename, and rollback.
+  - `frontend/src/settings/UpdateCard.tsx` & `MixerSurface.tsx`: updated to `UpdateStatePayload` contract with revision ordering, inline confirmation panel with version warning, Confirm and Later buttons, and version-tracked banner dismissal.
+  - `docs/index.html`: updated `tpl-ps`, `tpl-curl`, and `tpl-unix` snippets with immutable tag resolution and graceful shutdown notes.
+  - `scripts/verify-install-lifecycle.ps1` & `.sh`: cross-platform lifecycle verification harnesses.
+  - `.github/workflows/installer-lifecycle.yml` & `desktop-validation.yml`: wired native lifecycle validation with `baseline_tag` and `run_installer_lifecycle` inputs.
+- Verification:
+  - `cargo fmt --all --check`: clean (0 diff).
+  - `git diff --check`: clean (0 whitespace errors).
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: passed with 0 warnings.
+  - `cargo test --workspace --no-default-features`: passed all 380 tests across 8 suites.
+  - `npm --prefix frontend test`: passed all 128 tests across 20 test files.
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-install-volumecontrol.ps1` and `pwsh`: passed all bootstrap behavioral tests.
+  - `bash scripts/test-install-unix.sh`: passed all 23 installer checks.
+  - `sh scripts/check-tauri-deadlock.sh`: passed all 10 invariants.
+  - `scripts/verify-install-lifecycle.sh`: verified candidate lifecycle in isolated WSL Ubuntu-24.04 environment.
+- Records: registered `vol-111` in `feature_list.json` and marked passing.
+
 ## Session 128 (2026-10-23) - Release v0.1.10 and winget 0.1.10 manifests
 
 - Goal: publish release v0.1.10 with verified multi-platform artifacts and generate the 0.1.10 winget manifest trio.

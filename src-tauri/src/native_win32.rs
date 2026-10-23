@@ -65,6 +65,9 @@ const SHOW_MIXER_EVENT_NAME: windows_sys::core::PCWSTR =
     windows_sys::core::w!("Local\\VolumeControl.ShowMixer");
 static SHOW_MIXER_EVENT_HANDLE: AtomicIsize = AtomicIsize::new(0);
 
+const EXIT_EVENT_NAME: windows_sys::core::PCWSTR =
+    windows_sys::core::w!("Local\\VolumeControl.Exit");
+static EXIT_EVENT_HANDLE: AtomicIsize = AtomicIsize::new(0);
 /// Prevent two app instances (VolumePro's `#SingleInstance Force`
 /// equivalent). Mirrors the legacy host's named-mutex guard verbatim.
 /// Returns `false` when another instance already holds the mutex. A foreground
@@ -90,6 +93,7 @@ pub fn ensure_single_instance(show_mixer: bool) -> bool {
             return false;
         }
         create_show_mixer_event();
+        create_exit_event();
         true
     }
 }
@@ -106,6 +110,45 @@ fn create_show_mixer_event() {
     }
 }
 
+/// Create the event the fast poll thread watches for deliberate "exit" requests.
+fn create_exit_event() {
+    unsafe {
+        let event = CreateEventW(std::ptr::null(), 0, 0, EXIT_EVENT_NAME);
+        if event == 0 {
+            log::warn!("could not create the exit event; quit requests will stay silent");
+            return;
+        }
+        EXIT_EVENT_HANDLE.store(event as isize, Ordering::SeqCst);
+    }
+}
+
+/// Ask the running primary instance to exit gracefully.
+pub fn request_exit_event() -> bool {
+    unsafe {
+        for _ in 0..100 {
+            let event = OpenEventW(EVENT_MODIFY_STATE, 0, EXIT_EVENT_NAME);
+            if event != 0 {
+                SetEvent(event);
+                CloseHandle(event);
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        log::warn!("running instance did not expose the exit event");
+        false
+    }
+}
+
+/// Consume a pending exit request. Auto-reset event + zero timeout.
+pub fn take_exit_request() -> bool {
+    let handle = EXIT_EVENT_HANDLE.load(Ordering::Acquire);
+    if handle == 0 {
+        return false;
+    }
+    unsafe {
+        WaitForSingleObject(handle as windows_sys::Win32::Foundation::HANDLE, 0) == WAIT_OBJECT_0
+    }
+}
 /// Ask the running primary instance to reveal the mixer. The event may not be
 /// created yet while the primary is still between the mutex and the event
 /// (startup microseconds), so retry briefly instead of dropping the request.
@@ -273,7 +316,10 @@ unsafe extern "system" fn wheel_wndproc(
 
 #[cfg(test)]
 mod tests {
-    use super::{create_show_mixer_event, request_show_mixer, take_show_mixer_request};
+    use super::{
+        create_exit_event, create_show_mixer_event, request_exit_event, request_show_mixer,
+        take_exit_request, take_show_mixer_request,
+    };
 
     #[test]
     fn show_mixer_event_is_auto_reset() {
@@ -287,6 +333,18 @@ mod tests {
         assert!(
             !take_show_mixer_request(),
             "auto-reset event must clear after one wait"
+        );
+    }
+
+    #[test]
+    fn exit_event_is_auto_reset() {
+        create_exit_event();
+        assert!(!take_exit_request(), "fresh exit event must be clear");
+        assert!(request_exit_event(), "signalling exit event must succeed");
+        assert!(take_exit_request(), "signalled exit event must be observed");
+        assert!(
+            !take_exit_request(),
+            "auto-reset exit event must clear after one wait"
         );
     }
 }

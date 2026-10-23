@@ -1,0 +1,31 @@
+name: Installer Lifecycle Validation
+
+on:
+  push:
+    branches:
+      - "test/reliable-auto-update"
+  workflow_dispatch:
+    inputs:
+      baseline_tag:
+        description: "Baseline release tag (e.g. v0.1.9)"
+        required: false
+        type: string
+        default: "v0.1.9"
+      target_tag:
+        description: "Target candidate tag (e.g. v0.1.10)"
+        required: false
+        type: string
+        default: "v0.1.10"
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle-validation:
+    name: Desktop Lifecycle Validation
+    uses: ./.github/workflows/desktop-validation.yml
+    with:
+      release_mode: true
+      release_tag: ${{ inputs.target_tag || 'v0.1.10' }}
+      baseline_tag: ${{ inputs.baseline_tag || 'v0.1.9' }}
+      run_installer_lifecycle: true

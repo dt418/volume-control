@@ -68,4 +68,12 @@ describe("Settings surface", () => {
       $(`[data-surface=settings] button[aria-label="Open Mixer shortcut: Not set"]`),
     ).toBeDisplayed();
   });
+
+  it("displays the updates card with version and check control", async () => {
+    const updateCard = $("[data-testid='update-card']");
+    await updateCard.waitForDisplayed({ timeout: 60_000 });
+    await expect(updateCard).toBeDisplayed();
+    const checkBtn = updateCard.$("button*=Check for updates");
+    await expect(checkBtn).toBeDisplayed();
+  });
 });
