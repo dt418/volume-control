@@ -1,5 +1,21 @@
 # Progress Log
 
+## Session 133 (2026-10-23) - Repair NSIS installer hooks to unblock the v0.1.11 Windows bundle
+
+- Goal: the v0.1.11 release run aborted at `Build release Tauri host` with `!macro: macro named "CheckIfAppIsRunning" already exists!` from `src-tauri/nsis/hooks.nsh`; make the Windows NSIS package build and keep the graceful-shutdown guarantee.
+- What landed:
+  - `src-tauri/nsis/hooks.nsh`: dropped the `CheckIfAppIsRunning` redefinition - the bundled template declares it in `utils.nsh`, so redefining it is a hard makensis error and cannot override it. The hooks run immediately before that macro, so aborting there keeps the Restart Manager force-kill unreachable.
+  - `src-tauri/nsis/hooks.nsh`: escapes PowerShell variables as `$$` (NSIS was stripping `$h`/`$p` as unknown variables), uses distinct per-hook labels instead of a shared `success:`, and sets `SetErrorLevel 1` before `Abort`.
+  - `src-tauri/nsis/hooks.nsh`: the event name is `Local\VolumeControl.Exit` with a single backslash - the previous `\\` produced a different event name, so `OpenExisting` always threw and the app was never asked to exit.
+  - `src-tauri/nsis/hooks.nsh`: matches processes by the exact `$INSTDIR\VolumeControl.exe` path instead of the image name alone.
+  - `scripts/test-release-workflow.sh`: replaced the obsolete `taskkill.exe /IM VolumeControl.exe` assertion with the graceful-exit contract (both hooks present, `Local\VolumeControl.Exit` used, no taskkill/Stop-Process -Force/TerminateProcess call).
+- Verification:
+  - makensis 3.11 `-WX` compiled a harness including `hooks.nsh` with both hooks inserted: 0 warnings, 0 errors.
+  - Hook command against the packaged PowerShell line: no matching process -> exit 0 in 0.6s; matching process that ignores the event -> exit 1 after 15.6s with the process untouched; matching process waiting on `Local\VolumeControl.Exit` -> exit 0 in 0.7s and the target exited with code 0.
+  - `cargo fmt --all --check` and `git diff --check`: clean.
+  - `bash scripts/test-release-workflow.sh`: all contract checks pass, including the updated NSIS graceful-exit assertion.
+- Records: registered `vol-115` in `feature_list.json` as passing.
+
 ## Session 132 (2026-10-23) - Advance lifecycle validation tags and refine unix compatibility guards
 
 - Goal: address PR #74 review feedback by advancing installer lifecycle validation tags to v0.1.10/v0.1.11, requiring actual General navigation click sequence in E2E settings guard, and distinguishing unconditional signal loop termination from conditional/continue break paths.
@@ -8,7 +24,6 @@
   - `scripts/verify-install-lifecycle.sh` & `verify-install-lifecycle.ps1`: updated default baseline to `v0.1.10` and target candidate to `v0.1.11`.
   - `scripts/check-unix-compat.sh` & `check-unix-compat.ps1`: refined signal loop scanner to track outer loop depth, inner loops, and continue paths; refined settings E2E isolation check to match actual General button lookup and `.click()` sequence.
   - `scripts/test-check-unix-compat.sh`: added regression tests for conditional break, nested loop break, continue-path before break, and unclicked General token rejection.
-  - `src-tauri/nsis/hooks.nsh`: removed duplicate `CheckIfAppIsRunning` macro to resolve makensis duplicate definition error.
 - Verification:
   - `bash scripts/test-check-unix-compat.sh`: passed all 10 regression tests.
   - `powershell -ExecutionPolicy Bypass -File scripts/check-unix-compat.ps1`: passed all gates.

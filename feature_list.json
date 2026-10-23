@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T14:40",
+  "last_updated": "2026-10-23T15:10",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -34,6 +34,27 @@
         "scripts/test-check-unix-compat.sh verifies single-line/multiline break rejection, conditional/nested break acceptance, continue-path acceptance, and General variable assignment rejection."
       ],
       "notes": "Addresses review feedback for PR #74."
+    },
+    {
+      "id": "vol-115",
+      "priority": 115,
+      "area": "installer",
+      "title": "Fix NSIS installer hooks so Windows release bundling and graceful shutdown work",
+      "user_visible_behavior": "The Windows NSIS installer builds again and asks a running VolumeControl instance to exit through Local\\VolumeControl.Exit before replacing files, waiting up to 15 seconds and aborting with exit code 1 instead of force-killing when the app refuses.",
+      "status": "passing",
+      "verification": [
+        "makensis 3.11 with -WX compiled a harness that includes hooks.nsh and inserts both NSIS_HOOK_PREINSTALL and NSIS_HOOK_PREUNINSTALL: 0 warnings, 0 errors.",
+        "Standalone reproduction of the hook PowerShell command with no matching process returned exit 0 in 0.6s.",
+        "Standalone reproduction with a same-name process that ignores the event returned exit 1 after 15.6s and left the process running (no force-kill).",
+        "Standalone reproduction with a same-name process that waits on Local\\VolumeControl.Exit returned exit 0 in 0.7s with the target process exiting (code 0)."
+      ],
+      "evidence": [
+        "src-tauri/nsis/hooks.nsh no longer redefines CheckIfAppIsRunning (the bundled template declares it in utils.nsh, so a redefinition is a hard makensis error).",
+        "src-tauri/nsis/hooks.nsh escapes PowerShell variables as $$ and uses a single backslash in the Local\\VolumeControl.Exit name so OpenExisting receives the same event the Rust host creates.",
+        "src-tauri/nsis/hooks.nsh uses distinct labels per hook (volumecontrol_stop_ok_preinstall/preuninstall) and SetErrorLevel 1 before Abort.",
+        "src-tauri/nsis/hooks.nsh matches running processes by the exact $INSTDIR\\VolumeControl.exe path instead of image name only."
+      ],
+      "notes": "Unblocks the v0.1.11 Windows release bundle, which aborted with 'macro named CheckIfAppIsRunning already exists'."
     },
     {
       "id": "vol-113",
