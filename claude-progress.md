@@ -6,10 +6,13 @@
 - What landed:
   - `frontend/src/styles.css`: implemented multi-stage Liquid Glass CSS tokens with 20px blur, 180% saturation, OKLab luminance tint, 1px specular rim highlight, and 18px squircle curvature.
   - `frontend/src/styles.test.ts`: verified specular rim, 20px blur tokens, squircle curvature, and anti-blur multiplication preservation.
+  - `frontend/src/components/ui/card.tsx`: exported `CardSm` high-density container, removed nested `backdrop-blur` from `Card` to enforce anti-blur multiplication.
+  - `frontend/src/components/ui/badge.tsx`: added `pill` variant with capsule styling and `active:scale-[0.97]` tactile press feedback.
+  - `frontend/src/components/ui/card.test.tsx`: added unit test suite covering `CardSm` density, anti-blur rule, and pill badges.
 - Verification:
-  - `npm --prefix frontend test`: 126 tests passed across 19 files.
+  - `npm --prefix frontend test`: 129 tests passed across 20 files.
   - `git diff --check`: clean.
-- Records: registered `vol-117` in `feature_list.json` as `in_progress`.
+- Records: updated `vol-117` in `feature_list.json` as `in_progress`.
 
 ## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
 
