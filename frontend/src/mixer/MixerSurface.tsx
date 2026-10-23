@@ -227,7 +227,9 @@ export function MixerSurface() {
               onClick={() => openSurface("window-settings")}
               className="shrink-0 text-accent font-medium hover:underline cursor-pointer"
             >
-              {tr("settings.updates.viewUpdate")}
+              {updateState?.phase === "ready"
+                ? tr("settings.updates.install")
+                : tr("settings.updates.viewUpdate")}
             </button>
             {updateState?.info?.release_url && (
               <a
