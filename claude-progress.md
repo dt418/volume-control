@@ -1,5 +1,23 @@
 # Progress Log
 
+## Session 132 (2026-10-23) - Advance lifecycle validation tags and refine unix compatibility guards
+
+- Goal: address PR #74 review feedback by advancing installer lifecycle validation tags to v0.1.10/v0.1.11, requiring actual General navigation click sequence in E2E settings guard, and distinguishing unconditional signal loop termination from conditional/continue break paths.
+- What landed:
+  - `.github/workflows/installer-lifecycle.yml` & `desktop-validation.yml`: updated default baseline tag to `v0.1.10` and target tag to `v0.1.11`.
+  - `scripts/verify-install-lifecycle.sh` & `verify-install-lifecycle.ps1`: updated default baseline to `v0.1.10` and target candidate to `v0.1.11`.
+  - `scripts/check-unix-compat.sh` & `check-unix-compat.ps1`: refined signal loop scanner to track outer loop depth, inner loops, and continue paths; refined settings E2E isolation check to match actual General button lookup and `.click()` sequence.
+  - `scripts/test-check-unix-compat.sh`: added regression tests for conditional break, nested loop break, continue-path before break, and unclicked General token rejection.
+- Verification:
+  - `bash scripts/test-check-unix-compat.sh`: passed all 10 regression tests.
+  - `powershell -ExecutionPolicy Bypass -File scripts/check-unix-compat.ps1`: passed all gates.
+  - `bash scripts/check-unix-compat.sh`: passed all gates.
+  - `cargo fmt --all --check` & `git diff --check`: clean.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: 0 warnings.
+  - `cargo test --workspace --no-default-features`: 380 passed.
+  - `sh scripts/check-tauri-deadlock.sh`: 10/10 invariants passed.
+- Records: registered `vol-114` in `feature_list.json` and marked passing.
+
 ## Session 131 (2026-10-23) - VolumeControl v0.1.11 version bump and release preparation
 
 - Goal: synchronize version 0.1.11 across all workspace manifests and lock files, document changelog, and prepare release tag v0.1.11.

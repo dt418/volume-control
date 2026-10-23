@@ -96,4 +96,42 @@ else
   pass "check-unix-compat.sh enforces General navigation before updateCard lookup/wait"
 fi
 mv -f "$e2e_bak" "$e2e_file"
+
+# 7. Acceptance of signals.forever() loop with conditional break
+printf 'fn dummy(signals: &signal_hook::iterator::Signals) {\n    for s in signals.forever() {\n        if s == 15 {\n            break;\n        }\n    }\n}\n' > "$tmp_file"
+if bash scripts/check-unix-compat.sh >/dev/null 2>&1; then
+  pass "check-unix-compat.sh allows for .. in signals.forever() with conditional break"
+else
+  fail "check-unix-compat.sh rejected for .. in signals.forever() with conditional break"
+fi
+rm -f "$tmp_file"
+
+# 8. Acceptance of signals.forever() loop with break in nested loop
+printf 'fn dummy(signals: &signal_hook::iterator::Signals) {\n    for s in signals.forever() {\n        for x in 0..10 {\n            break;\n        }\n    }\n}\n' > "$tmp_file"
+if bash scripts/check-unix-compat.sh >/dev/null 2>&1; then
+  pass "check-unix-compat.sh allows break in nested loop inside signals.forever()"
+else
+  fail "check-unix-compat.sh rejected break in nested loop inside signals.forever()"
+fi
+rm -f "$tmp_file"
+
+# 9. Section isolation: reject General token without actual navigation click
+cp "$e2e_file" "$e2e_bak"
+sed -e 's/await.*General.*click.*/const targetSection = "General";/' "$e2e_bak" > "$e2e_file"
+if bash scripts/check-unix-compat.sh >/dev/null 2>&1; then
+  fail "check-unix-compat.sh should have rejected General variable assignment without click"
+else
+  pass "check-unix-compat.sh requires actual General navigation click"
+fi
+mv -f "$e2e_bak" "$e2e_file"
+
+# 10. Acceptance of signals.forever() loop with continue before outer-depth break
+printf 'fn dummy(signals: &signal_hook::iterator::Signals) {\n    for s in signals.forever() {\n        if s != 15 {\n            continue;\n        }\n        break;\n    }\n}\n' > "$tmp_file"
+if bash scripts/check-unix-compat.sh >/dev/null 2>&1; then
+  pass "check-unix-compat.sh allows for .. in signals.forever() with continue path before break"
+else
+  fail "check-unix-compat.sh rejected for .. in signals.forever() with continue path before break"
+fi
+rm -f "$tmp_file"
+
 echo "All check-unix-compat tests passed."

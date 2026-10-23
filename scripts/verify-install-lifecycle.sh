@@ -4,8 +4,8 @@
 # for Linux and macOS published baseline and candidate packages.
 set -euo pipefail
 
-BASELINE_TAG="v0.1.9"
-TARGET_TAG="v0.1.10"
+BASELINE_TAG="v0.1.10"
+TARGET_TAG="v0.1.11"
 CANDIDATE_DIR=""
 OUTPUT_ROOT="output/install-lifecycle/unix"
 ISOLATED=0
