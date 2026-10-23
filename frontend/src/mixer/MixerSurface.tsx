@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { CircleHelp, Search, Settings, X } from "lucide-react";
 
@@ -6,9 +6,8 @@ import { SurfaceCloseButton } from "../components/ui/surface-close-button";
 import { appLabel } from "../lib/appLabel";
 import { invoke, listen } from "../lib/ipc";
 import { translatorFor, LanguageProvider } from "../lib/i18n";
-import { notifyUpdate } from "../lib/notify";
 import { surfaceErrorMessage } from "../lib/surface";
-import type { UpdateInfoPayload } from "../lib/update";
+import type { UpdateStatePayload } from "../lib/update";
 import { SessionRow } from "./SessionRow";
 import { SystemOutputRow } from "./SystemOutputRow";
 import { useSessions } from "./sessionStore";
@@ -35,28 +34,31 @@ export function MixerSurface() {
     updateSession,
   } = useSessions();
   const [query, setQuery] = useState("");
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfoPayload | null>(null);
-  const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateStatePayload | null>(null);
+  const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
+  const lastRevision = useRef<number>(-1);
   const tr = translatorFor(language);
 
-  // Check once per mixer mount and also honor update results emitted by the
-  // Settings card or tray. Fail-soft: no banner when the check cannot run.
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    void listen<UpdateInfoPayload>("state://update", (payload) => {
-      if (!disposed) {
-        setUpdateInfo(payload);
-        void notifyUpdate(payload);
+    void listen<UpdateStatePayload>("state://update", (payload) => {
+      if (!disposed && payload.revision > lastRevision.current) {
+        lastRevision.current = payload.revision;
+        setUpdateState(payload);
       }
     }).then((fn) => {
-      unlisten = fn;
+      if (disposed) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
     });
-    void invoke<UpdateInfoPayload>("check_for_updates")
+    void invoke<UpdateStatePayload>("get_update_state")
       .then((payload) => {
-        if (!disposed && payload) {
-          setUpdateInfo(payload);
-          void notifyUpdate(payload);
+        if (!disposed && payload.revision > lastRevision.current) {
+          lastRevision.current = payload.revision;
+          setUpdateState(payload);
         }
       })
       .catch(() => {});
@@ -202,40 +204,57 @@ export function MixerSurface() {
         )}
       </div>
 
-      {updateInfo?.is_update_available &&
-        updateInfo.release_url &&
-        !updateDismissed && (
+      {(() => {
+        const latestTag = updateState?.info?.latest_version;
+        const isAvailable =
+          updateState?.phase === "available" ||
+          updateState?.phase === "downloading" ||
+          updateState?.phase === "ready";
+        if (!isAvailable || !latestTag || dismissedVersion === latestTag) {
+          return null;
+        }
+        return (
           <div
             data-testid="update-banner"
             role="status"
             className="flex items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-2 py-1 text-[11px]"
           >
             <span className="min-w-0 flex-1 truncate font-medium">
-              {updateInfo.message}
+              {updateState?.info?.message || tr("settings.updates.available", latestTag)}
             </span>
-            <a
-              href={updateInfo.release_url}
-              onClick={(event) => {
-                event.preventDefault();
-                void invoke<void>("open_release", {
-                  url: updateInfo.release_url,
-                }).catch(() => {});
-              }}
-              className="shrink-0 text-accent underline hover:text-accent/80"
+            <button
+              type="button"
+              onClick={() => openSurface("window-settings")}
+              className="shrink-0 text-accent font-medium hover:underline cursor-pointer"
             >
-              {tr("settings.updates.viewRelease")}
-            </a>
+              {tr("settings.updates.viewUpdate")}
+            </button>
+            {updateState?.info?.release_url && (
+              <a
+                href={updateState.info.release_url}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void invoke<void>("open_release", {
+                    url: updateState.info?.release_url,
+                  }).catch(() => {});
+                }}
+                className="shrink-0 text-accent underline hover:text-accent/80"
+              >
+                {tr("settings.updates.viewRelease")}
+              </a>
+            )}
             <button
               type="button"
               aria-label={tr("update.dismiss")}
               title={tr("update.dismiss")}
-              onClick={() => setUpdateDismissed(true)}
-              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/60 hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => setDismissedVersion(latestTag)}
+              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-foreground/60 hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent cursor-pointer"
             >
               <X aria-hidden="true" className="h-3 w-3" />
             </button>
           </div>
-        )}
+        );
+      })()}
 
       <SystemOutputRow
         value={volumePct}

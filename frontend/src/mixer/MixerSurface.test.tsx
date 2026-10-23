@@ -151,13 +151,19 @@ describe("MixerSurface", () => {
   it("shows and dismisses the in-app update banner", async () => {
     vi.mocked(ipc.invoke).mockImplementation(async (cmd: string) => {
       if (cmd === "get_bootstrap") return bootstrap;
-      if (cmd === "check_for_updates") {
+      if (cmd === "get_update_state") {
         return {
-          current_version: "0.1.10",
-          latest_version: "v0.1.11",
-          is_update_available: true,
-          release_url: "https://example.test/v0.1.11",
-          message: "Update available: v0.1.11",
+          revision: 1,
+          phase: "available",
+          info: {
+            current_version: "0.1.10",
+            latest_version: "v0.1.11",
+            is_update_available: true,
+            release_url: "https://example.test/v0.1.11",
+            message: "Update available: v0.1.11",
+          },
+          error: null,
+          install_supported: true,
         };
       }
       return {};
@@ -165,6 +171,7 @@ describe("MixerSurface", () => {
     await renderSurface();
     const banner = await screen.findByTestId("update-banner");
     expect(banner).toHaveTextContent("Update available: v0.1.11");
+    expect(within(banner).getByText("View update")).toBeInTheDocument();
     fireEvent.click(
       within(banner).getByRole("button", { name: /dismiss update notification/i }),
     );

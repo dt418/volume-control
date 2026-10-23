@@ -19,6 +19,22 @@ pub struct UpdateInfo {
     pub message: String,
 }
 
+/// Asset metadata within a published release.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseAsset {
+    pub name: String,
+    pub browser_download_url: String,
+}
+
+/// Release metadata returned by GitHub releases API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReleaseInfo {
+    pub tag_name: String,
+    pub draft: bool,
+    pub prerelease: bool,
+    pub assets: Vec<ReleaseAsset>,
+}
+
 /// Pure version/status resolution from an explicit current version and latest tag result.
 pub fn resolve_update_info(
     lang: Language,
@@ -62,18 +78,61 @@ pub fn resolve_update_info(
     }
 }
 
-/// Fetch the latest tag and return structured update info.
+/// Fetch the latest release and return structured update info.
+/// Propagates network/validation errors instead of masking them as up-to-date.
 pub fn check_update_info(lang: Language) -> Result<UpdateInfo, String> {
+    let release = fetch_latest_release()?;
     Ok(resolve_update_info(
         lang,
         env!("CARGO_PKG_VERSION"),
-        fetch_latest_tag(),
+        Ok(release.tag_name),
     ))
 }
 /// GitHub API endpoint for the latest stable release.
-const RELEASES_LATEST_API: &str =
+pub const RELEASES_LATEST_API: &str =
     "https://api.github.com/repos/dt418/volume-control/releases/latest";
 
+/// Resolve the API URL for release discovery.
+/// Allows loopback test fixture override only in debug builds with VOLUMECTL_E2E_DEBUG=1.
+pub fn release_api_url() -> String {
+    #[cfg(debug_assertions)]
+    {
+        if std::env::var("VOLUMECTL_E2E_DEBUG").as_deref() == Ok("1") {
+            if let Ok(base) = std::env::var("VOLUMECTL_E2E_UPDATE_BASE_URL") {
+                let trimmed = base.trim();
+                if trimmed.starts_with("http://127.0.0.1:")
+                    || trimmed.starts_with("http://localhost:")
+                {
+                    let base_clean = trimmed.trim_end_matches('/');
+                    return format!("{base_clean}/releases/latest");
+                }
+            }
+        }
+    }
+    RELEASES_LATEST_API.to_string()
+}
+
+/// Validate that a release is non-draft, non-prerelease, and has an exact vMAJOR.MINOR.PATCH tag.
+pub fn validate_release(release: ReleaseInfo) -> Result<ReleaseInfo, String> {
+    if release.draft {
+        return Err("release is a draft".to_string());
+    }
+    if release.prerelease {
+        return Err("release is a prerelease".to_string());
+    }
+    let tag = release.tag_name.trim();
+    if !tag.starts_with('v') {
+        return Err(format!("release tag '{tag}' does not start with 'v'"));
+    }
+    let (major, minor, patch) = parse_version(tag)
+        .ok_or_else(|| format!("release tag '{tag}' is not valid semver vMAJOR.MINOR.PATCH"))?;
+    if tag != format!("v{major}.{minor}.{patch}") {
+        return Err(format!(
+            "release tag '{tag}' has trailing components or non-standard format"
+        ));
+    }
+    Ok(release)
+}
 /// Parse `vX.Y.Z` (also accepting a bare `X.Y.Z`) into a comparable triple.
 pub fn parse_version(tag: &str) -> Option<(u64, u64, u64)> {
     let trimmed = tag.trim();
@@ -97,9 +156,10 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
     }
 }
 
-/// Fetch the latest stable release tag (`vX.Y.Z`). Blocking; ~seconds.
-pub fn fetch_latest_tag() -> Result<String, String> {
-    let response = ureq::get(RELEASES_LATEST_API)
+/// Fetch the latest stable release from the release API. Blocking; ~seconds.
+pub fn fetch_latest_release() -> Result<ReleaseInfo, String> {
+    let url = release_api_url();
+    let response = ureq::get(&url)
         .set("Accept", "application/vnd.github+json")
         .set(
             "User-Agent",
@@ -108,21 +168,21 @@ pub fn fetch_latest_tag() -> Result<String, String> {
         .timeout(std::time::Duration::from_secs(10))
         .call()
         .map_err(|error| format!("update check request failed: {error}"))?;
-    let body: serde_json::Value = response
+    let release: ReleaseInfo = response
         .into_json()
         .map_err(|error| format!("update check response invalid: {error}"))?;
-    body.get("tag_name")
-        .and_then(|value| value.as_str())
-        .map(str::to_owned)
-        .ok_or_else(|| "update check response missing tag_name".to_string())
+    validate_release(release)
 }
-
 /// Localized overlay message for the whole check (never panics, never
 /// propagates the raw error to the user).
 pub fn check_for_updates(lang: Language) -> String {
-    check_update_info(lang)
-        .map(|info| info.message)
-        .unwrap_or_else(|e| e)
+    match check_update_info(lang) {
+        Ok(info) => info.message,
+        Err(error) => {
+            log::warn!("update check failed: {error}");
+            locale::strings(lang).update_check_failed.to_string()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -185,5 +245,72 @@ mod tests {
         let err = resolve_update_info(Language::En, "0.1.7", Err("network error".into()));
         assert!(!err.is_update_available);
         assert_eq!(err.latest_version, None);
+    }
+
+    #[test]
+    fn validate_release_accepts_clean_semver_release() {
+        let rel = ReleaseInfo {
+            tag_name: "v0.1.10".into(),
+            draft: false,
+            prerelease: false,
+            assets: vec![ReleaseAsset {
+                name: "VolumeControl_0.1.10_x64-setup.exe".into(),
+                browser_download_url: "https://example.com/asset.exe".into(),
+            }],
+        };
+        assert!(validate_release(rel).is_ok());
+    }
+
+    #[test]
+    fn validate_release_rejects_draft_or_prerelease() {
+        let draft = ReleaseInfo {
+            tag_name: "v0.1.10".into(),
+            draft: true,
+            prerelease: false,
+            assets: vec![],
+        };
+        assert!(validate_release(draft).is_err());
+
+        let pre = ReleaseInfo {
+            tag_name: "v0.1.10".into(),
+            draft: false,
+            prerelease: true,
+            assets: vec![],
+        };
+        assert!(validate_release(pre).is_err());
+    }
+
+    #[test]
+    fn validate_release_rejects_invalid_tag_format() {
+        let no_v = ReleaseInfo {
+            tag_name: "0.1.10".into(),
+            draft: false,
+            prerelease: false,
+            assets: vec![],
+        };
+        assert!(validate_release(no_v).is_err());
+
+        let trailing = ReleaseInfo {
+            tag_name: "v0.1.10-beta".into(),
+            draft: false,
+            prerelease: false,
+            assets: vec![],
+        };
+        assert!(validate_release(trailing).is_err());
+
+        let non_numeric = ReleaseInfo {
+            tag_name: "v0.1.x".into(),
+            draft: false,
+            prerelease: false,
+            assets: vec![],
+        };
+        assert!(validate_release(non_numeric).is_err());
+    }
+
+    #[test]
+    fn release_api_url_defaults_to_production() {
+        // Without E2E debug env var, returns production URL
+        let url = release_api_url();
+        assert_eq!(url, RELEASES_LATEST_API);
     }
 }

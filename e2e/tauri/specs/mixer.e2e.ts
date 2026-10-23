@@ -102,4 +102,13 @@ describe("Mixer surface", () => {
     await expect($("[data-testid=system-output-value]")).not.toHaveText("Muted");
     await expect(volume).toHaveAttribute("aria-valuenow", "50");
   });
+
+  it("reads update state without throwing", async () => {
+    const updateState = (await invokeForTest(app, "get_update_state", {})) as {
+      phase?: string;
+      revision?: number;
+    };
+    expect(typeof updateState.revision).toBe("number");
+    expect(typeof updateState.phase).toBe("string");
+  });
 });

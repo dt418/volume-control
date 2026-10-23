@@ -106,12 +106,12 @@ fi
   && report ok 'macos install preserves the bundle layout' \
   || report FAIL 'macos install preserves the bundle layout'
 
-if run_macos install "$mac_root" >/dev/null 2>&1; then
-  report FAIL 'macos install refuses to overwrite an existing install'
+if out="$(run_macos install "$mac_root" 2>&1)"; then
+  case "$out" in *"unchanged"*|*"Component"*) report ok 'macos repeat install reports unchanged' ;;
+                 *) report FAIL 'macos repeat install reports unchanged' ;; esac
 else
-  report ok 'macos install refuses to overwrite an existing install'
+  report FAIL 'macos repeat install reports unchanged'
 fi
-
 printf 'tampered' >> "$mac_root/VolumeControl.app/Contents/Info.plist"
 if out="$(run_macos update "$mac_root" 2>&1)"; then
   case "$out" in *"Updated VolumeControl $version"*) report ok 'macos update replaces the installed app' ;;
@@ -124,26 +124,21 @@ grep -q 'plist-stub' "$mac_root/VolumeControl.app/Contents/Info.plist" \
   && report ok 'macos update restores pristine bundle bytes' \
   || report FAIL 'macos update restores pristine bundle bytes'
 
-if out="$(run_macos uninstall "$mac_root" 2>&1)"; then
-  case "$out" in *"Removed VolumeControl"*) report ok 'macos uninstall removes the app' ;;
-                 *) report FAIL 'macos uninstall removes the app' ;; esac
+if out="$(VOLUMECTL_RELEASE_BASE="http://127.0.0.1:9" run_macos uninstall "$mac_root" 2>&1)"; then
+  case "$out" in *"Removed VolumeControl"*) report ok 'macos uninstall works offline and removes the app' ;;
+                 *) report FAIL 'macos uninstall works offline and removes the app' ;; esac
 else
   printf '%s\n' "$out" >&2
-  report FAIL 'macos uninstall removes the app'
+  report FAIL 'macos uninstall works offline and removes the app'
 fi
 [[ ! -e "$mac_root/VolumeControl.app" ]] \
   && report ok 'macos uninstall leaves no bundle behind' \
   || report FAIL 'macos uninstall leaves no bundle behind'
-if out="$(run_macos uninstall "$mac_root" 2>&1)"; then
+if out="$(VOLUMECTL_RELEASE_BASE="http://127.0.0.1:9" run_macos uninstall "$mac_root" 2>&1)"; then
   case "$out" in *"nothing installed"*) report ok 'macos uninstall on a clean root reports nothing installed' ;;
                  *) report FAIL 'macos uninstall on a clean root reports nothing installed' ;; esac
 else
   report FAIL 'macos uninstall on a clean root reports nothing installed'
-fi
-if run_macos update "$mac_root" >/dev/null 2>&1; then
-  report FAIL 'macos update without an install fails closed'
-else
-  report ok 'macos update without an install fails closed'
 fi
 
 # Checksum tampering: flip a byte in the zip copy the installer will fetch.
@@ -168,16 +163,13 @@ else
 fi
 mv "$release_dir/SHA256SUMS.keep" "$release_dir/SHA256SUMS.txt"
 
-# Vietnamese failure message via VOLUMECTL_LANG (reinstall against an
-# installed root to hit the refusal path).
-run_macos install "$fixture_root/macos-vi" >/dev/null 2>&1
-if out="$(VOLUMECTL_LANG=vi run_macos install "$fixture_root/macos-vi" 2>&1)"; then
-  report FAIL 'macos refuses a second install in Vietnamese too'
+# Vietnamese localization via VOLUMECTL_LANG on bad version format
+if out="$(VOLUMECTL_LANG=vi VC_VERSION_OVERRIDE=bad run_macos install "$fixture_root/macos-vi" 2>&1)"; then
+  report FAIL 'macos rejects a malformed version in Vietnamese'
 else
-  case "$out" in *"dùng 'update'"*) report ok 'macos localizes failure messages (vi)' ;;
+  case "$out" in *"phiên bản"*|*"vX.Y.Z"*) report ok 'macos localizes failure messages (vi)' ;;
                  *) report FAIL 'macos localizes failure messages (vi)' ;; esac
 fi
-
 if out="$(VC_VERSION_OVERRIDE=1.2.3 run_macos install "$fixture_root/macos-v" 2>&1)"; then
   report FAIL 'macos rejects a malformed version'
 else
@@ -201,12 +193,12 @@ fi
   && report ok 'linux install ships the release README' \
   || report FAIL 'linux install ships the release README'
 
-if run_linux install "$linux_root" >/dev/null 2>&1; then
-  report FAIL 'linux install refuses to overwrite an existing install'
+if out="$(run_linux install "$linux_root" 2>&1)"; then
+  case "$out" in *"unchanged"*|*"Component"*) report ok 'linux repeat install reports unchanged' ;;
+                 *) report FAIL 'linux repeat install reports unchanged' ;; esac
 else
-  report ok 'linux install refuses to overwrite an existing install'
+  report FAIL 'linux repeat install reports unchanged'
 fi
-
 if out="$(run_linux update "$linux_root" 2>&1)"; then
   case "$out" in *"Updated VolumeControl $version"*) report ok 'linux update reinstalls the verified binary' ;;
                  *) report FAIL 'linux update reinstalls the verified binary' ;; esac
@@ -225,23 +217,35 @@ else
 fi
 mv "$release_dir/keep.tar.gz" "$release_dir/volumecontrol-$version-linux-amd64.tar.gz"
 
-if out="$(run_linux uninstall "$linux_root" 2>&1)"; then
-  case "$out" in *"Removed VolumeControl"*) report ok 'linux uninstall removes the installed files' ;;
-                 *) report FAIL 'linux uninstall removes the installed files' ;; esac
+if out="$(VOLUMECTL_RELEASE_BASE="http://127.0.0.1:9" run_linux uninstall "$linux_root" 2>&1)"; then
+  case "$out" in *"Removed VolumeControl"*) report ok 'linux uninstall works offline and removes the installed files' ;;
+                 *) report FAIL 'linux uninstall works offline and removes the installed files' ;; esac
 else
   printf '%s\n' "$out" >&2
-  report FAIL 'linux uninstall removes the installed files'
+  report FAIL 'linux uninstall works offline and removes the installed files'
 fi
 [[ ! -e "$linux_root/bin/volumectl" ]] \
   && report ok 'linux uninstall leaves no binary behind' \
   || report FAIL 'linux uninstall leaves no binary behind'
-if out="$(run_linux uninstall "$linux_root" 2>&1)"; then
+if out="$(VOLUMECTL_RELEASE_BASE="http://127.0.0.1:9" run_linux uninstall "$linux_root" 2>&1)"; then
   case "$out" in *"nothing installed"*) report ok 'linux uninstall on a clean root reports nothing installed' ;;
                  *) report FAIL 'linux uninstall on a clean root reports nothing installed' ;; esac
 else
   report FAIL 'linux uninstall on a clean root reports nothing installed'
 fi
 
+# Prepared mode on Linux
+prep_dir="$fixture_root/prep-linux"
+mkdir -p "$prep_dir"
+cp "$release_dir/volumecontrol-$version-linux-amd64.tar.gz" "$prep_dir/"
+cp "$release_dir/SHA256SUMS.txt" "$prep_dir/"
+if out="$(bash "$linux_installer" update --prepared-dir "$prep_dir" 2>&1)"; then
+  [[ -f "$prep_dir/handoff.ready" && -f "$prep_dir/result.exit-code" ]] \
+    && report ok 'linux prepared apply creates handoff and result markers' \
+    || report FAIL 'linux prepared apply creates handoff and result markers'
+else
+  report FAIL 'linux prepared apply creates handoff and result markers'
+fi
 # Latest-release resolution against the fixture layout.
 if out="$(VC_VERSION_OVERRIDE= run_macos install "$fixture_root/macos-latest" 2>&1)"; then
   case "$out" in *"Installed VolumeControl $version"*) report ok 'macos resolves the latest tag from the release layout' ;;

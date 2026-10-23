@@ -1,5 +1,28 @@
 # Session Handoff
 
+## Session 129 (2026-10-23) - Reliable update notifications, background downloads, and transactional installation lifecycle
+
+- Summary: Implemented host-owned UpdateManager coordinator, background streaming downloads with SHA-256 verification, user confirmation modal/panel in Settings UpdateCard, graceful process shutdown without force-kill (Local\VolumeControl.Exit and SIGTERM), and transactional installation lifecycle across Windows, Linux, and macOS.
+- Changes:
+  - `crates/volumectl/src/updates.rs`: `fetch_latest_release` with ReleaseInfo, strict semver validation, error propagation.
+  - `src-tauri/src/update_manager.rs`: host-owned `UpdateManager` managing `UpdateState` with revision ordering, 15s delay, 6h periodic checks, request coalescing, and background download worker.
+  - `src-tauri/src/lifecycle.rs`: `Local\VolumeControl.Exit` event, `signal-hook` SIGTERM on Unix, native notifications with deduplication in `update-state.json`, and offline prepared apply helper.
+  - `scripts/Install-VolumeControl.ps1`, `packaging/install-linux.sh`, `packaging/install-macos.sh`: graceful shutdown, file locks, install receipts, transactional staging/rollback, and offline prepared apply.
+  - `src-tauri/nsis/hooks.nsh`: eliminated force-kill and overrode `CheckIfAppIsRunning`.
+  - `frontend/src/settings/UpdateCard.tsx` & `MixerSurface.tsx`: `UpdateStatePayload` contract, revision tracking, inline confirmation panel with version warning, Confirm and Later buttons.
+  - `docs/index.html`: updated `tpl-ps`, `tpl-curl`, and `tpl-unix` snippets and graceful notes.
+  - `scripts/verify-install-lifecycle.ps1` & `.sh`: lifecycle verification harnesses.
+  - `.github/workflows/installer-lifecycle.yml` & `desktop-validation.yml`: native lifecycle validation workflow.
+- Verification:
+  - `cargo fmt --all --check` & `git diff --check`: clean.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: passed with 0 warnings.
+  - `cargo test --workspace --no-default-features`: 380 tests passed across 8 suites.
+  - `npm --prefix frontend test`: 128 tests passed across 20 files.
+  - `scripts/test-install-volumecontrol.ps1` (PS 5.1 & pwsh 7) and `scripts/test-install-unix.sh` (23 checks): all passed.
+  - `scripts/check-tauri-deadlock.sh`: 10/10 invariants passed.
+  - `scripts/verify-install-lifecycle.sh`: verified in isolated WSL environment.
+  - Records: `vol-111` registered and marked passing in `feature_list.json`.
+
 ## Session 123 (2026-10-21) - Winget 0.1.8 submission and desktop icon fix
 
 - Winget: PR microsoft/winget-pkgs#454508 updated to 0.1.8 (fork branch

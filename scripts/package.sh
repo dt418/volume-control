@@ -14,11 +14,12 @@ set -euo pipefail
 platform="${RELEASE_PLATFORM:?set RELEASE_PLATFORM (windows|macos|ubuntu)}"
 tag="${RELEASE_TAG:?set RELEASE_TAG (e.g. v0.1.0)}"
 version="${tag#v}"
+profile="${PACKAGE_PROFILE:-release}"
 
 case "$platform" in
-  windows) bin="target/release/VolumeControl.exe" ; ext="zip" ;;
-  macos)   bin="target/release/VolumeControl"     ; ext="zip" ;;
-  ubuntu)  bin="target/release/VolumeControl"     ; ext="tar.gz" ;;
+  windows) bin="target/$profile/VolumeControl.exe" ; ext="zip" ;;
+  macos)   bin="target/$profile/VolumeControl"     ; ext="zip" ;;
+  ubuntu)  bin="target/$profile/VolumeControl"     ; ext="tar.gz" ;;
   *) echo "unknown platform: $platform" >&2 ; exit 1 ;;
 esac
 
@@ -72,7 +73,7 @@ case "$ext" in
     ;;
 esac
 if [ "$platform" = "windows" ]; then
-  nsis="target/release/bundle/nsis/VolumeControl_${version}_x64-setup.exe"
+  nsis="target/$profile/bundle/nsis/VolumeControl_${version}_x64-setup.exe"
   test -s "$nsis" || { echo "release NSIS installer missing: $nsis" >&2; exit 1; }
   cp "$nsis" "dist/$(basename "$nsis")"
   cp scripts/Install-VolumeControl.ps1 dist/Install-VolumeControl.ps1
@@ -84,7 +85,7 @@ case "$platform" in
   macos)
     test -s packaging/install-macos.sh || { echo "missing packaging/install-macos.sh" >&2; exit 1; }
     cp packaging/install-macos.sh dist/install-macos.sh
-    dmg="$(find target/release/bundle/dmg -type f -name '*.dmg' 2>/dev/null | head -n 1 || true)"
+    dmg="$(find target/$profile/bundle/dmg -type f -name '*.dmg' 2>/dev/null | head -n 1 || true)"
     test -n "$dmg" && test -s "$dmg" || { echo "release dmg missing under target/release/bundle/dmg" >&2; exit 1; }
     cp "$dmg" "dist/volumecontrol-${version}-macos.dmg"
     ;;

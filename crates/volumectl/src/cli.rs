@@ -12,11 +12,23 @@ pub fn run() -> Result<ExitCode, String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let cmd = args.first().map(String::as_str).unwrap_or("get");
 
+    if cmd == "--version" || cmd == "-v" || cmd == "-V" {
+        println!("volumectl {}", env!("CARGO_PKG_VERSION"));
+        return Ok(ExitCode::SUCCESS);
+    }
+
     if cmd == "check-updates" {
         let (config, _) = crate::config::load_with_notice();
-        let message = crate::updates::check_for_updates(config.language);
-        println!("{message}");
-        return Ok(ExitCode::SUCCESS);
+        match crate::updates::check_update_info(config.language) {
+            Ok(info) => {
+                println!("{}", info.message);
+                return Ok(ExitCode::SUCCESS);
+            }
+            Err(e) => {
+                eprintln!("update check failed: {e}");
+                return Ok(ExitCode::FAILURE);
+            }
+        }
     }
 
     #[cfg(not(target_os = "windows"))]

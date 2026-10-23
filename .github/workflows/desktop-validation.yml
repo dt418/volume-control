@@ -12,8 +12,16 @@ on:
         description: "Release tag used in package names"
         required: false
         type: string
-        default: ""
-
+      baseline_tag:
+        description: "Baseline release tag for lifecycle verification"
+        required: false
+        type: string
+        default: "v0.1.9"
+      run_installer_lifecycle:
+        description: "Run installer lifecycle verification against packaged candidate"
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 
@@ -117,6 +125,16 @@ jobs:
           if [ -z "$release_tag" ]; then release_tag="v0.0.0-validation"; fi
           export RELEASE_TAG="$release_tag"
           bash scripts/package.sh
+      - name: Run installer lifecycle verification (Windows)
+        if: inputs.run_installer_lifecycle && matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          ./scripts/verify-install-lifecycle.ps1 -BaselineTag "${{ inputs.baseline_tag }}" -TargetTag "${{ inputs.release_tag }}" -CandidateDirectory (Resolve-Path dist).Path -OutputRoot output/install-lifecycle/windows -Isolated
+      - name: Run installer lifecycle verification (Unix)
+        if: inputs.run_installer_lifecycle && matrix.platform != 'windows'
+        shell: bash
+        run: |
+          bash scripts/verify-install-lifecycle.sh --baseline-tag "${{ inputs.baseline_tag }}" --target-tag "${{ inputs.release_tag }}" --candidate-dir "$PWD/dist" --output-root "output/install-lifecycle/${{ matrix.platform }}" --isolated
       - name: Write SHA-bound build metadata
         shell: bash
         env:
@@ -159,6 +177,9 @@ jobs:
           rm -rf validation-artifact
           mkdir -p validation-artifact/e2e validation-artifact/platform-logs
           cp dist/* validation-artifact/
+          if [ -d output/install-lifecycle ]; then
+            cp -r output/install-lifecycle validation-artifact/
+          fi
           # Portable bash 3.2 (macOS /bin/bash) + BSD utilities: no `mapfile`,
           # no `cp --parents`. NUL-delimited reads keep paths with spaces safe.
           junit_files=()

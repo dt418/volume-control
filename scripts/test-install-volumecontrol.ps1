@@ -273,15 +273,13 @@ try {
     $uninstallOutput = @(Invoke-VolumeControlAction -Action uninstall -Silent -InstallRoot $installRoot 6>&1)
     Assert-Equal ($uninstallOutput -join "`n") "removed VolumeControl from $installRoot" 'uninstall reports the result'
     Assert-True (Test-Path -LiteralPath $configPath -PathType Leaf) 'uninstall must preserve %APPDATA%\volume-control'
+    Remove-Item -LiteralPath $uninstallerPath -Force -ErrorAction SilentlyContinue
+
+    # Second uninstall against clean root must be successful no-op
+    $secondUninstallOutput = @(Invoke-VolumeControlAction -Action uninstall -Silent -InstallRoot $installRoot 6>&1)
+    Assert-Equal ($secondUninstallOutput -join "`n") "nothing installed at $installRoot" 'second uninstall reports nothing installed'
 
     Remove-Item function:global:Start-Process -Force
-    $installedExecutable = Join-Path $installRoot 'VolumeControl.exe'
-    Copy-Item $installerPath $installedExecutable
-    Assert-Throws { Invoke-VolumeControlAction -Action install -Release $validRelease -InstallRoot $installRoot } 'standard executable already exists'
-
-    Remove-Item -LiteralPath $installedExecutable -Force
-    Assert-Throws { Invoke-VolumeControlAction -Action update -Release $validRelease -InstallRoot $installRoot } 'standard executable is missing'
-
     $actualInvokeVerifiedInstaller = (Get-Item function:Invoke-VerifiedInstaller).ScriptBlock
     $script:currentVersionLaunches = 0
     function Invoke-VerifiedInstaller {
@@ -293,7 +291,7 @@ try {
     $installOutput = @(Invoke-VolumeControlAction -Action install -Release $validRelease -InstallRoot $installRoot 6>&1)
     Assert-Equal ($installOutput -join "`n") "installed VolumeControl 1.2.3 into $installRoot" 'install reports the result'
     Assert-Equal $script:currentVersionLaunches 1 'install launches the verified installer once'
-
+    $installedExecutable = Join-Path $installRoot 'VolumeControl.exe'
     Copy-Item $installerPath $installedExecutable
     $script:installedFileVersion = '1.0.0'
     function global:Get-Item {
@@ -323,9 +321,18 @@ try {
 
     Remove-Item function:global:Get-Process -Force
     $script:installedFileVersion = '1.2.3'
+    Copy-Item $installerPath (Join-Path $installRoot 'uninstall.exe') -Force
+    Write-InstallReceipt -InstallRoot $installRoot -Tag 'v1.2.3' -ExecutableSha256 $installerSha256
     $currentOutput = @(Invoke-VolumeControlAction -Action update -Release $validRelease -InstallRoot $installRoot 6>&1)
     Assert-Equal ($currentOutput -join "`n") 'VolumeControl 1.2.3 is already installed; nothing to update' 'current release reports the no-op'
     Assert-Equal $script:currentVersionLaunches 2 'current release update must not launch installer'
+
+    # Test newer installed version reports no downgrade
+    $script:installedFileVersion = '2.0.0'
+    $downgradeOutput = @(Invoke-VolumeControlAction -Action install -Release $validRelease -InstallRoot $installRoot 6>&1)
+    Assert-True (($downgradeOutput -join "`n") -like '*skipping downgrade*') 'installed newer version skips downgrade'
+    Assert-Equal $script:currentVersionLaunches 2 'downgrade must not launch installer'
+
     Remove-Item function:global:Get-Item -Force
     Set-Item function:Invoke-VerifiedInstaller -Value $actualInvokeVerifiedInstaller
 
@@ -337,12 +344,13 @@ try {
         prerelease = $false
         assets = @()
     }
+    $script:StopTimeoutSeconds = 0
     function global:Get-Process {
         [CmdletBinding()]
         param([string] $Name)
 
         if ($Name -ceq 'VolumeControl') {
-            return [pscustomobject]@{ Name = 'VolumeControl'; Id = 4242 }
+            return [pscustomobject]@{ Name = 'VolumeControl'; Id = 4242; Path = $installedExecutable }
         }
         return Microsoft.PowerShell.Management\Get-Process @PSBoundParameters
     }
@@ -351,7 +359,18 @@ try {
     }
 
     Assert-Throws { Invoke-VolumeControlAction -Action update -Release $newRelease -InstallRoot $installRoot } 'close VolumeControl'
-
+    $script:StopTimeoutSeconds = $null
+    Remove-Item function:global:Get-Process -Force
+    Remove-Item function:global:Stop-Process -Force
+    # Prepared apply test
+    $prepDir = Join-Path $testRoot 'prepared-test'
+    New-Item -ItemType Directory -Path $prepDir | Out-Null
+    Copy-Item $installerPath (Join-Path $prepDir $installerName)
+    Copy-Item $manifestPath (Join-Path $prepDir 'SHA256SUMS.txt')
+    Invoke-VolumeControlAction -Action update -PreparedDir $prepDir -InstallRoot $installRoot
+    Assert-True (Test-Path (Join-Path $prepDir 'handoff.ready')) 'prepared apply writes handoff.ready'
+    Assert-True (Test-Path (Join-Path $prepDir 'result.exit-code')) 'prepared apply writes result.exit-code'
+    Assert-Equal ([System.IO.File]::ReadAllText((Join-Path $prepDir 'result.exit-code')).Trim()) '0' 'result.exit-code is 0'
     # --- Remote-download safety: `irm` on Windows PowerShell 5.1 decodes a
     # text/plain response as cp1252, so the published asset must be pure ASCII
     # and BOM-less; VI text travels as [char] escapes that survive that decode.
@@ -399,10 +418,22 @@ try {
         Assert-Throws { Read-ExpectedSha256 -ManifestPath $malformedManifest -AssetName $installerName } "kh$([char]0x00F4)ng $([char]0x0111)$([char]0x00FA)ng $([char]0x0111)$([char]0x1ECB)nh d$([char]0x1EA1)ng chu$([char]0x1EA9)n"
 
         $viFailureMessage = $null
+        $script:StopTimeoutSeconds = 0
+        function global:Get-Process {
+            [CmdletBinding()]
+            param([string] $Name)
+            if ($Name -ceq 'VolumeControl') {
+                return [pscustomobject]@{ Name = 'VolumeControl'; Id = 4242; Path = $installedExecutable }
+            }
+            return Microsoft.PowerShell.Management\Get-Process @PSBoundParameters
+        }
         try {
             Invoke-VolumeControlAction -Action update -Release $newRelease -InstallRoot $installRoot
         } catch {
             $viFailureMessage = $_.Exception.Message
+        } finally {
+            $script:StopTimeoutSeconds = $null
+            Remove-Item function:global:Get-Process -Force
         }
         Assert-True ($viFailureMessage -clike "*h$([char]0x00E3)y $([char]0x0111)$([char]0x00F3)ng VolumeControl*") 'VI message for the running-process failure path'
         Assert-False ($viFailureMessage -clike '*update.refused-running-process*') 'message IDs never reach the user'

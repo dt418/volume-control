@@ -13,10 +13,10 @@ use volumectl_lib::tray_common::TrayCommand;
 
 use commands::{
     adjust_volume, check_for_updates, close_surface, config_path, get_audio_sessions,
-    get_autostart, get_bootstrap, mute_session, open_config_location, open_release, open_surface,
-    recommended_blacklist, request_notification_permission, reset_volume, resolve_apps,
-    running_apps, save_config, set_autostart, set_modifier, set_session_volume, set_volume,
-    set_window_title, surface_ready, toggle_mute, update_settings,
+    get_autostart, get_bootstrap, get_update_state, install_update, mute_session,
+    open_config_location, open_release, open_surface, recommended_blacklist, reset_volume,
+    resolve_apps, running_apps, save_config, set_autostart, set_modifier, set_session_volume,
+    set_volume, set_window_title, surface_ready, toggle_mute, update_settings,
 };
 use events_sink::TauriSink;
 use window_manager::{SurfaceId, WindowManager};
@@ -24,7 +24,10 @@ use window_manager::{SurfaceId, WindowManager};
 #[cfg(not(target_os = "windows"))]
 pub mod native_headless;
 #[cfg(target_os = "windows")]
-mod native_win32;
+pub mod native_win32;
+
+pub mod lifecycle;
+pub mod update_manager;
 
 mod commands;
 mod events_sink;
@@ -50,7 +53,8 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
         running_apps,
         resolve_apps,
         open_release,
-        request_notification_permission,
+        get_update_state,
+        install_update,
         set_window_title,
         config_path,
         open_config_location,
@@ -94,9 +98,6 @@ fn dispatch_tray_command(app: &tauri::AppHandle, command: TrayCommand) {
     // The update check performs a blocking network fetch; run it off the
     // core lock so volume/hotkey handling stays responsive while it flies.
     if command == TrayCommand::CheckUpdates {
-        let handle = app.clone();
-        // Immediate feedback: the fetch takes seconds, so the overlay shows
-        // the in-progress card before the result replaces it.
         if let Some(shared) = app.try_state::<Arc<Mutex<AppCore>>>() {
             let mut core = shared
                 .lock()
@@ -105,25 +106,9 @@ fn dispatch_tray_command(app: &tauri::AppHandle, command: TrayCommand) {
                 volumectl_lib::locale::strings(core.config().language).update_check_in_progress;
             core.show_overlay_text(in_progress.to_string());
         }
-        std::thread::spawn(move || {
-            let language = handle
-                .try_state::<Arc<Mutex<AppCore>>>()
-                .map(|shared| {
-                    shared
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .config()
-                        .language
-                })
-                .unwrap_or_default();
-            let message = volumectl_lib::updates::check_for_updates(language);
-            if let Some(shared) = handle.try_state::<Arc<Mutex<AppCore>>>() {
-                let mut core = shared
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
-                core.show_overlay_text(message);
-            }
-        });
+        if let Some(manager) = app.try_state::<Arc<update_manager::UpdateManager>>() {
+            manager.request_check(true);
+        }
         return;
     }
     let Some(shared) = app.try_state::<Arc<Mutex<AppCore>>>() else {
@@ -319,6 +304,15 @@ pub fn run() -> tauri::Result<()> {
         let shared = Arc::new(Mutex::new(core));
         app.manage(shared.clone());
         startup_mark!("state managed");
+        let update_mgr = Arc::new(
+            update_manager::UpdateManager::start(handle.clone())
+                .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?,
+        );
+        app.manage(update_mgr);
+        startup_mark!("update manager started");
+
+        lifecycle::install_signal_handlers(handle.clone())
+            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
         // A user launch (desktop/tray shortcut, Start menu, winget
         // `winget install` completion) must show something: the tray icon
@@ -360,6 +354,12 @@ pub fn run() -> tauri::Result<()> {
             // Tauri command on the main thread can hold it while the
             // window manager waits for the main thread. Dispatch the
             // surface request first, with no core lock held.
+            #[cfg(target_os = "windows")]
+            if native_win32::take_exit_request() {
+                log::info!("exit requested via Local\\VolumeControl.Exit event");
+                lifecycle::request_exit(&fast_handle);
+                break;
+            }
             #[cfg(target_os = "windows")]
             if native_win32::take_show_mixer_request() {
                 match fast_handle.try_state::<WindowManager>() {
@@ -430,7 +430,8 @@ pub fn run() -> tauri::Result<()> {
         running_apps,
         resolve_apps,
         open_release,
-        request_notification_permission,
+        get_update_state,
+        install_update,
         set_window_title,
         config_path,
         open_config_location,
