@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T16:05",
+  "last_updated": "2026-10-23T15:02",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -21,16 +21,22 @@
       "area": "updater",
       "title": "Localized update notification with Windows toast actions and in-app install affordances",
       "user_visible_behavior": "The update notification uses the app language, Windows toasts expose Cai dat / De sau buttons and open Settings when activated, the Mixer banner offers an install action once the package is ready, and Settings lets you dismiss an available update with De sau.",
-      "status": "in_progress",
+      "status": "passing",
       "verification": [
         "cargo clippy --workspace --all-targets --no-default-features -- -D warnings",
-        "npm --prefix frontend test"
+        "cargo fmt --all --check",
+        "npx tsc --noEmit (frontend)",
+        "npm --prefix frontend test",
+        "Windows toast smoke with tauri-winrt-notification"
       ],
       "evidence": [
-        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings: No issues found.",
-        "npm --prefix frontend test: 124 tests passed across 19 files."
+        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings: No issues found (worktree update-notifications, branch feat/update-ux-notifications).",
+        "cargo fmt --all --check: clean.",
+        "npx tsc --noEmit (frontend): clean.",
+        "npm --prefix frontend test: 124 tests passed across 19 files.",
+        "Windows toast smoke: toast with Cài đặt/Để sau buttons returned Ok(()) and ToastNotificationManager history listed action arguments install and later."
       ],
-      "notes": "Windows toast uses tauri-winrt-notification directly because tauri-plugin-notification exposes action buttons on mobile only."
+      "notes": "Windows toast uses tauri-winrt-notification directly because tauri-plugin-notification exposes action buttons on mobile only. Toast activation opening Settings was not exercised outside the running host."
     },
     {
       "id": "vol-114",

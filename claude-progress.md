@@ -16,7 +16,9 @@
   - `cargo check -p volumecontrol-tauri --no-default-features`: Windows target compiles with the new dependency.
   - `npx tsc --noEmit`: clean.
   - `npm --prefix frontend test`: 124 tests passed across 19 files.
-- Records: registered `vol-116` in `feature_list.json` as in_progress; work continues on branch `feat/update-notifications` in a dedicated worktree.
+  - `cargo fmt --all --check`: clean.
+  - Windows toast smoke: a standalone `tauri-winrt-notification 0.8` call with the same builder chain (title, localized body, "Cài đặt"/"Để sau" buttons, `on_activated`) returned `Ok(())`; `ToastNotificationManager.History` showed the toast with both action arguments `install` and `later`. Clicking through to Settings was not exercised outside the host.
+- Records: `vol-116` is `passing`; the work moved off `bonnethead` to branch `feat/update-ux-notifications` in the `update-notifications` worktree, checked out from `main`.
 
 ## Session 133 (2026-10-23) - Repair NSIS installer hooks to unblock the v0.1.11 Windows bundle
 
