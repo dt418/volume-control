@@ -27,7 +27,7 @@
         "npm --prefix frontend run build"
       ],
       "evidence": [
-        "npm --prefix frontend test: 130 tests passed across 20 files."
+        "npm --prefix frontend test: 132 tests passed across 20 files."
       ],
       "notes": "Implementing plan docs/superpowers/plans/2026-10-23-rust-ui-liquid-glass-implementation.md"
     },

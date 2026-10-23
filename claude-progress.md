@@ -12,8 +12,11 @@
   - `frontend/src/mixer/SystemOutputRow.tsx`: modernized system output row to `CardSm` high-density container (`rounded-xl border-border/40 bg-card/60`).
   - `frontend/src/mixer/SessionRow.tsx`: upgraded session rows to floating `CardSm` items with hover lighting and no nested blur.
   - `frontend/src/mixer/SystemOutputRow.test.tsx`: verified high-density styling and anti-blur compliance.
+  - `frontend/src/lib/i18n.tsx`: added bilingual EN/VI dictionary entries for Liquid Glass tokens and preview card.
+  - `frontend/src/settings/AppearancePreview.tsx`: upgraded to real-time optical preview card displaying simulated glass surface, specular rim, and material/accent pill badges.
+  - `frontend/src/lib/i18n.test.ts` & `frontend/src/settings/AppearancePreview.test.tsx`: verified bilingual resolution and preview card structure.
 - Verification:
-  - `npm --prefix frontend test`: 130 tests passed across 20 files.
+  - `npm --prefix frontend test`: 132 tests passed across 20 files.
   - `git diff --check`: clean.
 - Records: updated `vol-117` in `feature_list.json` as `in_progress`.
 
