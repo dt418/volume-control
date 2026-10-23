@@ -9,8 +9,11 @@
   - `frontend/src/components/ui/card.tsx`: exported `CardSm` high-density container, removed nested `backdrop-blur` from `Card` to enforce anti-blur multiplication.
   - `frontend/src/components/ui/badge.tsx`: added `pill` variant with capsule styling and `active:scale-[0.97]` tactile press feedback.
   - `frontend/src/components/ui/card.test.tsx`: added unit test suite covering `CardSm` density, anti-blur rule, and pill badges.
+  - `frontend/src/mixer/SystemOutputRow.tsx`: modernized system output row to `CardSm` high-density container (`rounded-xl border-border/40 bg-card/60`).
+  - `frontend/src/mixer/SessionRow.tsx`: upgraded session rows to floating `CardSm` items with hover lighting and no nested blur.
+  - `frontend/src/mixer/SystemOutputRow.test.tsx`: verified high-density styling and anti-blur compliance.
 - Verification:
-  - `npm --prefix frontend test`: 129 tests passed across 20 files.
+  - `npm --prefix frontend test`: 130 tests passed across 20 files.
   - `git diff --check`: clean.
 - Records: updated `vol-117` in `feature_list.json` as `in_progress`.
 

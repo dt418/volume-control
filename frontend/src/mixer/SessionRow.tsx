@@ -39,7 +39,7 @@ export const SessionRow = memo(function SessionRow({
   return (
     <div
       data-testid="session-row"
-      className="flex items-center gap-3 rounded-lg border border-foreground/20 bg-background/88 px-3 py-2 shadow-sm"
+      className="flex items-center gap-3 rounded-xl border border-border/40 bg-card/60 px-3 py-2 shadow-sm transition-colors hover:border-accent/40"
     >
       <span className="w-28 shrink-0" title={description}>
         <span className="block truncate text-xs font-medium">{displayName}</span>
