@@ -61,4 +61,12 @@ describe("SystemOutputRow", () => {
     fireEvent.keyDown(slider, { key: "ArrowRight" }); // Radix slider step
     expect(ipc.invoke).toHaveBeenCalledWith("set_volume", { percent: 56 });
   });
+
+  it("renders with CardSm high-density styling and no nested blur", () => {
+    render(<SystemOutputRow value={55} muted={false} thresholds={thresholds} />);
+    const row = screen.getByTestId("system-output-row");
+    expect(row.className).toContain("rounded-xl");
+    expect(row.className).toContain("bg-card/60");
+    expect(row.className).not.toContain("backdrop-blur");
+  });
 });

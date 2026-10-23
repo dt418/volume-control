@@ -80,6 +80,14 @@ describe("OverlaySurface", () => {
     fire("state://volume", { pct: 0, muted: true });
     expect(await screen.findByText("Muted")).toBeInTheDocument();
   });
+  it("renders overlay-card with Liquid Glass capsule styling", async () => {
+    render(<OverlaySurface />);
+    await screen.findByText("55%");
+    const card = screen.getByTestId("overlay-card");
+    expect(card.className).toContain("glass-surface");
+    expect(card.className).toContain("rounded-2xl");
+    expect(card.className).not.toContain("backdrop-blur");
+  });
 
   describe("auto-hide self-timer", () => {
     beforeEach(() => {

@@ -1,7 +1,7 @@
 # Plan: Fix Linux Foreground Process Detection Bug
 
-**Spec Reference**: [2026-01-15-fix-linux-foreground-detection-bug.md](../specs/2026-01-15-fix-linux-foreground-detection-bug.md)  
-**Estimated Time**: 4 hours  
+**Spec Reference**: [2026-01-15-fix-linux-foreground-detection-bug.md](../specs/2026-01-15-fix-linux-foreground-detection-bug.md)
+**Estimated Time**: 4 hours
 **Priority**: Critical (blocking Linux users from reliable blacklist functionality)
 
 ---

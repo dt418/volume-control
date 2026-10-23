@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Card, CardContent } from "../components/ui/card";
+import { Card, CardContent, CardSm } from "../components/ui/card";
 import { Kbd } from "../components/ui/kbd";
 import { SurfaceCloseButton } from "../components/ui/surface-close-button";
 import { applyAppearance, type AppearancePayload } from "../lib/appearance";
@@ -38,7 +38,7 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
 
 function ShortcutCard({ item, status }: { item: HelpShortcut; status: ReturnType<typeof statusForAction> }) {
   return (
-    <Card data-testid="help-card" className="p-0">
+    <CardSm data-testid="help-card" className="p-0">
       <CardContent className="flex items-center justify-between gap-3 px-3 py-2">
         <span className="text-sm">{item.label}</span>
         <span className="flex items-center gap-2">
@@ -46,7 +46,7 @@ function ShortcutCard({ item, status }: { item: HelpShortcut; status: ReturnType
           <Kbd data-testid="help-combo">{item.combo}</Kbd>
         </span>
       </CardContent>
-    </Card>
+    </CardSm>
   );
 }
 
@@ -170,7 +170,7 @@ export function HelpSurface() {
     <LanguageProvider language={language}>
       <main
         data-surface="help"
-        className="surface-shell h-dvh min-h-0 overflow-hidden flex flex-col bg-background"
+        className="surface-shell h-dvh min-h-0 overflow-hidden flex flex-col glass-surface"
       >
         {/* Header band (legacy parity): 3px accent bar, title, subtitle, close × */}
         <header data-testid="surface-header" className="relative flex-shrink-0 border-b border-foreground/10">

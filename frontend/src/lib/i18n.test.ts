@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asLanguage, translatorFor } from "./i18n";
+import { asLanguage, translatorFor, type TranslationKey } from "./i18n";
 
 describe("i18n dictionaries", () => {
   it("translates every key in both languages", () => {
@@ -28,5 +28,16 @@ describe("i18n dictionaries", () => {
     expect(asLanguage("vi")).toBe("vi");
     expect(asLanguage("fr")).toBe("en");
     expect(asLanguage(undefined)).toBe("en");
+  });
+
+  it("provides accurate Vietnamese translations for Liquid Glass tokens", () => {
+    const vi = translatorFor("vi");
+    const en = translatorFor("en");
+    expect(en("appearance.material.liquidGlass" as TranslationKey)).toBe("Liquid Glass (Translucent)");
+    expect(vi("appearance.material.liquidGlass" as TranslationKey)).toBe("Kính chất lỏng (Trong mờ)");
+    expect(en("appearance.specularRim" as TranslationKey)).toBe("Specular Rim Refraction");
+    expect(vi("appearance.specularRim" as TranslationKey)).toBe("Viền phản xạ khúc xạ");
+    expect(en("appearance.previewTitle" as TranslationKey)).toBe("Liquid Glass Live Preview");
+    expect(vi("appearance.previewTitle" as TranslationKey)).toBe("Xem trước Kính chất lỏng");
   });
 });

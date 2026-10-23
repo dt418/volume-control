@@ -1,7 +1,7 @@
 # Cross-Platform Blacklist Optimization Plan
 
-**Date:** 2026-01-15  
-**Related Spec:** `2026-01-15-cross-platform-blacklist-optimization.md`  
+**Date:** 2026-01-15
+**Related Spec:** `2026-01-15-cross-platform-blacklist-optimization.md`
 **Status:** Ready for Implementation
 
 ## Overview
@@ -11,8 +11,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 ## Phase 1: Foundation Fixes (Critical)
 
 ### Task 1.1: Fix Blacklist Normalization
-**File:** `crates/volumectl/src/config.rs`  
-**Effort:** 1 hour  
+**File:** `crates/volumectl/src/config.rs`
+**Effort:** 1 hour
 **Priority:** P0
 
 **Changes:**
@@ -28,8 +28,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] Unit tests for all three platforms
 
 ### Task 1.2: Update Recommended Blacklist
-**File:** `crates/volumectl/src/config.rs`  
-**Effort:** 2 hours  
+**File:** `crates/volumectl/src/config.rs`
+**Effort:** 2 hours
 **Priority:** P0
 
 **Changes:**
@@ -45,8 +45,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] Tests verify correct entries per platform
 
 ### Task 1.3: Improve Blacklist Matching
-**File:** `crates/volumectl/src/config.rs`  
-**Effort:** 1 hour  
+**File:** `crates/volumectl/src/config.rs`
+**Effort:** 1 hour
 **Priority:** P1
 
 **Changes:**
@@ -63,8 +63,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 ## Phase 2: Foreground Detection Improvements
 
 ### Task 2.1: Enhance macOS Detection
-**File:** `crates/volumectl/src/app.rs`  
-**Effort:** 3 hours  
+**File:** `crates/volumectl/src/app.rs`
+**Effort:** 3 hours
 **Priority:** P1
 
 **Changes:**
@@ -85,8 +85,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] Works with both Intel and Apple Silicon
 
 ### Task 2.2: Enhance Linux Detection
-**File:** `crates/volumectl/src/app.rs`  
-**Effort:** 3 hours  
+**File:** `crates/volumectl/src/app.rs`
+**Effort:** 3 hours
 **Priority:** P1
 
 **Changes:**
@@ -103,8 +103,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] Returns process names without extension
 
 ### Task 2.3: Add Tool Detection Helper
-**File:** `crates/volumectl/src/app.rs` (new module)  
-**Effort:** 1 hour  
+**File:** `crates/volumectl/src/app.rs` (new module)
+**Effort:** 1 hour
 **Priority:** P2
 
 **Changes:**
@@ -122,8 +122,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 ## Phase 3: Performance Optimization
 
 ### Task 3.1: Implement Foreground Cache
-**File:** `crates/volumectl/src/app.rs`  
-**Effort:** 2 hours  
+**File:** `crates/volumectl/src/app.rs`
+**Effort:** 2 hours
 **Priority:** P1
 
 **Changes:**
@@ -140,8 +140,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] Benchmarks show improvement
 
 ### Task 3.2: Add Performance Benchmarks
-**File:** `crates/volumectl/benches/blacklist_bench.rs`  
-**Effort:** 1 hour  
+**File:** `crates/volumectl/benches/blacklist_bench.rs`
+**Effort:** 1 hour
 **Priority:** P2
 
 **Changes:**
@@ -159,8 +159,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 ## Phase 4: User Experience
 
 ### Task 4.1: Add Conflict Detection
-**File:** `crates/volumectl/src/config.rs` (new module)  
-**Effort:** 2 hours  
+**File:** `crates/volumectl/src/config.rs` (new module)
+**Effort:** 2 hours
 **Priority:** P2
 
 **Changes:**
@@ -176,8 +176,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] Provides actionable recommendations
 
 ### Task 4.2: Improve Settings UI Warnings
-**File:** `crates/volumectl/src/settings.rs`  
-**Effort:** 2 hours  
+**File:** `crates/volumectl/src/settings.rs`
+**Effort:** 2 hours
 **Priority:** P2
 
 **Changes:**
@@ -193,8 +193,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] No false positives
 
 ### Task 4.3: Update Documentation
-**Files:** `README.md`, `README.vi.md`, `docs/`  
-**Effort:** 2 hours  
+**Files:** `README.md`, `README.vi.md`, `docs/`
+**Effort:** 2 hours
 **Priority:** P1
 
 **Changes:**
@@ -212,8 +212,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 ## Phase 5: Testing & Validation
 
 ### Task 5.1: Add Unit Tests
-**File:** `crates/volumectl/src/config.rs`, `app.rs`  
-**Effort:** 3 hours  
+**File:** `crates/volumectl/src/config.rs`, `app.rs`
+**Effort:** 3 hours
 **Priority:** P0
 
 **Test Coverage:**
@@ -230,8 +230,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] Tests run in CI for all targets
 
 ### Task 5.2: Add Integration Tests
-**File:** `crates/volumectl/tests/`  
-**Effort:** 2 hours  
+**File:** `crates/volumectl/tests/`
+**Effort:** 2 hours
 **Priority:** P1
 
 **Test Scenarios:**
@@ -247,8 +247,8 @@ This plan breaks down the implementation of cross-platform blacklist optimizatio
 - [ ] Manual test checklist created
 
 ### Task 5.3: CI/CD Updates
-**File:** `.github/workflows/`, `Cargo.toml`  
-**Effort:** 1 hour  
+**File:** `.github/workflows/`, `Cargo.toml`
+**Effort:** 1 hour
 **Priority:** P1
 
 **Changes:**

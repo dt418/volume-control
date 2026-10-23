@@ -68,7 +68,7 @@ export function SystemOutputRow({ value, muted, thresholds, onError }: SystemOut
     <section
       data-testid="system-output-row"
       aria-label={tr("common.systemOutput")}
-      className="rounded-lg border border-foreground/20 bg-background/88 px-2.5 py-1.5 shadow-sm"
+      className="rounded-xl border border-border/40 bg-card/60 px-2.5 py-1.5 shadow-sm transition-colors"
     >
       <div className="flex items-center gap-2">
         <h2 className="text-xs font-semibold">{tr("common.systemOutput")}</h2>

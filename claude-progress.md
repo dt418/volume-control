@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session 135 (2026-10-23) - Rust/UI and Apple Liquid Glass Visual System Modernization
+
+- Goal: Implement Apple-style Liquid Glass optics and Rust/UI high-density component primitives across VolumeControl UI surfaces.
+- What landed:
+  - `frontend/src/styles.css`: implemented multi-stage Liquid Glass CSS tokens with 20px blur, 180% saturation, OKLab luminance tint, 1px specular rim highlight, and 18px squircle curvature.
+  - `frontend/src/styles.test.ts`: verified specular rim, 20px blur tokens, squircle curvature, and anti-blur multiplication preservation.
+  - `frontend/src/components/ui/card.tsx`: exported `CardSm` high-density container, removed nested `backdrop-blur` from `Card` to enforce anti-blur multiplication.
+  - `frontend/src/components/ui/badge.tsx`: added `pill` variant with capsule styling and `active:scale-[0.97]` tactile press feedback.
+  - `frontend/src/components/ui/card.test.tsx`: added unit test suite covering `CardSm` density, anti-blur rule, and pill badges.
+  - `frontend/src/mixer/SystemOutputRow.tsx`: modernized system output row to `CardSm` high-density container (`rounded-xl border-border/40 bg-card/60`).
+  - `frontend/src/mixer/SessionRow.tsx`: upgraded session rows to floating `CardSm` items with hover lighting and no nested blur.
+  - `frontend/src/mixer/SystemOutputRow.test.tsx`: verified high-density styling and anti-blur compliance.
+  - `frontend/src/lib/i18n.tsx`: added bilingual EN/VI dictionary entries for Liquid Glass tokens and preview card.
+  - `frontend/src/settings/AppearancePreview.tsx`: upgraded to real-time optical preview card displaying simulated glass surface, specular rim, and material/accent pill badges.
+  - `frontend/src/lib/i18n.test.ts` & `frontend/src/settings/AppearancePreview.test.tsx`: verified bilingual resolution and preview card structure.
+  - `frontend/src/overlay/OverlaySurface.tsx`: upgraded volume overlay HUD to Liquid Glass capsule (`rounded-2xl glass-surface`), removed ad-hoc backdrop-blur-md.
+  - `frontend/src/overlay/OverlaySurface.test.tsx`: verified overlay-card renders with Liquid Glass capsule styling.
+  - `frontend/src/help/HelpSurface.tsx`: integrated `glass-surface` on main shell and `CardSm` on shortcut cards.
+- Verification:
+  - `npm --prefix frontend test`: 133 tests passed across 20 files.
+  - `npm --prefix frontend run build`: production build passed, CSS payload increase only +0.21 kB gzipped (budget ≤ 2.5 kB).
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: 0 warnings, clean.
+  - `cargo fmt --all --check`: clean.
+  - `git diff --check`: clean.
+- Records: updated `vol-117` in `feature_list.json` to `passing`.
+
 ## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
 
 - Goal: after shipping v0.1.11, close the gaps the installed 0.1.10 build exposed: the update banner showed no install choice, the native toast carried no action and was English-only.

@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T15:02",
+  "last_updated": "2026-10-23T18:30",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,27 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-117",
+      "priority": 117,
+      "area": "ui",
+      "title": "Rust/UI and Apple Liquid Glass Visual System Modernization",
+      "user_visible_behavior": "Surfaces feature multi-layer Liquid Glass optics (20px blur, 180% saturation, OKLab luminance tint, 1px specular rim highlight), high-density CardSm rows, and pill-shaped tactile controls.",
+      "status": "passing",
+      "verification": [
+        "npm --prefix frontend test",
+        "npm --prefix frontend run build",
+        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings",
+        "cargo fmt --all --check"
+      ],
+      "evidence": [
+        "npm --prefix frontend test: 133 tests passed across 20 files.",
+        "npm --prefix frontend run build: styles CSS gzipped is 7.33 kB (+0.21 kB vs 7.12 kB baseline, well below 2.5 kB budget).",
+        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings: 0 warnings, clean.",
+        "cargo fmt --all --check: clean."
+      ],
+      "notes": "Implemented all 5 tasks from docs/superpowers/plans/2026-10-23-rust-ui-liquid-glass-implementation.md"
+    },
     {
       "id": "vol-116",
       "priority": 116,

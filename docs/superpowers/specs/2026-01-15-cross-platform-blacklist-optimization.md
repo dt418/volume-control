@@ -1,7 +1,7 @@
 # Cross-Platform Blacklist Optimization Spec
 
-**Date:** 2026-01-15  
-**Author:** AI Assistant  
+**Date:** 2026-01-15
+**Author:** AI Assistant
 **Status:** Approved for Implementation
 
 ## Executive Summary
@@ -14,7 +14,7 @@ This spec addresses critical gaps in the VolumeControl application's blacklist f
 
 1. **Blacklist Inconsistency**: The `normalize()` function in `config.rs` filters blacklist entries to only accept `.exe` extensions (line 385), making it impossible to add macOS (`.app`) or Linux (no extension) applications.
 
-2. **Foreground Process Detection Gaps**: 
+2. **Foreground Process Detection Gaps**:
    - macOS: Uses AppleScript but doesn't normalize app names properly
    - Linux: Depends on external tools (`xprop`, `wmctrl`, `xwininfo`) which may not be installed
    - No graceful fallback when detection fails
@@ -70,10 +70,10 @@ fn normalize_blacklist_entry(entry: &str) -> String {
     let entry = entry.trim().to_lowercase();
     #[cfg(target_os = "windows")]
     return if entry.ends_with(".exe") { entry } else { format!("{}.exe", entry) };
-    
+
     #[cfg(target_os = "macos")]
     return if entry.ends_with(".app") { entry } else { format!("{}.app", entry) };
-    
+
     #[cfg(target_os = "linux")]
     return entry; // No extension convention on Linux
 }
@@ -139,7 +139,7 @@ pub fn recommended_blacklist(modifier: HotkeyModifier) -> Vec<String> {
         HotkeyModifier::Alt => get_alt_conflict_apps(),
         HotkeyModifier::Ctrl => get_ctrl_conflict_apps(),
     };
-    
+
     // Platform-aware normalization
     list.iter()
         .map(|s| normalize_for_platform(s))

@@ -46,4 +46,12 @@ describe("AppearancePreview", () => {
     render(<AppearancePreview draft={draft} />);
     expect(screen.getByText(/preview tracks the draft/i)).toBeInTheDocument();
   });
+
+  it("renders the simulated Liquid Glass preview card with optical styling", () => {
+    render(<AppearancePreview draft={draft} />);
+    const card = screen.getByTestId("liquid-glass-preview-card");
+    expect(card).toBeInTheDocument();
+    expect(card.className).toContain("glass-surface");
+    expect(card.className).toContain("rounded-xl");
+  });
 });

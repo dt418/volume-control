@@ -68,7 +68,7 @@ x11rb = { version = "0.13", features = ["allow-unsafe-code"] }
 #[cfg(target_os = "linux")]
 fn foreground_process() -> Option<String> {
     use std::process::Command;
-    
+
     // Method 1: Try xdotool first (most reliable if available)
     if let Ok(output) = Command::new("xdotool")
         .args(["getactivewindow", "--pid"])
@@ -84,25 +84,25 @@ fn foreground_process() -> Option<String> {
             }
         }
     }
-    
+
     // Method 2: Fallback to xprop + wmctrl
     let output = Command::new("xprop")
         .args(["-root", "_NET_ACTIVE_WINDOW"])
         .output()
         .ok()?;
-    
+
     if !output.status.success() {
         return None;
     }
-    
+
     let window_id = String::from_utf8_lossy(&output.stdout);
     let window_id = window_id.split('#').nth(1)?.trim();
-    
+
     let wmctrl_output = Command::new("wmctrl")
         .arg("-lp")
         .output()
         .ok()?;
-    
+
     if wmctrl_output.status.success() {
         let lines = String::from_utf8_lossy(&wmctrl_output.stdout);
         for line in lines.lines() {
@@ -119,7 +119,7 @@ fn foreground_process() -> Option<String> {
             }
         }
     }
-    
+
     // Method 3: Direct X11 query via x11rb (no CLI deps needed)
     // This replaces the broken /proc enumeration
     if let Ok(active_window) = get_active_window_x11() {
@@ -130,7 +130,7 @@ fn foreground_process() -> Option<String> {
             }
         }
     }
-    
+
     // All methods failed - return None (better than wrong answer)
     log::warn!("Could not determine foreground process on Linux");
     None
@@ -139,41 +139,41 @@ fn foreground_process() -> Option<String> {
 fn get_active_window_x11() -> Option<u32> {
     use x11rb::connection::Connection;
     use x11rb::protocol::xproto::*;
-    
+
     let (conn, screen_num) = x11rb::connect(None).ok()?;
     let screen = &conn.setup().roots[screen_num];
     let root = screen.root;
-    
+
     let prop = conn
         .get_property(false, root, AtomEnum::_NET_ACTIVE_WINDOW, AtomEnum::WINDOW, 0, 1)
         .ok()?
         .reply()
         .ok()?;
-    
+
     if prop.value.is_empty() {
         return None;
     }
-    
+
     Some(u32::from_ne_bytes([prop.value[0], prop.value[1], prop.value[2], prop.value[3]]))
 }
 
 fn get_window_pid_x11(window: u32) -> Option<u32> {
     use x11rb::connection::Connection;
     use x11rb::protocol::xproto::*;
-    
+
     let (conn, screen_num) = x11rb::connect(None).ok()?;
     let screen = &conn.setup().roots[screen_num];
-    
+
     let prop = conn
         .get_property(false, window, AtomEnum::_NET_WM_PID, AtomEnum::CARDINAL, 0, 1)
         .ok()?
         .reply()
         .ok()?;
-    
+
     if prop.value.len() < 4 {
         return None;
     }
-    
+
     Some(u32::from_ne_bytes([prop.value[0], prop.value[1], prop.value[2], prop.value[3]]))
 }
 ```
