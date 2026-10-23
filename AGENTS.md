@@ -11,7 +11,9 @@ Run the full quality gate before committing or opening a PR:
 5. `sh scripts/check-tauri-deadlock.sh` when `src-tauri` surface code
    (window creation, surface commands, tauri features) changed — see
    `.agents/skills/tauri-deadlock-guard/SKILL.md`
-6. `sh scripts/check-records.sh --staged` (record-keeping guard; the
+6. `sh scripts/check-unix-compat.sh` when `src-tauri` or `e2e/tauri` changed — see
+   `.agents/skills/cross-platform-unix-guard/SKILL.md`
+7. `sh scripts/check-records.sh --staged` (record-keeping guard; the
    pre-commit hook runs this automatically)
 
 Install the pre-commit hook so format and lint checks run automatically on

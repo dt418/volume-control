@@ -14,7 +14,7 @@ Windows builds: `scripts\win-build.bat build|run|test` (MSVC wrapper).
 
 Canonical gate: `bash scripts/format-lint.sh` (`--skip-tests`, `--all-features` when appropriate); see `.agents/skills/format-lint/SKILL.md`. Full commands/platform packages: README "Building".
 
-`src-tauri` surface changes: read `.agents/skills/tauri-deadlock-guard/SKILL.md`; run `bash scripts/check-tauri-deadlock.sh`. Project PreToolUse hook blocks direct pushes, destructive git, `--no-verify`; use `bash scripts/ship.sh --push`; delete merged branches only with `git branch -d` or `gh pr merge --delete-branch`.
+`src-tauri` surface changes: read `.agents/skills/tauri-deadlock-guard/SKILL.md` and `.agents/skills/cross-platform-unix-guard/SKILL.md`; run `bash scripts/check-tauri-deadlock.sh` and `bash scripts/check-unix-compat.sh`. Project PreToolUse hook blocks direct pushes, destructive git, `--no-verify`; use `bash scripts/ship.sh --push`; delete merged branches only with `git branch -d` or `gh pr merge --delete-branch`.
 
 ## Architecture
 

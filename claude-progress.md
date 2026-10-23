@@ -1,5 +1,36 @@
 # Progress Log
 
+## Session 131 (2026-10-23) - VolumeControl v0.1.11 version bump and release preparation
+
+- Goal: synchronize version 0.1.11 across all workspace manifests and lock files, document changelog, and prepare release tag v0.1.11.
+- What landed:
+  - Bumped version from `0.1.10` to `0.1.11` across `Cargo.toml`, `crates/volumectl/Cargo.toml`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `frontend/package.json`, `frontend/package-lock.json`, and `Cargo.lock`.
+  - Updated `CHANGELOG.md` with `[0.1.11] - 2026-10-23` documenting UpdateManager, background downloads, explicit confirmation, graceful shutdown, and transactional installers.
+- Verification:
+  - `bash scripts/check-version-sync.sh v0.1.11`: confirmed version sync ok across all 7 targets.
+  - `cargo check --workspace --no-default-features`: clean.
+  - `npm --prefix frontend test`: 124 tests passed across 19 files.
+- Records: registered `vol-113` in `feature_list.json` and marked passing.
+
+## Session 130 (2026-10-23) - Cross-platform Unix compatibility guard, gates, and skill
+
+- Goal: establish automated guards, gates, and skill documentation preventing cross-platform Unix (Linux/macOS) CI regressions.
+- What landed:
+  - `.agents/skills/cross-platform-unix-guard/SKILL.md` & `.claude/skills/cross-platform-unix-guard/SKILL.md`: byte-identical skill documenting cross-target parameter suppression, signal loop never_loop prevention, E2E surface tab isolation, and Windows-host cross-compilation practices.
+  - `scripts/check-unix-compat.sh` & `scripts/check-unix-compat.ps1`: automated guard scripts validating signal loop patterns, parameter suppression in lifecycle helpers, and E2E settings section isolation.
+  - `scripts/test-check-unix-compat.sh`: regression smoke tests for `check-unix-compat.sh`.
+  - `scripts/test-check-records.sh`: added mirror parity assertion for `cross-platform-unix-guard`.
+  - `GUARDRAILS.md`: added hard rules for cross-platform Unix compatibility.
+  - `AGENTS.md` & `CLAUDE.md`: wired `check-unix-compat.sh` into quality gate sequence.
+  - `.github/workflows/ci.yml`: added `Cross-platform Unix compatibility guard` and smoke-test steps to the `checks` job.
+- Verification:
+  - `powershell -ExecutionPolicy Bypass -File scripts/check-unix-compat.ps1`: passed all checks.
+  - `bash scripts/check-unix-compat.sh`: passed all checks.
+  - `bash scripts/test-check-unix-compat.sh`: passed all regression assertions.
+  - `bash scripts/test-check-records.sh`: passed all checks including cross-platform-unix-guard mirror parity.
+  - `cargo fmt --all --check` & `git diff --check`: clean.
+- Records: registered `vol-112` in `feature_list.json` and marked passing.
+
 ## Session 129 (2026-10-23) - Reliable update notifications, background downloads, and transactional installation lifecycle
 
 - Goal: implement host-owned update checking and coordination, background downloads with SHA-256 verification, user confirmation before installation, graceful process shutdown without force-kill, and transactional multiplatform installer lifecycles.

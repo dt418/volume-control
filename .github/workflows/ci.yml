@@ -117,6 +117,10 @@ jobs:
         run: bash scripts/ci-diff-check.sh
       - name: Tauri deadlock guard
         run: bash scripts/check-tauri-deadlock.sh
+      - name: Cross-platform Unix compatibility guard
+        run: bash scripts/check-unix-compat.sh
+      - name: Smoke-test cross-platform Unix compatibility guard
+        run: bash scripts/test-check-unix-compat.sh
       - name: Record-keeping guard (branch change set)
         run: bash scripts/check-records.sh --branch
       - name: Smoke-test record-keeping guard

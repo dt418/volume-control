@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T11:00",
+  "last_updated": "2026-10-23T11:50",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -15,6 +15,45 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-113",
+      "priority": 113,
+      "area": "release",
+      "title": "VolumeControl v0.1.11 version bump and release preparation",
+      "user_visible_behavior": "Synchronized version 0.1.11 across all package manifests and lock files, updated CHANGELOG.md, and prepared release tag v0.1.11.",
+      "status": "passing",
+      "verification": [
+        "bash scripts/check-version-sync.sh v0.1.11 confirmed version sync ok: 0.1.11 across all 7 targets.",
+        "cargo check --workspace --no-default-features succeeded.",
+        "npm --prefix frontend test passed 124 tests."
+      ],
+      "evidence": [
+        "Cargo.toml, crates/volumectl/Cargo.toml, src-tauri/Cargo.toml, src-tauri/tauri.conf.json, frontend/package.json, frontend/package-lock.json, and Cargo.lock bumped to 0.1.11.",
+        "CHANGELOG.md updated with 0.1.11 section."
+      ],
+      "notes": "Ready for tag v0.1.11 creation and release workflow execution."
+    },
+    {
+      "id": "vol-112",
+      "priority": 112,
+      "area": "tooling",
+      "title": "Cross-platform Unix compatibility guard, gates, and skill",
+      "user_visible_behavior": "Automated static and CI checks enforce cross-platform compatibility across Windows, Linux, and macOS, preventing -D unused-variables on target-conditional arguments, never_loop errors on Unix termination signal loops, and E2E settings tab state leakage across surfaces.",
+      "status": "passing",
+      "verification": [
+        "powershell -ExecutionPolicy Bypass -File scripts/check-unix-compat.ps1 passes all invariants.",
+        "bash scripts/check-unix-compat.sh passes all invariants.",
+        "bash scripts/test-check-unix-compat.sh passes all regression assertions.",
+        "bash scripts/test-check-records.sh passes byte-identical mirror assertions for cross-platform-unix-guard."
+      ],
+      "evidence": [
+        ".agents/skills/cross-platform-unix-guard/SKILL.md & .claude/skills/cross-platform-unix-guard/SKILL.md: cross-platform invariants and workflows.",
+        "scripts/check-unix-compat.sh & scripts/check-unix-compat.ps1: static guard script enforcing signal loop and parameter suppression invariants.",
+        "scripts/test-check-unix-compat.sh: negative regression tests.",
+        "GUARDRAILS.md, AGENTS.md, CLAUDE.md, and .github/workflows/ci.yml: guardrail rules, local quality gate steps, and CI workflow integration."
+      ],
+      "notes": "Triggered by PR #72 Linux and macOS CI breakages. Hardens against clippy::never_loop, unused variables, and E2E surface state contamination."
+    },
     {
       "id": "vol-111",
       "priority": 111,
