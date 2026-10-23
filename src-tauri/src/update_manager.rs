@@ -355,7 +355,7 @@ impl UpdateManager {
         });
 
         // Step 5: Send native notification with deduplication
-        Self::notify_update_available(app, &release.tag_name);
+        Self::notify_update_available(app, &release.tag_name, lang);
 
         // Dispatch background download
         Self::spawn_download(
@@ -367,8 +367,8 @@ impl UpdateManager {
         );
     }
 
-    fn notify_update_available(app: &AppHandle, tag: &str) {
-        if let Err(e) = crate::lifecycle::notify_update_if_needed(app, tag) {
+    fn notify_update_available(app: &AppHandle, tag: &str, lang: volumectl_lib::config::Language) {
+        if let Err(e) = crate::lifecycle::notify_update_if_needed(app, tag, lang) {
             log::warn!("failed to send native update notification: {e}");
         }
     }

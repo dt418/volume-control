@@ -1,5 +1,23 @@
 # Progress Log
 
+## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
+
+- Goal: after shipping v0.1.11, close the gaps the installed 0.1.10 build exposed: the update banner showed no install choice, the native toast carried no action and was English-only.
+- What landed:
+  - `crates/volumectl/src/locale.rs`: added `update_notify_title`, `update_notify_body`, `update_notify_install`, `update_notify_later` for both languages and registered them in the coverage test.
+  - `src-tauri/src/lifecycle.rs`: `notify_update_if_needed` now takes the active language, renders the localized body, and on Windows sends the toast through `tauri-winrt-notification` with "Cài đặt" / "Để sau" buttons; activation opens the Settings surface via `WindowManager::open`.
+  - `src-tauri/src/update_manager.rs`: passes the current language into the notification.
+  - `src-tauri/Cargo.toml`: direct Windows dependency on `tauri-winrt-notification = "0.8"` (already in the lockfile through the notification plugin).
+  - `frontend/src/settings/UpdateCard.tsx`: "Để sau" now dismisses an available/downloading update for that version.
+  - `frontend/src/mixer/MixerSurface.tsx`: the banner action reads "Cài đặt" once the package is ready instead of the generic "Xem cập nhật".
+  - `frontend/src/lib/i18n.tsx`: new `settings.updates.install` key (EN/VI).
+- Verification:
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: no issues.
+  - `cargo check -p volumecontrol-tauri --no-default-features`: Windows target compiles with the new dependency.
+  - `npx tsc --noEmit`: clean.
+  - `npm --prefix frontend test`: 124 tests passed across 19 files.
+- Records: registered `vol-116` in `feature_list.json` as in_progress; work continues on branch `feat/update-notifications` in a dedicated worktree.
+
 ## Session 133 (2026-10-23) - Repair NSIS installer hooks to unblock the v0.1.11 Windows bundle
 
 - Goal: the v0.1.11 release run aborted at `Build release Tauri host` with `!macro: macro named "CheckIfAppIsRunning" already exists!` from `src-tauri/nsis/hooks.nsh`; make the Windows NSIS package build and keep the graceful-shutdown guarantee.

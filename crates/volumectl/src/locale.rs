@@ -24,6 +24,10 @@ pub struct Strings {
     pub update_check_available_prefix: &'static str,
     pub update_check_failed: &'static str,
     pub update_check_in_progress: &'static str,
+    pub update_notify_title: &'static str,
+    pub update_notify_body: &'static str,
+    pub update_notify_install: &'static str,
+    pub update_notify_later: &'static str,
     pub toast_editing_config: &'static str,
     pub toast_config_reloaded: &'static str,
     pub mixer_mute: &'static str,
@@ -63,6 +67,10 @@ pub fn strings(lang: Language) -> Strings {
             update_check_available_prefix: "Volume Control update available:",
             update_check_failed: "Update check failed",
             update_check_in_progress: "Checking for updates…",
+            update_notify_title: "Update available",
+            update_notify_body: "Volume Control {0} is ready. Open Settings to install it.",
+            update_notify_install: "Install",
+            update_notify_later: "Later",
             toast_editing_config: "Editing config — changes reload automatically",
             toast_config_reloaded: "Config reloaded",
             mixer_mute: "Mute",
@@ -98,6 +106,10 @@ pub fn strings(lang: Language) -> Strings {
             update_check_available_prefix: "Đã có bản cập nhật Điều khiển âm lượng:",
             update_check_failed: "Kiểm tra cập nhật thất bại",
             update_check_in_progress: "Đang kiểm tra cập nhật…",
+            update_notify_title: "Có bản cập nhật",
+            update_notify_body: "Điều khiển âm lượng {0} đã sẵn sàng. Mở Cài đặt để cài đặt.",
+            update_notify_install: "Cài đặt",
+            update_notify_later: "Để sau",
             toast_editing_config: "Đang sửa cấu hình — thay đổi tự áp dụng",
             toast_config_reloaded: "Đã tải lại cấu hình",
             mixer_mute: "Tắt tiếng",
@@ -164,6 +176,10 @@ mod tests {
             $check(s.update_check_available_prefix);
             $check(s.update_check_failed);
             $check(s.update_check_in_progress);
+            $check(s.update_notify_title);
+            $check(s.update_notify_body);
+            $check(s.update_notify_install);
+            $check(s.update_notify_later);
             $check(s.toast_editing_config);
             $check(s.toast_config_reloaded);
             $check(s.mixer_mute);

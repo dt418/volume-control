@@ -5218,6 +5218,7 @@ dependencies = [
  "tauri-plugin-pilot",
  "tauri-plugin-wdio",
  "tauri-plugin-wdio-webdriver",
+ "tauri-winrt-notification",
  "ureq",
  "volumectl",
  "windows-sys 0.52.0",

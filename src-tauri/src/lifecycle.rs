@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
+#[cfg(not(target_os = "windows"))]
 use tauri_plugin_notification::NotificationExt;
 
 pub fn mark_exit_requested() {
@@ -69,7 +70,11 @@ pub fn store_last_notified_version(tag: &str) {
     }
 }
 
-pub fn notify_update_if_needed(app: &AppHandle, tag: &str) -> Result<(), String> {
+pub fn notify_update_if_needed(
+    app: &AppHandle,
+    tag: &str,
+    lang: volumectl_lib::config::Language,
+) -> Result<(), String> {
     if let Some(last) = load_last_notified_version() {
         if last == tag {
             return Ok(());
@@ -83,18 +88,70 @@ pub fn notify_update_if_needed(app: &AppHandle, tag: &str) -> Result<(), String>
         }
     }
 
-    let title = "VolumeControl Update Available";
-    let body = format!("Version {tag} is available and downloading in the background.");
+    let strings = volumectl_lib::locale::strings(lang);
+    let body = strings.update_notify_body.replace("{0}", tag);
 
+    show_update_notification(app, strings.update_notify_title, &body, &strings)?;
+
+    store_last_notified_version(tag);
+    Ok(())
+}
+
+/// Windows renders the update prompt through WinRT directly so the toast can
+/// carry "Install" / "Later" buttons and open Settings when activated.
+/// `tauri-plugin-notification` exposes actions on mobile only, so its desktop
+/// builder cannot express them.
+#[cfg(target_os = "windows")]
+fn show_update_notification(
+    app: &AppHandle,
+    title: &str,
+    body: &str,
+    strings: &volumectl_lib::locale::Strings,
+) -> Result<(), String> {
+    use tauri_winrt_notification::{Duration, Toast};
+
+    let handle = app.clone();
+    let app_id = app.config().identifier.clone();
+    Toast::new(&app_id)
+        .title(title)
+        .text1(body)
+        .add_button(strings.update_notify_install, "install")
+        .add_button(strings.update_notify_later, "later")
+        .duration(Duration::Short)
+        .on_activated(move |action| {
+            if action.as_deref() != Some("later") {
+                open_settings_surface(&handle);
+            }
+            Ok(())
+        })
+        .show()
+        .map_err(|e| format!("failed to show notification: {e}"))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn show_update_notification(
+    app: &AppHandle,
+    title: &str,
+    body: &str,
+    _strings: &volumectl_lib::locale::Strings,
+) -> Result<(), String> {
     app.notification()
         .builder()
         .title(title)
         .body(body)
         .show()
-        .map_err(|e| format!("failed to show notification: {e}"))?;
+        .map_err(|e| format!("failed to show notification: {e}"))
+}
 
-    store_last_notified_version(tag);
-    Ok(())
+/// Opens the Settings surface from a notification activation. `WindowManager::open`
+/// marshals to the event-loop thread itself, so this is safe off-thread.
+#[cfg(target_os = "windows")]
+fn open_settings_surface(app: &AppHandle) {
+    if let Some(manager) = app.try_state::<crate::window_manager::WindowManager>() {
+        if let Err(error) = manager.open(crate::window_manager::SurfaceId::Settings) {
+            log::warn!("failed to open Settings from notification: {error}");
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]

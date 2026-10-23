@@ -11,6 +11,7 @@ export function UpdateCard() {
   const [installing, setInstalling] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
+  const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
   const [updateState, setUpdateState] = useState<UpdateStatePayload | null>(null);
   const lastRevision = useRef<number>(-1);
 
@@ -116,7 +117,8 @@ export function UpdateCard() {
         </div>
 
         {/* Phase: Available or Downloading */}
-        {(phase === "available" || phase === "downloading") && (
+        {(phase === "available" || phase === "downloading") &&
+          dismissedVersion !== updateState?.info?.latest_version && (
           <div
             role="status"
             className="rounded-md border border-accent/40 bg-accent/10 p-3 text-sm flex flex-col gap-2 text-foreground"
@@ -142,6 +144,13 @@ export function UpdateCard() {
                 >
                   {tr("settings.updates.viewRelease")}
                 </a>
+                <button
+                  type="button"
+                  onClick={() => setDismissedVersion(latestTag)}
+                  className="text-xs text-foreground/60 underline hover:text-foreground font-medium"
+                >
+                  {tr("settings.updates.later")}
+                </button>
               </div>
             )}
           </div>
