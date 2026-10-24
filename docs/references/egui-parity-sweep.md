@@ -68,7 +68,7 @@ Legend: ✅ pass · ◐ partial · ⛔ gap.
 Measured with `scripts/bench-ui.ps1` (startup = process start → visible main
 window; RSS after idle; idle CPU over 10 s).
 
-| Metric | egui host (`VolumeControl-Egui.exe --surface=mixer`) | native host (`volumecontrol-host.exe --surface=mixer`) |
+| Metric | egui host (`volumecontrol-host.exe --surface=mixer`) | native host (`volumecontrol-host.exe --surface=mixer`) |
 |---|---|---|
 | Startup → first window (warm) | 818 ms | 805 ms |
 | RSS idle (20 s settle) | 490.6 MB | 493.8 MB |
@@ -78,7 +78,7 @@ window; RSS after idle; idle CPU over 10 s).
 
 Cutover (2026-10-25): `crates/volumecontrol-host` (native liquid-glass renderer)
 and `crates/dioxus-settings-prototype` were removed; the egui host
-(`VolumeControl-Egui.exe`, crate `volumecontrol-egui`) is the renderer of
+(`volumecontrol-host.exe`, crate `volumecontrol-egui`) is the renderer of
 record. The native column above is historical baseline data only; the binary
 is no longer built. `crates/liquid_glass` stays in the workspace with its own
 tests.

@@ -10,7 +10,7 @@
 # Exit code 1 means the requested element was not found or not invokable.
 
 param(
-    [string]$Process = 'VolumeControl-Egui',
+    [string]$Process = 'volumecontrol-host',
     [switch]$Windows,
     [switch]$Tree,
     [switch]$TrayMenu,

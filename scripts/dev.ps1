@@ -10,7 +10,7 @@
 
 param(
     [string[]]$Args = @('--surface=mixer', '--debug-ui'),
-    [string]$Exe = 'target/debug/VolumeControl-Egui.exe'
+    [string]$Exe = 'target/debug/volumecontrol-host.exe'
 )
 
 $ErrorActionPreference = 'Stop'

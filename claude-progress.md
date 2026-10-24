@@ -1,3 +1,6 @@
+- Session 139 (2026-10-25) - Final host binary naming
+  - Renamed the egui bin from `VolumeControl-Egui` to `volumecontrol-host` (the native crate that owned that name is gone); updated scripts, VS Code launch configs, and the parity sweep.
+  - Verification: `--smoke --smoke-ms=4000` exit 0 with `target/debug/volumecontrol-host.exe`; CLI `get` → 55; workspace check builds.
 - Session 138 (2026-10-25) - Cutover to egui foundation
   - User accepted the four cutover deviations and authorized deletion. Removed `crates/volumecontrol-host` (native liquid-glass renderer) and `crates/dioxus-settings-prototype`; dropped them from workspace members and refreshed `Cargo.lock`.
   - Kept `crates/liquid_glass` in the workspace (plan decision) and kept `src-tauri`/`frontend` as the separately packaged Tauri app until packaging moves to the egui binary.

@@ -1,5 +1,10 @@
 # Session Handoff
 
+## Session 139 (2026-10-25) - Host binary name finalized
+
+- Summary: after removing the native host crate, the egui binary takes the plan's final name `volumecontrol-host` (no collision remains). Tauri `VolumeControl.exe` still exists for its separate packaging path.
+- Changes: `crates/volumecontrol-egui/Cargo.toml` bin name; `main.rs` usage; `scripts/app-uia.ps1`, `scripts/bench-ui.ps1`, `scripts/dev.ps1`, `.vscode/launch.json`, parity sweep.
+- Verification: `cargo run -p volumecontrol-egui -- --smoke --smoke-ms=4000` exit 0; CLI `get` returns 55; workspace check builds; clippy/fmt clean via hook.
 ## Session 138 (2026-10-25) - Egui cutover: legacy renderer retired
 
 - Summary: user approved the cutover deviations (mixer 400×280, single hotkey owner, live installer untested, deletion). Removed the native liquid-glass host renderer and the Dioxus settings prototype; the egui host is now the renderer of record.

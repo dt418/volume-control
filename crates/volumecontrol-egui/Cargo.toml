@@ -7,7 +7,7 @@ license.workspace = true
 description = "Egui/eframe foundation for VolumeControl surfaces"
 
 [[bin]]
-name = "VolumeControl-Egui"
+name = "volumecontrol-host"
 path = "src/main.rs"
 
 [dependencies]
