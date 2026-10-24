@@ -125,6 +125,10 @@ pub fn parse_ini(text: &str) -> Result<Config, ConfigError> {
                     ensure_unique(&mut seen, section_name, key)?;
                     config.app_label_style = parse_app_label_style(value)?;
                 }
+                "ui_font_size" => {
+                    ensure_unique(&mut seen, section_name, key)?;
+                    config.ui_font_size = parse_decimal(value, "ui_font_size")?;
+                }
                 _ => unknown_key(section_name, key),
             },
             "hotkeys" => match key {
@@ -261,6 +265,7 @@ pub fn serialize_ini(config: &Config) -> Result<String, ConfigError> {
         "app_label_style={}\n",
         config.app_label_style.as_str()
     ));
+    output.push_str(&format!("ui_font_size={}\n", config.ui_font_size));
 
     let default_hotkeys = HotkeyBindings::default();
     let hotkeys = config.hotkeys.as_ref().unwrap_or(&default_hotkeys);
@@ -627,6 +632,7 @@ mod tests {
             autostart: true,
             language: Language::Vi,
             app_label_style: AppLabelStyle::FriendlyAndProcess,
+            ui_font_size: 20,
             hotkeys: Some(HotkeyBindings::for_modifier(HotkeyModifier::Alt)),
             blacklist: vec!["game.exe".into(), "chat.exe".into()],
             color_thresholds: ColorThresholds {

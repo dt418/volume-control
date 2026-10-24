@@ -23,13 +23,14 @@ pub fn material_for(surface: SurfaceId) -> MaterialMode {
 
 /// Window title used for both the viewport and the HWND lookup.
 #[must_use]
-pub fn title_for(surface: SurfaceId) -> &'static str {
+pub fn title_for(surface: SurfaceId, language: volumectl::config::Language) -> String {
+    use crate::i18n::{tr, Key};
     match surface {
-        SurfaceId::Overlay => "VolumeControl Overlay",
-        SurfaceId::Mixer => "VolumeControl Mixer",
-        SurfaceId::Settings => "VolumeControl Settings",
-        SurfaceId::Help => "VolumeControl Help",
-        SurfaceId::Tray => "VolumeControl Tray",
+        SurfaceId::Overlay => tr(Key::OverlayVolume, language, &[]).to_string(),
+        SurfaceId::Mixer => tr(Key::MixerTitle, language, &[]).to_string(),
+        SurfaceId::Settings => tr(Key::AppWindowSettings, language, &[]).to_string(),
+        SurfaceId::Help => tr(Key::AppWindowHelp, language, &[]).to_string(),
+        SurfaceId::Tray => tr(Key::AppName, language, &[]).to_string(),
     }
 }
 
@@ -37,6 +38,7 @@ pub fn title_for(surface: SurfaceId) -> &'static str {
 #[derive(Debug, Default)]
 pub struct VibrancyState {
     applied: HashMap<isize, (SurfaceId, MaterialMode, bool)>,
+    taskbar_hidden: std::collections::HashSet<isize>,
 }
 
 impl VibrancyState {
@@ -49,16 +51,28 @@ impl VibrancyState {
     ///
     /// The lookup is retried every frame until the window exists; effects are
     /// re-applied when the HWND changes (viewport closed/reopened).
-    pub fn apply(&mut self, surface: SurfaceId, material: MaterialMode, is_dark: bool) {
+    pub fn apply(
+        &mut self,
+        surface: SurfaceId,
+        material: MaterialMode,
+        is_dark: bool,
+        language: volumectl::config::Language,
+    ) {
         if matches!(surface, SurfaceId::Tray) {
             return;
         }
-        self.apply_platform(surface, material, is_dark);
+        self.apply_platform(surface, material, is_dark, language);
     }
 
     #[cfg(target_os = "windows")]
-    fn apply_platform(&mut self, surface: SurfaceId, material: MaterialMode, is_dark: bool) {
-        let Some(hwnd) = windows_impl::find_window_by_title(title_for(surface)) else {
+    fn apply_platform(
+        &mut self,
+        surface: SurfaceId,
+        material: MaterialMode,
+        is_dark: bool,
+        language: volumectl::config::Language,
+    ) {
+        let Some(hwnd) = windows_impl::find_window_by_title(&title_for(surface, language)) else {
             return;
         };
         if self.applied.get(&hwnd) == Some(&(surface, material, is_dark)) {
@@ -71,10 +85,21 @@ impl VibrancyState {
         if windows_impl::apply(hwnd, surface, material, is_dark).is_ok() {
             self.applied.insert(hwnd, (surface, material, is_dark));
         }
+        if matches!(surface, SurfaceId::Mixer | SurfaceId::Overlay)
+            && self.taskbar_hidden.insert(hwnd)
+        {
+            windows_impl::hide_from_taskbar(hwnd);
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn apply_platform(&mut self, surface: SurfaceId, _material: MaterialMode, _is_dark: bool) {
+    fn apply_platform(
+        &mut self,
+        surface: SurfaceId,
+        _material: MaterialMode,
+        _is_dark: bool,
+        _language: volumectl::config::Language,
+    ) {
         // Recorded degradation: the compositor effect is applied per window
         // once a native handle is reachable from egui.
         log::debug!("native vibrancy unavailable for {surface:?}; egui translucent visuals only");
@@ -180,6 +205,18 @@ mod windows_impl {
         }
     }
 
+    /// Mark a window as a tool window so it never appears in the taskbar.
+    pub fn hide_from_taskbar(hwnd: isize) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_TOOLWINDOW,
+        };
+        // SAFETY: plain style read/write on a live HWND owned by this process.
+        unsafe {
+            let style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+            SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_TOOLWINDOW as i32);
+        }
+    }
+
     pub fn clear(hwnd: isize) {
         let handle = OwnedHwnd(hwnd);
         let _ = window_vibrancy::clear_mica(&handle);
@@ -193,11 +230,12 @@ mod tests {
 
     #[test]
     fn surface_titles_are_unique() {
+        let language = volumectl::config::Language::En;
         let titles = [
-            title_for(SurfaceId::Mixer),
-            title_for(SurfaceId::Settings),
-            title_for(SurfaceId::Help),
-            title_for(SurfaceId::Overlay),
+            title_for(SurfaceId::Mixer, language),
+            title_for(SurfaceId::Settings, language),
+            title_for(SurfaceId::Help, language),
+            title_for(SurfaceId::Overlay, language),
         ];
         for (index, title) in titles.iter().enumerate() {
             assert!(titles[index + 1..].iter().all(|other| other != title));
@@ -213,7 +251,12 @@ mod tests {
     #[test]
     fn tray_has_no_vibrancy_state() {
         let mut state = VibrancyState::new();
-        state.apply(SurfaceId::Tray, MaterialMode::Translucent, true);
+        state.apply(
+            SurfaceId::Tray,
+            MaterialMode::Translucent,
+            true,
+            volumectl::config::Language::En,
+        );
         assert!(state.applied.is_empty());
     }
 }

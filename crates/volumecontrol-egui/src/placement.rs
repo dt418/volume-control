@@ -9,7 +9,7 @@ use volumectl::ui::SurfaceId;
 /// Mixer width in logical pixels.
 pub const MIXER_WIDTH: f32 = 400.0;
 /// Mixer height in logical pixels.
-pub const MIXER_HEIGHT: f32 = 224.0;
+pub const MIXER_HEIGHT: f32 = 240.0;
 /// Settings default width in logical pixels.
 pub const SETTINGS_DEFAULT_WIDTH: f32 = 760.0;
 /// Settings default height in logical pixels.
@@ -21,15 +21,18 @@ pub const HELP_HEIGHT: f32 = 500.0;
 /// Overlay width in logical pixels.
 pub const OVERLAY_WIDTH: f32 = 336.0;
 /// Overlay height in logical pixels.
-pub const OVERLAY_HEIGHT: f32 = 88.0;
+pub const OVERLAY_HEIGHT: f32 = 120.0;
 
-/// Margin between a docked surface and the work area edge, logical pixels.
-pub const EDGE_MARGIN: f32 = 16.0;
-/// Vertical gap between the mixer and the volume overlay, logical pixels.
-pub const MIXER_OVERLAY_GAP: f32 = 8.0;
-/// Extra clearance above the bottom edge for the overlay so the HUD sits
-/// above the Windows taskbar / system tray, logical pixels.
-pub const OVERLAY_TRAY_CLEARANCE: f32 = 40.0;
+/// Overlay horizontal margin from the work-area edge, logical pixels.
+pub const OVERLAY_MARGIN_X: f32 = 20.0;
+/// Overlay vertical margin (taskbar clearance), logical pixels.
+pub const OVERLAY_MARGIN_Y: f32 = 40.0;
+/// Gap between the mixer bottom and the overlay top, logical pixels.
+pub const MIXER_OVERLAY_GAP: f32 = 16.0;
+/// Help horizontal margin, logical pixels.
+pub const HELP_MARGIN_X: f32 = 24.0;
+/// Help vertical margin, logical pixels.
+pub const HELP_MARGIN_Y: f32 = 48.0;
 
 /// Physical window geometry: position and size in device pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,36 +89,31 @@ pub fn frame_for(surface: SurfaceId, area: &WorkArea, scale: f32) -> Placement {
     let (logical_w, logical_h) = logical_size(surface);
     let width = ((logical_w * scale).round() as u32).max(1);
     let height = ((logical_h * scale).round() as u32).max(1);
-    let margin = (EDGE_MARGIN * scale).round() as i32;
-    let tray = (OVERLAY_TRAY_CLEARANCE * scale).round() as i32;
     let area_right = ((area.x + area.width) * scale) as i32;
     let area_bottom = ((area.y + area.height) * scale) as i32;
     let area_x = (area.x * scale) as i32;
     let area_y = (area.y * scale) as i32;
 
+    let overlay_top = area_bottom
+        - (OVERLAY_MARGIN_Y * scale).round() as i32
+        - (OVERLAY_HEIGHT * scale).round() as i32;
     let (x, y) = match surface {
         SurfaceId::Overlay => (
-            area_right - width as i32 - margin,
-            area_bottom - height as i32 - margin - tray,
+            area_right - (OVERLAY_MARGIN_X * scale).round() as i32 - width as i32,
+            overlay_top,
         ),
-        SurfaceId::Mixer => {
-            let overlay_top = area_bottom - (OVERLAY_HEIGHT * scale).round() as i32 - margin - tray;
-            (
-                area_right - width as i32 - margin,
-                overlay_top - (MIXER_OVERLAY_GAP * scale).round() as i32 - height as i32,
-            )
-        }
+        SurfaceId::Mixer => (
+            area_right - (OVERLAY_MARGIN_X * scale).round() as i32 - width as i32,
+            overlay_top - (MIXER_OVERLAY_GAP * scale).round() as i32 - height as i32,
+        ),
         SurfaceId::Settings | SurfaceId::Tray => (
             (area_x as f32 + ((area.width * scale - width as f32) / 2.0)).round() as i32,
             (area_y as f32 + ((area.height * scale - height as f32) / 2.0)).round() as i32,
         ),
-        SurfaceId::Help => {
-            let overlay_top = area_bottom - (OVERLAY_HEIGHT * scale).round() as i32 - margin - tray;
-            (
-                area_right - width as i32 - margin,
-                overlay_top - (MIXER_OVERLAY_GAP * scale).round() as i32 - height as i32,
-            )
-        }
+        SurfaceId::Help => (
+            area_right - (HELP_MARGIN_X * scale).round() as i32 - width as i32,
+            area_bottom - (HELP_MARGIN_Y * scale).round() as i32 - height as i32,
+        ),
     };
 
     Placement {
@@ -133,22 +131,22 @@ mod tests {
     const AREA: WorkArea = WorkArea::new(0.0, 0.0, 1600.0, 900.0);
 
     #[test]
-    fn overlay_docks_bottom_right_above_tray() {
+    fn overlay_docks_bottom_right_at_legacy_margins() {
         let frame = frame_for(SurfaceId::Overlay, &AREA, 1.0);
         assert_eq!(frame.width, OVERLAY_WIDTH as u32);
         assert_eq!(frame.height, OVERLAY_HEIGHT as u32);
-        assert_eq!(frame.x, 1600 - OVERLAY_WIDTH as i32 - 16);
-        assert_eq!(
-            frame.y,
-            900 - OVERLAY_HEIGHT as i32 - 16 - OVERLAY_TRAY_CLEARANCE as i32
-        );
+        assert_eq!(frame.x, 1600 - 20 - OVERLAY_WIDTH as i32);
+        assert_eq!(frame.y, 900 - 40 - OVERLAY_HEIGHT as i32);
     }
 
     #[test]
     fn mixer_docks_above_bottom_right_overlay() {
         let frame = frame_for(SurfaceId::Mixer, &AREA, 1.0);
         let overlay = frame_for(SurfaceId::Overlay, &AREA, 1.0);
-        assert_eq!(frame.x, overlay.x + (OVERLAY_WIDTH - MIXER_WIDTH) as i32);
+        assert_eq!(
+            frame.x + frame.width as i32,
+            overlay.x + overlay.width as i32
+        );
         assert_eq!(
             frame.y + frame.height as i32 + MIXER_OVERLAY_GAP as i32,
             overlay.y
@@ -168,12 +166,8 @@ mod tests {
         );
 
         let help = frame_for(SurfaceId::Help, &AREA, 1.0);
-        let overlay = frame_for(SurfaceId::Overlay, &AREA, 1.0);
-        assert_eq!(help.x, 1600 - HELP_WIDTH as i32 - 16);
-        assert_eq!(
-            help.y + help.height as i32 + MIXER_OVERLAY_GAP as i32,
-            overlay.y
-        );
+        assert_eq!(help.x, 1600 - 24 - HELP_WIDTH as i32);
+        assert_eq!(help.y, 900 - 48 - HELP_HEIGHT as i32);
     }
 
     #[test]
@@ -181,19 +175,16 @@ mod tests {
         let frame = frame_for(SurfaceId::Overlay, &AREA, 2.0);
         assert_eq!(frame.width, (OVERLAY_WIDTH * 2.0) as u32);
         assert_eq!(frame.height, (OVERLAY_HEIGHT * 2.0) as u32);
-        assert_eq!(frame.x, 3200 - (OVERLAY_WIDTH * 2.0) as i32 - 32);
+        assert_eq!(frame.x, 3200 - 40 - (OVERLAY_WIDTH * 2.0) as i32);
     }
 
     #[test]
     fn physical_dpi_preserves_negative_monitor_origin() {
         let area = WorkArea::new(-1920.0, 100.0, 1920.0, 1080.0);
         let frame = frame_for(SurfaceId::Mixer, &area, 2.0);
-        assert_eq!(frame.x, -((MIXER_WIDTH * 2.0) as i32) - 32);
+        assert_eq!(frame.x, -40 - (MIXER_WIDTH * 2.0) as i32);
         let expected_bottom = (100.0 + 1080.0) * 2.0;
-        let overlay_top = expected_bottom
-            - (OVERLAY_HEIGHT * 2.0)
-            - (EDGE_MARGIN * 2.0)
-            - (OVERLAY_TRAY_CLEARANCE * 2.0);
+        let overlay_top = expected_bottom - (OVERLAY_HEIGHT * 2.0) - 80.0;
         let expected_y = overlay_top - (MIXER_OVERLAY_GAP * 2.0) - (MIXER_HEIGHT * 2.0);
         assert_eq!(frame.y, expected_y as i32);
     }
@@ -210,10 +201,7 @@ mod tests {
     fn tiny_work_area_keeps_window_on_screen_origin() {
         let tiny = WorkArea::new(0.0, 0.0, 10.0, 10.0);
         let frame = frame_for(SurfaceId::Overlay, &tiny, 1.0);
-        assert_eq!(frame.x, 10 - OVERLAY_WIDTH as i32 - 16);
-        assert_eq!(
-            frame.y,
-            10 - OVERLAY_HEIGHT as i32 - 16 - OVERLAY_TRAY_CLEARANCE as i32
-        );
+        assert_eq!(frame.x, 10 - 20 - OVERLAY_WIDTH as i32);
+        assert_eq!(frame.y, 10 - 40 - OVERLAY_HEIGHT as i32);
     }
 }

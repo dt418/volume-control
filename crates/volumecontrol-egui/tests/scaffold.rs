@@ -80,9 +80,9 @@ fn surface_labels_match_the_legacy_host_contract() {
 
 #[test]
 fn mixer_is_a_borderless_always_on_top_hud() {
-    let builder = builder_for(SurfaceId::Mixer, 1.0, &AREA);
+    let builder = builder_for(SurfaceId::Mixer, 1.0, &AREA, Language::En);
     let frame = frame_for(SurfaceId::Mixer, &AREA, 1.0);
-    assert_eq!(builder.title.as_deref(), Some("VolumeControl Mixer"));
+    assert_eq!(builder.title.as_deref(), Some("Volume Mixer"));
     assert_eq!(builder.window_level, Some(egui::WindowLevel::AlwaysOnTop));
     assert_eq!(builder.taskbar, Some(false));
     assert_eq!(builder.decorations, Some(false));
@@ -92,14 +92,14 @@ fn mixer_is_a_borderless_always_on_top_hud() {
         builder.position,
         Some(egui::pos2(frame.x as f32, frame.y as f32))
     );
-    assert_eq!(builder.inner_size, Some(egui::vec2(400.0, 224.0)));
+    assert_eq!(builder.inner_size, Some(egui::vec2(400.0, 240.0)));
 }
 
 #[test]
 fn settings_is_a_resizable_taskbar_window_with_min_size() {
-    let builder = builder_for(SurfaceId::Settings, 1.0, &AREA);
+    let builder = builder_for(SurfaceId::Settings, 1.0, &AREA, Language::En);
     let frame = frame_for(SurfaceId::Settings, &AREA, 1.0);
-    assert_eq!(builder.title.as_deref(), Some("VolumeControl Settings"));
+    assert_eq!(builder.title.as_deref(), Some("Volume Control Settings"));
     assert_eq!(builder.window_level, None);
     assert_eq!(builder.taskbar, Some(true));
     assert_eq!(builder.resizable, Some(true));
@@ -114,8 +114,8 @@ fn settings_is_a_resizable_taskbar_window_with_min_size() {
 
 #[test]
 fn help_is_a_resizable_taskbar_window() {
-    let builder = builder_for(SurfaceId::Help, 1.0, &AREA);
-    assert_eq!(builder.title.as_deref(), Some("VolumeControl Help"));
+    let builder = builder_for(SurfaceId::Help, 1.0, &AREA, Language::En);
+    assert_eq!(builder.title.as_deref(), Some("Volume Control Help"));
     assert_eq!(builder.taskbar, Some(true));
     assert_eq!(builder.resizable, Some(true));
     assert_eq!(builder.inner_size, Some(egui::vec2(520.0, 500.0)));
@@ -123,19 +123,19 @@ fn help_is_a_resizable_taskbar_window() {
 
 #[test]
 fn overlay_is_a_click_through_hud() {
-    let builder = builder_for(SurfaceId::Overlay, 1.0, &AREA);
-    assert_eq!(builder.title.as_deref(), Some("VolumeControl Overlay"));
+    let builder = builder_for(SurfaceId::Overlay, 1.0, &AREA, Language::En);
+    assert_eq!(builder.title.as_deref(), Some("Volume"));
     assert_eq!(builder.window_level, Some(egui::WindowLevel::AlwaysOnTop));
-    assert_eq!(builder.taskbar, Some(false));
+    assert_eq!(builder.taskbar, None);
     assert_eq!(builder.decorations, Some(false));
     assert_eq!(builder.transparent, Some(true));
-    assert_eq!(builder.mouse_passthrough, Some(true));
-    assert_eq!(builder.inner_size, Some(egui::vec2(336.0, 88.0)));
+    assert_eq!(builder.mouse_passthrough, None);
+    assert_eq!(builder.inner_size, Some(egui::vec2(336.0, 120.0)));
 }
 
 #[test]
 fn builder_positions_follow_dpi_scale() {
-    let builder = builder_for(SurfaceId::Overlay, 2.0, &AREA);
+    let builder = builder_for(SurfaceId::Overlay, 2.0, &AREA, Language::En);
     let frame = frame_for(SurfaceId::Overlay, &AREA, 2.0);
     assert_eq!(
         builder.position,

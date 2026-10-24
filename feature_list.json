@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-24T09:10",
+  "last_updated": "2026-10-24T11:25",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -15,6 +15,41 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-120",
+      "priority": 120,
+      "area": "egui-migration",
+      "title": "Backlog: egui UI/UX optimization pass",
+      "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
+      "status": "not_started",
+      "verification": [],
+      "evidence": [],
+      "notes": "Requested by the user to be scheduled after the current goal. Start from docs/references/egui-design-tokens.md and docs/references/legacy-app/feature-reference.md."
+    },
+    {
+      "id": "vol-121",
+      "priority": 121,
+      "area": "egui-migration",
+      "title": "Egui UI polish: design tokens, mixer cards, HUD sync, icons, and legacy geometry",
+      "user_visible_behavior": "The egui surfaces use one design-token system, the mixer shows card blocks with a pinned footer and scrollable session list, the HUD shows live volume for mouse and hotkey changes, speaker icons reflect mute/low/medium/high levels, and overlay/help/mixer positions match the legacy layout.",
+      "status": "in_progress",
+      "verification": [
+        "cargo test -p volumecontrol-egui: 70 tests pass (15 unit, 9 cli, 6 help, 8 mixer, 9 scaffold, 12 settings, 4 single_instance, 7 tray).",
+        "cargo clippy -p volumecontrol-egui --all-targets --no-default-features -- -D warnings: clean.",
+        "cargo fmt --all --check: clean.",
+        "Live screenshots: mixer card layout with pinned footer, Settings General/Hotkeys tabs, Help surface, and HUD at 96% with orange rail."
+      ],
+      "evidence": [
+        "docs/references/egui-design-tokens.md defines color, spacing, radius, typography, control-size, motion, and elevation tokens; style.rs implements them with a user-configurable font scale.",
+        "Config.ui_font_size (9..=24, default 14) persists in config.ini and is editable in Settings > General; all text styles derive from it.",
+        "Mixer: card-based system/session rows, pinned footer with background and top border, bounded scroll area, speaker icon levels (mute/none/low/medium/high), optimistic volume updates plus a 50 ms core heartbeat so hotkey/mouse changes render immediately.",
+        "Placement now matches legacy: overlay 20/40 px margins, mixer 16 px gap above overlay, Help 24/48 px margins, Settings centered.",
+        "Overlay: 336x120 HUD with wrap-safe text payloads; click-through applied after window creation because the builder flag prevented the window from appearing on Windows.",
+        "Tray, CLI verbs, and single-instance modules were implemented by parallel subagents and wired into the host; app/tray icons load from src-tauri/icons.",
+        "Legacy window titles are localized; egui single-instance namespace is separate from the legacy app so both can run during migration."
+      ],
+      "notes": "Goal fix-ui. Remaining polish is queued as vol-120 per the user's request."
+    },
     {
       "id": "vol-119",
       "priority": 119,

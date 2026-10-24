@@ -4,7 +4,10 @@
 //! [--surface=<mixer|settings|help|overlay>]`
 
 use volumecontrol_egui::app::{builder_for, LaunchOptions, VolumeControlApp};
+use volumecontrol_egui::cli::{self, Verb};
 use volumecontrol_egui::placement::WorkArea;
+use volumecontrol_egui::settings::model::Tab;
+use volumecontrol_egui::single_instance::{self, Launch};
 use volumecontrol_egui::sink::EguiSink;
 
 use volumectl::audio;
@@ -25,6 +28,19 @@ fn parse_options() -> LaunchOptions {
                 {
                     options.smoke = true;
                     options.smoke_ms = ms;
+                } else if let Some(tab) = arg.strip_prefix("--settings-tab=") {
+                    options.settings_tab = match tab.to_lowercase().as_str() {
+                        "general" => Some(Tab::General),
+                        "hotkeys" => Some(Tab::Hotkeys),
+                        "appearance" => Some(Tab::Appearance),
+                        "blacklist" => Some(Tab::Blacklist),
+                        "feedback" => Some(Tab::Feedback),
+                        "storage" => Some(Tab::Storage),
+                        other => {
+                            log::warn!("unknown settings tab {other:?}");
+                            None
+                        }
+                    };
                 } else if let Some(surface) = arg.strip_prefix("--surface=") {
                     options.target_surface = match surface.to_lowercase().as_str() {
                         "mixer" => Some(SurfaceId::Mixer),
@@ -50,11 +66,35 @@ fn main() -> Result<(), String> {
         .try_init()
         .ok();
 
+    let raw_args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(verb) = cli::parse(&raw_args) {
+        let (config, notice) = config::load_with_notice();
+        let (sink, _events) = EguiSink::new(eframe::egui::Context::default());
+        let audio = match audio::default_backend() {
+            Ok(backend) => backend,
+            Err(error) => Box::new(audio::UnavailableAudio::new(error.to_string())),
+        };
+        let mut core =
+            AppCore::new_with_notice(audio, config.clone(), config.modifier, sink, notice)
+                .map_err(|error| format!("core init failed: {error}"))?;
+        if verb == Verb::Get {
+            println!("{}", cli::render_get_core(&core));
+            return Ok(());
+        }
+        cli::apply(&mut core, verb)?;
+        return Ok(());
+    }
+
+    let guard = match single_instance::acquire() {
+        Launch::Primary(guard) => guard,
+        Launch::Secondary => return Ok(()),
+    };
+
     let options = parse_options();
     let (config, notice) = config::load_with_notice();
     let area = WorkArea::new(0.0, 0.0, 1600.0, 900.0);
     let mut native_options = eframe::NativeOptions {
-        viewport: builder_for(SurfaceId::Mixer, 1.0, &area),
+        viewport: builder_for(SurfaceId::Mixer, 1.0, &area, config.language),
         persist_window: false,
         centered: false,
         ..Default::default()
@@ -86,7 +126,8 @@ fn main() -> Result<(), String> {
                     .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> {
                         error.into()
                     })?;
-            let app = VolumeControlApp::new(core, events, options);
+            let mut app = VolumeControlApp::new(core, events, options);
+            app.attach_primary(guard);
             Ok(Box::new(app))
         }),
     )

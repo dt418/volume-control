@@ -56,6 +56,8 @@ pub struct SettingsPatch {
     /// [`crate::autostart`]; this field keeps the typed config in sync for
     /// bootstrap and migration compatibility.
     pub autostart: Option<bool>,
+    /// Base UI font size in logical points (9..=24).
+    pub ui_font_size: Option<u8>,
 }
 
 /// Optional beep feedback patch (mirrors [`crate::config::BeepConfig`]).
@@ -738,6 +740,12 @@ impl AppCore {
             }
         }
 
+        if let Some(size) = patch.ui_font_size {
+            if !(9..=24).contains(&size) {
+                return Err("ui_font_size: must be between 9 and 24".into());
+            }
+        }
+
         // Colour thresholds: prospective values through the shared
         // config::validate_thresholds (0..=100 + monotonic band order).
         if let Some(thresholds) = &patch.color_thresholds {
@@ -814,6 +822,9 @@ impl AppCore {
         }
         if let Some(autostart) = patch.autostart {
             self.config.autostart = autostart;
+        }
+        if let Some(size) = patch.ui_font_size {
+            self.config.ui_font_size = size;
         }
         if let Some(lang) = language {
             self.config.language = lang;

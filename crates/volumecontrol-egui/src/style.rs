@@ -23,16 +23,65 @@ pub struct Tokens {
     pub warning: Color32,
 }
 
-/// Control corner radius, design-spec §1.
+/// Small radius: chips, pills.
+pub const RADIUS_SM: u8 = 4;
+/// Control corner radius: buttons, inputs, list cards.
 pub const RADIUS_CONTROL: u8 = 8;
 /// Card corner radius.
 pub const RADIUS_CARD: u8 = 12;
-/// Mixer/overlay card corner radius.
+/// Mixer/overlay shell radius.
 pub const RADIUS_HUD: u8 = 16;
-/// Intra-row spacing.
-pub const SPACING_INNER: f32 = 8.0;
-/// Card padding.
-pub const SPACING_CARD: f32 = 16.0;
+
+/// Spacing scale (design tokens).
+pub const SPACE_1: f32 = 2.0;
+pub const SPACE_2: f32 = 4.0;
+pub const SPACE_3: f32 = 6.0;
+pub const SPACE_4: f32 = 8.0;
+pub const SPACE_5: f32 = 12.0;
+pub const SPACE_6: f32 = 16.0;
+pub const SPACE_7: f32 = 24.0;
+pub const SPACE_8: f32 = 32.0;
+
+/// Intra-row spacing (alias of SPACE_4).
+pub const SPACING_INNER: f32 = SPACE_4;
+/// Card padding (alias of SPACE_6).
+pub const SPACING_CARD: f32 = SPACE_6;
+
+/// Control sizes.
+pub const ICON_BUTTON: f32 = 24.0;
+pub const BUTTON_HEIGHT: f32 = 28.0;
+pub const INPUT_HEIGHT: f32 = 30.0;
+pub const ROW_HEIGHT: f32 = 32.0;
+
+/// Motion durations.
+pub const DURATION_FAST: f32 = 0.12;
+pub const DURATION_NORMAL: f32 = 0.18;
+pub const DURATION_SLOW: f32 = 0.24;
+
+/// Typography scale derived from the user font size.
+#[derive(Debug, Clone, Copy)]
+pub struct TypeScale {
+    pub caption: f32,
+    pub small: f32,
+    pub body: f32,
+    pub title: f32,
+    pub headline: f32,
+    pub display: f32,
+}
+
+/// Build the type scale for a base font size (9..=24).
+#[must_use]
+pub fn type_scale(base: u8) -> TypeScale {
+    let base = f32::from(base.clamp(9, 24));
+    TypeScale {
+        caption: (base - 4.0).max(8.0),
+        small: (base - 2.0).max(9.0),
+        body: base,
+        title: base + 4.0,
+        headline: base + 8.0,
+        display: base + 14.0,
+    }
+}
 
 /// Palette for the requested theme.
 #[must_use]
@@ -40,9 +89,9 @@ pub fn tokens(is_dark: bool) -> Tokens {
     if is_dark {
         Tokens {
             // Alpha ~180 keeps the vibrancy backdrop visible.
-            background: Color32::from_rgba_unmultiplied(23, 24, 27, 180),
-            card: Color32::from_rgba_unmultiplied(30, 32, 35, 180),
-            input: Color32::from_rgba_unmultiplied(35, 37, 41, 200),
+            background: Color32::from_rgba_unmultiplied(23, 24, 27, 235),
+            card: Color32::from_rgba_unmultiplied(30, 32, 35, 232),
+            input: Color32::from_rgba_unmultiplied(35, 37, 41, 240),
             border: Color32::from_rgb(46, 49, 52),
             accent: Color32::from_rgb(0x2F, 0x7F, 0xF7),
             text: Color32::from_rgb(0xE8, 0xEA, 0xED),
@@ -53,9 +102,9 @@ pub fn tokens(is_dark: bool) -> Tokens {
         }
     } else {
         Tokens {
-            background: Color32::from_rgba_unmultiplied(245, 246, 248, 190),
-            card: Color32::from_rgba_unmultiplied(255, 255, 255, 200),
-            input: Color32::from_rgba_unmultiplied(237, 239, 242, 220),
+            background: Color32::from_rgba_unmultiplied(245, 246, 248, 245),
+            card: Color32::from_rgba_unmultiplied(255, 255, 255, 240),
+            input: Color32::from_rgba_unmultiplied(237, 239, 242, 245),
             border: Color32::from_rgb(0xD8, 0xDC, 0xE1),
             accent: Color32::from_rgb(0x2F, 0x7F, 0xF7),
             text: Color32::from_rgb(0x1B, 0x1D, 0x20),
@@ -68,7 +117,7 @@ pub fn tokens(is_dark: bool) -> Tokens {
 }
 
 /// Install the token set into the egui context.
-pub fn apply(ctx: &egui::Context, is_dark: bool) {
+pub fn apply(ctx: &egui::Context, is_dark: bool, font_size: u8) {
     let tokens = tokens(is_dark);
     let mut visuals = if is_dark {
         Visuals::dark()
@@ -108,9 +157,28 @@ pub fn apply(ctx: &egui::Context, is_dark: bool) {
     widgets.active.fg_stroke = Stroke::new(1.0, tokens.text);
 
     ctx.set_visuals(visuals);
+    let base = f32::from(font_size.clamp(9, 24));
     ctx.all_styles_mut(|style| {
         style.spacing.item_spacing = egui::vec2(SPACING_INNER, SPACING_INNER);
         style.spacing.button_padding = egui::vec2(10.0, 4.0);
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(base));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(base));
+        style.text_styles.insert(
+            egui::TextStyle::Small,
+            egui::FontId::proportional((base - 3.0).max(8.0)),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Heading,
+            egui::FontId::proportional(base + 5.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Monospace,
+            egui::FontId::monospace((base - 1.0).max(8.0)),
+        );
     });
 }
 

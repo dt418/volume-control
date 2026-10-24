@@ -135,6 +135,22 @@ pub fn band_color(
     }
 }
 
+/// Speaker glyph for the current mute level: muted, low, medium, high.
+#[must_use]
+pub fn speaker_icon(volume: u8, muted: bool) -> &'static str {
+    if muted {
+        egui_phosphor::regular::SPEAKER_SLASH
+    } else if volume == 0 {
+        egui_phosphor::regular::SPEAKER_NONE
+    } else if volume <= 33 {
+        egui_phosphor::regular::SPEAKER_SIMPLE_LOW
+    } else if volume <= 66 {
+        egui_phosphor::regular::SPEAKER_LOW
+    } else {
+        egui_phosphor::regular::SPEAKER_HIGH
+    }
+}
+
 /// Header status text: confirmed percentage or the muted label.
 #[must_use]
 pub fn status_text(state: &AppState, language: Language) -> String {
@@ -176,69 +192,103 @@ pub fn show(
 ) {
     let language = options.language;
     let tokens = style::tokens(options.is_dark);
+    let footer_height = 24.0;
+    let full = ui.available_rect_before_wrap();
+    let footer_rect = egui::Rect::from_min_max(
+        egui::pos2(full.left(), full.bottom() - footer_height - 2.0),
+        egui::pos2(full.right(), full.bottom() - 2.0),
+    );
+    let content_rect =
+        egui::Rect::from_min_max(full.min, egui::pos2(full.right(), footer_rect.top() - 4.0));
 
-    header(ui, state, options, tokens, intents);
-    ui.add_space(6.0);
-    search(ui, query, tokens, language);
-    ui.add_space(6.0);
-    system_row(ui, state, options, tokens, intents);
-    ui.add_space(6.0);
+    ui.scope_builder(egui::UiBuilder::new().max_rect(content_rect), |ui| {
+        header(ui, state, options, tokens, intents);
+        ui.add_space(6.0);
+        search(ui, query, tokens, language);
+        ui.add_space(6.0);
+        system_row(ui, state, options, tokens, intents);
+        ui.add_space(6.0);
 
-    if let Some(error) = &options.error {
-        ui.horizontal(|ui| {
-            ui.colored_label(tokens.danger, error);
-            if ui
-                .small_button(tr(Key::MixerRetryConnection, language, &[]).to_string())
-                .clicked()
-            {
-                intents.push(MixerIntent::RetryBackend);
-            }
-        });
-    }
-
-    let visible_rows = rows(state, query, options.app_label_style, language);
-    let footer_height = 18.0;
-    if options.sessions_supported {
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .max_height((ui.available_height() - footer_height).max(24.0))
-            .show(ui, |ui| {
-                if visible_rows.is_empty() {
-                    ui.label(
-                        RichText::new(empty_text(!state.sessions.is_empty(), query, language))
-                            .size(11.0)
-                            .color(tokens.muted),
-                    );
-                } else {
-                    for row in &visible_rows {
-                        session_row(ui, row, options, tokens, intents);
-                    }
+        if let Some(error) = &options.error {
+            ui.horizontal(|ui| {
+                ui.colored_label(tokens.danger, error);
+                if ui
+                    .small_button(tr(Key::MixerRetryConnection, language, &[]).to_string())
+                    .clicked()
+                {
+                    intents.push(MixerIntent::RetryBackend);
                 }
             });
-    } else {
-        ui.label(
-            RichText::new(tr(Key::MixerUnsupported, language, &[]))
-                .size(11.0)
-                .color(tokens.muted),
-        );
-    }
+        }
 
-    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-        ui.horizontal(|ui| {
+        let visible_rows = rows(state, query, options.app_label_style, language);
+        if options.sessions_supported {
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
+                .show(ui, |ui| {
+                    if visible_rows.is_empty() {
+                        ui.label(
+                            RichText::new(empty_text(!state.sessions.is_empty(), query, language))
+                                .small()
+                                .color(tokens.muted),
+                        );
+                    } else {
+                        for row in &visible_rows {
+                            session_row(ui, row, options, tokens, intents);
+                        }
+                    }
+                });
+        } else {
             ui.label(
-                RichText::new(footer_text(visible_rows.len(), language))
-                    .size(10.0)
+                RichText::new(tr(Key::MixerUnsupported, language, &[]))
+                    .small()
                     .color(tokens.muted),
             );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        }
+    });
+
+    let count = rows(state, query, options.app_label_style, language).len();
+    egui::Area::new(egui::Id::new("mixer-footer"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(footer_rect.min)
+        .show(ui.ctx(), |ui| {
+            ui.set_min_size(footer_rect.size());
+            ui.painter().rect_filled(
+                egui::Rect::from_min_size(egui::Pos2::ZERO, footer_rect.size()),
+                egui::CornerRadius {
+                    nw: 0,
+                    ne: 0,
+                    sw: style::RADIUS_HUD,
+                    se: style::RADIUS_HUD,
+                },
+                {
+                    let card = tokens.card;
+                    egui::Color32::from_rgb(card.r(), card.g(), card.b())
+                },
+            );
+            ui.painter().hline(
+                0.0..=footer_rect.width(),
+                0.0,
+                egui::Stroke::new(1.0, tokens.border),
+            );
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.add_space(4.0);
                 ui.label(
-                    RichText::new(tr(Key::MixerEscToClose, language, &[]))
-                        .size(10.0)
+                    RichText::new(footer_text(count, language))
+                        .small()
                         .color(tokens.muted),
                 );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(tr(Key::MixerEscToClose, language, &[]))
+                            .small()
+                            .color(tokens.muted),
+                    );
+                });
             });
         });
-    });
 }
 
 fn header(
@@ -274,17 +324,6 @@ fn header(
             }
             if icon_button(
                 ui,
-                egui_phosphor::regular::GEAR,
-                tr(Key::SettingsTitle, language, &[]),
-            )
-            .clicked()
-            {
-                intents.push(MixerIntent::Action(AppAction::ShowSurface(
-                    volumectl::ui::SurfaceId::Settings,
-                )));
-            }
-            if icon_button(
-                ui,
                 egui_phosphor::regular::QUESTION,
                 tr(Key::HelpTitle, language, &[]),
             )
@@ -292,6 +331,17 @@ fn header(
             {
                 intents.push(MixerIntent::Action(AppAction::ShowSurface(
                     volumectl::ui::SurfaceId::Help,
+                )));
+            }
+            if icon_button(
+                ui,
+                egui_phosphor::regular::GEAR,
+                tr(Key::SettingsTitle, language, &[]),
+            )
+            .clicked()
+            {
+                intents.push(MixerIntent::Action(AppAction::ShowSurface(
+                    volumectl::ui::SurfaceId::Settings,
                 )));
             }
         });
@@ -330,64 +380,69 @@ fn system_row(
     intents: &mut Vec<MixerIntent>,
 ) {
     let language = options.language;
-    ui.horizontal(|ui| {
-        ui.allocate_ui_with_layout(
-            egui::vec2(104.0, 30.0),
-            egui::Layout::top_down(egui::Align::LEFT),
-            |ui| {
-                ui.label(RichText::new(tr(Key::MixerSystemOutput, language, &[])).size(11.0));
+    egui::Frame::NONE
+        .fill(tokens.card)
+        .stroke(egui::Stroke::new(1.0, tokens.border))
+        .corner_radius(egui::CornerRadius::same(style::RADIUS_CONTROL))
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(tr(Key::MixerSystemOutput, language, &[])).strong());
                 ui.label(
                     RichText::new(if state.muted {
                         tr(Key::CommonMuted, language, &[]).to_string()
                     } else {
                         format!("{}%", state.volume_percent)
                     })
-                    .size(9.0)
+                    .small()
                     .color(tokens.muted),
                 );
-            },
-        );
-        let mut volume = state.volume_percent;
-        let width = (ui.available_width() - 56.0).max(80.0);
-        let label = tr(Key::MixerSystemOutput, language, &[]).to_string();
-        let response = signal_slider(
-            ui,
-            &mut volume,
-            state.muted,
-            options.green_up_to,
-            options.blue_up_to,
-            tokens,
-            width,
-            &label,
-        );
-        if response.changed() {
-            intents.push(MixerIntent::Action(AppAction::SetVolumePercent {
-                percent: u16::from(volume),
-            }));
-        }
-        let mute_icon = if state.muted {
-            egui_phosphor::regular::SPEAKER_SLASH
-        } else {
-            egui_phosphor::regular::SPEAKER_HIGH
-        };
-        let mute_hint = if state.muted {
-            tr(Key::MixerUnmuteSystemOutput, language, &[])
-        } else {
-            tr(Key::MixerMuteSystemOutput, language, &[])
-        };
-        if icon_button(ui, mute_icon, mute_hint).clicked() {
-            intents.push(MixerIntent::Action(AppAction::ToggleMute));
-        }
-        if icon_button(
-            ui,
-            egui_phosphor::regular::ARROW_COUNTER_CLOCKWISE,
-            tr(Key::MixerResetVolume, language, &[]),
-        )
-        .clicked()
-        {
-            intents.push(MixerIntent::Action(AppAction::ResetVolume));
-        }
-    });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if icon_button(
+                        ui,
+                        egui_phosphor::regular::ARROW_COUNTER_CLOCKWISE,
+                        tr(Key::MixerResetVolume, language, &[]),
+                    )
+                    .clicked()
+                    {
+                        intents.push(MixerIntent::Action(AppAction::ResetVolume));
+                    }
+                    let mute_hint = if state.muted {
+                        tr(Key::MixerUnmuteSystemOutput, language, &[])
+                    } else {
+                        tr(Key::MixerMuteSystemOutput, language, &[])
+                    };
+                    if icon_button(
+                        ui,
+                        speaker_icon(state.volume_percent, state.muted),
+                        mute_hint,
+                    )
+                    .clicked()
+                    {
+                        intents.push(MixerIntent::Action(AppAction::ToggleMute));
+                    }
+                });
+            });
+            ui.add_space(4.0);
+            let mut volume = state.volume_percent;
+            let width = ui.available_width();
+            let label = tr(Key::MixerSystemOutput, language, &[]).to_string();
+            let response = signal_slider(
+                ui,
+                &mut volume,
+                state.muted,
+                options.green_up_to,
+                options.blue_up_to,
+                tokens,
+                width,
+                &label,
+            );
+            if response.changed() {
+                intents.push(MixerIntent::Action(AppAction::SetVolumePercent {
+                    percent: u16::from(volume),
+                }));
+            }
+        });
 }
 
 fn session_row(
@@ -398,54 +453,58 @@ fn session_row(
     intents: &mut Vec<MixerIntent>,
 ) {
     let language = options.language;
-    ui.horizontal(|ui| {
-        ui.allocate_ui_with_layout(
-            egui::vec2(104.0, 34.0),
-            egui::Layout::top_down(egui::Align::LEFT),
-            |ui| {
-                ui.add(egui::Label::new(RichText::new(&row.label).size(11.0)).truncate());
-                if let Some(hint) = &row.hint {
-                    ui.add(
-                        egui::Label::new(RichText::new(hint).size(9.0).color(tokens.muted))
-                            .truncate(),
-                    );
+    egui::Frame::NONE
+        .fill(tokens.card)
+        .stroke(egui::Stroke::new(1.0, tokens.border))
+        .corner_radius(egui::CornerRadius::same(style::RADIUS_CONTROL))
+        .inner_margin(egui::Margin::symmetric(10, 6))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(140.0, 32.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.add(egui::Label::new(RichText::new(&row.label)).truncate());
+                        if let Some(hint) = &row.hint {
+                            ui.add(
+                                egui::Label::new(RichText::new(hint).small().color(tokens.muted))
+                                    .truncate(),
+                            );
+                        }
+                    },
+                );
+                let mut volume = row.volume;
+                let controls_width = 34.0;
+                let width = (ui.available_width() - controls_width).max(60.0);
+                let response = signal_slider(
+                    ui,
+                    &mut volume,
+                    row.muted,
+                    options.green_up_to,
+                    options.blue_up_to,
+                    tokens,
+                    width,
+                    &row.label,
+                );
+                if response.changed() {
+                    intents.push(MixerIntent::Action(AppAction::SetSessionVolume {
+                        id: row.id.clone(),
+                        percent: volume,
+                    }));
                 }
-            },
-        );
-        let mut volume = row.volume;
-        let width = (ui.available_width() - 30.0).max(60.0);
-        let response = signal_slider(
-            ui,
-            &mut volume,
-            row.muted,
-            options.green_up_to,
-            options.blue_up_to,
-            tokens,
-            width,
-            &row.label,
-        );
-        if response.changed() {
-            intents.push(MixerIntent::Action(AppAction::SetSessionVolume {
-                id: row.id.clone(),
-                percent: volume,
-            }));
-        }
-        let icon = if row.muted {
-            egui_phosphor::regular::SPEAKER_SLASH
-        } else {
-            egui_phosphor::regular::SPEAKER_HIGH
-        };
-        let hint = if row.muted {
-            tr(Key::MixerUnmute, language, &[])
-        } else {
-            tr(Key::MixerMute, language, &[])
-        };
-        if icon_button(ui, icon, hint).clicked() {
-            intents.push(MixerIntent::Action(AppAction::ToggleSessionMute {
-                id: row.id.clone(),
-            }));
-        }
-    });
+                let hint = if row.muted {
+                    tr(Key::MixerUnmute, language, &[])
+                } else {
+                    tr(Key::MixerMute, language, &[])
+                };
+                if icon_button(ui, speaker_icon(row.volume, row.muted), hint).clicked() {
+                    intents.push(MixerIntent::Action(AppAction::ToggleSessionMute {
+                        id: row.id.clone(),
+                    }));
+                }
+            });
+        });
+    ui.add_space(6.0);
 }
 
 fn icon_button(
@@ -455,6 +514,39 @@ fn icon_button(
 ) -> egui::Response {
     ui.add(egui::Button::new(RichText::new(icon).size(12.0)).frame(false))
         .on_hover_text(tooltip)
+}
+
+/// Draw the SignalRail track/fill/thumb into `track`.
+pub fn paint_rail(
+    painter: &egui::Painter,
+    track: egui::Rect,
+    value: u8,
+    muted: bool,
+    green_up_to: u8,
+    blue_up_to: u8,
+    tokens: &Tokens,
+) {
+    let color = band_color(value, green_up_to, blue_up_to, muted, tokens);
+    painter.rect_filled(track, egui::CornerRadius::same(3), tokens.input);
+    let fill_width = track.width() * f32::from(value) / 100.0;
+    if fill_width > 0.0 {
+        let fill = egui::Rect::from_min_size(track.min, egui::vec2(fill_width, track.height()));
+        painter.rect_filled(fill, egui::CornerRadius::same(3), color);
+    }
+    let thumb_center = egui::pos2(track.left() + fill_width, track.center().y);
+    if muted {
+        let r = 5.0;
+        let points = vec![
+            egui::pos2(thumb_center.x, thumb_center.y - r),
+            egui::pos2(thumb_center.x + r, thumb_center.y),
+            egui::pos2(thumb_center.x, thumb_center.y + r),
+            egui::pos2(thumb_center.x - r, thumb_center.y),
+        ];
+        painter.add(Shape::closed_line(points, Stroke::new(1.5, tokens.muted)));
+    } else {
+        painter.circle_filled(thumb_center, 5.0, color);
+        painter.circle_stroke(thumb_center, 5.0, Stroke::new(1.0, tokens.background));
+    }
 }
 
 /// SignalRail-style slider: one value-width fill in the current band color,
@@ -477,8 +569,6 @@ pub fn signal_slider(
         egui::pos2(rect.center().x, rect.center().y),
         egui::vec2(rect.width(), track_height),
     );
-    let radius = egui::CornerRadius::same(3);
-
     if response.is_pointer_button_down_on() || response.clicked() {
         if let Some(position) = response.interact_pointer_pos() {
             let pct = (((position.x - track.left()) / track.width()) * 100.0)
@@ -491,30 +581,15 @@ pub fn signal_slider(
         }
     }
 
-    let color = band_color(*value, green_up_to, blue_up_to, muted, &tokens);
-    let painter = ui.painter();
-    painter.rect_filled(track, radius, tokens.input);
-    let fill_width = track.width() * f32::from(*value) / 100.0;
-    if fill_width > 0.0 {
-        let fill = egui::Rect::from_min_size(track.min, egui::vec2(fill_width, track.height()));
-        painter.rect_filled(fill, radius, color);
-    }
-    let thumb_x = track.left() + fill_width;
-    let thumb_center = egui::pos2(thumb_x, track.center().y);
-    if muted {
-        let r = 5.0;
-        let points = vec![
-            egui::pos2(thumb_center.x, thumb_center.y - r),
-            egui::pos2(thumb_center.x + r, thumb_center.y),
-            egui::pos2(thumb_center.x, thumb_center.y + r),
-            egui::pos2(thumb_center.x - r, thumb_center.y),
-        ];
-        painter.add(Shape::closed_line(points, Stroke::new(1.5, tokens.muted)));
-    } else {
-        painter.circle_filled(thumb_center, 5.0, color);
-        painter.circle_stroke(thumb_center, 5.0, Stroke::new(1.0, tokens.background));
-    }
-
+    paint_rail(
+        ui.painter(),
+        track,
+        *value,
+        muted,
+        green_up_to,
+        blue_up_to,
+        &tokens,
+    );
     response.widget_info(|| WidgetInfo::slider(true, f64::from(*value), label));
     response
 }
