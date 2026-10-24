@@ -22,6 +22,9 @@ tray-icon.workspace = true
 muda.workspace = true
 raw-window-handle = "0.6"
 png = "0.17"
+base64 = "0.22"
+sha2 = "0.10"
+ureq.workspace = true
 log.workspace = true
 env_logger.workspace = true
 

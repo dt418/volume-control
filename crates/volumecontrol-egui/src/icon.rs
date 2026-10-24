@@ -36,3 +36,50 @@ fn decode_icon() -> Option<Arc<egui::IconData>> {
         height: info.height,
     }))
 }
+
+/// Decode a `data:image/png;base64,...` URL coming from `RunningApp.icon`.
+///
+/// Returns `None` for malformed URLs or decoders that cannot produce RGBA.
+#[must_use]
+pub fn decode_data_url(url: &str) -> Option<egui::ColorImage> {
+    let payload = url.strip_prefix("data:image/png;base64,")?;
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(payload.trim())
+        .ok()?;
+    let decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+    let mut reader = decoder.read_info().ok()?;
+    let mut buffer = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buffer).ok()?;
+    buffer.truncate(info.buffer_size());
+    let rgba = match info.color_type {
+        png::ColorType::Rgba => buffer,
+        png::ColorType::Rgb => {
+            let (pixels, _) = buffer.as_chunks::<3>();
+            pixels
+                .iter()
+                .flat_map(|pixel| [pixel[0], pixel[1], pixel[2], 255])
+                .collect()
+        }
+        _ => return None,
+    };
+    Some(egui::ColorImage::from_rgba_unmultiplied(
+        [info.width as usize, info.height as usize],
+        &rgba,
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_png_data_url_from_running_apps() {
+        // 1x1 transparent PNG.
+        let url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        let image = decode_data_url(url).expect("valid data URL");
+        assert_eq!(image.size, [1, 1]);
+        assert!(decode_data_url("not-a-data-url").is_none());
+        assert!(decode_data_url("data:image/png;base64,!!!").is_none());
+    }
+}

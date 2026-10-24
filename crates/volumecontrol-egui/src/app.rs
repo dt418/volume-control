@@ -143,6 +143,7 @@ pub struct VolumeControlApp {
     applied_dark: Option<bool>,
     applied_title_language: Option<Language>,
     last_poll: Instant,
+    last_external_poll: Instant,
     last_sessions_poll: Instant,
     sessions_supported: bool,
     mixer_query: String,
@@ -150,6 +151,7 @@ pub struct VolumeControlApp {
     overlay_volume: u8,
     overlay_muted: bool,
     overlay_until: Option<Instant>,
+    overlay_started: Instant,
     parked: bool,
     root_positioned: bool,
     settings_draft: SettingsDraft,
@@ -159,7 +161,10 @@ pub struct VolumeControlApp {
     picker: PickerState,
     running_apps: Vec<RunningApp>,
     update_card: UpdateCard,
-    update_rx: Option<Receiver<Result<volumectl::updates::UpdateInfo, String>>>,
+    update_rx: Option<Receiver<Result<volumectl::updates::ReleaseInfo, String>>>,
+    download_rx: Option<Receiver<Result<std::path::PathBuf, String>>>,
+    update_release: Option<volumectl::updates::ReleaseInfo>,
+    update_installer: Option<std::path::PathBuf>,
     update_url: Option<String>,
     pending_modifier: Option<HotkeyModifier>,
     config_notice: Option<ConfigLoadNotice>,
@@ -178,6 +183,7 @@ pub struct VolumeControlApp {
     smoke_toast_shown: bool,
     smoke_verified: Arc<AtomicBool>,
     overlay_demo_shown: bool,
+    mixer_seen_focus: bool,
 }
 
 impl VolumeControlApp {
@@ -267,6 +273,7 @@ impl VolumeControlApp {
             applied_dark: None,
             applied_title_language: None,
             last_poll: Instant::now(),
+            last_external_poll: Instant::now(),
             last_sessions_poll: Instant::now(),
             sessions_supported: payload.sessions_supported,
             mixer_query: String::new(),
@@ -274,6 +281,7 @@ impl VolumeControlApp {
             overlay_volume: payload.volume_pct,
             overlay_muted: payload.muted,
             overlay_until: None,
+            overlay_started: Instant::now(),
             parked: false,
             root_positioned: false,
             settings_draft,
@@ -284,6 +292,9 @@ impl VolumeControlApp {
             running_apps: Vec::new(),
             update_card: UpdateCard::new(volumectl::VERSION),
             update_rx: None,
+            download_rx: None,
+            update_release: None,
+            update_installer: None,
             update_url: None,
             pending_modifier: None,
             config_notice: payload.config_notice,
@@ -302,6 +313,7 @@ impl VolumeControlApp {
             smoke_toast_shown: false,
             smoke_verified,
             overlay_demo_shown: false,
+            mixer_seen_focus: false,
         }
     }
 
@@ -404,13 +416,29 @@ impl VolumeControlApp {
             return;
         }
         self.update_card.check_started();
-        let language = self.settings_draft.language;
         let (sender, receiver) = mpsc::channel();
         std::thread::spawn(move || {
-            let result = volumectl::updates::check_update_info(language);
+            let result = volumectl::updates::fetch_latest_release();
             let _ = sender.send(result);
         });
         self.update_rx = Some(receiver);
+        ctx.request_repaint_after(Duration::from_millis(150));
+    }
+
+    fn start_download(&mut self, ctx: &egui::Context) {
+        let Some(release) = self.update_release.clone() else {
+            return;
+        };
+        if self.download_rx.is_some() {
+            return;
+        }
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result = download_release(&release);
+            let _ = sender.send(result);
+        });
+        self.download_rx = Some(receiver);
+        self.update_card.download_progress(0);
         ctx.request_repaint_after(Duration::from_millis(150));
     }
 
@@ -530,6 +558,7 @@ impl VolumeControlApp {
                     self.config = *config;
                     self.is_dark = self.resolve_dark();
                     self.state.show(SurfaceId::Overlay);
+                    self.overlay_started = Instant::now();
                     self.overlay_until = Some(
                         Instant::now()
                             + Duration::from_millis(self.config.overlay_duration_ms.max(500)),
@@ -563,7 +592,12 @@ impl VolumeControlApp {
         }
         self.last_poll = Instant::now();
         self.core.poll_hotkeys();
-        self.core.sync_external_state();
+        let watches_volume =
+            self.state.is_visible(SurfaceId::Mixer) || self.state.is_visible(SurfaceId::Overlay);
+        if watches_volume && self.last_external_poll.elapsed() >= Duration::from_secs(1) {
+            self.last_external_poll = Instant::now();
+            self.core.sync_external_state();
+        }
         if self.state.is_visible(SurfaceId::Mixer)
             && self.last_sessions_poll.elapsed() >= Duration::from_millis(1_500)
         {
@@ -695,34 +729,62 @@ impl VolumeControlApp {
     }
 
     fn poll_updates(&mut self, ctx: &egui::Context) {
-        let Some(receiver) = &self.update_rx else {
-            return;
-        };
-        match receiver.try_recv() {
-            Ok(Ok(info)) => {
-                self.update_url = info.release_url.clone();
-                if info.is_update_available {
-                    if let Some(version) = info.latest_version.clone() {
-                        self.update_card.check_finished(Some(version));
+        if let Some(receiver) = &self.update_rx {
+            match receiver.try_recv() {
+                Ok(Ok(release)) => {
+                    let tag = release.tag_name.clone();
+                    let info = volumectl::updates::resolve_update_info(
+                        self.settings_draft.language,
+                        volumectl::VERSION,
+                        Ok(tag.clone()),
+                    );
+                    self.update_url = info.release_url.clone();
+                    if info.is_update_available {
+                        self.update_card.check_finished(Some(tag));
+                        self.update_release = Some(release);
                     } else {
                         self.update_card.check_finished(None);
+                        self.update_release = None;
                     }
-                } else {
-                    self.update_card.check_finished(None);
+                    self.core.show_overlay_text(info.message.clone());
+                    self.update_rx = None;
                 }
-                self.core.show_overlay_text(info.message.clone());
-                self.update_rx = None;
+                Ok(Err(error)) => {
+                    self.update_card.failed(error);
+                    self.update_rx = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    ctx.request_repaint_after(Duration::from_millis(150));
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.update_card.failed("update check worker stopped");
+                    self.update_rx = None;
+                }
             }
-            Ok(Err(error)) => {
-                self.update_card.failed(error);
-                self.update_rx = None;
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => {
-                ctx.request_repaint_after(Duration::from_millis(150));
-            }
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                self.update_card.failed("update check worker stopped");
-                self.update_rx = None;
+        }
+        if let Some(receiver) = &self.download_rx {
+            match receiver.try_recv() {
+                Ok(Ok(path)) => {
+                    self.update_installer = Some(path);
+                    let version = self
+                        .update_release
+                        .as_ref()
+                        .map(|r| r.tag_name.trim_start_matches('v').to_string())
+                        .unwrap_or_default();
+                    self.update_card.download_ready(version);
+                    self.download_rx = None;
+                }
+                Ok(Err(error)) => {
+                    self.update_card.failed(error);
+                    self.download_rx = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    ctx.request_repaint_after(Duration::from_millis(150));
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.update_card.failed("update download worker stopped");
+                    self.download_rx = None;
+                }
             }
         }
     }
@@ -787,14 +849,23 @@ impl VolumeControlApp {
                 self.dispatch(AppAction::OpenConfigLocation);
             }
             SettingsIntent::CheckUpdates => self.start_update_check(ctx),
-            SettingsIntent::DownloadUpdate => {
-                if let Some(url) = &self.update_url {
-                    open_external(url);
-                }
-            }
+            SettingsIntent::DownloadUpdate => self.start_download(ctx),
             SettingsIntent::InstallUpdate => {
-                if let Some(url) = &self.update_url {
-                    open_external(url);
+                if let Some(installer) = self.update_installer.clone() {
+                    self.update_card.install_started(
+                        self.update_release
+                            .as_ref()
+                            .map(|r| r.tag_name.trim_start_matches('v').to_string())
+                            .unwrap_or_default(),
+                    );
+                    if let Err(error) =
+                        crate::updates::launch_installer(&installer, std::process::id())
+                    {
+                        self.update_card.failed(error);
+                    } else {
+                        self.quitting = true;
+                        ctx.send_viewport_cmd(ViewportCommand::Close);
+                    }
                 }
             }
             SettingsIntent::DismissUpdate => self.update_card.dismiss(),
@@ -888,6 +959,16 @@ impl VolumeControlApp {
             blue_up_to: self.config.color_thresholds.blue_up_to,
             app_label_style: self.config.app_label_style,
             sessions_supported: self.sessions_supported,
+            banner: match self.update_card.phase {
+                crate::settings::update_card::UpdatePhase::Available { .. }
+                | crate::settings::update_card::UpdatePhase::Downloading { .. }
+                | crate::settings::update_card::UpdatePhase::Ready { .. } => Some(
+                    self.update_card
+                        .phase
+                        .status_text(self.state.language, &self.update_card.current_version),
+                ),
+                _ => None,
+            },
             error: match &self.state.status {
                 UiStatus::Error(error) => Some(error.clone()),
                 UiStatus::Ready | UiStatus::Syncing => None,
@@ -1014,8 +1095,14 @@ impl VolumeControlApp {
             device: self.state.device.as_deref(),
             green_up_to: self.config.color_thresholds.green_up_to,
             blue_up_to: self.config.color_thresholds.blue_up_to,
+            progress: crate::surfaces::overlay::overlay_ease(
+                self.overlay_started.elapsed().as_millis() as u64,
+            ),
         };
         crate::surfaces::overlay::show(ui, &view);
+        if view.progress < 1.0 {
+            ui.ctx().request_repaint();
+        }
     }
 
     fn show_placeholder(&mut self, ui: &mut egui::Ui, surface: SurfaceId) {
@@ -1103,23 +1190,38 @@ impl VolumeControlApp {
     }
 }
 
-fn open_external(url: &str) {
-    #[cfg(target_os = "windows")]
-    let command = ("cmd", ["/C", "start", ""].as_slice(), Some(url));
-    #[cfg(target_os = "macos")]
-    let command = ("open", [].as_slice(), Some(url));
-    #[cfg(target_os = "linux")]
-    let command = ("xdg-open", [].as_slice(), Some(url));
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let command = ("true", [].as_slice(), Some(url));
-    let mut process = std::process::Command::new(command.0);
-    process.args(command.1);
-    if let Some(url) = command.2 {
-        process.arg(url);
-    }
-    if let Err(error) = process.spawn() {
-        log::warn!("failed to open {url}: {error}");
-    }
+fn download_release(
+    release: &volumectl::updates::ReleaseInfo,
+) -> Result<std::path::PathBuf, String> {
+    let version = release.tag_name.trim().trim_start_matches('v');
+    let asset_name = crate::updates::asset_filename(version);
+    let asset = release
+        .assets
+        .iter()
+        .find(|asset| asset.name == asset_name)
+        .ok_or_else(|| format!("release {} has no asset {asset_name}", release.tag_name))?;
+    let manifest = release
+        .assets
+        .iter()
+        .find(|asset| asset.name == "SHA256SUMS.txt")
+        .ok_or("release has no SHA256SUMS.txt")?;
+    let manifest_body = ureq::get(&manifest.browser_download_url)
+        .call()
+        .map_err(|e| format!("checksum manifest download failed: {e}"))?
+        .into_string()
+        .map_err(|e| format!("checksum manifest read failed: {e}"))?;
+    let expected = crate::updates::manifest_sha256(&manifest_body, &asset_name)
+        .ok_or_else(|| format!("checksum manifest has no entry for {asset_name}"))?;
+    let directory = crate::updates::package_dir(&release.tag_name);
+    let destination = directory.join(&asset_name);
+    crate::updates::download_verified(
+        &asset.browser_download_url,
+        &destination,
+        &expected,
+        &mut |_percent| {},
+    )?;
+    crate::updates::validate_payload(&destination)?;
+    Ok(destination)
 }
 
 fn session_state(info: &volumectl::host_core::AudioSessionInfo) -> AudioSessionState {
@@ -1174,7 +1276,14 @@ impl eframe::App for VolumeControlApp {
             self.handle_close_request(ui, SurfaceId::Mixer);
             self.handle_escape(ui, SurfaceId::Mixer);
             self.show_mixer(ui);
+            let focused = ctx.input(|input| input.viewport().focused).unwrap_or(true);
+            if mixer_should_close(focused, self.mixer_seen_focus) && !self.quitting {
+                self.state.hide(SurfaceId::Mixer);
+                self.root_shown = false;
+            }
+            self.mixer_seen_focus |= focused;
         } else {
+            self.mixer_seen_focus = false;
             ctx.request_repaint_after(SLOW_POLL);
         }
 
@@ -1222,5 +1331,27 @@ impl eframe::App for VolumeControlApp {
             // Smoke presentation lands with the smoke contract task.
             ctx.request_repaint_after(Duration::from_millis(16));
         }
+    }
+}
+
+/// Legacy Mixer rule: a transient HUD closes on focus loss, but only after it
+/// has been focused at least once (opening from a hotkey must not self-close).
+fn mixer_should_close(focused: bool, seen_focus: bool) -> bool {
+    seen_focus && !focused
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mixer_hides_only_after_first_focus() {
+        // Never focused yet: losing focus is not a close reason.
+        assert!(!mixer_should_close(false, false));
+        // Gaining focus records that the surface was actually focused.
+        assert!(!mixer_should_close(true, false));
+        // After the first focus, losing it closes the transient Mixer.
+        assert!(mixer_should_close(false, true));
+        assert!(!mixer_should_close(true, true));
     }
 }

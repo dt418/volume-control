@@ -42,9 +42,8 @@ impl UpdatePhase {
     #[must_use]
     pub fn action(&self) -> Option<UpdateAction> {
         match self {
-            UpdatePhase::Idle | UpdatePhase::UpToDate | UpdatePhase::Available { .. } => {
-                Some(UpdateAction::Check)
-            }
+            UpdatePhase::Idle | UpdatePhase::UpToDate => Some(UpdateAction::Check),
+            UpdatePhase::Available { .. } => Some(UpdateAction::Download),
             UpdatePhase::Failed { .. } => Some(UpdateAction::Retry),
             UpdatePhase::Ready { .. } => Some(UpdateAction::ConfirmInstall),
             UpdatePhase::Checking

@@ -7311,6 +7311,7 @@ dependencies = [
 name = "volumecontrol-egui"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "eframe",
  "egui",
  "egui-phosphor",
@@ -7321,7 +7322,9 @@ dependencies = [
  "muda",
  "png 0.17.16",
  "raw-window-handle",
+ "sha2",
  "tray-icon",
+ "ureq",
  "volumectl",
  "window-vibrancy 0.8.1",
  "windows-sys 0.52.0",

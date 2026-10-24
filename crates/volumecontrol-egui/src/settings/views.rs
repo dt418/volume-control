@@ -614,13 +614,22 @@ fn picker_panel(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Ve
                                 let mut checked =
                                     blacklist::is_blocked(&view.draft.blacklist, &app.process);
                                 let name = app.display_name.as_deref().unwrap_or(&app.title);
-                                if ui
-                                    .checkbox(&mut checked, format!("{name} ({})", app.process))
-                                    .changed()
-                                {
-                                    intents
-                                        .push(SettingsIntent::ToggleBlacklist(app.process.clone()));
-                                }
+                                ui.horizontal(|ui| {
+                                    if let Some(texture) = running_app_icon(ui, app) {
+                                        ui.add(egui::Image::new(egui::load::SizedTexture::new(
+                                            texture.id(),
+                                            egui::vec2(16.0, 16.0),
+                                        )));
+                                    }
+                                    if ui
+                                        .checkbox(&mut checked, format!("{name} ({})", app.process))
+                                        .changed()
+                                    {
+                                        intents.push(SettingsIntent::ToggleBlacklist(
+                                            app.process.clone(),
+                                        ));
+                                    }
+                                });
                             }
                             if matched == 0 {
                                 ui.small(
@@ -1252,4 +1261,21 @@ fn hotkey_conflicted(action: RecorderAction, status: &[HotkeyRegResult]) -> bool
         result.action == hotkey_action(action)
             && matches!(result.status, HotkeyRegStatus::Conflicted(_))
     })
+}
+
+/// Decode and cache a running-app icon texture for the picker.
+fn running_app_icon(ui: &egui::Ui, app: &RunningApp) -> Option<egui::TextureHandle> {
+    let data = app.icon.as_deref()?;
+    let id = egui::Id::new(("running-app-icon", &app.process));
+    if let Some(texture) = ui.data(|d| d.get_temp::<egui::TextureHandle>(id)) {
+        return Some(texture);
+    }
+    let image = crate::icon::decode_data_url(data)?;
+    let texture = ui.ctx().load_texture(
+        format!("running-app-{}", app.process),
+        image,
+        egui::TextureOptions::LINEAR,
+    );
+    ui.data_mut(|d| d.insert_temp(id, texture.clone()));
+    Some(texture)
 }

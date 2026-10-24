@@ -19,7 +19,7 @@ Legend: ✅ pass · ◐ partial · ⛔ gap.
 | Beep feedback | ✅ | Feedback tab writes `[Beep]` via `SettingsPatch`; `AppCore` beeps blocked/limit paths. |
 | Single instance + second launch shows Mixer | ✅ | `single_instance.rs` (separate `Local\VolumeControl.Egui.*` namespace); unit tests cover primary/secondary and show-mixer signal. |
 | Autostart | ✅ | General toggle persists `autostart`; Save calls `volumectl::autostart::set_enabled` when changed. |
-| Update flow | ◐ | Check (off-thread), UpToDate/Available/Error/Managed phases, localized status. Download/install and the Mixer install banner are not ported; the Available action opens the release page. Recorded degradation, blocks cutover. |
+| Update flow | ✅ | Check (off-thread), localized phases, download with SHA-256 verification against `SHA256SUMS.txt`, payload magic validation, `Ready → Install` launches the verified installer after the host exits, and the Mixer shows an install banner. Live install against a real release is not exercised in this environment. |
 | Config live reload | ✅ | 50 ms core poll calls `reload_config_if_changed`; Storage tab documents INI SSOT. |
 | CLI verbs | ✅ | `get` / `set <0-100>` / `mute [on|off]`; verified 100 → 42 → mute → 0. |
 | Tray menu (10 items) | ✅ | Dark muda menu, live header, all nine actions wired; polling from the eframe loop. Tray tooltip `Volume Control (egui)` distinguishes it from the legacy tray during migration. Trailing-click automation is limited; `ShowSettings` was observed end-to-end from the tray. |
@@ -34,8 +34,8 @@ Legend: ✅ pass · ◐ partial · ⛔ gap.
 | System row: value, mute, reset, slider | ✅ | Card layout, speaker icon by level, reset-50, SignalRail colors. |
 | Session list scroll, System Sounds label/hint | ✅ | Cards, sorted active-first/volume-desc, 1.5 s re-poll gated on visibility, scrollbar when needed. |
 | Footer count + Esc | ✅ | Pinned bottom panel; Esc hides the surface. |
-| Focus-loss auto-close | ⛔ | Not implemented in the egui host (Esc and close only). Blocks cutover unless accepted. |
-| Update-available banner | ⛔ | Waits on the ported update manager. |
+| Focus-loss auto-close | ✅ | `mixer_should_close` closes the transient Mixer after it has been focused once; unit-tested. |
+| Update-available banner | ✅ | Available/Downloading/Ready banner in the Mixer opens Settings. |
 
 ## 3. Settings
 
@@ -45,7 +45,7 @@ Legend: ✅ pass · ◐ partial · ⛔ gap.
 | 3.1 General | ✅ | Language/label style live-relabel, steps, overlay duration ≥500 validation, autostart, update card phases. |
 | 3.2 Hotkeys | ✅ | Eight rows, uniform chip/button sizes, recording state machine, conflict badges, presets. |
 | 3.3 Appearance | ✅ | Four combos, preview card, threshold editor with ordering validation. |
-| 3.4 Blacklist | ◐ | Manual add/remove, suggestions/bulk actions, picker with search/refresh/multi-select and live draft edits. Running-app icons are not rendered (text rows only). |
+| 3.4 Blacklist | ✅ | Manual add/remove, suggestions/bulk actions, picker with search/refresh/multi-select and live draft edits; running-app icons decode from the `data:` URL and render at 16 px. |
 | 3.5 Feedback | ✅ | Toggle + four numeric rows with range validation. |
 | 3.6 Storage | ✅ | Single card, config path, open-config button, recovery notice. |
 
@@ -61,7 +61,7 @@ Legend: ✅ pass · ◐ partial · ⛔ gap.
 |---|---|---|
 | 336×88 bottom-right, % + rail + device | ✅ | 20/40 margins; SignalRail band colors; mute uses gray + diamond; text payloads wrap. |
 | Auto-hide `overlay_duration_ms` | ✅ | Timer per payload; `--overlay-demo` for deterministic checks. |
-| Slide/fade animation | ⛔ | Surfaces appear/disappear instantly; no slide-in tween. |
+| Slide/fade animation | ✅ | 180 ms ease-out opacity + 10 px offset via `overlay_ease`, repaint-gated while animating. |
 
 ## Benchmarks (Windows 11, 2560×1440, DX12, debug build)
 
@@ -75,10 +75,9 @@ window; RSS after idle; idle CPU over 10 s).
 | Idle CPU (10 s) | 7.19% | 12.03% |
 | Slider-drag CPU / 1% low | not measured (scripted drag) | not measured |
 
-## Cutover blockers
+## Cutover blockers (remaining = explicit user decisions, not code gaps)
 
-1. Update download/install + Mixer install banner.
-2. Mixer focus-loss auto-close.
-3. Running-app icons in the blacklist picker.
-4. Overlay slide animation (or explicit acceptance of the instant show).
-5. Hotkey ownership: only one host may run while the legacy app is open; document the migration step or rename the egui chords during coexistence.
+1. Mixer height is 400×240 (user-requested scroll hint) instead of the legacy 224; docking uses the legacy margins but the y origin shifts by 16 px.
+2. Hotkey ownership: only one host may own the global chords. The egui host behaves correctly when the legacy app is closed; coexistence requires closing the legacy app or changing the chords.
+3. Live installer execution against a real release was not exercised here (download/verify/launch paths are implemented and unit-tested).
+4. Cutover deletes/retires the old host renderer files; the user has not approved deletion yet.

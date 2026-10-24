@@ -5,7 +5,7 @@ use eframe::egui;
 use egui::{Color32, RichText, Sense, Shape, Stroke, WidgetInfo};
 
 use volumectl::config::{AppLabelStyle, Language};
-use volumectl::ui::{AppAction, AppState, AudioSessionState};
+use volumectl::ui::{AppAction, AppState, AudioSessionState, SurfaceId};
 
 use crate::i18n::{tr, Key};
 use crate::style::{self, Tokens};
@@ -27,6 +27,8 @@ pub struct MixerOptions {
     pub app_label_style: AppLabelStyle,
     pub sessions_supported: bool,
     pub error: Option<String>,
+    /// Update banner copy (available/downloading/ready), localized by the host.
+    pub banner: Option<String>,
 }
 
 /// Filtered, sorted session list for rendering.
@@ -227,6 +229,35 @@ pub fn show(
             ui.add_space(style::SPACE_2);
             system_row(ui, state, options, tokens, intents);
             ui.add_space(style::SPACE_2);
+
+            if let Some(banner) = &options.banner {
+                egui::Frame::NONE
+                    .fill(tokens.accent.gamma_multiply(0.18))
+                    .corner_radius(egui::CornerRadius::same(style::RADIUS_CONTROL))
+                    .inner_margin(egui::Margin::symmetric(8, 4))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(banner).small());
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .small_button(
+                                            tr(Key::SettingsUpdatesViewUpdate, language, &[])
+                                                .to_string(),
+                                        )
+                                        .clicked()
+                                    {
+                                        intents.push(MixerIntent::Action(AppAction::ShowSurface(
+                                            SurfaceId::Settings,
+                                        )));
+                                    }
+                                },
+                            );
+                        });
+                    });
+                ui.add_space(style::SPACE_2);
+            }
 
             if let Some(error) = &options.error {
                 ui.horizontal(|ui| {

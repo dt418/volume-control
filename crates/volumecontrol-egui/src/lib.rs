@@ -17,4 +17,5 @@ pub mod single_instance;
 pub mod sink;
 pub mod style;
 pub mod surfaces;
+pub mod updates;
 pub mod vibrancy;

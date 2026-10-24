@@ -9,6 +9,16 @@ use crate::i18n::{tr, Key};
 use crate::style::{self, Tokens};
 use crate::surfaces::mixer;
 
+/// Duration of the HUD slide/fade in milliseconds.
+pub const OVERLAY_ANIM_MS: u64 = 180;
+
+/// Ease-out progress for the HUD entrance (0 at start, 1 once settled).
+#[must_use]
+pub fn overlay_ease(elapsed_ms: u64) -> f32 {
+    let t = (elapsed_ms as f32 / OVERLAY_ANIM_MS as f32).clamp(0.0, 1.0);
+    1.0 - (1.0 - t) * (1.0 - t)
+}
+
 pub struct OverlayView<'a> {
     pub language: Language,
     pub is_dark: bool,
@@ -18,6 +28,8 @@ pub struct OverlayView<'a> {
     pub device: Option<&'a str>,
     pub green_up_to: u8,
     pub blue_up_to: u8,
+    /// Entrance progress 0..=1 (1 = fully settled, no offset).
+    pub progress: f32,
 }
 
 pub fn show(ui: &mut egui::Ui, view: &OverlayView<'_>) {
@@ -33,13 +45,17 @@ pub fn show(ui: &mut egui::Ui, view: &OverlayView<'_>) {
                 .corner_radius(egui::CornerRadius::same(style::RADIUS_HUD))
                 .inner_margin(egui::Margin::symmetric(12, 10)),
         )
-        .show(ui, |ui| match view.text {
-            Some(text) => {
-                ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                    ui.add(egui::Label::new(RichText::new(text).small()).wrap());
-                });
+        .show(ui, |ui| {
+            ui.set_opacity(view.progress.clamp(0.0, 1.0));
+            ui.add_space((1.0 - view.progress.clamp(0.0, 1.0)) * 10.0);
+            match view.text {
+                Some(text) => {
+                    ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+                        ui.add(egui::Label::new(RichText::new(text).small()).wrap());
+                    });
+                }
+                None => volume_layout(ui, view, &tokens),
             }
-            None => volume_layout(ui, view, &tokens),
         });
 }
 
@@ -85,4 +101,17 @@ fn volume_layout(ui: &mut egui::Ui, view: &OverlayView<'_>, tokens: &Tokens) {
         view.blue_up_to,
         tokens,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn overlay_ease_reaches_full_alpha_at_duration() {
+        assert_eq!(overlay_ease(0), 0.0);
+        assert!(overlay_ease(90) > 0.0 && overlay_ease(90) < 1.0);
+        assert_eq!(overlay_ease(180), 1.0);
+        assert_eq!(overlay_ease(10_000), 1.0);
+    }
 }
