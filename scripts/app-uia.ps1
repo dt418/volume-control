@@ -185,9 +185,10 @@ public static class UiaKeys {
     }
 }
 '@ -ErrorAction SilentlyContinue
-    # Header is disabled, so Down skips it: 1..9 = mute, reset, mixer,
-    # settings, help, check-updates, reload, open-config, exit.
-    for ($i = 0; $i -lt $TrayIndex; $i++) { [UiaKeys]::Tap(0x28) }
+    # The popup focuses row 1 (mute) on open; egui moves focus one row per
+    # Down. 1..9 = mute, reset, mixer, settings, help, check-updates, reload,
+    # open-config, exit.
+    for ($i = 1; $i -lt $TrayIndex; $i++) { [UiaKeys]::Tap(0x28) }
     [UiaKeys]::Tap(0x0D)
     Write-Output "invoked tray index $TrayIndex"
     exit 0

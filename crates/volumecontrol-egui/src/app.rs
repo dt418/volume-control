@@ -203,6 +203,7 @@ pub struct VolumeControlApp {
     revealed: std::collections::HashSet<SurfaceId>,
     root_revealed: bool,
     debug_ui: bool,
+    applied_debug_ui: Option<bool>,
     wheel: Option<WheelBridge>,
     wheel_actions: Option<Receiver<volumectl::hotkeys::HotkeyAction>>,
     smoke: bool,
@@ -336,6 +337,7 @@ impl VolumeControlApp {
             revealed: std::collections::HashSet::new(),
             root_revealed: false,
             debug_ui: options.debug_ui,
+            applied_debug_ui: None,
             wheel,
             wheel_actions,
             smoke: options.smoke,
@@ -423,6 +425,13 @@ impl VolumeControlApp {
             let (w, h) = crate::placement::logical_size(SurfaceId::Tray);
             egui::pos2(x / scale - w + 8.0, y / scale - h - 8.0)
         });
+    }
+
+    fn surface_material(&self, surface: SurfaceId) -> volumectl::ui::MaterialMode {
+        match self.config.appearance.material {
+            volumectl::ui::MaterialMode::Auto => vibrancy::material_for(surface),
+            requested => requested,
+        }
     }
 
     fn close_tray_menu(&mut self) {
@@ -1012,7 +1021,7 @@ impl VolumeControlApp {
         }
         self.vibrancy.apply(
             SurfaceId::Settings,
-            vibrancy::material_for(SurfaceId::Settings),
+            self.surface_material(SurfaceId::Settings),
             self.is_dark,
             self.state.language,
         );
@@ -1147,7 +1156,7 @@ impl VolumeControlApp {
         }
         self.vibrancy.apply(
             SurfaceId::Help,
-            vibrancy::material_for(SurfaceId::Help),
+            self.surface_material(SurfaceId::Help),
             self.is_dark,
             self.state.language,
         );
@@ -1230,7 +1239,7 @@ impl VolumeControlApp {
             }
             self.vibrancy.apply(
                 surface,
-                vibrancy::material_for(surface),
+                self.surface_material(surface),
                 self.is_dark,
                 self.state.language,
             );
@@ -1295,7 +1304,7 @@ impl VolumeControlApp {
             if open {
                 self.vibrancy.apply(
                     SurfaceId::Tray,
-                    vibrancy::material_for(SurfaceId::Tray),
+                    self.surface_material(SurfaceId::Tray),
                     self.is_dark,
                     self.state.language,
                 );
@@ -1305,12 +1314,18 @@ impl VolumeControlApp {
                 let focus_lost = self.tray_menu_seen_focus && !focused;
                 if escape || focus_lost || chosen.is_some() {
                     self.close_tray_menu();
+                    ctx.send_viewport_cmd_to(
+                        viewport_id(SurfaceId::Tray),
+                        ViewportCommand::Visible(false),
+                    );
                     if let Some(action) = chosen {
                         self.handle_tray_action(action, ctx);
                     }
                 }
             }
-            self.tray_was_open = self.tray_open;
+            // Use the frame-start value: closing flips `tray_open`, but the
+            // Visible(false) transition above already ran this frame.
+            self.tray_was_open = open;
         }
 
         if self.state.is_visible(SurfaceId::Overlay) {
@@ -1327,7 +1342,7 @@ impl VolumeControlApp {
             });
             self.vibrancy.apply(
                 SurfaceId::Overlay,
-                vibrancy::material_for(SurfaceId::Overlay),
+                self.surface_material(SurfaceId::Overlay),
                 self.is_dark,
                 self.state.language,
             );
@@ -1392,13 +1407,15 @@ impl eframe::App for VolumeControlApp {
         if ctx.input(|input| input.key_pressed(egui::Key::F12)) {
             self.debug_ui = !self.debug_ui;
         }
-        if self.debug_ui {
+        if self.applied_debug_ui != Some(self.debug_ui) {
+            let enabled = self.debug_ui;
             ctx.all_styles_mut(|style| {
-                style.debug.debug_on_hover = true;
-                style.debug.show_interactive_widgets = true;
-                style.debug.show_widget_hits = true;
-                style.debug.show_focused_widget = true;
+                style.debug.debug_on_hover = enabled;
+                style.debug.show_interactive_widgets = enabled;
+                style.debug.show_widget_hits = enabled;
+                style.debug.show_focused_widget = enabled;
             });
+            self.applied_debug_ui = Some(self.debug_ui);
         }
         if self.applied_dark != Some(self.is_dark) {
             style::apply(&ctx, self.is_dark, self.config.ui_font_size);

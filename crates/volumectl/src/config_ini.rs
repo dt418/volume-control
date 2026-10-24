@@ -468,6 +468,11 @@ fn parse_material(value: &str) -> Result<MaterialMode, ConfigError> {
     match value {
         "Auto" => Ok(MaterialMode::Auto),
         "Translucent" => Ok(MaterialMode::Translucent),
+        "Acrylic" => Ok(MaterialMode::Acrylic),
+        "Blur" => Ok(MaterialMode::Blur),
+        "Mica" => Ok(MaterialMode::Mica),
+        "Transparent" => Ok(MaterialMode::Transparent),
+        "LiquidGlass" => Ok(MaterialMode::LiquidGlass),
         "Opaque" => Ok(MaterialMode::Opaque),
         _ => Err(ini_error(
             "appearance.material",
@@ -671,6 +676,26 @@ mod tests {
 
         // Parsing adopts the platform blacklist normalization contract.
         assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn every_material_round_trips_through_ini() {
+        for material in [
+            MaterialMode::Auto,
+            MaterialMode::Translucent,
+            MaterialMode::Acrylic,
+            MaterialMode::Blur,
+            MaterialMode::Mica,
+            MaterialMode::Transparent,
+            MaterialMode::LiquidGlass,
+            MaterialMode::Opaque,
+        ] {
+            let mut config = full_config();
+            config.appearance.material = material;
+            let encoded = serialize_ini(&config).expect("serialize material");
+            let decoded = parse_ini(&encoded).expect("parse material");
+            assert_eq!(decoded.appearance.material, material, "{material:?}");
+        }
     }
 
     #[test]

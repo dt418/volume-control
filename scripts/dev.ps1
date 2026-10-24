@@ -36,10 +36,12 @@ function Get-LatestWrite {
 
 $stamp = [DateTime]::MinValue
 $app = $null
+$builtOnce = $false
 
 while ($true) {
     $latest = Get-LatestWrite
-    if (-not $app -or $latest -gt $stamp) {
+    if (-not $builtOnce -or $latest -gt $stamp) {
+        $builtOnce = $true
         if ($app -and -not $app.HasExited) {
             $app.Kill()
             $app.WaitForExit()

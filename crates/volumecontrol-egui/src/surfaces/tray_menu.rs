@@ -37,6 +37,7 @@ pub struct MenuState {
 /// Draw the menu and return the chosen action, if any.
 pub fn show(ui: &mut egui::Ui, state: MenuState) -> Option<TrayAction> {
     let tokens = style::tokens(state.is_dark);
+    let mut row_ids: Vec<egui::Id> = Vec::new();
     // Rows already carry their own 32 px height; default item spacing would
     // add 8 px per row and push the last items out of the fixed popup.
     ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
@@ -60,66 +61,71 @@ pub fn show(ui: &mut egui::Ui, state: MenuState) -> Option<TrayAction> {
                 .color(tokens.text),
             );
             separator(ui, tokens);
-            if row(
-                ui,
-                tokens,
-                if state.muted {
-                    icon::SPEAKER_SLASH
-                } else {
-                    icon::SPEAKER_HIGH
-                },
-                s.tray_mute,
-                state.muted,
-            ) {
-                action = Some(TrayAction::ToggleMute);
-            }
-            if row(
-                ui,
-                tokens,
-                icon::ARROW_COUNTER_CLOCKWISE,
-                s.tray_reset,
-                false,
-            ) {
-                action = Some(TrayAction::Reset50);
-            }
-            if row(ui, tokens, icon::SLIDERS, s.tray_mixer, false) {
-                action = Some(TrayAction::ShowMixer);
-            }
-            separator(ui, tokens);
-            if row(ui, tokens, icon::GEAR, s.tray_settings, false) {
-                action = Some(TrayAction::ShowSettings);
-            }
-            if row(ui, tokens, icon::QUESTION, s.tray_help, false) {
-                action = Some(TrayAction::ShowHelp);
-            }
-            if row(
-                ui,
-                tokens,
-                icon::ARROWS_CLOCKWISE,
-                s.tray_check_updates,
-                false,
-            ) {
-                action = Some(TrayAction::CheckUpdates);
-            }
-            if row(ui, tokens, icon::ARROW_CLOCKWISE, s.tray_reload, false) {
-                action = Some(TrayAction::ReloadConfig);
-            }
-            if row(ui, tokens, icon::FOLDER_OPEN, s.tray_edit, false) {
-                action = Some(TrayAction::OpenConfig);
-            }
-            separator(ui, tokens);
-            if row(ui, tokens, icon::POWER, s.tray_exit, false) {
-                action = Some(TrayAction::Exit);
+            let mute_icon = if state.muted {
+                icon::SPEAKER_SLASH
+            } else {
+                icon::SPEAKER_HIGH
+            };
+            {
+                let mut push = |clicked: bool, id: egui::Id, act: TrayAction| {
+                    row_ids.push(id);
+                    if clicked {
+                        action = Some(act);
+                    }
+                };
+                let (clicked, id) = row(ui, tokens, mute_icon, s.tray_mute, state.muted);
+                push(clicked, id, TrayAction::ToggleMute);
+                let (clicked, id) = row(
+                    ui,
+                    tokens,
+                    icon::ARROW_COUNTER_CLOCKWISE,
+                    s.tray_reset,
+                    false,
+                );
+                push(clicked, id, TrayAction::Reset50);
+                let (clicked, id) = row(ui, tokens, icon::SLIDERS, s.tray_mixer, false);
+                push(clicked, id, TrayAction::ShowMixer);
+                separator(ui, tokens);
+                let (clicked, id) = row(ui, tokens, icon::GEAR, s.tray_settings, false);
+                push(clicked, id, TrayAction::ShowSettings);
+                let (clicked, id) = row(ui, tokens, icon::QUESTION, s.tray_help, false);
+                push(clicked, id, TrayAction::ShowHelp);
+                let (clicked, id) = row(
+                    ui,
+                    tokens,
+                    icon::ARROWS_CLOCKWISE,
+                    s.tray_check_updates,
+                    false,
+                );
+                push(clicked, id, TrayAction::CheckUpdates);
+                let (clicked, id) = row(ui, tokens, icon::ARROW_CLOCKWISE, s.tray_reload, false);
+                push(clicked, id, TrayAction::ReloadConfig);
+                let (clicked, id) = row(ui, tokens, icon::FOLDER_OPEN, s.tray_edit, false);
+                push(clicked, id, TrayAction::OpenConfig);
+                separator(ui, tokens);
+                let (clicked, id) = row(ui, tokens, icon::POWER, s.tray_exit, false);
+                push(clicked, id, TrayAction::Exit);
             }
         });
 
-    ui.input(|input| {
-        if input.key_pressed(egui::Key::Escape) {
-            // A dedicated action would be nicer, but hiding happens in the app
-            // when the viewport loses focus; Escape closes the viewport itself.
-        }
-    });
+    focus_first_row(ui, &row_ids);
     action
+}
+
+/// Focus the first row on open so the popup is keyboard-usable; egui's own
+/// focus navigation then moves between rows with Up/Down.
+fn focus_first_row(ui: &egui::Ui, ids: &[egui::Id]) {
+    if ids.is_empty() {
+        return;
+    }
+    // Focus is context-wide, so a widget in another viewport can own it; only
+    // a row of this popup counts.
+    let owns_focus = ui
+        .memory(|memory| memory.focused())
+        .is_some_and(|id| ids.contains(&id));
+    if !owns_focus {
+        ui.memory_mut(|memory| memory.request_focus(ids[0]));
+    }
 }
 
 fn separator(ui: &mut egui::Ui, tokens: Tokens) {
@@ -132,7 +138,13 @@ fn separator(ui: &mut egui::Ui, tokens: Tokens) {
         .rect_filled(line, egui::CornerRadius::ZERO, tokens.border);
 }
 
-fn row(ui: &mut egui::Ui, tokens: Tokens, glyph: &str, label: &str, checked: bool) -> bool {
+fn row(
+    ui: &mut egui::Ui,
+    tokens: Tokens,
+    glyph: &str,
+    label: &str,
+    checked: bool,
+) -> (bool, egui::Id) {
     let width = ui.available_width();
     let (rect, response) =
         ui.allocate_exact_size(egui::vec2(width, ROW_HEIGHT), egui::Sense::click());
@@ -181,6 +193,7 @@ fn row(ui: &mut egui::Ui, tokens: Tokens, glyph: &str, label: &str, checked: boo
         node.set_role(egui::accesskit::Role::MenuItem);
         node.set_label(label.to_owned());
     });
-    response.clicked()
-        || (response.has_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)))
+    let activated = response.clicked()
+        || (response.has_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)));
+    (activated, response.id)
 }

@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-25T23:00",
+  "last_updated": "2026-10-25T23:50",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -35,6 +35,7 @@
       "user_visible_behavior": "The egui surfaces use one design-token system, the mixer shows card blocks with a pinned footer and scrollable session list, the HUD shows live volume for mouse and hotkey changes, speaker icons reflect mute/low/medium/high levels, and overlay/help/mixer positions match the legacy layout.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25 final review: INI accepts all material values (round-trip test), tray close transition hides the popup, saved material drives vibrancy per surface, tray rows take initial keyboard focus (UIA -TrayIndex 4 opens Settings), F12 clears debug flags, dev.ps1 waits for edits after a failed build.",
         "2026-10-25: captured the theme dropdown (check column first, 30 px rows, no hover shift), Settings title at 19 px, and the 400x280 mixer with ~1.4 session cards; `scripts/capture-window.ps1` uses PrintWindow so occluded wgpu windows capture reliably. Mixer is 400x280; tray popup 268x336 shows all nine rows. Egui tray popup replaces the native menu (persistent viewport, check/icon/label order, computed height, UIA scripts); material modes Auto/Translucent/Acrylic/Blur/Mica/Transparent/LiquidGlass/Opaque; 26-28px icon hit targets with hover/focus and AccessKit labels; --debug-ui/F12 plus VS Code launch configs and scripts/dev.ps1; mixer 400x280 with padded footer and in-field search icon.",
         "cargo test -p volumecontrol-egui: 70 tests pass (15 unit, 9 cli, 6 help, 8 mixer, 9 scaffold, 12 settings, 4 single_instance, 7 tray).",
         "cargo clippy -p volumecontrol-egui --all-targets --no-default-features -- -D warnings: clean.",
