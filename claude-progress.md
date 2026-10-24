@@ -1,5 +1,27 @@
 # Progress Log
 
+## Session 135 (2026-10-23) - Restore native WGPU surfaces and computer-use accessibility
+
+- Goal: native Winit/WGPU surfaces were white or blank; user could see no colored content. Restore real rendering and verify through `orca computer`.
+- Root cause:
+  - One shared `TextSystem` began with a 0x0 Glyphon viewport, and the first-window dimensions prevented the only resize path from running, so glyphs were clipped or projected outside the viewport.
+  - Continuous redraw requests could starve `WM_PAINT` delivery on Windows. Mixer rendered, but Settings, Help, and Overlay did not receive frames.
+  - Host had an unused AccessKit wrapper; no adapters or published semantic trees existed.
+- What landed:
+  - `crates/volumecontrol-host/src/paint.rs`: per-window `TextSystem` initialized at actual surface dimensions and synchronized every frame; nonzero window validation; ordinary WGPU presentation retained; failed DirectComposition experiment removed.
+  - `crates/volumecontrol-host/src/app.rs`: renders published scenes on the main event loop; adds AccessKit adapters before first show, semantic tree publication after rebuilds, and main-thread action dispatch.
+  - `crates/liquid_glass/src/text/system.rs`: nonzero viewport initialization plus resolution accessor; text tests assert the nonzero invariant and real resize.
+  - `crates/volumectl/src/audio/mod.rs`: Windows `default_backend()` now exposes the existing WASAPI backend through the shared factory.
+  - Added bounded `--smoke-ms=<milliseconds>` smoke dwell for actual GUI verification; default remains 2500 ms.
+- Verification:
+  - `cargo test --workspace --no-default-features`: 462 passed across 11 suites.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: no issues.
+  - `cargo fmt --all --check`: clean.
+  - Desktop screenshot `C:\Users\Thanh\AppData\Local\Temp\volumecontrol-host-all-final.png`: all four native surfaces and update toast render with dark materials and Vietnamese text.
+  - Computer-use on live `volumecontrol-host`: semantic tree contains Mute button; click changes it to Unmute; second click restores Mute.
+  - `cargo run -p volumecontrol-host -- --smoke`: exit 0 with all four scenes and update toast through the production loop.
+- Records: registered `vol-117` as passing. WebView paths remain; native keyboard/IME integration and macOS/Linux visual proof are still pending.
+
 ## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
 
 - Goal: after shipping v0.1.11, close the gaps the installed 0.1.10 build exposed: the update banner showed no install choice, the native toast carried no action and was English-only.
@@ -4393,3 +4415,26 @@ fn get_window_pid_x11() -> Option<u32> {
   (`0 */3 * * *`); `on.schedule` is parsed statically, so secrets/variables
   cannot configure it. `workflow_dispatch` remains available for immediate
   checks.
+
+## Session 136 (2026-10-24) - Native UI/UX computer-use debugging, surface overlap remediation, and Dioxus prototype evaluation
+
+- Goal: use computer use to build and debug UI/UX across all native surfaces, fix window placement and overlap bugs, implement keyboard/IME navigation, evaluate an isolated Dioxus Native prototype for Settings, and integrate native OS window vibrancy (window-vibrancy 0.8.1).
+- Landed:
+  - `crates/volumecontrol-host/src/vibrancy.rs`: cross-platform backdrop vibrancy module calling `window-vibrancy` on Windows (Mica for Settings, Acrylic for HUDs/Mixer) and macOS (`NSVisualEffectView` with `HudWindow`/`Sidebar`); Linux X11 sets `_KDE_NET_WM_BLUR_BEHIND_REGION` via x11rb after extracting the XID through raw-window-handle rwh_06 (winit 0.30's public `WindowExtX11` is an empty marker trait — the initial `xlib_window()` call was caught by a linux-target replica check and replaced with the verified `HasWindowHandle`/`as_raw` chain); Wayland protocol blur documented as compositor-rule owned.
+  - `crates/liquid_glass/src/gpu/surface.rs`: `SurfaceManager::new` gained a `transparent` flag selecting `CompositeAlphaMode::PreMultiplied` (Opaque fallback when unsupported) so the native Mica/Acrylic/NSVisualEffectView backdrop shows through the swapchain instead of being hidden behind an opaque frame.
+  - `crates/volumecontrol-host/src/placement.rs`: corrected `Mixer` and `Help` docking to bottom-right directly above the volume overlay (`MIXER_OVERLAY_GAP = 8px`) and tray clearance.
+  - `crates/liquid_glass/src/surfaces/mixer.rs`: added visual Accent fill indicators to master and audio session volume sliders; resolved `@%SystemRoot%\System32\AudioSrv.Dll` to friendly label "System Sounds"; fixed Unicode lowercasing in search.
+  - `crates/volumectl/src/linux_host_core.rs`: enforced mutual exclusion (`show_surface_exclusive`) among interactive menu surfaces (`Mixer`, `Settings`, `Help`) so opening one closes competing surfaces while keeping HUD overlay intact.
+  - `crates/volumecontrol-host/src/app.rs`: added CLI `--surface=<mixer|settings|help|overlay>` for targeted debugging; wired keyboard focus traversal (`Tab`, `Shift+Tab`), `Enter`/`Space` activation, `Escape` surface dismiss, and Winit IME text commit for Mixer search.
+  - `crates/dioxus-settings-prototype`: standalone isolated Dioxus 0.7.10 prototype evaluating declarative RSX ergonomics and VirtualDom reactivity without touching production host or config.
+  - Visual polish pass: text-alignment engine in `paint.rs collect_text_areas` (vertical centering everywhere, horizontal centering for `Control`/`Accent` roles, 8 px label padding) + `SceneNode::text_centered` override; mixer layout polish (64 px mute buttons, 190 px sliders, "Tìm ứng dụng…" search placeholder, `fit_label` 104 px labels with ellipsis, session-count footer "N phiên ứng dụng · Esc để đóng"); a11y keeps the full display name while the pill shows the fitted one (verified live: slider announces "System Sounds volume").
+  - Full-app review and test pass: fixed the smoke acceptance regression where `show_surface_exclusive` prevented `Mixer`+`Settings`+`Help` from being open simultaneously — `HostApp` now tracks `smoke_seen: HashSet<SurfaceId>` across scene rebuilds and cycles `ShowSurface` in `pump_host` until every surface has been presented once. `volumecontrol-host --smoke` exits 0 again.
+- Verification:
+  - `cargo test --workspace --no-default-features`: 467 tests passed across 11 suites.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: 0 errors, 0 warnings.
+  - `cargo fmt --all --check`: clean.
+  - `cargo run -p volumecontrol-host -- --smoke --smoke-ms=10000`: exit 0 with all surfaces presented through the production loop.
+  - Computer-use interactive inspection: validated isolated Mixer slider drag, Mute click toggle, Settings tab navigation and draft cancel, Help shortcut list and Escape dismiss, and Overlay HUD rendering with native backdrop vibrancy.
+- Decision: keep production on native `liquid_glass` WGPU/Winit renderer with native OS vibrancy enhancements.
+- Legacy reference capture (2026-10-24, computer use on installed v0.1.11): full UIA enumeration + screenshots of Mixer, all 6 Settings tabs (top + scrolled-bottom), Help, Overlay toast, and hotkey/tray behaviors; saved to `docs/references/legacy-app/img/` and documented in `docs/references/legacy-app/feature-reference.md` with e2e coverage mapping and the native-parity gap table (tray, hotkey recorders, blacklist/beep/threshold UI, update install flow, mixer header controls, and 9 stubbed `AppAction`s are the dominant gaps).
+- Visual polish pass (2026-10-24): text is now vertically centered in every node and horizontally centered for button-like roles (`Control`/`Accent`, per-node override `SceneNode::text_centered` + `with_text_centered`), left-aligned text gains 8 px padding; Mixer mute buttons widened to 64 px, sliders re-flowed to 190 px, labels fit to a 104 px column with `…` truncation (`fit_label`), search field shows the "Tìm ứng dụng…" placeholder, and a legacy-parity footer "N phiên ứng dụng · Esc để đóng" was added. Verified by computer-use screenshots (Mixer + Settings) and full gates: 467 tests / clippy clean / fmt clean.

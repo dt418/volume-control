@@ -567,11 +567,42 @@ impl AppCore {
                 self.config.appearance.motion = motion;
                 self.save_and_adopt();
             }
-            // ── Not wired yet (host integration / webview surfaces). ─────
-            A::ApplyConfig | A::CancelConfig | A::ResetConfig => {
-                log::debug!(
-                    "settings-window intents are driven by the webview surface (later task)"
-                );
+            A::SetAccent(accent) => {
+                self.config.appearance.accent = accent;
+                self.save_and_adopt();
+            }
+            A::SetLanguage(language) => {
+                self.config.language = language;
+                self.save_and_adopt();
+            }
+            A::ApplyConfigDraft(patch) => {
+                if let Err(error) = self.update_settings(*patch) {
+                    log::warn!("Settings draft rejected: {error}");
+                } else if let Err(error) = self.save_config() {
+                    log::warn!("Settings draft persist failed: {error}");
+                }
+            }
+            A::ApplyConfig => {
+                self.save_and_adopt();
+            }
+            A::CancelConfig => {
+                self.force_reload_config();
+            }
+            A::ResetConfig => {
+                self.config = crate::config::Config::default();
+                self.save_and_adopt();
+            }
+            A::SetSessionVolume { id, percent } => {
+                if let Err(e) = self.set_session_volume(&id, percent) {
+                    log::warn!("Failed to set session volume for {}: {}", id, e);
+                }
+                self.publish_confirmed_state(false);
+            }
+            A::ToggleSessionMute { id } => {
+                if let Err(e) = self.mute_session(&id) {
+                    log::warn!("Failed to toggle session mute for {}: {}", id, e);
+                }
+                self.publish_confirmed_state(false);
             }
             A::OpenConfigLocation => {
                 crate::config::open_in_editor();

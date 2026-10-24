@@ -350,6 +350,7 @@ fn test_caps_with_compositor(compositor: bool) -> volumectl_lib::ui::UiCapabilit
         blur: compositor,
         high_contrast: false,
         reduced_motion: false,
+        reduced_transparency: false,
         dpi_scale: 1.0,
         work_area: volumectl_lib::ui::WorkArea::new(0, 0, 1600, 900),
     }
@@ -361,6 +362,7 @@ fn test_caps() -> volumectl_lib::ui::UiCapabilities {
         blur: false,
         high_contrast: false,
         reduced_motion: false,
+        reduced_transparency: false,
         dpi_scale: 1.0,
         work_area: volumectl_lib::ui::WorkArea::new(0, 0, 1600, 900),
     }

@@ -1,5 +1,18 @@
 # Session Handoff
 
+## Session 135 (2026-10-23) - Restore native WGPU surfaces and computer-use accessibility
+
+- Summary: fixed white/blank native surfaces, added deterministic main-loop rendering, per-window text viewports, and working AccessKit/computer-use controls.
+- Changes:
+  - `crates/volumecontrol-host/src/app.rs`: AccessKit adapters before first show, semantic trees after rebuilds, main-thread action dispatch, all-scene rendering.
+  - `crates/volumecontrol-host/src/paint.rs`: per-window `TextSystem`, actual physical-pixel sizes, nonzero dimension validation, normal WGPU surfaces.
+  - `crates/liquid_glass/src/text/system.rs`: nonzero initial Glyphon viewport and test accessor.
+  - `crates/volumectl/src/audio/mod.rs`: shared `default_backend()` supports Windows WASAPI.
+  - `docs/plans/rust-ui-liquid-glass/runtime-adapter.md`: Windows visual and computer-use proof recorded.
+  - `feature_list.json` and `claude-progress.md`: `vol-117`, Session 135.
+- Verification: workspace tests 462 passed across 11 suites; clippy `-D warnings` clean; fmt clean. Desktop screenshot has all four native surfaces and toast. Computer-use clicked Mute -> Unmute -> Mute.
+- Remaining: keyboard/IME integration and macOS/Linux visual proof; WebView paths remain until full parity.
+
 ## Session 131 (2026-10-23) - VolumeControl v0.1.11 version bump and release preparation
 
 - Summary: Bumped version from 0.1.10 to 0.1.11 across all package manifests and lock files, updated CHANGELOG.md, verified version sync, and prepared tag v0.1.11 for release publishing.

@@ -19,6 +19,8 @@ pub struct UiCapabilities {
     pub high_contrast: bool,
     /// The system prefers reduced motion (animations should be limited).
     pub reduced_motion: bool,
+    /// The system prefers reduced transparency (translucent glass should be opaque).
+    pub reduced_transparency: bool,
     /// DPI scale factor in effect (for example 1.0, 1.25, 1.5).
     pub dpi_scale: f32,
     /// Monitor work area the surfaces are placed against.
@@ -65,7 +67,7 @@ impl ResolvedMaterial {
 /// An explicit [`MaterialMode::Translucent`] request resolves to translucent
 /// (never blurred), still degrading to opaque without a compositor.
 pub fn resolve_material(requested: MaterialMode, caps: &UiCapabilities) -> ResolvedMaterial {
-    if caps.high_contrast || requested == MaterialMode::Opaque {
+    if caps.high_contrast || caps.reduced_transparency || requested == MaterialMode::Opaque {
         return ResolvedMaterial::Opaque;
     }
     match requested {
@@ -118,6 +120,7 @@ mod tests {
             blur,
             high_contrast,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: 1.0,
             work_area: WorkArea::new(0, 0, 2560, 1400),
         }
@@ -207,6 +210,20 @@ mod tests {
         assert!(ResolvedMaterial::Translucent.is_translucent());
     }
 
+    #[test]
+    fn reduced_transparency_forces_opaque_regardless_of_compositor() {
+        let mut c = caps(true, true, false);
+        c.reduced_transparency = true;
+        assert_eq!(
+            resolve_material(MaterialMode::Auto, &c),
+            ResolvedMaterial::Opaque
+        );
+        assert_eq!(
+            resolve_material(MaterialMode::Translucent, &c),
+            ResolvedMaterial::Opaque
+        );
+    }
+
     // --- motion resolution -------------------------------------------------------
 
     fn motion_caps(reduced_motion: bool) -> UiCapabilities {
@@ -215,6 +232,7 @@ mod tests {
             blur: true,
             high_contrast: false,
             reduced_motion,
+            reduced_transparency: false,
             dpi_scale: 1.0,
             work_area: WorkArea::new(0, 0, 2560, 1400),
         }

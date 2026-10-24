@@ -153,3 +153,6 @@ src-tauri/gen
 !.claude/skills/writing-skills/
 
 scripts/.test-format-lint.lock
+
+# Nested crate build artifacts
+crates/*/target/

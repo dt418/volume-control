@@ -77,6 +77,7 @@ fn detect_caps() -> UiCapabilities {
             blur: true,
             high_contrast: false,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: 1.0,
             work_area: FALLBACK_WORK_AREA,
         };
@@ -88,6 +89,7 @@ fn detect_caps() -> UiCapabilities {
             blur: true,
             high_contrast: false,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: 1.0,
             work_area: FALLBACK_WORK_AREA,
         };
@@ -114,6 +116,7 @@ fn detect_caps() -> UiCapabilities {
         // in this first host slice. Renderer fallback remains deterministic.
         high_contrast: false,
         reduced_motion: false,
+        reduced_transparency: false,
         dpi_scale: scale,
         work_area,
     }

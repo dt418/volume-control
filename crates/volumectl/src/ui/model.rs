@@ -83,6 +83,19 @@ pub enum UiStatus {
     Error(String),
 }
 
+/// Confirmed state of an application audio session in the per-app mixer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct AudioSessionState {
+    pub id: String,
+    pub name: String,
+    pub process: String,
+    pub display_name: Option<String>,
+    pub volume_percent: u8,
+    pub muted: bool,
+    pub active: bool,
+    pub system: bool,
+}
+
 /// Confirmed state published by the application host to every renderer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AppState {
@@ -98,11 +111,15 @@ pub struct AppState {
     pub theme: ThemeMode,
     pub material: MaterialMode,
     pub motion: MotionMode,
+    pub accent: AccentMode,
     /// UI language for surface copy (defaults to English for older state).
     #[serde(default)]
     pub language: Language,
     /// Host/audio synchronization status.
     pub status: UiStatus,
+    /// Active audio sessions in the per-app mixer.
+    #[serde(default)]
+    pub sessions: Vec<AudioSessionState>,
 }
 
 impl AppState {
@@ -187,12 +204,17 @@ pub enum AppAction {
     HideSurface(SurfaceId),
     ToggleSurface(SurfaceId),
     OpenTrayMenu,
+    ApplyConfigDraft(Box<crate::host_core::SettingsPatch>),
     ApplyConfig,
     CancelConfig,
     ResetConfig,
     SetTheme(ThemeMode),
     SetMaterial(MaterialMode),
     SetMotion(MotionMode),
+    SetAccent(AccentMode),
+    SetLanguage(Language),
+    SetSessionVolume { id: String, percent: u8 },
+    ToggleSessionMute { id: String },
     OpenConfigLocation,
     ReloadConfig,
     CheckUpdates,
@@ -261,5 +283,47 @@ mod tests {
         let decoded: AppState = serde_json::from_str(&encoded).expect("state deserializes");
 
         assert_eq!(decoded, state);
+    }
+
+    #[test]
+    fn app_state_with_sessions_and_accent_round_trips_through_serde() {
+        let mut state = AppState::from_audio(60, false, Some("Headphones".into()));
+        state.accent = AccentMode::Purple;
+        state.sessions.push(AudioSessionState {
+            id: "spotify.exe".into(),
+            name: "Spotify".into(),
+            process: "spotify.exe".into(),
+            display_name: Some("Spotify Music".into()),
+            volume_percent: 85,
+            muted: false,
+            active: true,
+            system: false,
+        });
+
+        let json = serde_json::to_string(&state).expect("state serializes");
+        let restored: AppState = serde_json::from_str(&json).expect("state deserializes");
+        assert_eq!(restored, state);
+        assert_eq!(restored.sessions.len(), 1);
+        assert_eq!(restored.sessions[0].name, "Spotify");
+        assert_eq!(restored.accent, AccentMode::Purple);
+    }
+
+    #[test]
+    fn session_actions_variants() {
+        let vol_act = AppAction::SetSessionVolume {
+            id: "app1".into(),
+            percent: 75,
+        };
+        let mute_act = AppAction::ToggleSessionMute { id: "app1".into() };
+        let accent_act = AppAction::SetAccent(AccentMode::Green);
+        let lang_act = AppAction::SetLanguage(Language::Vi);
+
+        assert_eq!(vol_act.normalized(), None);
+        assert_eq!(mute_act.normalized(), None);
+        assert!(matches!(
+            accent_act,
+            AppAction::SetAccent(AccentMode::Green)
+        ));
+        assert!(matches!(lang_act, AppAction::SetLanguage(Language::Vi)));
     }
 }

@@ -135,6 +135,30 @@ pub fn reduced_motion_enabled() -> bool {
     }
 }
 
+/// Whether the system transparency is disabled (Windows "Transparency effects" toggle off).
+///
+/// Reads `EnableTransparency` from
+/// `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`.
+/// When 0, the user disabled transparency, so reduced transparency is in effect.
+pub fn reduced_transparency_enabled() -> bool {
+    unsafe {
+        let mut value = 1u32;
+        let mut size = std::mem::size_of::<u32>() as u32;
+        let ok = RegGetValueW(
+            HKEY_CURRENT_USER,
+            windows_sys::core::w!(
+                "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"
+            ),
+            windows_sys::core::w!("EnableTransparency"),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            &mut value as *mut u32 as *mut _,
+            &mut size,
+        ) == 0;
+        ok && value == 0
+    }
+}
+
 /// DPI scale factor (for example 1.0, 1.25, 1.5) for the display hosting
 /// `hwnd`.
 ///
@@ -272,6 +296,7 @@ pub fn detect_capabilities(hwnd: HWND) -> UiCapabilities {
         blur: compositor,
         high_contrast: high_contrast_enabled(),
         reduced_motion: reduced_motion_enabled(),
+        reduced_transparency: reduced_transparency_enabled(),
         dpi_scale: dpi_scale_for(hwnd),
         work_area: work_area_for(hwnd),
     }

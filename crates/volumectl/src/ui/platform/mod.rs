@@ -30,5 +30,5 @@ pub mod macos;
 /// Compile-safe boundary consuming only shared [`crate::ui`] types; the GTK
 /// surface code lives in this module's `canvas` submodule behind the
 /// `gtk-renderer` feature and the PulseAudio backend in `crate::audio_linux`.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", test))]
 pub mod linux;
