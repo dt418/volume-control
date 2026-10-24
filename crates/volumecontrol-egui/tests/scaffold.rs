@@ -86,7 +86,7 @@ fn mixer_is_a_borderless_always_on_top_hud() {
     assert_eq!(builder.window_level, Some(egui::WindowLevel::AlwaysOnTop));
     assert_eq!(builder.taskbar, Some(false));
     assert_eq!(builder.decorations, Some(false));
-    assert_eq!(builder.transparent, Some(true));
+    assert_eq!(builder.transparent, None);
     assert_eq!(builder.resizable, Some(false));
     assert_eq!(
         builder.position,

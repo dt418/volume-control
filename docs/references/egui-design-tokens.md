@@ -60,7 +60,7 @@ through the surface while text stays readable.
 
 ## 5. Typography scale
 
-Base size = `Config.ui_font_size` (9–24, default 14). Every text style derives
+Base size = `Config.ui_font_size` (9–24, default 15). Every text style derives
 from it; views must not hardcode `size(...)`.
 
 | Token | Multiplier | At 14 px | Usage |

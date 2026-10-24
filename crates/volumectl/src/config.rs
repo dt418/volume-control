@@ -281,7 +281,7 @@ pub struct Config {
 }
 
 fn default_ui_font_size() -> u8 {
-    14
+    15
 }
 
 /// Beep feedback settings (mirrors VolumePro's `[Beep]` section).

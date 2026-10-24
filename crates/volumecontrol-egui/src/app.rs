@@ -47,6 +47,7 @@ pub struct LaunchOptions {
     pub show_all: bool,
     pub target_surface: Option<SurfaceId>,
     pub settings_tab: Option<Tab>,
+    pub overlay_demo: bool,
 }
 
 impl Default for LaunchOptions {
@@ -57,6 +58,7 @@ impl Default for LaunchOptions {
             show_all: false,
             target_surface: None,
             settings_tab: None,
+            overlay_demo: false,
         }
     }
 }
@@ -101,7 +103,6 @@ pub fn builder_for(
     match surface {
         SurfaceId::Mixer => builder
             .with_decorations(false)
-            .with_transparent(true)
             .with_resizable(false)
             .with_always_on_top()
             .with_taskbar(false),
@@ -176,6 +177,7 @@ pub struct VolumeControlApp {
     smoke_seen: HashSet<SurfaceId>,
     smoke_toast_shown: bool,
     smoke_verified: Arc<AtomicBool>,
+    overlay_demo_shown: bool,
 }
 
 impl VolumeControlApp {
@@ -299,6 +301,7 @@ impl VolumeControlApp {
             smoke_seen: HashSet::new(),
             smoke_toast_shown: false,
             smoke_verified,
+            overlay_demo_shown: false,
         }
     }
 
@@ -927,12 +930,9 @@ impl VolumeControlApp {
                 }
             }
         }
-        self.vibrancy.apply(
-            SurfaceId::Mixer,
-            vibrancy::material_for(SurfaceId::Mixer),
-            self.is_dark,
-            self.state.language,
-        );
+        // The Mixer shell is opaque; leaving Acrylic enabled makes Windows
+        // composite the whole surface and softens text. Only translucent
+        // surfaces get a native backdrop.
     }
 
     fn show_help(&mut self, ui: &mut egui::Ui) {
@@ -1180,6 +1180,11 @@ impl eframe::App for VolumeControlApp {
 
         self.show_children(&ctx);
 
+        if self.options.overlay_demo && !self.overlay_demo_shown {
+            self.overlay_demo_shown = true;
+            self.core
+                .show_overlay_text(tr(Key::AppName, self.state.language, &[]).to_string());
+        }
         if self.smoke && !self.smoke_toast_shown {
             self.smoke_toast_shown = true;
             self.core

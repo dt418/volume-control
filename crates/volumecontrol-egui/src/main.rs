@@ -24,6 +24,7 @@ fn parse_options() -> LaunchOptions {
         match arg.as_str() {
             "--smoke" => options.smoke = true,
             "--show-all" => options.show_all = true,
+            "--overlay-demo" => options.overlay_demo = true,
             _ => {
                 if let Some(ms) = arg
                     .strip_prefix("--smoke-ms=")
