@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Volume Control
+Comment=System volume mixer and hotkeys
+Exec=volumecontrol-host
+Icon=volumecontrol
+Terminal=false
+Categories=AudioVideo;Audio;Utility;
+StartupNotify=false

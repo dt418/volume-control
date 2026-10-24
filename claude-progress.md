@@ -1,3 +1,8 @@
+- Session 141 (2026-10-25) - Native packaging pipeline
+  - Added NSIS installer (`packaging/egui/windows.nsi`), `scripts/package-egui.ps1` (setup + portable zip + SHA256), and `scripts/package-egui.sh` (Linux tar.gz with desktop entry; macOS .app zip with ad-hoc signing).
+  - Added `.github/workflows/egui-release.yml` (Windows/Ubuntu/macOS artifacts, gated release upload via `EGUI_RELEASE_PUBLISH`) and `docs/dev/packaging.md`.
+  - Fixed release build: egui gates `Style::debug` on `debug_assertions`; the host now applies DebugOptions only in debug builds and logs a release warning.
+  - Verification: release build succeeds; installer built (4.8 MB) and zip (6.3 MB); silent install/uninstall cleaned files, desktop shortcut, and HKCU key; release `--smoke` exit 0; CLI get 55.
 - Session 140 (2026-10-25) - Cross-platform egui CI
   - Added `.github/workflows/egui-host.yml`: builds and tests `volumectl`, `volumecontrol-egui`, `liquid_glass` on windows-2025/ubuntu-24.04/macos-15, with Linux windowing deps, clippy `-D warnings`, and fmt. This closes the compile/unit portion of the Linux/macOS gap; visual runtime proof and the live installer still need real hardware/releases.
   - Verified locally with the exact CI command (`cargo test -p volumectl -p volumecontrol-egui -p liquid_glass`) — all suites pass; YAML parses.

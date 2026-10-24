@@ -1408,13 +1408,22 @@ impl eframe::App for VolumeControlApp {
             self.debug_ui = !self.debug_ui;
         }
         if self.applied_debug_ui != Some(self.debug_ui) {
-            let enabled = self.debug_ui;
-            ctx.all_styles_mut(|style| {
-                style.debug.debug_on_hover = enabled;
-                style.debug.show_interactive_widgets = enabled;
-                style.debug.show_widget_hits = enabled;
-                style.debug.show_focused_widget = enabled;
-            });
+            // `Style::debug` only exists in debug builds (egui gates it on
+            // `debug_assertions`), so release ignores --debug-ui/F12.
+            #[cfg(debug_assertions)]
+            {
+                let enabled = self.debug_ui;
+                ctx.all_styles_mut(|style| {
+                    style.debug.debug_on_hover = enabled;
+                    style.debug.show_interactive_widgets = enabled;
+                    style.debug.show_widget_hits = enabled;
+                    style.debug.show_focused_widget = enabled;
+                });
+            }
+            #[cfg(not(debug_assertions))]
+            if self.debug_ui {
+                log::warn!("--debug-ui/F12 is unavailable in release builds");
+            }
             self.applied_debug_ui = Some(self.debug_ui);
         }
         if self.applied_dark != Some(self.is_dark) {
