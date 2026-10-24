@@ -30,7 +30,7 @@ use crate::surfaces::tray::{Tray, TrayAction};
 use crate::vibrancy::{self, VibrancyState};
 
 /// Cadence for hotkey/audio/config polling, matching the legacy host timer.
-const SLOW_POLL: Duration = Duration::from_millis(50);
+const SLOW_POLL: Duration = Duration::from_millis(150);
 
 /// Off-screen position for the parked Mixer root.
 ///
