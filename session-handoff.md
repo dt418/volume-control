@@ -1,5 +1,10 @@
 # Session Handoff
 
+## Session 142 (2026-10-25) - Native packaging names aligned with the updater
+
+- Summary: packaged artifacts now use the host updater's asset contract so one file set serves both the in-app updater and the native release pipeline.
+- Changes: Windows setup `VolumeControl_<ver>_x64-setup.exe`; Linux `volumecontrol-<ver>-linux-amd64.tar.gz`; macOS `volumecontrol-<ver>-macos.zip`. NSIS, package scripts, workflow globs, and `docs/dev/packaging.md` updated.
+- Verification: setup rebuilt (4.8 MB) + zip (6.3 MB) + SHA256SUMS; silent install into a temp dir installed `volumecontrol-host.exe`, silent uninstall removed everything.
 ## Session 139 (2026-10-25) - Host binary name finalized
 
 - Summary: after removing the native host crate, the egui binary takes the plan's final name `volumecontrol-host` (no collision remains). Tauri `VolumeControl.exe` still exists for its separate packaging path.

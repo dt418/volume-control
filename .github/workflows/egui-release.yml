@@ -66,12 +66,14 @@ jobs:
         run: |
           ls -la output/egui
           test -f output/egui/SHA256SUMS.txt
-          compgen -G "output/egui/VolumeControl-*" >/dev/null
+          compgen -G "output/egui/*" >/dev/null
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
-            output/egui/VolumeControl-*
+            output/egui/*.exe
+            output/egui/*.zip
+            output/egui/*.tar.gz
             output/egui/SHA256SUMS.txt
           if-no-files-found: error
 
@@ -89,5 +91,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          find dist -type f -name 'VolumeControl-*' -print0 |
+          find dist -type f \( -name 'VolumeControl*' -o -name 'volumecontrol-*' \) -print0 |
             xargs -0 gh release upload "$TAG" --clobber

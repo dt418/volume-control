@@ -1,3 +1,6 @@
+- Session 142 (2026-10-25) - Updater-compatible package names
+  - Windows setup is `VolumeControl_<ver>_x64-setup.exe`, Linux `volumecontrol-<ver>-linux-amd64.tar.gz`, macOS `volumecontrol-<ver>-macos.zip` — matching `crates/volumecontrol-egui/src/updates.rs` so the in-app updater finds native release assets.
+  - Verification: rebuilt artifacts + SHA256SUMS; silent install/uninstall round-trip clean.
 - Session 141 (2026-10-25) - Native packaging pipeline
   - Added NSIS installer (`packaging/egui/windows.nsi`), `scripts/package-egui.ps1` (setup + portable zip + SHA256), and `scripts/package-egui.sh` (Linux tar.gz with desktop entry; macOS .app zip with ad-hoc signing).
   - Added `.github/workflows/egui-release.yml` (Windows/Ubuntu/macOS artifacts, gated release upload via `EGUI_RELEASE_PUBLISH`) and `docs/dev/packaging.md`.

@@ -4,9 +4,9 @@ The egui host packages without Tauri:
 
 | Platform | Script | Output |
 |---|---|---|
-| Windows | `scripts/package-egui.ps1` | `VolumeControl-<ver>-x64-setup.exe` (NSIS, per-user), portable `.zip`, `SHA256SUMS.txt` |
-| Linux | `scripts/package-egui.sh` | `VolumeControl-<ver>-linux-<arch>.tar.gz` (binary + `.desktop` + icon), `SHA256SUMS.txt` |
-| macOS | `scripts/package-egui.sh` | `VolumeControl-<ver>-macos-<arch>.zip` (`VolumeControl.app`), `SHA256SUMS.txt` |
+| Windows | `scripts/package-egui.ps1` | `VolumeControl_<ver>_x64-setup.exe` (NSIS, per-user; updater contract), portable `.zip`, `SHA256SUMS.txt` |
+| Linux | `scripts/package-egui.sh` | `volumecontrol-<ver>-linux-amd64.tar.gz` (binary + `.desktop` + icon), `SHA256SUMS.txt` |
+| macOS | `scripts/package-egui.sh` | `volumecontrol-<ver>-macos.zip` (`VolumeControl.app`), `SHA256SUMS.txt` |
 
 Version defaults to `src-tauri/tauri.conf.json` until versioning moves into the
 Rust workspace.
@@ -33,7 +33,7 @@ manual until the first verified native release.
 
 ## Verified locally (2026-10-25)
 
-- `scripts/package-egui.ps1` → `VolumeControl-0.1.11-x64-setup.exe` (4.8 MB) +
+- `scripts/package-egui.ps1` → `VolumeControl_0.1.11_x64-setup.exe` (4.8 MB) +
   portable zip (6.3 MB) + `SHA256SUMS.txt`.
 - Silent install into a temp dir produced the app and uninstaller; silent
   uninstall removed both, the desktop shortcut, and the HKCU uninstall key.

@@ -3,8 +3,9 @@
 #
 #   scripts/package-egui.sh [version] [output-root]
 #
-# Linux:  VolumeControl-<ver>-linux-x64.tar.gz (binary + .desktop + icon)
-# macOS:  VolumeControl-<ver>-macos-<arch>.zip (.app bundle)
+# Linux:  volumecontrol-<ver>-linux-amd64.tar.gz (binary + .desktop + icon)
+# macOS:  volumecontrol-<ver>-macos.zip (.app bundle)
+# Names match the host updater's asset contract.
 # plus SHA256SUMS.txt. Signing/notarization is out of scope.
 set -euo pipefail
 
@@ -41,7 +42,7 @@ Install (per user):
 The host needs a compositor for translucency; blur is compositor-controlled
 (KWin, GNOME Blur My Shell, Hyprland).
 EOF
-    tar -C "$stage" -czf "$out_root/VolumeControl-$version-linux-$(uname -m).tar.gz" .
+    tar -C "$stage" -czf "$out_root/volumecontrol-$version-linux-amd64.tar.gz" .
     ;;
   Darwin)
     arch=$(uname -m)
@@ -55,7 +56,7 @@ EOF
     if command -v codesign >/dev/null 2>&1; then
       codesign --force --deep --sign - "$app" || echo "ad-hoc signing failed" >&2
     fi
-    (cd "$stage" && zip -qry "../VolumeControl-$version-macos-$arch.zip" "VolumeControl.app")
+    (cd "$stage" && zip -qry "../volumecontrol-$version-macos.zip" "VolumeControl.app")
     ;;
   *)
     echo "unsupported platform: $(uname -s)" >&2
@@ -66,7 +67,7 @@ esac
 (
   cd "$out_root"
   rm -f SHA256SUMS.txt
-  for f in VolumeControl-*.tar.gz VolumeControl-*.zip; do
+  for f in volumecontrol-*.tar.gz volumecontrol-*.zip VolumeControl-*.zip; do
     [[ -e "$f" ]] || continue
     if command -v sha256sum >/dev/null 2>&1; then
       sha256sum "$f" >> SHA256SUMS.txt

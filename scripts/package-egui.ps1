@@ -1,7 +1,7 @@
 # Build the native egui host and package it for Windows.
 #
 # Output (default output\egui):
-#   VolumeControl-<version>-x64-setup.exe   NSIS installer (per-user)
+#   VolumeControl_<version>_x64-setup.exe   NSIS installer (per-user; matches the updater contract)
 #   VolumeControl-<version>-x64.zip         portable build
 #   SHA256SUMS.txt
 #
@@ -48,7 +48,7 @@ try {
     $zip = Join-Path $outDir "VolumeControl-$Version-x64.zip"
     Compress-Archive -Path (Join-Path $stage 'volumecontrol-host.exe') -DestinationPath $zip -Force
 
-    $setup = Join-Path $outDir "VolumeControl-$Version-x64-setup.exe"
+    $setup = Join-Path $outDir "VolumeControl_$Version`_x64-setup.exe"
     $icon = Join-Path $root 'src-tauri/icons/icon.ico'
     & $Makensis /V2 `
         "/DVERSION=$Version" `
