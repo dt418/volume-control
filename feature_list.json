@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-25T22:00",
+  "last_updated": "2026-10-25T22:20",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -21,8 +21,9 @@
       "area": "egui-migration",
       "title": "Backlog: egui UI/UX optimization pass",
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
-      "status": "not_started",
-      "verification": [],
+      "status": "in_progress",
+      "verification": [
+        "2026-10-25: UI/UX pass under way — tray popup, material modes, 26–28 px icon targets, type ramp, mixer 400×280, dropdown check/icon/label order, padded footer; docs in docs/dev/ui-system.md."],
       "evidence": [],
       "notes": "Requested by the user to be scheduled after the current goal. Start from docs/references/egui-design-tokens.md and docs/references/legacy-app/feature-reference.md."
     },
@@ -60,6 +61,7 @@
       "user_visible_behavior": "The egui Mixer shows the legacy header (title, live percentage or 'Đã tắt tiếng', gear/help/close icons), search pill, system-output row with mute and reset-50 controls, sorted session rows, an empty/unsupported state, and the session-count footer with 'Esc để đóng'.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25: mixer resized to 400×280 (~1.4 session cards), footer divider padding, search icon inside the field; captured screenshots verify layout.",
         "cargo test -p volumecontrol-egui: 15 unit + 8 mixer + 9 scaffold tests passed.",
         "cargo clippy -p volumecontrol-egui --all-targets --no-default-features -- -D warnings: clean.",
         "cargo fmt --all --check: clean.",
@@ -82,6 +84,7 @@
       "user_visible_behavior": "A parallel egui/eframe binary hosts the Mixer as its root viewport with Settings, Help, and Overlay as child viewports, renders Vietnamese labels with the platform UI font, applies native Mica/Acrylic backdrop per HWND, and forwards every EventSink notification into the eframe loop. The legacy Tauri app and native host stay untouched as the reference.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25: host adds --debug-ui/F12 (egui DebugOptions), persistent tray viewport, DWM rounded corners, window capture helper, VS Code launch configs; workspace tests 549 pass, clippy/fmt clean.",
         "cargo test -p volumecontrol-egui: 13 unit tests + 9 scaffold contract tests passed.",
         "cargo clippy --workspace --all-targets --no-default-features -- -D warnings: clean (after providing the gitignored frontend/dist build artifact in the worktree).",
         "cargo fmt --all --check: clean.",
@@ -105,6 +108,7 @@
       "user_visible_behavior": "Native WGPU Overlay, Mixer, Settings, and Help render visible dark surfaces with readable Vietnamese text; update toast is visible; AccessKit exposes semantic controls and computer-use can toggle the Mixer mute button.",
       "status": "passing",
       "verification": [
+        "2026-10-25: tray/context menu rendered by egui (native menu never dispatched), material effects mapped per platform, icon hit targets enlarged; UIA scripts locate tray by tooltip.",
         "cargo test --workspace --no-default-features: 467 tests passed across 11 suites.",
         "cargo clippy --workspace --all-targets --no-default-features -- -D warnings: no issues.",
         "cargo fmt --all --check: clean.",
