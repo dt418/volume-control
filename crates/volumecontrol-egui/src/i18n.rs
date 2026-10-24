@@ -376,6 +376,8 @@ pub enum Key {
     HelpShortcuts,
     /// `help.close`
     HelpClose,
+    /// `hotkey.conflictBadge`
+    HotkeyConflictBadge,
     /// `hotkey.volumeUp`
     HotkeyVolumeUp,
     /// `hotkey.volumeUpHelp`
@@ -450,7 +452,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, in table order.
-    pub const ALL: [Key; 217] = [
+    pub const ALL: [Key; 218] = [
         Key::AppLanguage,
         Key::AppLanguageEn,
         Key::AppLanguageVi,
@@ -633,6 +635,7 @@ impl Key {
         Key::HelpTitle,
         Key::HelpShortcuts,
         Key::HelpClose,
+        Key::HotkeyConflictBadge,
         Key::HotkeyVolumeUp,
         Key::HotkeyVolumeUpHelp,
         Key::HotkeyVolumeDown,
@@ -671,7 +674,7 @@ impl Key {
     ];
 }
 
-const EN: [&str; 217] = [
+const EN: [&str; 218] = [
     "Language", "English", "Tiếng Việt",
     "Volume Control", "Volume Control Settings", "Volume Control Help",
     "Saved", "Saving…", "Close",
@@ -732,22 +735,22 @@ const EN: [&str; 217] = [
     "Blue up to", "Orange up to", "Shortcut cleared",
     "Shortcut recorded", "Press a modifier such as Ctrl, Alt, Shift, or Cmd with a key", "Not set",
     "Global shortcut", "Press shortcut…", "Help",
-    "Keyboard shortcuts", "Close", "Volume Up",
-    "Increase volume by the small step.", "Volume Down", "Decrease volume by the small step.",
-    "Volume Up (large)", "Increase volume by the large step.", "Volume Down (large)",
-    "Decrease volume by the large step.", "Toggle Mute", "Mute or unmute the current output.",
-    "Reset to 50%", "Set the current output to 50%.", "Open Mixer",
-    "Show or hide the mixer panel.", "Open Menu", "Open the Volume Control tray menu.",
-    "Volume", "Commands", "Extended",
-    "Search shortcuts…", "Search shortcuts", "Edit config",
-    "Help unavailable", "No shortcuts match", "Caps Lock falls back to Ctrl + Alt",
-    "In use", "Active", "Shortcut conflict",
-    "Another application already owns one of these combinations.", "Change the modifier in Settings.", "is used by another app.",
-    "are used by another app.", "Ready", "Fallback",
-    "Disabled",
+    "Keyboard shortcuts", "Close", "hotkey already registered by another application",
+    "Volume Up", "Increase volume by the small step.", "Volume Down",
+    "Decrease volume by the small step.", "Volume Up (large)", "Increase volume by the large step.",
+    "Volume Down (large)", "Decrease volume by the large step.", "Toggle Mute",
+    "Mute or unmute the current output.", "Reset to 50%", "Set the current output to 50%.",
+    "Open Mixer", "Show or hide the mixer panel.", "Open Menu",
+    "Open the Volume Control tray menu.", "Volume", "Commands",
+    "Extended", "Search shortcuts…", "Search shortcuts",
+    "Edit config", "Help unavailable", "No shortcuts match",
+    "Caps Lock falls back to Ctrl + Alt", "In use", "Active",
+    "Shortcut conflict", "Another application already owns one of these combinations.", "Change the modifier in Settings.",
+    "is used by another app.", "are used by another app.", "Ready",
+    "Fallback", "Disabled",
 ];
 
-const VI: [&str; 217] = [
+const VI: [&str; 218] = [
     "Ngôn ngữ", "English", "Tiếng Việt",
     "Điều khiển âm lượng", "Cài đặt Điều khiển âm lượng", "Trợ giúp Điều khiển âm lượng",
     "Đã lưu", "Đang lưu…", "Đóng",
@@ -808,19 +811,19 @@ const VI: [&str; 217] = [
     "Xanh dương tới", "Cam tới", "Đã xoá phím tắt",
     "Đã ghi phím tắt", "Nhấn phím bổ trợ như Ctrl, Alt, Shift hoặc Cmd cùng một phím", "Chưa đặt",
     "Phím tắt toàn cục", "Nhấn phím tắt…", "Trợ giúp",
-    "Phím tắt bàn phím", "Đóng", "Tăng âm lượng",
-    "Tăng âm lượng theo bước nhỏ.", "Giảm âm lượng", "Giảm âm lượng theo bước nhỏ.",
-    "Tăng âm lượng (lớn)", "Tăng âm lượng theo bước lớn.", "Giảm âm lượng (lớn)",
-    "Giảm âm lượng theo bước lớn.", "Bật/tắt tiếng", "Tắt hoặc bật tiếng đầu ra hiện tại.",
-    "Đặt lại 50%", "Đặt đầu ra hiện tại về 50%.", "Mở bộ trộn",
-    "Hiện hoặc ẩn bảng bộ trộn.", "Mở menu", "Mở menu khay của Điều khiển âm lượng.",
-    "Âm lượng", "Lệnh", "Mở rộng",
-    "Tìm phím tắt…", "Tìm phím tắt", "Sửa cấu hình",
-    "Trợ giúp không khả dụng", "Không có phím tắt khớp", "Caps Lock dùng dự phòng Ctrl + Alt",
-    "Đang bị dùng", "Hoạt động", "Xung đột phím tắt",
-    "Một ứng dụng khác đã chiếm một trong các tổ hợp này.", "Đổi phím bổ trợ trong Cài đặt.", "đang bị ứng dụng khác dùng.",
-    "đang bị ứng dụng khác dùng.", "Sẵn sàng", "Dự phòng",
-    "Đã tắt",
+    "Phím tắt bàn phím", "Đóng", "hotkey already registered by another application",
+    "Tăng âm lượng", "Tăng âm lượng theo bước nhỏ.", "Giảm âm lượng",
+    "Giảm âm lượng theo bước nhỏ.", "Tăng âm lượng (lớn)", "Tăng âm lượng theo bước lớn.",
+    "Giảm âm lượng (lớn)", "Giảm âm lượng theo bước lớn.", "Bật/tắt tiếng",
+    "Tắt hoặc bật tiếng đầu ra hiện tại.", "Đặt lại 50%", "Đặt đầu ra hiện tại về 50%.",
+    "Mở bộ trộn", "Hiện hoặc ẩn bảng bộ trộn.", "Mở menu",
+    "Mở menu khay của Điều khiển âm lượng.", "Âm lượng", "Lệnh",
+    "Mở rộng", "Tìm phím tắt…", "Tìm phím tắt",
+    "Sửa cấu hình", "Trợ giúp không khả dụng", "Không có phím tắt khớp",
+    "Caps Lock dùng dự phòng Ctrl + Alt", "Đang bị dùng", "Hoạt động",
+    "Xung đột phím tắt", "Một ứng dụng khác đã chiếm một trong các tổ hợp này.", "Đổi phím bổ trợ trong Cài đặt.",
+    "đang bị ứng dụng khác dùng.", "đang bị ứng dụng khác dùng.", "Sẵn sàng",
+    "Dự phòng", "Đã tắt",
 ];
 
 /// Copy table for `lang`.

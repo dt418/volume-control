@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-24T11:25",
+  "last_updated": "2026-10-24T13:10",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -45,7 +45,7 @@
         "Mixer: card-based system/session rows, pinned footer with background and top border, bounded scroll area, speaker icon levels (mute/none/low/medium/high), optimistic volume updates plus a 50 ms core heartbeat so hotkey/mouse changes render immediately.",
         "Placement now matches legacy: overlay 20/40 px margins, mixer 16 px gap above overlay, Help 24/48 px margins, Settings centered.",
         "Overlay: 336x120 HUD with wrap-safe text payloads; click-through applied after window creation because the builder flag prevented the window from appearing on Windows.",
-        "Tray, CLI verbs, and single-instance modules were implemented by parallel subagents and wired into the host; app/tray icons load from src-tauri/icons.",
+        "Tray, CLI verbs, and single-instance modules were implemented by parallel subagents and wired into the host; app/tray icons load from src-tauri/icons. Tray events are polled from the eframe loop so all 9 actionable menu items reach the host; the Windows wheel hook posts into a hidden message window bridged to AppCore.",
         "Legacy window titles are localized; egui single-instance namespace is separate from the legacy app so both can run during migration."
       ],
       "notes": "Goal fix-ui. Remaining polish is queued as vol-120 per the user's request."

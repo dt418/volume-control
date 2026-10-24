@@ -327,14 +327,21 @@ pub fn show(ui: &mut egui::Ui, view: &mut HelpView<'_>) -> Vec<HelpIntent> {
     let tokens = style::tokens(view.is_dark);
     ui.spacing_mut().item_spacing = egui::vec2(style::SPACING_INNER, style::SPACING_INNER);
 
-    ui.label(RichText::new(tr(Key::HelpShortcuts, view.language, &[])).strong());
     let hint = tr(Key::HelpSearchPlaceholder, view.language, &[]).to_string();
-    ui.add(
-        egui::TextEdit::singleline(view.query)
-            .hint_text(hint)
-            .desired_width(f32::INFINITY),
-    );
-    ui.add_space(4.0);
+    egui::Frame::NONE
+        .fill(tokens.input)
+        .stroke(egui::Stroke::new(1.0, tokens.border))
+        .corner_radius(egui::CornerRadius::same(style::RADIUS_CONTROL))
+        .inner_margin(egui::Margin::symmetric(8, 4))
+        .show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::singleline(view.query)
+                    .frame(egui::Frame::NONE)
+                    .hint_text(hint)
+                    .desired_width(f32::INFINITY),
+            );
+        });
+    ui.add_space(style::SPACE_2);
 
     let content_height = (ui.available_height() - 40.0).max(60.0);
     ui.allocate_ui_with_layout(
@@ -411,20 +418,29 @@ fn render_callout(
                     .color(tokens.warning),
             );
         });
-        ui.label(RichText::new(tr(c.body_key, lang, &[])).small());
-        ui.horizontal_wrapped(|ui| {
-            ui.label(
-                RichText::new(conflict_sentence(c, lang))
-                    .small()
-                    .color(tokens.muted),
-            );
+        ui.add(egui::Label::new(RichText::new(tr(c.body_key, lang, &[])).small()).wrap());
+        let summary = format!(
+            "{} {}",
+            c.conflicted_bindings.len(),
+            tr(c.tail_key, lang, &[]),
+        );
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(summary).small().color(tokens.muted));
             if ui.link(tr(c.action_key, lang, &[]).as_ref()).clicked() {
                 intents.push(HelpIntent::OpenSettings);
             }
         });
         ui.horizontal_wrapped(|ui| {
-            for combo in &c.conflicted_bindings {
+            for combo in c.conflicted_bindings.iter().take(3) {
                 render_chip(ui, combo, tokens);
+            }
+            let remaining = c.conflicted_bindings.len().saturating_sub(3);
+            if remaining > 0 {
+                ui.label(
+                    RichText::new(format!("+{remaining}"))
+                        .small()
+                        .color(tokens.muted),
+                );
             }
         });
     });

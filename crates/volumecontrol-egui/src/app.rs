@@ -13,6 +13,7 @@ use volumectl::hotkeys::HotkeyRegResult;
 use volumectl::ui::{AppAction, AppState, AudioSessionState, SurfaceId, UiStatus};
 
 use crate::i18n::{tr, Key};
+use crate::native_win32::WheelBridge;
 use crate::placement::{frame_for, logical_size, WorkArea};
 use crate::settings::model::{FieldError, SettingsDraft, Tab};
 use crate::settings::recorder::Recorder;
@@ -146,6 +147,7 @@ pub struct VolumeControlApp {
     overlay_muted: bool,
     overlay_until: Option<Instant>,
     parked: bool,
+    root_positioned: bool,
     settings_draft: SettingsDraft,
     settings_tab: Tab,
     settings_error: Option<FieldError>,
@@ -163,6 +165,8 @@ pub struct VolumeControlApp {
     primary: Option<PrimaryGuard>,
     tray_volume: u8,
     tray_language: Language,
+    wheel: Option<WheelBridge>,
+    wheel_actions: Option<Receiver<volumectl::hotkeys::HotkeyAction>>,
 }
 
 impl VolumeControlApp {
@@ -210,6 +214,12 @@ impl VolumeControlApp {
         let settings_draft = SettingsDraft::from_config(&config);
         let (tray_sender, tray_actions) = mpsc::channel();
         let tray = Tray::new(config.language, payload.volume_pct, tray_sender).ok();
+        let (wheel, wheel_actions) = crate::native_win32::install()
+            .map(|(bridge, actions)| (Some(bridge), Some(actions)))
+            .unwrap_or_else(|error| {
+                log::debug!("wheel bridge unavailable: {error}");
+                (None, None)
+            });
         let tray_volume = payload.volume_pct;
         let tray_language = config.language;
         Self {
@@ -220,6 +230,9 @@ impl VolumeControlApp {
             hotkey_status: payload.hotkey_status,
             options,
             root_shown,
+            // Treat the root as initially visible so a Settings/Help launch
+            // sends the parking command instead of leaving a default black
+            // root window centered on screen.
             root_visible_last: true,
             quitting: false,
             vibrancy: VibrancyState::new(),
@@ -235,6 +248,7 @@ impl VolumeControlApp {
             overlay_muted: payload.muted,
             overlay_until: None,
             parked: false,
+            root_positioned: false,
             settings_draft,
             settings_tab: options.settings_tab.unwrap_or_default(),
             settings_error: None,
@@ -252,12 +266,38 @@ impl VolumeControlApp {
             primary: None,
             tray_volume,
             tray_language,
+            wheel,
+            wheel_actions,
         }
     }
 
     /// Attach the single-instance guard so second launches can wake the Mixer.
     pub fn attach_primary(&mut self, primary: PrimaryGuard) {
         self.primary = Some(primary);
+    }
+
+    /// Legacy modal rule: Mixer/Settings/Help never stack; Overlay stays free.
+    fn show_surface_exclusive(&mut self, surface: SurfaceId, ctx: &egui::Context) {
+        if matches!(
+            surface,
+            SurfaceId::Mixer | SurfaceId::Settings | SurfaceId::Help
+        ) {
+            for other in [SurfaceId::Mixer, SurfaceId::Settings, SurfaceId::Help] {
+                if other != surface {
+                    self.state.hide(other);
+                    ctx.send_viewport_cmd_to(viewport_id(other), ViewportCommand::Close);
+                    if other == SurfaceId::Mixer {
+                        self.root_shown = false;
+                    }
+                }
+            }
+        }
+        self.state.show(surface);
+        if surface == SurfaceId::Mixer {
+            self.root_shown = true;
+        } else {
+            ctx.send_viewport_cmd_to(viewport_id(surface), ViewportCommand::Focus);
+        }
     }
 
     fn poll_single_instance(&mut self) {
@@ -271,26 +311,37 @@ impl VolumeControlApp {
         }
     }
 
-    fn poll_tray(&mut self) {
+    fn poll_tray(&mut self, ctx: &egui::Context) {
+        if let Some(tray) = &self.tray {
+            // muda/tray-icon expose OS events on their own channels; drain
+            // them here on the eframe thread before handling the actions.
+            while tray.poll().is_some() {}
+        }
         while let Ok(action) = self.tray_actions.try_recv() {
             match action {
                 TrayAction::ToggleMute => self.dispatch(AppAction::ToggleMute),
                 TrayAction::Reset50 => self.dispatch(AppAction::ResetVolume),
-                TrayAction::ShowMixer => {
-                    self.state.show(SurfaceId::Mixer);
-                    self.root_shown = true;
-                }
+                TrayAction::ShowMixer => self.show_surface_exclusive(SurfaceId::Mixer, ctx),
                 TrayAction::ShowSettings => {
                     self.dispatch(AppAction::ShowSurface(SurfaceId::Settings));
                 }
                 TrayAction::ShowHelp => {
                     self.dispatch(AppAction::ShowSurface(SurfaceId::Help));
                 }
-                TrayAction::CheckUpdates => self.dispatch(AppAction::CheckUpdates),
+                TrayAction::CheckUpdates => self.start_update_check(ctx),
                 TrayAction::ReloadConfig => self.dispatch(AppAction::ReloadConfig),
                 TrayAction::OpenConfig => self.dispatch(AppAction::OpenConfigLocation),
                 TrayAction::Exit => {
                     self.quitting = true;
+                    self.state.hide(SurfaceId::Settings);
+                    self.state.hide(SurfaceId::Help);
+                    self.state.hide(SurfaceId::Overlay);
+                    ctx.send_viewport_cmd_to(
+                        viewport_id(SurfaceId::Settings),
+                        ViewportCommand::Close,
+                    );
+                    ctx.send_viewport_cmd_to(viewport_id(SurfaceId::Help), ViewportCommand::Close);
+                    ctx.send_viewport_cmd(ViewportCommand::Close);
                 }
                 TrayAction::Header => {}
             }
@@ -307,6 +358,21 @@ impl VolumeControlApp {
                 tray.set_language(self.tray_language);
             }
         }
+    }
+
+    fn start_update_check(&mut self, ctx: &egui::Context) {
+        if self.update_rx.is_some() {
+            return;
+        }
+        self.update_card.check_started();
+        let language = self.settings_draft.language;
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let result = volumectl::updates::check_update_info(language);
+            let _ = sender.send(result);
+        });
+        self.update_rx = Some(receiver);
+        ctx.request_repaint_after(Duration::from_millis(150));
     }
 
     fn language(&self) -> Language {
@@ -392,10 +458,7 @@ impl VolumeControlApp {
                 }
                 EguiEvent::Open(surface) => {
                     let was_visible = self.state.is_visible(surface);
-                    self.state.show(surface);
-                    if surface == SurfaceId::Mixer {
-                        self.root_shown = true;
-                    }
+                    self.show_surface_exclusive(surface, ctx);
                     if surface == SurfaceId::Settings && !was_visible {
                         self.settings_draft.rebase(&self.config);
                         self.settings_error = None;
@@ -445,6 +508,16 @@ impl VolumeControlApp {
         }
     }
 
+    fn poll_wheel(&mut self) {
+        let Some(receiver) = &self.wheel_actions else {
+            return;
+        };
+        while let Ok(action) = receiver.try_recv() {
+            self.core.apply_hotkey(action);
+        }
+        let _ = &self.wheel;
+    }
+
     fn poll_core(&mut self) {
         if self.last_poll.elapsed() < SLOW_POLL {
             return;
@@ -484,30 +557,71 @@ impl VolumeControlApp {
         }
     }
 
+    fn work_area(&self, ctx: &egui::Context) -> WorkArea {
+        #[cfg(target_os = "windows")]
+        {
+            use windows_sys::Win32::Foundation::RECT;
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                SystemParametersInfoW, SPI_GETWORKAREA,
+            };
+            let mut rect = RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            };
+            // SAFETY: SPI_GETWORKAREA writes exactly one RECT to the supplied
+            // valid pointer and has no ownership side effect.
+            let ok = unsafe {
+                SystemParametersInfoW(SPI_GETWORKAREA, 0, (&mut rect as *mut RECT).cast(), 0)
+            };
+            if ok != 0 {
+                let scale = ctx.pixels_per_point().max(1.0);
+                return WorkArea::new(
+                    rect.left as f32 / scale,
+                    rect.top as f32 / scale,
+                    (rect.right - rect.left) as f32 / scale,
+                    (rect.bottom - rect.top) as f32 / scale,
+                );
+            }
+        }
+        let monitor = ctx.input(|input| input.viewport().monitor_size);
+        let size = monitor.unwrap_or(egui::vec2(1600.0, 900.0));
+        WorkArea::new(0.0, 0.0, size.x, size.y)
+    }
+
     /// Park the root off-screen instead of hiding it, so child viewports keep
     /// receiving UI passes (eframe 0.36 skips `App::ui` for hidden roots).
     fn sync_root_visibility(&mut self, ctx: &egui::Context) {
+        let place_root = |ctx: &egui::Context, area: WorkArea| {
+            let frame = frame_for(SurfaceId::Mixer, &area, ctx.pixels_per_point());
+            let scale = ctx.pixels_per_point();
+            ctx.send_viewport_cmd(ViewportCommand::OuterPosition(egui::pos2(
+                (frame.x as f32 / scale).round(),
+                (frame.y as f32 / scale).round(),
+            )));
+            ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(
+                logical_size(SurfaceId::Mixer).0,
+                logical_size(SurfaceId::Mixer).1,
+            )));
+        };
+
+        if self.root_shown && !self.root_positioned {
+            place_root(ctx, self.work_area(ctx));
+            self.root_positioned = true;
+        }
         if self.root_shown != self.root_visible_last {
             if self.root_shown {
-                let frame = frame_for(
-                    SurfaceId::Mixer,
-                    &WorkArea::new(0.0, 0.0, 1600.0, 900.0),
-                    ctx.pixels_per_point(),
-                );
-                let scale = ctx.pixels_per_point();
-                ctx.send_viewport_cmd(ViewportCommand::OuterPosition(egui::pos2(
-                    (frame.x as f32 / scale).round(),
-                    (frame.y as f32 / scale).round(),
-                )));
-                ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(
-                    logical_size(SurfaceId::Mixer).0,
-                    logical_size(SurfaceId::Mixer).1,
-                )));
+                place_root(ctx, self.work_area(ctx));
                 ctx.send_viewport_cmd(ViewportCommand::Visible(true));
                 ctx.send_viewport_cmd(ViewportCommand::Focus);
+                self.root_positioned = true;
             } else {
+                // Keep the 1×1 root alive so immediate child viewports keep
+                // painting, but never leave the default 400×280 black window.
                 ctx.send_viewport_cmd(ViewportCommand::OuterPosition(PARKED_POSITION));
                 ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(1.0, 1.0)));
+                self.root_positioned = false;
             }
             self.parked = !self.root_shown;
             self.root_visible_last = self.root_shown;
@@ -557,6 +671,7 @@ impl VolumeControlApp {
                 } else {
                     self.update_card.check_finished(None);
                 }
+                self.core.show_overlay_text(info.message.clone());
                 self.update_rx = None;
             }
             Ok(Err(error)) => {
@@ -632,19 +747,7 @@ impl VolumeControlApp {
             SettingsIntent::OpenConfig => {
                 self.dispatch(AppAction::OpenConfigLocation);
             }
-            SettingsIntent::CheckUpdates => {
-                if self.update_rx.is_none() {
-                    self.update_card.check_started();
-                    let language = self.settings_draft.language;
-                    let (sender, receiver) = mpsc::channel();
-                    std::thread::spawn(move || {
-                        let result = volumectl::updates::check_update_info(language);
-                        let _ = sender.send(result);
-                    });
-                    self.update_rx = Some(receiver);
-                    ctx.request_repaint_after(Duration::from_millis(150));
-                }
-            }
+            SettingsIntent::CheckUpdates => self.start_update_check(ctx),
             SettingsIntent::DownloadUpdate => {
                 if let Some(url) = &self.update_url {
                     open_external(url);
@@ -722,6 +825,7 @@ impl VolumeControlApp {
                     config_notice: notice.as_deref(),
                     saved_blacklist: &self.config.blacklist,
                     modifier: self.config.modifier,
+                    hotkey_status: &self.hotkey_status,
                 };
                 intents = views::show(ui, &mut view);
             });
@@ -800,14 +904,44 @@ impl VolumeControlApp {
         let default_bindings = volumectl::config::HotkeyBindings::default();
         let bindings = self.config.hotkeys.as_ref().unwrap_or(&default_bindings);
         let mut intents = Vec::new();
+        let opaque = {
+            let color = tokens.background;
+            egui::Color32::from_rgb(color.r(), color.g(), color.b())
+        };
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
-                    .fill(tokens.background)
+                    .fill(opaque)
                     .corner_radius(egui::CornerRadius::same(style::RADIUS_CARD))
                     .inner_margin(egui::Margin::same(14)),
             )
             .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        ui.label(
+                            egui::RichText::new(tr(Key::AppName, self.state.language, &[]))
+                                .strong(),
+                        );
+                        ui.label(
+                            egui::RichText::new(tr(Key::HelpShortcuts, self.state.language, &[]))
+                                .small()
+                                .color(tokens.muted),
+                        );
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(egui::Button::new(egui_phosphor::regular::X).frame(false))
+                            .on_hover_text(
+                                tr(Key::CommonClose, self.state.language, &[]).to_string(),
+                            )
+                            .clicked()
+                        {
+                            intents.push(HelpIntent::Close);
+                        }
+                    });
+                });
+                ui.separator();
+                ui.add_space(style::SPACE_2);
                 let mut view = HelpView {
                     language: self.state.language,
                     is_dark: self.is_dark,
@@ -881,7 +1015,7 @@ impl VolumeControlApp {
 
     fn show_children(&mut self, ctx: &egui::Context) {
         let scale = ctx.pixels_per_point();
-        let area = WorkArea::new(0.0, 0.0, 1600.0, 900.0);
+        let area = self.work_area(ctx);
 
         for surface in [SurfaceId::Settings, SurfaceId::Help] {
             if !self.state.is_visible(surface) {
@@ -985,9 +1119,10 @@ impl eframe::App for VolumeControlApp {
         }
         self.drain_events(&ctx);
         self.poll_core();
+        self.poll_wheel();
         self.poll_updates(&ctx);
         self.poll_single_instance();
-        self.poll_tray();
+        self.poll_tray(&ctx);
         self.sync_root_visibility(&ctx);
 
         if self

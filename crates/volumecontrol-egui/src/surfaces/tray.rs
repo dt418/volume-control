@@ -26,7 +26,6 @@
 //! preserving 100% bilingual parity without inventing ad-hoc strings.
 
 use std::sync::mpsc::Sender;
-use std::sync::{Mutex, Once};
 
 use muda::{Menu, MenuItem, PredefinedMenuItem};
 use tray_icon::{TrayIcon, TrayIconBuilder};
@@ -157,46 +156,14 @@ pub fn build_icon() -> Option<tray_icon::Icon> {
 // Global event routing state for `muda` and `tray-icon`.
 // Handlers are installed once and forward events directly to the active Tray sender.
 // No nested event loops are spawned.
-static TRAY_SENDER: Mutex<Option<Sender<TrayAction>>> = Mutex::new(None);
-static INIT_MENU_HANDLER: Once = Once::new();
-static INIT_TRAY_HANDLER: Once = Once::new();
-
-fn init_event_forwarding() {
-    INIT_MENU_HANDLER.call_once(|| {
-        muda::MenuEvent::set_event_handler(Some(|event: muda::MenuEvent| {
-            if let Some(action) = TrayAction::from_menu_id(event.id().as_ref()) {
-                if action.is_actionable() {
-                    if let Ok(guard) = TRAY_SENDER.lock() {
-                        if let Some(sender) = guard.as_ref() {
-                            let _ = sender.send(action);
-                        }
-                    }
-                }
-            }
-        }));
-    });
-
-    INIT_TRAY_HANDLER.call_once(|| {
-        tray_icon::TrayIconEvent::set_event_handler(Some(|event: tray_icon::TrayIconEvent| {
-            if let tray_icon::TrayIconEvent::Click {
-                button: tray_icon::MouseButton::Left,
-                button_state: tray_icon::MouseButtonState::Up,
-                ..
-            } = event
-            {
-                if let Ok(guard) = TRAY_SENDER.lock() {
-                    if let Some(sender) = guard.as_ref() {
-                        let _ = sender.send(TrayAction::ShowMixer);
-                    }
-                }
-            }
-        }));
-    });
-}
+// Events are polled from the eframe loop (muda/tray-icon own their OS
+// channels). Installing a global event handler here would move events off the
+// channel and out of the host's reach.
 
 /// Managed system tray icon and context menu.
 pub struct Tray {
     _tray: TrayIcon,
+    _sender: Sender<TrayAction>,
     header_item: MenuItem,
     action_items: Vec<(TrayAction, MenuItem)>,
     language: Language,
@@ -284,11 +251,6 @@ impl Tray {
             .build()
             .map_err(|e| e.to_string())?;
 
-        init_event_forwarding();
-        if let Ok(mut guard) = TRAY_SENDER.lock() {
-            *guard = Some(sender);
-        }
-
         let action_items = vec![
             (TrayAction::ToggleMute, mute_item),
             (TrayAction::Reset50, reset_item),
@@ -303,6 +265,7 @@ impl Tray {
 
         Ok(Self {
             _tray: tray,
+            _sender: sender,
             header_item,
             action_items,
             language,
@@ -311,6 +274,28 @@ impl Tray {
     }
 
     /// Update the disabled header label with a new volume percentage.
+    /// Drain one pending menu/tray event, if any.
+    pub fn poll(&self) -> Option<TrayAction> {
+        if let Ok(event) = muda::MenuEvent::receiver().try_recv() {
+            if let Some(action) = TrayAction::from_menu_id(event.id().as_ref()) {
+                if action.is_actionable() {
+                    let _ = self._sender.send(action);
+                    return Some(action);
+                }
+            }
+        }
+        if let Ok(tray_icon::TrayIconEvent::Click {
+            button: tray_icon::MouseButton::Left,
+            button_state: tray_icon::MouseButtonState::Up,
+            ..
+        }) = tray_icon::TrayIconEvent::receiver().try_recv()
+        {
+            let _ = self._sender.send(TrayAction::ShowMixer);
+            return Some(TrayAction::ShowMixer);
+        }
+        None
+    }
+
     pub fn update_header(&mut self, volume_pct: u8) {
         self.volume_pct = volume_pct;
         let label = format!("Volume Control — {volume_pct}%");
@@ -348,13 +333,5 @@ impl Tray {
     #[inline]
     pub fn volume_pct(&self) -> u8 {
         self.volume_pct
-    }
-}
-
-impl Drop for Tray {
-    fn drop(&mut self) {
-        if let Ok(mut guard) = TRAY_SENDER.lock() {
-            *guard = None;
-        }
     }
 }

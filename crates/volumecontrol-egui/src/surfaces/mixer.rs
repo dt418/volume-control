@@ -192,95 +192,88 @@ pub fn show(
 ) {
     let language = options.language;
     let tokens = style::tokens(options.is_dark);
-    let footer_height = 24.0;
-    let full = ui.available_rect_before_wrap();
-    let footer_rect = egui::Rect::from_min_max(
-        egui::pos2(full.left(), full.bottom() - footer_height - 2.0),
-        egui::pos2(full.right(), full.bottom() - 2.0),
+
+    header(ui, state, options, tokens, intents);
+    ui.add_space(style::SPACE_2);
+    search(ui, query, tokens, language);
+    ui.add_space(style::SPACE_3);
+    system_row(ui, state, options, tokens, intents);
+    ui.add_space(style::SPACE_3);
+
+    if let Some(error) = &options.error {
+        ui.horizontal(|ui| {
+            ui.colored_label(tokens.danger, error);
+            if ui
+                .small_button(tr(Key::MixerRetryConnection, language, &[]).to_string())
+                .clicked()
+            {
+                intents.push(MixerIntent::RetryBackend);
+            }
+        });
+    }
+
+    let visible_rows = rows(state, query, options.app_label_style, language);
+    let list_height = 62.0;
+    let (list_rect, _) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), list_height),
+        egui::Sense::hover(),
     );
-    let content_rect =
-        egui::Rect::from_min_max(full.min, egui::pos2(full.right(), footer_rect.top() - 4.0));
-
-    ui.scope_builder(egui::UiBuilder::new().max_rect(content_rect), |ui| {
-        header(ui, state, options, tokens, intents);
-        ui.add_space(6.0);
-        search(ui, query, tokens, language);
-        ui.add_space(6.0);
-        system_row(ui, state, options, tokens, intents);
-        ui.add_space(6.0);
-
-        if let Some(error) = &options.error {
-            ui.horizontal(|ui| {
-                ui.colored_label(tokens.danger, error);
-                if ui
-                    .small_button(tr(Key::MixerRetryConnection, language, &[]).to_string())
-                    .clicked()
-                {
-                    intents.push(MixerIntent::RetryBackend);
-                }
-            });
-        }
-
-        let visible_rows = rows(state, query, options.app_label_style, language);
-        if options.sessions_supported {
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
-                .show(ui, |ui| {
-                    if visible_rows.is_empty() {
-                        ui.label(
-                            RichText::new(empty_text(!state.sessions.is_empty(), query, language))
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(list_rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+        |ui| {
+            ui.set_clip_rect(list_rect);
+            if options.sessions_supported {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .max_height(list_rect.height())
+                    .scroll_bar_visibility(
+                        egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
+                    )
+                    .show(ui, |ui| {
+                        if visible_rows.is_empty() {
+                            ui.label(
+                                RichText::new(empty_text(
+                                    !state.sessions.is_empty(),
+                                    query,
+                                    language,
+                                ))
                                 .small()
                                 .color(tokens.muted),
-                        );
-                    } else {
-                        for row in &visible_rows {
-                            session_row(ui, row, options, tokens, intents);
+                            );
+                        } else {
+                            for row in &visible_rows {
+                                session_row(ui, row, options, tokens, intents);
+                            }
                         }
-                    }
-                });
-        } else {
-            ui.label(
-                RichText::new(tr(Key::MixerUnsupported, language, &[]))
-                    .small()
-                    .color(tokens.muted),
-            );
-        }
-    });
-
-    let count = rows(state, query, options.app_label_style, language).len();
-    egui::Area::new(egui::Id::new("mixer-footer"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(footer_rect.min)
-        .show(ui.ctx(), |ui| {
-            ui.set_min_size(footer_rect.size());
-            ui.painter().rect_filled(
-                egui::Rect::from_min_size(egui::Pos2::ZERO, footer_rect.size()),
-                egui::CornerRadius {
-                    nw: 0,
-                    ne: 0,
-                    sw: style::RADIUS_HUD,
-                    se: style::RADIUS_HUD,
-                },
-                {
-                    let card = tokens.card;
-                    egui::Color32::from_rgb(card.r(), card.g(), card.b())
-                },
-            );
-            ui.painter().hline(
-                0.0..=footer_rect.width(),
-                0.0,
-                egui::Stroke::new(1.0, tokens.border),
-            );
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                ui.add_space(4.0);
+                    });
+            } else {
                 ui.label(
-                    RichText::new(footer_text(count, language))
+                    RichText::new(tr(Key::MixerUnsupported, language, &[]))
+                        .small()
+                        .color(tokens.muted),
+                );
+            }
+        },
+    );
+
+    ui.add_space(style::SPACE_1);
+    ui.separator();
+    egui::Frame::NONE
+        .fill({
+            let background = tokens.background;
+            egui::Color32::from_rgb(background.r(), background.g(), background.b())
+        })
+        .inner_margin(egui::Margin::symmetric(6, 3))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(footer_text(visible_rows.len(), language))
                         .small()
                         .color(tokens.muted),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add_space(4.0);
                     ui.label(
                         RichText::new(tr(Key::MixerEscToClose, language, &[]))
                             .small()

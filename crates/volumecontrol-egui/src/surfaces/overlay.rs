@@ -22,70 +22,67 @@ pub struct OverlayView<'a> {
 
 pub fn show(ui: &mut egui::Ui, view: &OverlayView<'_>) {
     let tokens = style::tokens(view.is_dark);
-    let rect = ui.ctx().viewport_rect();
+    let opaque = {
+        let color = tokens.card;
+        egui::Color32::from_rgb(color.r(), color.g(), color.b())
+    };
     egui::CentralPanel::default()
         .frame(
             egui::Frame::NONE
-                .fill(tokens.background)
+                .fill(opaque)
                 .corner_radius(egui::CornerRadius::same(style::RADIUS_HUD))
-                .inner_margin(egui::Margin::same(12)),
+                .inner_margin(egui::Margin::symmetric(12, 10)),
         )
-        .show(ui, |ui| {
-            ui.set_min_size(rect.size() - egui::vec2(24.0, 24.0));
-            match view.text {
-                Some(text) => {
-                    ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(text)
-                                    .size(ui.style().text_styles[&egui::TextStyle::Body].size),
-                            )
-                            .wrap(),
-                        );
-                    });
-                }
-                None => volume_layout(ui, view, &tokens),
+        .show(ui, |ui| match view.text {
+            Some(text) => {
+                ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+                    ui.add(egui::Label::new(RichText::new(text).small()).wrap());
+                });
             }
+            None => volume_layout(ui, view, &tokens),
         });
 }
 
 fn volume_layout(ui: &mut egui::Ui, view: &OverlayView<'_>, tokens: &Tokens) {
-    ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-        ui.label(
-            RichText::new(tr(Key::OverlayVolume, view.language, &[]))
+    ui.horizontal(|ui| {
+        ui.vertical(|ui| {
+            ui.label(
+                RichText::new(tr(Key::OverlayVolume, view.language, &[]))
+                    .small()
+                    .color(tokens.text),
+            );
+            ui.label(
+                RichText::new(view.device.map_or_else(
+                    || tr(Key::OverlaySystemOutput, view.language, &[]).to_string(),
+                    ToString::to_string,
+                ))
                 .small()
                 .color(tokens.muted),
-        );
-        let value = if view.muted {
-            tr(Key::CommonMuted, view.language, &[]).to_string()
-        } else {
-            format!("{}%", view.volume)
-        };
-        ui.label(
-            RichText::new(value)
-                .size(ui.style().text_styles[&egui::TextStyle::Body].size + 10.0)
-                .strong(),
-        );
-        ui.add_space(6.0);
-        let (rect, _) =
-            ui.allocate_exact_size(egui::vec2(ui.available_width(), 10.0), egui::Sense::hover());
-        mixer::paint_rail(
-            ui.painter(),
-            rect,
-            view.volume,
-            view.muted,
-            view.green_up_to,
-            view.blue_up_to,
-            tokens,
-        );
-        ui.add_space(4.0);
-        ui.label(
-            RichText::new(view.device.map_or_else(
-                || tr(Key::OverlaySystemOutput, view.language, &[]).to_string(),
-                ToString::to_string,
-            ))
-            .small()
-            .color(tokens.muted),
-        );
+            );
+        });
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            let value = if view.muted {
+                tr(Key::CommonMuted, view.language, &[]).to_string()
+            } else {
+                format!("{}%", view.volume)
+            };
+            ui.label(
+                RichText::new(value)
+                    .size(ui.style().text_styles[&egui::TextStyle::Heading].size + 6.0)
+                    .strong(),
+            );
+        });
     });
+    ui.add_space(5.0);
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 8.0), egui::Sense::hover());
+    mixer::paint_rail(
+        ui.painter(),
+        rect,
+        view.volume,
+        view.muted,
+        view.green_up_to,
+        view.blue_up_to,
+        tokens,
+    );
 }

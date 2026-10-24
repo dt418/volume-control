@@ -7,6 +7,7 @@ use volumectl::config::{
     AppLabelStyle, ConfigLoadNotice, HotkeyBindings, HotkeyModifier, Language,
 };
 use volumectl::host_core::RunningApp;
+use volumectl::hotkeys::{HotkeyAction, HotkeyRegResult, HotkeyRegStatus};
 use volumectl::ui::{AccentMode, MaterialMode, MotionMode, ThemeMode};
 
 use crate::i18n::{tr, Key};
@@ -45,6 +46,7 @@ pub struct PickerState {
     pub query: String,
     pub loading: bool,
     pub error: Option<String>,
+    pub anchor: Option<egui::Pos2>,
 }
 
 pub struct SettingsView<'a> {
@@ -62,10 +64,14 @@ pub struct SettingsView<'a> {
     pub config_notice: Option<&'a str>,
     pub saved_blacklist: &'a [String],
     pub modifier: HotkeyModifier,
+    pub hotkey_status: &'a [HotkeyRegResult],
 }
 
 pub fn show(ui: &mut egui::Ui, view: &mut SettingsView<'_>) -> Vec<SettingsIntent> {
     let mut intents = Vec::new();
+    // One control rhythm for every tab: equal heights and 6 px vertical gaps.
+    ui.spacing_mut().interact_size.y = style::BUTTON_HEIGHT;
+    ui.spacing_mut().item_spacing.y = style::SPACE_3;
     if view.recorder.active().is_some() {
         capture_keys(ui, view.draft, view.recorder);
     }
@@ -89,7 +95,6 @@ pub fn show(ui: &mut egui::Ui, view: &mut SettingsView<'_>) -> Vec<SettingsInten
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE)
         .show(ui, |ui| {
-            let width = ui.available_width();
             let tokens = style::tokens(view.is_dark);
             egui::Frame::NONE
                 .fill(tokens.card)
@@ -99,9 +104,12 @@ pub fn show(ui: &mut egui::Ui, view: &mut SettingsView<'_>) -> Vec<SettingsInten
                     ui.set_min_size(ui.available_size());
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
-                                ui.set_width(width - 32.0);
+                                ui.set_width(ui.available_width());
                                 match *view.tab {
                                     Tab::General => general_tab(ui, view, &mut intents),
                                     Tab::Hotkeys => hotkeys_tab(ui, view, &mut intents),
@@ -272,8 +280,13 @@ fn hotkeys_tab(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
             .inner_margin(egui::Margin::symmetric(12, 8))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
+                    let available = ui.available_width();
+                    let button_width = 50.0;
+                    let label_width = (available * 0.32).clamp(140.0, 180.0);
+                    let chip_width =
+                        (available - label_width - 2.0 * button_width - 24.0).max(120.0);
                     ui.allocate_ui_with_layout(
-                        egui::vec2(230.0, 34.0),
+                        egui::vec2(label_width, 34.0),
                         Layout::top_down(Align::Min),
                         |ui| {
                             ui.label(tr(action.label(), view.language, &[]).to_string());
@@ -295,10 +308,10 @@ fn hotkeys_tab(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
                     };
                     if ui
                         .add_sized(
-                            [190.0, 28.0],
+                            [chip_width, 28.0],
                             egui::Button::new(RichText::new(display).monospace().small())
                                 .frame(true)
-                                .min_size(egui::vec2(190.0, 28.0)),
+                                .min_size(egui::vec2(chip_width, 28.0)),
                         )
                         .clicked()
                     {
@@ -306,11 +319,11 @@ fn hotkeys_tab(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
                     }
                     if ui
                         .add_sized(
-                            [52.0, 28.0],
+                            [button_width, 28.0],
                             egui::Button::new(
                                 tr(Key::RecorderRecord, view.language, &[]).to_string(),
                             )
-                            .min_size(egui::vec2(52.0, 28.0)),
+                            .min_size(egui::vec2(button_width, 28.0)),
                         )
                         .clicked()
                     {
@@ -322,13 +335,21 @@ fn hotkeys_tab(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
                             egui::Button::new(
                                 tr(Key::RecorderClear, view.language, &[]).to_string(),
                             )
-                            .min_size(egui::vec2(52.0, 28.0)),
+                            .min_size(egui::vec2(button_width, 28.0)),
                         )
                         .clicked()
                     {
                         action.set_binding(&mut view.draft.hotkeys, String::new());
                     }
                 });
+                if hotkey_conflicted(action, view.hotkey_status) {
+                    ui.add_space(2.0);
+                    ui.label(
+                        RichText::new(tr(Key::HotkeyConflictBadge, view.language, &[]))
+                            .small()
+                            .color(tokens.danger),
+                    );
+                }
             });
         ui.add_space(6.0);
     }
@@ -409,30 +430,42 @@ fn blacklist_tab(
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         let mut entry = String::new();
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut entry)
-                .hint_text(tr(Key::BlacklistManualPlaceholder, view.language, &[]))
-                .desired_width(180.0),
+        let field_width = (ui.available_width() - 68.0).max(140.0);
+        let response = ui.add_sized(
+            [field_width, style::INPUT_HEIGHT],
+            egui::TextEdit::singleline(&mut entry).hint_text(tr(
+                Key::BlacklistManualPlaceholder,
+                view.language,
+                &[],
+            )),
         );
         let submit = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
         let clicked = ui
-            .button(tr(Key::BlacklistAdd, view.language, &[]).to_string())
+            .add_sized(
+                [56.0, style::INPUT_HEIGHT],
+                egui::Button::new(tr(Key::BlacklistAdd, view.language, &[]).to_string()),
+            )
             .clicked();
         if (clicked || submit) && !entry.trim().is_empty() {
             intents.push(SettingsIntent::AddBlacklist(entry.clone()));
         }
-        if ui
-            .button(tr(Key::BlacklistChooseApps, view.language, &[]).to_string())
-            .clicked()
-        {
+    });
+    ui.horizontal_wrapped(|ui| {
+        let choose = ui.add_sized(
+            [180.0, style::INPUT_HEIGHT],
+            egui::Button::new(tr(Key::BlacklistChooseApps, view.language, &[]).to_string()),
+        );
+        let anchor = choose.rect.left_bottom() + egui::vec2(0.0, 4.0);
+        if choose.clicked() {
             view.picker.open = !view.picker.open;
             if view.picker.open {
+                view.picker.anchor = Some(anchor);
                 view.picker.loading = true;
                 intents.push(SettingsIntent::RefreshRunningApps);
+            } else {
+                view.picker.anchor = None;
             }
         }
-    });
-    ui.horizontal(|ui| {
         for (label, intent) in [
             (
                 Key::BlacklistApplyRecommended,
@@ -504,97 +537,112 @@ fn blacklist_tab(
 }
 
 fn picker_panel(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec<SettingsIntent>) {
+    let Some(anchor) = view.picker.anchor else {
+        return;
+    };
     let tokens = style::tokens(view.is_dark);
-    egui::Frame::NONE
-        .fill(tokens.card)
-        .stroke(egui::Stroke::new(1.0, tokens.border))
-        .corner_radius(egui::CornerRadius::same(style::RADIUS_CARD))
-        .inner_margin(egui::Margin::same(10))
-        .show(ui, |ui| {
-            ui.set_width(320.0);
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(tr(Key::BlacklistAppPicker, view.language, &[]))
-                        .size(12.0)
-                        .strong(),
-                );
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui
-                        .small_button(tr(Key::BlacklistDone, view.language, &[]).to_string())
-                        .clicked()
-                    {
-                        view.picker.open = false;
-                    }
-                    if ui
-                        .small_button(tr(Key::BlacklistRefresh, view.language, &[]).to_string())
-                        .clicked()
-                    {
-                        view.picker.loading = true;
-                        intents.push(SettingsIntent::RefreshRunningApps);
-                    }
-                });
-            });
-            ui.add(
-                egui::TextEdit::singleline(&mut view.picker.query).hint_text(tr(
-                    Key::BlacklistSearchApps,
-                    view.language,
-                    &[],
-                )),
-            );
-            if view.picker.loading {
-                ui.small(tr(Key::BlacklistLoadingApps, view.language, &[]).to_string());
-                return;
-            }
-            if let Some(error) = &view.picker.error {
-                ui.colored_label(tokens.danger, error);
-            }
-            let query = view.picker.query.to_lowercase();
-            let mut matched = 0;
-            egui::ScrollArea::vertical()
-                .max_height(180.0)
+    egui::Area::new(egui::Id::new("running-app-picker"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(anchor)
+        .show(ui.ctx(), |ui| {
+            egui::Frame::NONE
+                .fill({
+                    let card = tokens.card;
+                    egui::Color32::from_rgb(card.r(), card.g(), card.b())
+                })
+                .stroke(egui::Stroke::new(1.0, tokens.border))
+                .corner_radius(egui::CornerRadius::same(style::RADIUS_CARD))
+                .inner_margin(egui::Margin::same(10))
                 .show(ui, |ui| {
-                    for app in view.running_apps {
-                        let haystack = format!(
-                            "{} {} {}",
-                            app.process,
-                            app.title,
-                            app.display_name.as_deref().unwrap_or("")
-                        )
-                        .to_lowercase();
-                        if !query.is_empty() && !haystack.contains(&query) {
-                            continue;
-                        }
-                        matched += 1;
-                        let mut checked =
-                            blacklist::is_blocked(&view.draft.blacklist, &app.process);
-                        let name = app.display_name.as_deref().unwrap_or(&app.title);
-                        if ui
-                            .checkbox(&mut checked, format!("{name} ({})", app.process))
-                            .changed()
-                        {
-                            intents.push(SettingsIntent::ToggleBlacklist(app.process.clone()));
-                        }
-                    }
-                    if matched == 0 {
-                        ui.small(
-                            tr(
-                                if view.running_apps.is_empty() {
-                                    Key::BlacklistNoRunningApps
-                                } else {
-                                    Key::BlacklistNoAppMatches
-                                },
-                                view.language,
-                                &[],
-                            )
-                            .to_string(),
+                    ui.set_width(320.0);
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(tr(Key::BlacklistAppPicker, view.language, &[])).strong(),
                         );
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui
+                                .small_button(
+                                    tr(Key::BlacklistDone, view.language, &[]).to_string(),
+                                )
+                                .clicked()
+                            {
+                                view.picker.open = false;
+                                view.picker.anchor = None;
+                            }
+                            if ui
+                                .small_button(
+                                    tr(Key::BlacklistRefresh, view.language, &[]).to_string(),
+                                )
+                                .clicked()
+                            {
+                                view.picker.loading = true;
+                                intents.push(SettingsIntent::RefreshRunningApps);
+                            }
+                        });
+                    });
+                    ui.add(
+                        egui::TextEdit::singleline(&mut view.picker.query).hint_text(tr(
+                            Key::BlacklistSearchApps,
+                            view.language,
+                            &[],
+                        )),
+                    );
+                    if view.picker.loading {
+                        ui.small(tr(Key::BlacklistLoadingApps, view.language, &[]).to_string());
+                        return;
                     }
+                    if let Some(error) = &view.picker.error {
+                        ui.colored_label(tokens.danger, error);
+                    }
+                    let query = view.picker.query.to_lowercase();
+                    let mut matched = 0;
+                    egui::ScrollArea::vertical()
+                        .max_height(180.0)
+                        .show(ui, |ui| {
+                            for app in view.running_apps {
+                                let haystack = format!(
+                                    "{} {} {}",
+                                    app.process,
+                                    app.title,
+                                    app.display_name.as_deref().unwrap_or("")
+                                )
+                                .to_lowercase();
+                                if !query.is_empty() && !haystack.contains(&query) {
+                                    continue;
+                                }
+                                matched += 1;
+                                let mut checked =
+                                    blacklist::is_blocked(&view.draft.blacklist, &app.process);
+                                let name = app.display_name.as_deref().unwrap_or(&app.title);
+                                if ui
+                                    .checkbox(&mut checked, format!("{name} ({})", app.process))
+                                    .changed()
+                                {
+                                    intents
+                                        .push(SettingsIntent::ToggleBlacklist(app.process.clone()));
+                                }
+                            }
+                            if matched == 0 {
+                                ui.small(
+                                    tr(
+                                        if view.running_apps.is_empty() {
+                                            Key::BlacklistNoRunningApps
+                                        } else {
+                                            Key::BlacklistNoAppMatches
+                                        },
+                                        view.language,
+                                        &[],
+                                    )
+                                    .to_string(),
+                                );
+                            }
+                        });
+                    ui.small(format!(
+                        "{}: {}",
+                        tr(Key::BlacklistSelected, view.language, &[]),
+                        view.draft.blacklist.len()
+                    ));
                 });
-            ui.small(format!(
-                "{}: {}",
-                tr(Key::BlacklistSelected, view.language, &[]),
-                view.draft.blacklist.len()
-            ));
         });
 }
 
@@ -1184,4 +1232,24 @@ pub fn apply_preset(draft: &mut SettingsDraft, modifier: HotkeyModifier) {
 #[must_use]
 pub fn capturing(recorder: &Recorder) -> bool {
     recorder.active().is_some()
+}
+
+fn hotkey_action(action: RecorderAction) -> HotkeyAction {
+    match action {
+        RecorderAction::VolumeUp => HotkeyAction::VolumeUp,
+        RecorderAction::VolumeDown => HotkeyAction::VolumeDown,
+        RecorderAction::VolumeUpLarge => HotkeyAction::VolumeUpLarge,
+        RecorderAction::VolumeDownLarge => HotkeyAction::VolumeDownLarge,
+        RecorderAction::ToggleMute => HotkeyAction::ToggleMute,
+        RecorderAction::Reset50 => HotkeyAction::Reset50,
+        RecorderAction::OpenMixer => HotkeyAction::OpenMixer,
+        RecorderAction::OpenMenu => HotkeyAction::OpenMenu,
+    }
+}
+
+fn hotkey_conflicted(action: RecorderAction, status: &[HotkeyRegResult]) -> bool {
+    status.iter().any(|result| {
+        result.action == hotkey_action(action)
+            && matches!(result.status, HotkeyRegStatus::Conflicted(_))
+    })
 }

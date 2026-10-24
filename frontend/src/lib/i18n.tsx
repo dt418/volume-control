@@ -204,6 +204,7 @@ const EN = {
   "help.shortcuts": "Keyboard shortcuts",
   "help.close": "Close",
 
+  "hotkey.conflictBadge": "hotkey already registered by another application",
   "hotkey.volumeUp": "Volume Up",
   "hotkey.volumeUpHelp": "Increase volume by the small step.",
   "hotkey.volumeDown": "Volume Down",
@@ -437,6 +438,7 @@ const VI: Record<TranslationKey, string> = {
   "help.shortcuts": "Phím tắt bàn phím",
   "help.close": "Đóng",
 
+  "hotkey.conflictBadge": "hotkey already registered by another application",
   "hotkey.volumeUp": "Tăng âm lượng",
   "hotkey.volumeUpHelp": "Tăng âm lượng theo bước nhỏ.",
   "hotkey.volumeDown": "Giảm âm lượng",

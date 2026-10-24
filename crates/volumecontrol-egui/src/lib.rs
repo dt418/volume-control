@@ -10,6 +10,7 @@ pub mod cli;
 pub mod fonts;
 pub mod i18n;
 pub mod icon;
+pub mod native_win32;
 pub mod placement;
 pub mod settings;
 pub mod single_instance;
