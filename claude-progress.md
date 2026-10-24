@@ -4455,3 +4455,6 @@ fn get_window_pid_x11() -> Option<u32> {
   - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` and `cargo fmt --all --check`: clean.
   - Live `--show-all` on Windows: all four surfaces at legacy geometry; screenshots in `%TEMP%\egui-final-*.png`; UIA tree announces full Vietnamese labels.
 - Records: registered `vol-118` (in_progress). Legacy `frontend/`, `src-tauri/`, `crates/volumecontrol-host/`, and `crates/liquid_glass/` stay untouched as the reference per the user's directive.
+- Task 2 (Mixer parity) landed in the same session: `src/surfaces/mixer.rs` model + view, SignalRail-style slider (band colors, gray fill + diamond thumb while muted, AccessKit slider info), search filter, app-label styles, sorted session rows, system mute/reset, 1.5 s re-poll gated on visibility, unsupported state, footer.
+  - Verification: 15 unit + 8 mixer + 9 scaffold tests pass; clippy clean; fmt clean; live screenshot `%TEMP%\egui-mixer-t2.png`; UIA tree lists search, sliders, and "2 phiên ứng dụng" / "Esc để đóng".
+  - Registered `vol-119` (in_progress). Update banner deferred to the host update manager; not faked.

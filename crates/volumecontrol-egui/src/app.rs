@@ -122,6 +122,9 @@ pub struct VolumeControlApp {
     is_dark: bool,
     applied_dark: Option<bool>,
     last_poll: Instant,
+    last_sessions_poll: Instant,
+    sessions_supported: bool,
+    mixer_query: String,
     overlay_text: Option<String>,
     overlay_until: Option<Instant>,
     parked: bool,
@@ -183,6 +186,9 @@ impl VolumeControlApp {
             is_dark,
             applied_dark: None,
             last_poll: Instant::now(),
+            last_sessions_poll: Instant::now(),
+            sessions_supported: payload.sessions_supported,
+            mixer_query: String::new(),
             overlay_text: None,
             overlay_until: None,
             parked: false,
@@ -267,6 +273,11 @@ impl VolumeControlApp {
         self.last_poll = Instant::now();
         self.core.poll_hotkeys();
         self.core.sync_external_state();
+        if self.state.is_visible(SurfaceId::Mixer)
+            && self.last_sessions_poll.elapsed() >= Duration::from_millis(1_500)
+        {
+            self.refresh_sessions();
+        }
         if self.core.reload_config_if_changed() {
             let payload = self.core.bootstrap();
             self.config = payload.config.clone();
@@ -278,6 +289,12 @@ impl VolumeControlApp {
             self.is_dark = payload.appearance.theme_resolved == "dark";
             self.applied_dark = None;
         }
+    }
+
+    fn refresh_sessions(&mut self) {
+        self.last_sessions_poll = Instant::now();
+        let sessions = self.core.sessions();
+        self.state.sessions = sessions.iter().map(session_state).collect();
     }
 
     fn resolve_dark(&self) -> bool {
@@ -343,8 +360,20 @@ impl VolumeControlApp {
     }
 
     fn show_mixer(&mut self, ui: &mut egui::Ui) {
-        let language = self.language();
         let tokens = style::tokens(self.is_dark);
+        let options = crate::surfaces::mixer::MixerOptions {
+            language: self.language(),
+            is_dark: self.is_dark,
+            green_up_to: self.config.color_thresholds.green_up_to,
+            blue_up_to: self.config.color_thresholds.blue_up_to,
+            app_label_style: self.config.app_label_style,
+            sessions_supported: self.sessions_supported,
+            error: match &self.state.status {
+                UiStatus::Error(error) => Some(error.clone()),
+                UiStatus::Ready | UiStatus::Syncing => None,
+            },
+        };
+        let mut intents = Vec::new();
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::NONE
@@ -353,58 +382,29 @@ impl VolumeControlApp {
                     .inner_margin(egui::Margin::same(12)),
             )
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(tr(Key::MixerTitle, language, &[]).to_string())
-                            .size(13.0)
-                            .strong(),
-                    );
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{} {}%",
-                            tr(Key::CommonVolume, language, &[]),
-                            self.state.volume_percent
-                        ))
-                        .size(11.0)
-                        .color(tokens.muted),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let close = ui
-                            .add(egui::Button::new(egui_phosphor::regular::X).frame(false))
-                            .on_hover_text(tr(Key::CommonClose, language, &[]).to_string());
-                        if close.clicked() {
-                            self.state.hide(SurfaceId::Mixer);
-                            self.root_shown = false;
-                        }
-                        let settings = ui
-                            .add(egui::Button::new(egui_phosphor::regular::GEAR).frame(false))
-                            .on_hover_text(tr(Key::SettingsTitle, language, &[]).to_string());
-                        if settings.clicked() {
-                            self.dispatch(AppAction::ShowSurface(SurfaceId::Settings));
-                        }
-                        let help = ui
-                            .add(egui::Button::new(egui_phosphor::regular::QUESTION).frame(false))
-                            .on_hover_text(tr(Key::HelpTitle, language, &[]).to_string());
-                        if help.clicked() {
-                            self.dispatch(AppAction::ShowSurface(SurfaceId::Help));
-                        }
-                    });
-                });
-                ui.add_space(8.0);
-                if ui
-                    .button(tr(Key::MixerMute, language, &[]).to_string())
-                    .clicked()
-                {
-                    self.dispatch(AppAction::ToggleMute);
-                }
-                ui.add(
-                    egui::Slider::new(&mut self.state.volume_percent, 0..=100)
-                        .text(tr(Key::MixerSystemOutput, language, &[]).to_string()),
+                crate::surfaces::mixer::show(
+                    ui,
+                    &self.state,
+                    &mut self.mixer_query,
+                    &options,
+                    &mut intents,
                 );
-                if let UiStatus::Error(error) = &self.state.status {
-                    ui.colored_label(tokens.danger, error);
-                }
             });
+        for intent in intents {
+            match intent {
+                crate::surfaces::mixer::MixerIntent::Action(action) => {
+                    if matches!(action, AppAction::HideSurface(SurfaceId::Mixer)) {
+                        self.state.hide(SurfaceId::Mixer);
+                        self.root_shown = false;
+                    }
+                    self.dispatch(action);
+                }
+                crate::surfaces::mixer::MixerIntent::RetryBackend => {
+                    self.core.sync_external_state();
+                    self.refresh_sessions();
+                }
+            }
+        }
         self.vibrancy.apply(
             SurfaceId::Mixer,
             vibrancy::material_for(SurfaceId::Mixer),

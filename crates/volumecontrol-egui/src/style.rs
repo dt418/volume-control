@@ -20,6 +20,7 @@ pub struct Tokens {
     pub muted: Color32,
     pub danger: Color32,
     pub success: Color32,
+    pub warning: Color32,
 }
 
 /// Control corner radius, design-spec §1.
@@ -48,6 +49,7 @@ pub fn tokens(is_dark: bool) -> Tokens {
             muted: Color32::from_rgb(0x9A, 0xA0, 0xA6),
             danger: Color32::from_rgb(0xEF, 0x44, 0x44),
             success: Color32::from_rgb(0x22, 0xC5, 0x5E),
+            warning: Color32::from_rgb(0xF5, 0x9E, 0x0B),
         }
     } else {
         Tokens {
@@ -60,6 +62,7 @@ pub fn tokens(is_dark: bool) -> Tokens {
             muted: Color32::from_rgb(0x5F, 0x66, 0x70),
             danger: Color32::from_rgb(0xDC, 0x26, 0x26),
             success: Color32::from_rgb(0x16, 0xA3, 0x4A),
+            warning: Color32::from_rgb(0xB4, 0x53, 0x09),
         }
     }
 }

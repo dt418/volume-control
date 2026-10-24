@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-24T08:40",
+  "last_updated": "2026-10-24T09:10",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -15,6 +15,28 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-119",
+      "priority": 119,
+      "area": "egui-migration",
+      "title": "Egui mixer surface with legacy layout, sorting, search, and SignalRail slider",
+      "user_visible_behavior": "The egui Mixer shows the legacy header (title, live percentage or 'Đã tắt tiếng', gear/help/close icons), search pill, system-output row with mute and reset-50 controls, sorted session rows, an empty/unsupported state, and the session-count footer with 'Esc để đóng'.",
+      "status": "in_progress",
+      "verification": [
+        "cargo test -p volumecontrol-egui: 15 unit + 8 mixer + 9 scaffold tests passed.",
+        "cargo clippy -p volumecontrol-egui --all-targets --no-default-features -- -D warnings: clean.",
+        "cargo fmt --all --check: clean.",
+        "Live run --surface=mixer on Windows/DX12: screenshot shows Vietnamese header, search placeholder, muted system row with diamond thumb, Telegram + System Sounds rows with band-colored fills, and the footer.",
+        "Computer-use UIA tree lists the search edit, system slider, both session sliders, and the footer text '2 phiên ứng dụng' / 'Esc để đóng'."
+      ],
+      "evidence": [
+        "crates/volumecontrol-egui/src/surfaces/mixer.rs: pure model (rows/matching/labels/status/footer/empty state/band colors) plus the view; band boundaries follow SignalRail (green <40, blue 40..=75, orange >75, gray + diamond while muted).",
+        "Session list re-polls AppCore every 1.5 s only while the Mixer is visible; session volume and mute dispatch real AppActions (SetSessionVolume/ToggleSessionMute); system mute/reset/volume dispatch ToggleMute/ResetVolume/SetVolumePercent.",
+        "Search filters name/process/display-name case-insensitively; app label style honors friendly/friendly+process/process; System Sounds uses the localized friendly label and hint.",
+        "Screenshot: %TEMP%\\egui-mixer-t2.png; UIA tree recorded in the session ledger."
+      ],
+      "notes": "Task 2 of the egui migration plan. The update-available banner waits for the host update manager (Task 3 update card / Task 5 update service); deferred rather than faked."
+    },
     {
       "id": "vol-118",
       "priority": 118,

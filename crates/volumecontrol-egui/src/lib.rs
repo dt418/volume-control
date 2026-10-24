@@ -11,4 +11,5 @@ pub mod i18n;
 pub mod placement;
 pub mod sink;
 pub mod style;
+pub mod surfaces;
 pub mod vibrancy;
