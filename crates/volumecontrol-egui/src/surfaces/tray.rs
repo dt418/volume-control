@@ -244,9 +244,11 @@ impl Tray {
 
         let icon = build_icon().ok_or_else(|| "Failed to build tray icon".to_string())?;
 
+        // Distinct from the legacy host's tray icon while both run during the
+        // migration, so manual/automation tests cannot click the wrong menu.
         let tray = TrayIconBuilder::new()
             .with_icon(icon)
-            .with_tooltip("Volume Control")
+            .with_tooltip("Volume Control (egui)")
             .build()
             .map_err(|e| e.to_string())?;
         #[cfg(target_os = "windows")]

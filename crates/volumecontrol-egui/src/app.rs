@@ -1,7 +1,10 @@
 //! eframe application: root Mixer viewport, immediate child viewports, and
 //! the AppCore bridge loop.
 
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
@@ -167,12 +170,23 @@ pub struct VolumeControlApp {
     tray_language: Language,
     wheel: Option<WheelBridge>,
     wheel_actions: Option<Receiver<volumectl::hotkeys::HotkeyAction>>,
+    smoke: bool,
+    smoke_started: Instant,
+    smoke_duration: Duration,
+    smoke_seen: HashSet<SurfaceId>,
+    smoke_toast_shown: bool,
+    smoke_verified: Arc<AtomicBool>,
 }
 
 impl VolumeControlApp {
     /// Build the app from a configured core and the matching sink receiver.
     #[must_use]
-    pub fn new(mut core: AppCore, events: Receiver<EguiEvent>, options: LaunchOptions) -> Self {
+    pub fn new(
+        mut core: AppCore,
+        events: Receiver<EguiEvent>,
+        options: LaunchOptions,
+        smoke_verified: Arc<AtomicBool>,
+    ) -> Self {
         let payload = core.bootstrap();
         let mut state = AppState::from_audio(payload.volume_pct, payload.muted, None);
         state.theme = payload.config.appearance.theme;
@@ -195,7 +209,7 @@ impl VolumeControlApp {
         } else {
             state.show(SurfaceId::Mixer);
         }
-        if options.show_all {
+        if options.show_all || options.smoke {
             for surface in [
                 SurfaceId::Mixer,
                 SurfaceId::Settings,
@@ -204,6 +218,7 @@ impl VolumeControlApp {
             ] {
                 state.show(surface);
             }
+            root_shown = true;
         }
         if !root_shown {
             state.hide(SurfaceId::Mixer);
@@ -278,6 +293,12 @@ impl VolumeControlApp {
             tray_language,
             wheel,
             wheel_actions,
+            smoke: options.smoke,
+            smoke_started: Instant::now(),
+            smoke_duration: Duration::from_millis(options.smoke_ms.max(250)),
+            smoke_seen: HashSet::new(),
+            smoke_toast_shown: false,
+            smoke_verified,
         }
     }
 
@@ -1159,6 +1180,33 @@ impl eframe::App for VolumeControlApp {
 
         self.show_children(&ctx);
 
+        if self.smoke && !self.smoke_toast_shown {
+            self.smoke_toast_shown = true;
+            self.core
+                .show_overlay_text(tr(Key::AppName, self.state.language, &[]).to_string());
+        }
+        if self.smoke {
+            for surface in [
+                SurfaceId::Mixer,
+                SurfaceId::Settings,
+                SurfaceId::Help,
+                SurfaceId::Overlay,
+            ] {
+                if self.state.is_visible(surface)
+                    || (surface == SurfaceId::Overlay && self.overlay_until.is_some())
+                {
+                    self.smoke_seen.insert(surface);
+                }
+            }
+            if self.smoke_seen.len() == 4 {
+                self.smoke_verified.store(true, Ordering::Release);
+                self.quitting = true;
+                ctx.send_viewport_cmd(ViewportCommand::Close);
+            } else if self.smoke_started.elapsed() >= self.smoke_duration {
+                self.quitting = true;
+                ctx.send_viewport_cmd(ViewportCommand::Close);
+            }
+        }
         if self.overlay_until.is_some() {
             ctx.request_repaint();
         }

@@ -3,6 +3,9 @@
 //! Usage: `volumecontrol-egui [--smoke] [--smoke-ms=N] [--show-all]
 //! [--surface=<mixer|settings|help|overlay>]`
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use volumecontrol_egui::app::{builder_for, LaunchOptions, VolumeControlApp};
 use volumecontrol_egui::cli::{self, Verb};
 use volumecontrol_egui::placement::WorkArea;
@@ -108,6 +111,10 @@ fn main() -> Result<(), String> {
         setup.instance_descriptor.backends = eframe::wgpu::Backends::DX12;
     }
 
+    let smoke_verified = Arc::new(AtomicBool::new(false));
+    let smoke_flag = smoke_verified.clone();
+    let smoke_requested = options.smoke;
+
     eframe::run_native(
         "VolumeControl",
         native_options,
@@ -126,10 +133,14 @@ fn main() -> Result<(), String> {
                     .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> {
                         error.into()
                     })?;
-            let mut app = VolumeControlApp::new(core, events, options);
+            let mut app = VolumeControlApp::new(core, events, options, smoke_flag);
             app.attach_primary(guard);
             Ok(Box::new(app))
         }),
     )
-    .map_err(|error| format!("eframe failed: {error}"))
+    .map_err(|error| format!("eframe failed: {error}"))?;
+    if smoke_requested && !smoke_verified.load(Ordering::Acquire) {
+        return Err("smoke failed: not all surfaces were presented".into());
+    }
+    Ok(())
 }
