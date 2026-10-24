@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-23T23:40",
+  "last_updated": "2026-10-24T08:40",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -15,6 +15,29 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-118",
+      "priority": 118,
+      "area": "egui-migration",
+      "title": "Egui foundation host scaffold with AppCore bridge and legacy copy",
+      "user_visible_behavior": "A parallel egui/eframe binary hosts the Mixer as its root viewport with Settings, Help, and Overlay as child viewports, renders Vietnamese labels with the platform UI font, applies native Mica/Acrylic backdrop per HWND, and forwards every EventSink notification into the eframe loop. The legacy Tauri app and native host stay untouched as the reference.",
+      "status": "in_progress",
+      "verification": [
+        "cargo test -p volumecontrol-egui: 13 unit tests + 9 scaffold contract tests passed.",
+        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings: clean (after providing the gitignored frontend/dist build artifact in the worktree).",
+        "cargo fmt --all --check: clean.",
+        "cargo test --workspace --no-default-features: all suites green, 0 failed.",
+        "Live run --show-all on Windows/DX12: all four surfaces created at the legacy geometry; screenshots captured (Mixer 400x224, Settings 760x620, Help 520x500, Overlay 336x88).",
+        "Computer-use UIA tree of the Mixer announces Vietnamese labels: 'Bộ trộn âm lượng', 'Âm lượng 0%', 'Tắt tiếng', 'Đầu ra hệ thống'."
+      ],
+      "evidence": [
+        "crates/volumecontrol-egui: i18n.rs ports all 215 legacy EN/VI keys verbatim with {0} interpolation; sink.rs bridges EventSink over mpsc + request_repaint; placement.rs carries the legacy docking math; style.rs carries the dark/light glass tokens; fonts.rs installs Segoe UI/Arial/DejaVu; vibrancy.rs resolves this process's HWND via EnumWindows + PID and applies Mica/Acrylic per live handle.",
+        "eframe 0.36 runs no App::ui pass while the root viewport is hidden, so the Mixer root is parked off-screen at 1x1 instead of hidden; child viewports keep painting (verified with --surface=settings while the root was parked).",
+        "Vulkan on this Intel UHD 630 crashes with STATUS_ACCESS_VIOLATION before the first frame; the host pins the wgpu backend to DX12 on Windows and runs all four surfaces.",
+        "Vietnamese tofu was fixed by installing the platform UI font as the primary proportional face; the earlier header overlap was fixed with Phosphor icon buttons."
+      ],
+      "notes": "Task 1 of docs/superpowers/plans/2026-10-24-egui-foundation-migration.md. Smoke exit contract (Task 7) and full surface content (Tasks 2-4) are still open. Old frontend/src-tauri/liquid_glass remain the reference and are not deleted."
+    },
     {
       "id": "vol-117",
       "priority": 117,

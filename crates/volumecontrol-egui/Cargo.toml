@@ -1,0 +1,29 @@
+[package]
+name = "volumecontrol-egui"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Egui/eframe foundation for VolumeControl surfaces"
+
+[[bin]]
+name = "volumecontrol-egui"
+path = "src/main.rs"
+
+[dependencies]
+volumectl = { package = "volumectl", path = "../volumectl" }
+eframe = "0.36.2"
+egui = "0.36.2"
+egui-phosphor = "0.14"
+egui_extras = "0.36"
+egui-toast = "0.22"
+window-vibrancy.workspace = true
+raw-window-handle = "0.6"
+log.workspace = true
+env_logger.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = "0.13"

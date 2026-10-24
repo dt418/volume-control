@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/volumectl", "crates/liquid_glass", "crates/volumecontrol-host", "src-tauri"]
-default-members = ["crates/volumectl", "crates/liquid_glass", "crates/volumecontrol-host", "src-tauri"]
+members = ["crates/volumectl", "crates/liquid_glass", "crates/volumecontrol-host", "crates/volumecontrol-egui", "src-tauri"]
+default-members = ["crates/volumectl", "crates/liquid_glass", "crates/volumecontrol-host", "crates/volumecontrol-egui", "src-tauri"]
 
 [workspace.package]
 edition = "2021"
 version = "0.1.11"
 license = "MIT"
-rust-version = "1.92"
+rust-version = "1.95"
 
 [workspace.dependencies]
 # Low-level Win32 FFI — predictable signatures for WASAPI COM and the native

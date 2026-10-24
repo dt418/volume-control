@@ -4438,3 +4438,20 @@ fn get_window_pid_x11() -> Option<u32> {
 - Decision: keep production on native `liquid_glass` WGPU/Winit renderer with native OS vibrancy enhancements.
 - Legacy reference capture (2026-10-24, computer use on installed v0.1.11): full UIA enumeration + screenshots of Mixer, all 6 Settings tabs (top + scrolled-bottom), Help, Overlay toast, and hotkey/tray behaviors; saved to `docs/references/legacy-app/img/` and documented in `docs/references/legacy-app/feature-reference.md` with e2e coverage mapping and the native-parity gap table (tray, hotkey recorders, blacklist/beep/threshold UI, update install flow, mixer header controls, and 9 stubbed `AppAction`s are the dominant gaps).
 - Visual polish pass (2026-10-24): text is now vertically centered in every node and horizontally centered for button-like roles (`Control`/`Accent`, per-node override `SceneNode::text_centered` + `with_text_centered`), left-aligned text gains 8 px padding; Mixer mute buttons widened to 64 px, sliders re-flowed to 190 px, labels fit to a 104 px column with `…` truncation (`fit_label`), search field shows the "Tìm ứng dụng…" placeholder, and a legacy-parity footer "N phiên ứng dụng · Esc để đóng" was added. Verified by computer-use screenshots (Mixer + Settings) and full gates: 467 tests / clippy clean / fmt clean.
+
+## Session 137 (2026-10-24) - Egui foundation migration Task 1: scaffold host
+
+- Goal: start the egui/eframe foundation migration without touching the legacy Tauri app; scaffold a parallel host that binds the full `volumectl::host_core::AppCore` reducer, hosts the Mixer as root plus Settings/Help/Overlay child viewports, and proves rendering with computer use.
+- Landed:
+  - New `crates/volumecontrol-egui` binary (eframe/egui 0.36.2, wgpu 30, DX12 on Windows), added to workspace members; workspace MSRV and `clippy.toml` raised to 1.95 (eframe requires it).
+  - `i18n.rs`: all 215 legacy EN/VI keys ported verbatim from `frontend/src/lib/i18n.tsx` with typed `enum Key`, fixed-size tables, and `tr(key, lang, args)` `{n}` interpolation.
+  - `sink.rs`: `EguiSink: EventSink` forwards volume/hotkeys/sessions/backend/open/close/toggle/overlay/tray/exit over mpsc and requests a repaint; `surface_for_label` maps the legacy `window-*` labels.
+  - `app.rs`: `VolumeControlApp` (root Mixer, immediate child viewports, event drain, 150 ms hotkey/audio/config poll, Esc hide, root-close cancel, off-screen root parking), `builder_for` per-surface flags/geometry.
+  - `placement.rs`, `style.rs`, `fonts.rs`, `vibrancy.rs` (PID-scoped HWND lookup, Mica/Acrylic, per-HWND cache; macOS/Linux recorded degradation).
+  - Fixes found by computer use: Vietnamese tofu (Segoe UI installed as primary face), header text collision (Phosphor icon buttons), full-window glass background, Vulkan crash (DX12 pin).
+- Verification:
+  - `cargo test -p volumecontrol-egui`: 13 unit + 9 scaffold tests pass.
+  - `cargo test --workspace --no-default-features`: all suites green, 0 failed.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` and `cargo fmt --all --check`: clean.
+  - Live `--show-all` on Windows: all four surfaces at legacy geometry; screenshots in `%TEMP%\egui-final-*.png`; UIA tree announces full Vietnamese labels.
+- Records: registered `vol-118` (in_progress). Legacy `frontend/`, `src-tauri/`, `crates/volumecontrol-host/`, and `crates/liquid_glass/` stay untouched as the reference per the user's directive.
