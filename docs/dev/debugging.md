@@ -39,6 +39,7 @@ Build task: `cargo build -p volumecontrol-egui`.
 |---|---|
 | `scripts/find-tray-icon.ps1` | locate the tray icon by UIA tooltip (`Volume Control (egui)`); `-Open`, `-Left`, `-Right` |
 | `scripts/app-uia.ps1` | list app windows, dump the accessible tree, invoke a control by name, or drive the tray menu by item index |
+| `scripts/capture-window.ps1` | bring one HWND forward and save a PNG (`-Hwnd … -Out …`) |
 
 ```powershell
 scripts\app-uia.ps1 -Windows

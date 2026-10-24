@@ -4485,3 +4485,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - Materials: Auto/Translucent/Acrylic/Blur/Mica/Transparent/LiquidGlass/Opaque; Windows acrylic/mica/blur mapping with documented macOS/Linux degradation. Legacy config indices preserved.
   - A11y: 26–28px icon hit targets with hover/focus states, AccessKit labels, type ramp for titles; `--debug-ui`/F12, VS Code launch configs, hot-restart script.
   - Layout: mixer 400×280 with ~1.5 session cards, padded footer, search icon inside the input, blacklist spacing, DWM rounded corners and no black corner artifacts.
+  - Layout verification (2026-10-25): captured mixer at 400×280 (≈1.4 session cards, padded footer) and the egui tray popup at 268×336 with all nine rows via the new `scripts/capture-window.ps1`. Windows tests pass (549 across suites); clippy/fmt clean.
