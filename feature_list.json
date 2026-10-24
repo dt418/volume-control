@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-25T10:30",
+  "last_updated": "2026-10-25T10:50",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -47,7 +47,7 @@
         "Overlay: 336x120 HUD with wrap-safe text payloads; click-through applied after window creation because the builder flag prevented the window from appearing on Windows.",
         "Tray, CLI verbs, and single-instance modules were implemented by parallel subagents and wired into the host; app/tray icons load from src-tauri/icons. Tray events are polled from the eframe loop so all 9 actionable menu items reach the host; the Windows wheel hook posts into a hidden message window bridged to AppCore.",
         "Legacy window titles are localized; egui single-instance namespace is separate from the legacy app so both can run during migration.",
-        "Smoke contract: `--smoke` presents Mixer/Settings/Help/Overlay, records each, and exits 0 (verified); CLI `get`/`set 42`/`mute on` round-trip against the real backend. Tray switching surfaces no longer closes the root viewport (root close terminates eframe): Settings/Help children close, the Mixer root parks off-screen. Settings hotkey rows show the legacy conflict badge; the running-app picker floats as an opaque dropdown; Help and HUD use opaque legacy-style shells."
+        "Binary renamed to `VolumeControl-Egui.exe` to avoid collision with the Tauri `VolumeControl.exe`; `volumecontrol-host.exe` remains the native baseline. Benchmarks re-measured (warm): egui 818 ms / 490.6 MB / 7.66% idle vs native 805 ms / 493.8 MB / 15.16%. Smoke contract: `--smoke` presents Mixer/Settings/Help/Overlay, records each, and exits 0 (verified); CLI `get`/`set 42`/`mute on` round-trip against the real backend. Tray switching surfaces no longer closes the root viewport (root close terminates eframe): Settings/Help children close, the Mixer root parks off-screen. Settings hotkey rows show the legacy conflict badge; the running-app picker floats as an opaque dropdown; Help and HUD use opaque legacy-style shells."
       ],
       "notes": "Goal fix-ui. Remaining polish is queued as vol-120 per the user's request."
     },

@@ -608,7 +608,7 @@ pub fn signal_slider(
         &tokens,
     );
     response.widget_info(|| WidgetInfo::slider(true, f64::from(*value), label));
-    response
+    response.on_hover_text(format!("{value}%"))
 }
 
 #[cfg(test)]

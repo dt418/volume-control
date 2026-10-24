@@ -68,12 +68,17 @@ Legend: ✅ pass · ◐ partial · ⛔ gap.
 Measured with `scripts/bench-ui.ps1` (startup = process start → visible main
 window; RSS after idle; idle CPU over 10 s).
 
-| Metric | egui host (`volumecontrol-egui --surface=mixer`) | native host (`volumecontrol-host --surface=mixer`) |
+| Metric | egui host (`VolumeControl-Egui.exe --surface=mixer`) | native host (`volumecontrol-host.exe --surface=mixer`) |
 |---|---|---|
-| Startup → first window | 2,907 ms | 3,373 ms |
-| RSS idle | 490 MB | 506 MB |
-| Idle CPU (10 s) | 7.19% | 12.03% |
+| Startup → first window (warm) | 818 ms | 805 ms |
+| RSS idle (20 s settle) | 490.6 MB | 493.8 MB |
+| Idle CPU, first 10 s window | 6.72% | 13.75% |
+| Idle CPU, second 10 s window | 7.66% | 15.16% |
 | Slider-drag CPU / 1% low | not measured (scripted drag) | not measured |
+
+Binary note: the egui host now builds as `VolumeControl-Egui.exe` (crate
+`volumecontrol-egui`); `volumecontrol-host.exe` remains the native liquid-glass
+baseline. Both coexist until cutover.
 
 ## Cutover blockers (remaining = explicit user decisions, not code gaps)
 

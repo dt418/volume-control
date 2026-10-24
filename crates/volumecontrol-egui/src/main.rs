@@ -1,6 +1,6 @@
 //! Egui/eframe runtime host for VolumeControl.
 //!
-//! Usage: `volumecontrol-egui [--smoke] [--smoke-ms=N] [--show-all]
+//! Usage: `VolumeControl-Egui [--smoke] [--smoke-ms=N] [--show-all]
 //! [--surface=<mixer|settings|help|overlay>]`
 
 use std::sync::atomic::{AtomicBool, Ordering};
