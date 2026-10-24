@@ -47,6 +47,37 @@ pub const SPACING_INNER: f32 = SPACE_4;
 /// Card padding (alias of SPACE_6).
 pub const SPACING_CARD: f32 = SPACE_6;
 
+/// Surface geometry (logical points), shared with `placement.rs`.
+pub const MIXER_WIDTH: f32 = 400.0;
+pub const MIXER_HEIGHT: f32 = 240.0;
+pub const SETTINGS_DEFAULT_WIDTH: f32 = 760.0;
+pub const SETTINGS_DEFAULT_HEIGHT: f32 = 620.0;
+pub const SETTINGS_MIN_WIDTH: f32 = 620.0;
+pub const SETTINGS_MIN_HEIGHT: f32 = 520.0;
+pub const HELP_WIDTH: f32 = 520.0;
+pub const HELP_HEIGHT: f32 = 500.0;
+pub const OVERLAY_WIDTH: f32 = 336.0;
+pub const OVERLAY_HEIGHT: f32 = 88.0;
+
+/// Docking margins (logical points).
+pub const OVERLAY_MARGIN_X: f32 = 20.0;
+pub const OVERLAY_MARGIN_Y: f32 = 40.0;
+pub const MIXER_OVERLAY_GAP: f32 = 16.0;
+pub const HELP_MARGIN_X: f32 = 24.0;
+pub const HELP_MARGIN_Y: f32 = 48.0;
+
+/// Component geometry shared by views.
+pub const MIXER_FOOTER_HEIGHT: f32 = 22.0;
+pub const MIXER_SESSION_LABEL_WIDTH: f32 = 140.0;
+pub const MIXER_SESSION_ROW_HEIGHT: f32 = 30.0;
+pub const MIXER_CONTROLS_WIDTH: f32 = 62.0;
+pub const HOTKEY_LABEL_WIDTH: f32 = 210.0;
+pub const HOTKEY_ROW_HEIGHT: f32 = 44.0;
+pub const HOTKEY_CHIP_MIN_WIDTH: f32 = 120.0;
+pub const HOTKEY_BUTTON_WIDTH: f32 = 46.0;
+pub const PICKER_WIDTH: f32 = 320.0;
+pub const PICKER_HEIGHT: f32 = 180.0;
+
 /// Control sizes.
 pub const ICON_BUTTON: f32 = 24.0;
 pub const BUTTON_HEIGHT: f32 = 28.0;

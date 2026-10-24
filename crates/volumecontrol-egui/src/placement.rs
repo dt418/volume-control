@@ -6,33 +6,11 @@
 
 use volumectl::ui::SurfaceId;
 
-/// Mixer width in logical pixels.
-pub const MIXER_WIDTH: f32 = 400.0;
-/// Mixer height in logical pixels.
-pub const MIXER_HEIGHT: f32 = 280.0;
-/// Settings default width in logical pixels.
-pub const SETTINGS_DEFAULT_WIDTH: f32 = 760.0;
-/// Settings default height in logical pixels.
-pub const SETTINGS_DEFAULT_HEIGHT: f32 = 620.0;
-/// Help width in logical pixels.
-pub const HELP_WIDTH: f32 = 520.0;
-/// Help height in logical pixels.
-pub const HELP_HEIGHT: f32 = 500.0;
-/// Overlay width in logical pixels.
-pub const OVERLAY_WIDTH: f32 = 336.0;
-/// Overlay height in logical pixels.
-pub const OVERLAY_HEIGHT: f32 = 88.0;
-
-/// Overlay horizontal margin from the work-area edge, logical pixels.
-pub const OVERLAY_MARGIN_X: f32 = 20.0;
-/// Overlay vertical margin (taskbar clearance), logical pixels.
-pub const OVERLAY_MARGIN_Y: f32 = 40.0;
-/// Gap between the mixer bottom and the overlay top, logical pixels.
-pub const MIXER_OVERLAY_GAP: f32 = 16.0;
-/// Help horizontal margin, logical pixels.
-pub const HELP_MARGIN_X: f32 = 24.0;
-/// Help vertical margin, logical pixels.
-pub const HELP_MARGIN_Y: f32 = 48.0;
+pub use crate::style::{
+    HELP_HEIGHT, HELP_MARGIN_X, HELP_MARGIN_Y, HELP_WIDTH, MIXER_HEIGHT, MIXER_OVERLAY_GAP,
+    MIXER_WIDTH, OVERLAY_HEIGHT, OVERLAY_MARGIN_X, OVERLAY_MARGIN_Y, OVERLAY_WIDTH,
+    SETTINGS_DEFAULT_HEIGHT, SETTINGS_DEFAULT_WIDTH,
+};
 
 /// Physical window geometry: position and size in device pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

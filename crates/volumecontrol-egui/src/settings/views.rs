@@ -283,8 +283,8 @@ fn hotkeys_tab(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
                     let available = ui.available_width();
                     let button_width = 50.0;
                     let label_width = (available * 0.32).clamp(140.0, 180.0);
-                    let chip_width =
-                        (available - label_width - 2.0 * button_width - 24.0).max(120.0);
+                    let chip_width = (available - label_width - 2.0 * button_width - 24.0)
+                        .max(style::HOTKEY_CHIP_MIN_WIDTH);
                     ui.allocate_ui_with_layout(
                         egui::vec2(label_width, 34.0),
                         Layout::top_down(Align::Min),
@@ -554,7 +554,7 @@ fn picker_panel(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Ve
                 .corner_radius(egui::CornerRadius::same(style::RADIUS_CARD))
                 .inner_margin(egui::Margin::same(10))
                 .show(ui, |ui| {
-                    ui.set_width(320.0);
+                    ui.set_width(style::PICKER_WIDTH);
                     ui.horizontal(|ui| {
                         ui.label(
                             RichText::new(tr(Key::BlacklistAppPicker, view.language, &[])).strong(),
@@ -597,7 +597,7 @@ fn picker_panel(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Ve
                     let query = view.picker.query.to_lowercase();
                     let mut matched = 0;
                     egui::ScrollArea::vertical()
-                        .max_height(180.0)
+                        .max_height(style::PICKER_HEIGHT)
                         .show(ui, |ui| {
                             for app in view.running_apps {
                                 let haystack = format!(

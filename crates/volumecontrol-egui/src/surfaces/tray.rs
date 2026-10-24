@@ -245,11 +245,22 @@ impl Tray {
         let icon = build_icon().ok_or_else(|| "Failed to build tray icon".to_string())?;
 
         let tray = TrayIconBuilder::new()
-            .with_menu(Box::new(menu))
             .with_icon(icon)
             .with_tooltip("Volume Control")
             .build()
             .map_err(|e| e.to_string())?;
+        #[cfg(target_os = "windows")]
+        {
+            let themed = menu.clone();
+            // SAFETY: the HWND belongs to the live tray icon and the menu is
+            // initialized for it before being attached.
+            unsafe {
+                themed
+                    .init_for_hwnd_with_theme(tray.window_handle() as isize, muda::MenuTheme::Dark)
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+        tray.set_menu(Some(Box::new(menu)));
 
         let action_items = vec![
             (TrayAction::ToggleMute, mute_item),

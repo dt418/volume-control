@@ -106,3 +106,43 @@ Reduced-motion mode (`MotionMode::Reduced/Disabled`) clamps these to 0.
 | scrim | `#000 @ 40%` | modal/confirm backdrop |
 
 No drop shadows: separation comes from fill, border, and spacing.
+
+## 9. Surface geometry
+
+Declared once in `crates/volumecontrol-egui/src/style.rs` and re-exported by
+`placement.rs`; `builder_for` and every surface view consume these constants.
+
+| Constant | Value | Usage |
+|---|---|---|
+| `MIXER_WIDTH` / `MIXER_HEIGHT` | 400 × 240 | Mixer root viewport |
+| `SETTINGS_DEFAULT_WIDTH` / `SETTINGS_DEFAULT_HEIGHT` | 760 × 620 | Settings window |
+| `SETTINGS_MIN_WIDTH` / `SETTINGS_MIN_HEIGHT` | 620 × 520 | Settings resize floor |
+| `HELP_WIDTH` / `HELP_HEIGHT` | 520 × 500 | Help window |
+| `OVERLAY_WIDTH` / `OVERLAY_HEIGHT` | 336 × 88 | HUD overlay |
+| `OVERLAY_MARGIN_X` / `OVERLAY_MARGIN_Y` | 20 / 40 | overlay dock margins |
+| `MIXER_OVERLAY_GAP` | 16 | mixer bottom to overlay top |
+| `HELP_MARGIN_X` / `HELP_MARGIN_Y` | 24 / 48 | help dock margins |
+
+Component geometry:
+
+| Constant | Value | Usage |
+|---|---|---|
+| `MIXER_FOOTER_HEIGHT` | 22 | reserved footer band |
+| `MIXER_SESSION_LABEL_WIDTH` | 140 | session label column |
+| `MIXER_SESSION_ROW_HEIGHT` | 30 | label + hint block |
+| `MIXER_CONTROLS_WIDTH` | 62 | mute/reset control column |
+| `HOTKEY_LABEL_WIDTH` | 210 | hotkey label column |
+| `HOTKEY_ROW_HEIGHT` | 44 | hotkey row card |
+| `HOTKEY_CHIP_MIN_WIDTH` | 120 | binding chip minimum |
+| `HOTKEY_BUTTON_WIDTH` | 46 | Ghi/Xoá buttons |
+| `PICKER_WIDTH` / `PICKER_HEIGHT` | 320 / 180 | running-app picker |
+
+Implementation map:
+
+- `src/style.rs` — colors, spacing, radii, typography, control sizes, surface
+  geometry, component geometry, motion durations.
+- `src/placement.rs` — dock math; re-exports the surface geometry tokens.
+- `src/surfaces/mixer.rs` — footer, rows, SignalRail.
+- `src/surfaces/overlay.rs` — HUD layout.
+- `src/surfaces/help.rs` — help groups and footer.
+- `src/settings/views.rs` — tabs, hotkey rows, picker.
