@@ -92,7 +92,7 @@ fn mixer_is_a_borderless_always_on_top_hud() {
         builder.position,
         Some(egui::pos2(frame.x as f32, frame.y as f32))
     );
-    assert_eq!(builder.inner_size, Some(egui::vec2(400.0, 240.0)));
+    assert_eq!(builder.inner_size, Some(egui::vec2(400.0, 280.0)));
 }
 
 #[test]

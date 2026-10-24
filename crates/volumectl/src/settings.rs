@@ -2175,10 +2175,17 @@ fn theme_from_index(idx: i32) -> ThemeMode {
 }
 
 fn material_index(m: MaterialMode) -> usize {
+    // 0..=2 are the legacy indices; new materials append so existing settings
+    // files keep their exact meaning.
     match m {
         MaterialMode::Auto => 0,
         MaterialMode::Translucent => 1,
         MaterialMode::Opaque => 2,
+        MaterialMode::Acrylic => 3,
+        MaterialMode::Blur => 4,
+        MaterialMode::Mica => 5,
+        MaterialMode::Transparent => 6,
+        MaterialMode::LiquidGlass => 7,
     }
 }
 
@@ -2186,6 +2193,11 @@ fn material_from_index(idx: i32) -> MaterialMode {
     match idx {
         1 => MaterialMode::Translucent,
         2 => MaterialMode::Opaque,
+        3 => MaterialMode::Acrylic,
+        4 => MaterialMode::Blur,
+        5 => MaterialMode::Mica,
+        6 => MaterialMode::Transparent,
+        7 => MaterialMode::LiquidGlass,
         _ => MaterialMode::Auto,
     }
 }

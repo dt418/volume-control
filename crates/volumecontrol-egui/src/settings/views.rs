@@ -78,7 +78,9 @@ pub fn show(ui: &mut egui::Ui, view: &mut SettingsView<'_>) -> Vec<SettingsInten
     egui::Panel::top("settings-header")
         .frame(egui::Frame::NONE)
         .show(ui, |ui| {
+            ui.add_space(style::SPACE_2);
             header(ui, view, &mut intents);
+            ui.add_space(style::SPACE_4);
         });
     egui::Panel::bottom("settings-footer")
         .frame(egui::Frame::NONE)
@@ -86,20 +88,20 @@ pub fn show(ui: &mut egui::Ui, view: &mut SettingsView<'_>) -> Vec<SettingsInten
             footer(ui, view, &mut intents);
         });
     egui::Panel::left("settings-sidebar")
-        .default_size(196.0)
-        .size_range(196.0..=196.0)
-        .frame(egui::Frame::NONE)
+        .default_size(204.0)
+        .size_range(204.0..=204.0)
+        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(8, 8)))
         .show(ui, |ui| {
             sidebar(ui, view);
         });
     egui::CentralPanel::default()
-        .frame(egui::Frame::NONE)
+        .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(8, 8)))
         .show(ui, |ui| {
             let tokens = style::tokens(view.is_dark);
             egui::Frame::NONE
                 .fill(tokens.card)
-                .corner_radius(egui::CornerRadius::same(style::RADIUS_CARD))
-                .inner_margin(egui::Margin::same(16))
+                .corner_radius(egui::CornerRadius::same(style::RADIUS_CONTROL))
+                .inner_margin(egui::Margin::same(14))
                 .show(ui, |ui| {
                     ui.set_min_size(ui.available_size());
                     egui::ScrollArea::vertical()
@@ -107,6 +109,7 @@ pub fn show(ui: &mut egui::Ui, view: &mut SettingsView<'_>) -> Vec<SettingsInten
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
+                        .max_height(ui.available_height())
                         .show(ui, |ui| {
                             ui.vertical(|ui| {
                                 ui.set_width(ui.available_width());
@@ -125,26 +128,58 @@ pub fn show(ui: &mut egui::Ui, view: &mut SettingsView<'_>) -> Vec<SettingsInten
     intents
 }
 
+/// Prefix a label with a Phosphor icon (icon font, never a Unicode glyph).
+fn icon_text(icon: &str, text: &str) -> String {
+    format!("{icon}  {text}")
+}
+
+/// Give a custom-painted widget an accessible name for screen readers.
+fn name_widget(ui: &egui::Ui, response: &egui::Response, label: &str) {
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_role(egui::accesskit::Role::Button);
+        node.set_label(label.to_owned());
+    });
+}
+
 fn header(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec<SettingsIntent>) {
     let tokens = style::tokens(view.is_dark);
+    let base = ui.style().text_styles[&egui::TextStyle::Body].size;
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
-            ui.label(RichText::new(tr(Key::SettingsTitle, view.language, &[])).strong());
+            ui.label(
+                RichText::new(tr(Key::SettingsTitle, view.language, &[]))
+                    .size(base + 5.0)
+                    .strong(),
+            );
             ui.label(
                 RichText::new(tr(Key::SettingsSubtitle, view.language, &[]))
-                    .small()
+                    .size((base - 2.0).max(10.0))
                     .color(tokens.muted),
             );
         });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if ui
-                .add(
-                    egui::Button::new(RichText::new(egui_phosphor::regular::X).size(14.0))
-                        .frame(false),
-                )
-                .on_hover_text(tr(Key::CommonClose, view.language, &[]).to_string())
-                .clicked()
-            {
+            let close = tr(Key::CommonClose, view.language, &[]);
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(28.0, 28.0), egui::Sense::click());
+            let visuals = ui.style().interact(&response);
+            if response.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                ui.painter().rect_filled(
+                    rect,
+                    egui::CornerRadius::same(style::RADIUS_SM),
+                    visuals.weak_bg_fill,
+                );
+            }
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                egui_phosphor::regular::X,
+                egui::FontId::proportional(14.0),
+                visuals.fg_stroke.color,
+            );
+            let response = response.on_hover_text(close.to_string());
+            name_widget(ui, &response, &close);
+            if response.clicked() {
                 intents.push(SettingsIntent::Cancel);
             }
         });
@@ -171,25 +206,53 @@ fn sidebar(ui: &mut egui::Ui, view: &mut SettingsView<'_>) {
                 } else {
                     egui::Color32::TRANSPARENT
                 };
-                ui.painter().rect_filled(
-                    rect,
-                    egui::CornerRadius::same(style::RADIUS_CONTROL),
-                    fill,
-                );
-                let text_color = if selected { tokens.text } else { tokens.muted };
+                ui.painter()
+                    .rect_filled(rect, egui::CornerRadius::same(style::RADIUS_SM), fill);
+                if response.has_focus() {
+                    ui.painter().rect_stroke(
+                        rect,
+                        egui::CornerRadius::same(style::RADIUS_SM),
+                        egui::Stroke::new(1.5, tokens.accent),
+                        egui::StrokeKind::Inside,
+                    );
+                }
+                let label = tr(tab_key(tab), view.language, &[]).to_string();
+                name_widget(ui, &response, &label);
+                let text_color = if selected {
+                    tokens.text
+                } else {
+                    tokens.text.gamma_multiply(0.72)
+                };
                 ui.painter().text(
                     rect.left_center() + egui::vec2(14.0, 0.0),
                     egui::Align2::LEFT_CENTER,
-                    tr(tab_key(tab), view.language, &[]).to_string(),
+                    icon_text(tab_icon(tab), &label),
                     egui::FontId::proportional(ui.style().text_styles[&egui::TextStyle::Body].size),
                     if selected { tokens.text } else { text_color },
                 );
-                if response.clicked() {
+                let activated = response.clicked()
+                    || (response.has_focus()
+                        && ui.input(|input| {
+                            input.key_pressed(egui::Key::Enter)
+                                || input.key_pressed(egui::Key::Space)
+                        }));
+                if activated {
                     *view.tab = tab;
                 }
             }
         },
     );
+}
+
+fn tab_icon(tab: Tab) -> &'static str {
+    match tab {
+        Tab::General => egui_phosphor::regular::GEAR_SIX,
+        Tab::Hotkeys => egui_phosphor::regular::KEYBOARD,
+        Tab::Appearance => egui_phosphor::regular::PALETTE,
+        Tab::Blacklist => egui_phosphor::regular::PROHIBIT,
+        Tab::Feedback => egui_phosphor::regular::CHAT_CIRCLE_TEXT,
+        Tab::Storage => egui_phosphor::regular::ARCHIVE_BOX,
+    }
 }
 
 fn general_tab(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec<SettingsIntent>) {
@@ -429,21 +492,25 @@ fn blacklist_tab(
     ui.small(tr(Key::BlacklistSubtitle, view.language, &[]).to_string());
     ui.add_space(6.0);
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = style::SPACE_4;
         let mut entry = String::new();
-        let field_width = (ui.available_width() - 68.0).max(140.0);
+        // Leave room for the button plus the card's right padding; the input
+        // never touches the card edge.
+        let field_width = (ui.available_width() - 72.0).max(140.0);
         let response = ui.add_sized(
             [field_width, style::INPUT_HEIGHT],
-            egui::TextEdit::singleline(&mut entry).hint_text(tr(
-                Key::BlacklistManualPlaceholder,
-                view.language,
-                &[],
-            )),
+            egui::TextEdit::singleline(&mut entry)
+                .margin(egui::Margin::symmetric(10, 5))
+                .hint_text(tr(Key::BlacklistManualPlaceholder, view.language, &[])),
         );
         let submit = response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
         let clicked = ui
             .add_sized(
-                [56.0, style::INPUT_HEIGHT],
-                egui::Button::new(tr(Key::BlacklistAdd, view.language, &[]).to_string()),
+                [64.0, style::INPUT_HEIGHT],
+                egui::Button::new(icon_text(
+                    egui_phosphor::regular::PLUS,
+                    &tr(Key::BlacklistAdd, view.language, &[]),
+                )),
             )
             .clicked();
         if (clicked || submit) && !entry.trim().is_empty() {
@@ -453,7 +520,10 @@ fn blacklist_tab(
     ui.horizontal_wrapped(|ui| {
         let choose = ui.add_sized(
             [180.0, style::INPUT_HEIGHT],
-            egui::Button::new(tr(Key::BlacklistChooseApps, view.language, &[]).to_string()),
+            egui::Button::new(icon_text(
+                egui_phosphor::regular::LIST_MAGNIFYING_GLASS,
+                &tr(Key::BlacklistChooseApps, view.language, &[]),
+            )),
         );
         let anchor = choose.rect.left_bottom() + egui::vec2(0.0, 4.0);
         if choose.clicked() {
@@ -483,7 +553,17 @@ fn blacklist_tab(
             if ui
                 .add_enabled(
                     enabled,
-                    egui::Button::new(tr(label, view.language, &[]).to_string()),
+                    egui::Button::new(icon_text(
+                        match intent {
+                            SettingsIntent::ApplyRecommended => egui_phosphor::regular::SPARKLE,
+                            SettingsIntent::RestoreDefaults => {
+                                egui_phosphor::regular::ARROW_COUNTER_CLOCKWISE
+                            }
+                            SettingsIntent::ReloadSaved => egui_phosphor::regular::ARROW_CLOCKWISE,
+                            _ => egui_phosphor::regular::TRASH,
+                        },
+                        &tr(label, view.language, &[]),
+                    )),
                 )
                 .clicked()
             {
@@ -561,18 +641,20 @@ fn picker_panel(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Ve
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui
-                                .small_button(
-                                    tr(Key::BlacklistDone, view.language, &[]).to_string(),
-                                )
+                                .small_button(icon_text(
+                                    egui_phosphor::regular::CHECK,
+                                    &tr(Key::BlacklistDone, view.language, &[]),
+                                ))
                                 .clicked()
                             {
                                 view.picker.open = false;
                                 view.picker.anchor = None;
                             }
                             if ui
-                                .small_button(
-                                    tr(Key::BlacklistRefresh, view.language, &[]).to_string(),
-                                )
+                                .small_button(icon_text(
+                                    egui_phosphor::regular::ARROW_CLOCKWISE,
+                                    &tr(Key::BlacklistRefresh, view.language, &[]),
+                                ))
                                 .clicked()
                             {
                                 view.picker.loading = true;
@@ -726,7 +808,10 @@ fn storage_tab(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
                     .color(tokens.muted),
             );
             if ui
-                .button(tr(Key::SettingsOpenConfig, view.language, &[]).to_string())
+                .button(icon_text(
+                    egui_phosphor::regular::FOLDER_OPEN,
+                    &tr(Key::SettingsOpenConfig, view.language, &[]),
+                ))
                 .clicked()
             {
                 intents.push(SettingsIntent::OpenConfig);
@@ -779,13 +864,30 @@ fn update_card(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
                 };
                 ui.horizontal(|ui| {
                     if ui
-                        .button(tr(label, view.language, &[]).to_string())
+                        .button(icon_text(
+                            match intent {
+                                SettingsIntent::DownloadUpdate => {
+                                    egui_phosphor::regular::DOWNLOAD_SIMPLE
+                                }
+                                SettingsIntent::InstallUpdate => {
+                                    egui_phosphor::regular::CHECK_CIRCLE
+                                }
+                                SettingsIntent::CheckUpdates => {
+                                    egui_phosphor::regular::ARROWS_CLOCKWISE
+                                }
+                                _ => egui_phosphor::regular::ARROW_CLOCKWISE,
+                            },
+                            &tr(label, view.language, &[]),
+                        ))
                         .clicked()
                     {
                         intents.push(intent);
                     }
                     if ui
-                        .button(tr(Key::SettingsUpdatesLater, view.language, &[]).to_string())
+                        .button(icon_text(
+                            egui_phosphor::regular::X,
+                            &tr(Key::SettingsUpdatesLater, view.language, &[]),
+                        ))
                         .clicked()
                     {
                         intents.push(SettingsIntent::DismissUpdate);
@@ -797,13 +899,18 @@ fn update_card(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
 
 fn footer(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec<SettingsIntent>) {
     let pristine = view.draft.is_pristine();
-    ui.add_space(6.0);
+    ui.add_space(style::SPACE_4);
     ui.separator();
+    ui.add_space(style::SPACE_2);
     ui.horizontal(|ui| {
         if ui
             .add_enabled(
                 !pristine,
-                egui::Button::new(tr(Key::CommonReset, view.language, &[]).to_string()),
+                egui::Button::new(icon_text(
+                    egui_phosphor::regular::ARROW_COUNTER_CLOCKWISE,
+                    &tr(Key::CommonReset, view.language, &[]),
+                ))
+                .min_size(egui::vec2(84.0, style::BUTTON_HEIGHT)),
             )
             .clicked()
         {
@@ -814,8 +921,13 @@ fn footer(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec<Sett
                 .add_enabled(
                     !pristine,
                     egui::Button::new(
-                        RichText::new(tr(Key::CommonSaveChanges, view.language, &[])).strong(),
+                        RichText::new(icon_text(
+                            egui_phosphor::regular::CHECK,
+                            &tr(Key::CommonSaveChanges, view.language, &[]),
+                        ))
+                        .strong(),
                     )
+                    .min_size(egui::vec2(120.0, style::BUTTON_HEIGHT))
                     .fill(style::tokens(view.is_dark).accent),
                 )
                 .clicked()
@@ -823,13 +935,20 @@ fn footer(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec<Sett
                 intents.push(SettingsIntent::Save);
             }
             if ui
-                .button(tr(Key::CommonCancel, view.language, &[]).to_string())
+                .add_sized(
+                    [72.0, style::BUTTON_HEIGHT],
+                    egui::Button::new(icon_text(
+                        egui_phosphor::regular::X,
+                        &tr(Key::CommonCancel, view.language, &[]),
+                    )),
+                )
                 .clicked()
             {
                 intents.push(SettingsIntent::Cancel);
             }
         });
     });
+    ui.add_space(style::SPACE_3);
 }
 
 fn capture_keys(ui: &egui::Ui, draft: &mut SettingsDraft, recorder: &mut Recorder) {
@@ -1043,29 +1162,33 @@ fn numeric_beep_row(
 }
 
 fn language_combo(ui: &mut egui::Ui, view: &mut SettingsView<'_>) {
+    let width = ui.available_width();
     ui.label(RichText::new(tr(Key::AppLanguage, view.language, &[])).size(12.0));
     egui::ComboBox::from_id_salt("language")
-        .width(ui.available_width())
+        .width(width)
         .selected_text(match view.draft.language {
             Language::En => tr(Key::AppLanguageEn, view.language, &[]).to_string(),
             Language::Vi => tr(Key::AppLanguageVi, view.language, &[]).to_string(),
         })
         .show_ui(ui, |ui| {
-            ui.selectable_value(
-                &mut view.draft.language,
-                Language::En,
-                tr(Key::AppLanguageEn, view.language, &[]).to_string(),
-            );
-            ui.selectable_value(
-                &mut view.draft.language,
-                Language::Vi,
-                tr(Key::AppLanguageVi, view.language, &[]).to_string(),
-            );
+            ui.set_min_width(width + 16.0);
+            ui.spacing_mut().item_spacing.y = 2.0;
+            for (option, key) in [
+                (Language::En, Key::AppLanguageEn),
+                (Language::Vi, Key::AppLanguageVi),
+            ] {
+                let text = tr(key, view.language, &[]).to_string();
+                if combo_item(ui, width, view.draft.language == option, &text) {
+                    view.draft.language = option;
+                    ui.close();
+                }
+            }
         });
     ui.add_space(8.0);
 }
 
 fn label_style_combo(ui: &mut egui::Ui, view: &mut SettingsView<'_>) {
+    let width = ui.available_width();
     ui.label(RichText::new(tr(Key::SettingsAppLabelStyle, view.language, &[])).size(12.0));
     ui.label(
         RichText::new(tr(Key::SettingsAppLabelStyleHelp, view.language, &[]))
@@ -1073,22 +1196,65 @@ fn label_style_combo(ui: &mut egui::Ui, view: &mut SettingsView<'_>) {
             .color(style::tokens(view.is_dark).muted),
     );
     egui::ComboBox::from_id_salt("app_label_style")
-        .width(ui.available_width())
+        .width(width)
         .selected_text(label_style_text(view.draft.app_label_style, view.language))
         .show_ui(ui, |ui| {
+            ui.set_min_width(width + 16.0);
+            ui.spacing_mut().item_spacing.y = 2.0;
             for style in [
                 AppLabelStyle::Friendly,
                 AppLabelStyle::FriendlyAndProcess,
                 AppLabelStyle::Process,
             ] {
-                ui.selectable_value(
-                    &mut view.draft.app_label_style,
-                    style,
-                    label_style_text(style, view.language),
-                );
+                let text = label_style_text(style, view.language);
+                if combo_item(ui, width, view.draft.app_label_style == style, &text) {
+                    view.draft.app_label_style = style;
+                    ui.close();
+                }
             }
         });
     ui.add_space(8.0);
+}
+
+/// Popup row with fixed height and left-aligned text: hovering only repaints
+/// the background, so the menu never shifts.
+fn combo_item(ui: &mut egui::Ui, width: f32, selected: bool, text: &str) -> bool {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 30.0), egui::Sense::click());
+    let visuals = ui.visuals();
+    let fill = if selected {
+        visuals.selection.bg_fill
+    } else if response.hovered() {
+        visuals.widgets.hovered.weak_bg_fill
+    } else {
+        egui::Color32::TRANSPARENT
+    };
+    let text_color = if selected {
+        visuals.selection.stroke.color
+    } else {
+        visuals.widgets.inactive.fg_stroke.color
+    };
+    ui.painter()
+        .rect_filled(rect, egui::CornerRadius::same(4), fill);
+    // Order: check column, then label. The check column is always reserved so
+    // rows never shift when the selection moves.
+    let font = egui::FontId::proportional(ui.style().text_styles[&egui::TextStyle::Body].size);
+    if selected {
+        ui.painter().text(
+            rect.left_center() + egui::vec2(10.0, 0.0),
+            egui::Align2::LEFT_CENTER,
+            egui_phosphor::regular::CHECK,
+            egui::FontId::proportional(13.0),
+            text_color,
+        );
+    }
+    ui.painter().text(
+        rect.left_center() + egui::vec2(32.0, 0.0),
+        egui::Align2::LEFT_CENTER,
+        text,
+        font,
+        text_color,
+    );
+    response.clicked()
 }
 
 fn label_style_text(style: AppLabelStyle, language: Language) -> String {
@@ -1127,6 +1293,11 @@ fn material_combo(ui: &mut egui::Ui, view: &mut SettingsView<'_>) {
         &[
             (MaterialMode::Auto, Key::MaterialAuto),
             (MaterialMode::Translucent, Key::MaterialTranslucent),
+            (MaterialMode::Acrylic, Key::MaterialAcrylic),
+            (MaterialMode::Blur, Key::MaterialBlur),
+            (MaterialMode::Mica, Key::MaterialMica),
+            (MaterialMode::Transparent, Key::MaterialTransparent),
+            (MaterialMode::LiquidGlass, Key::MaterialLiquidGlass),
             (MaterialMode::Opaque, Key::MaterialOpaque),
         ],
     );
@@ -1178,12 +1349,19 @@ fn combo_row<T: PartialEq + Copy>(
         .find(|(option, _)| option == value)
         .map(|(_, key)| tr(*key, language, &[]).to_string())
         .unwrap_or_default();
+    let width = ui.available_width();
     egui::ComboBox::from_id_salt(id)
-        .width(ui.available_width())
+        .width(width)
         .selected_text(selected)
         .show_ui(ui, |ui| {
+            ui.set_min_width(width + 16.0);
+            ui.spacing_mut().item_spacing.y = 2.0;
             for (option, key) in options {
-                ui.selectable_value(value, *option, tr(*key, language, &[]).to_string());
+                let text = tr(*key, language, &[]).to_string();
+                if combo_item(ui, width, *value == *option, &text) {
+                    *value = *option;
+                    ui.close();
+                }
             }
         });
     ui.add_space(8.0);
@@ -1216,7 +1394,7 @@ fn preview_card(ui: &mut egui::Ui, view: &mut SettingsView<'_>) {
             let fill = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width() * 0.55, 8.0));
             ui.painter()
                 .rect_filled(fill, egui::CornerRadius::same(4), color);
-            ui.small("preview tracks the draft; only Save applies");
+            ui.small(tr(Key::SettingsPreviewHelp, view.language, &[]));
         });
 }
 

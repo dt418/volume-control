@@ -168,6 +168,8 @@ pub enum Key {
     SettingsSaveFailed,
     /// `settings.loadFailed`
     SettingsLoadFailed,
+    /// appearance preview helper
+    SettingsPreviewHelp,
     /// `settings.updates.title`
     SettingsUpdatesTitle,
     /// `settings.updates.subtitle`
@@ -234,6 +236,16 @@ pub enum Key {
     MaterialAuto,
     /// `material.translucent`
     MaterialTranslucent,
+    /// `material.acrylic`
+    MaterialAcrylic,
+    /// `material.blur`
+    MaterialBlur,
+    /// `material.mica`
+    MaterialMica,
+    /// `material.transparent`
+    MaterialTransparent,
+    /// `material.liquidGlass`
+    MaterialLiquidGlass,
     /// `material.opaque`
     MaterialOpaque,
     /// `motion.full`
@@ -452,7 +464,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, in table order.
-    pub const ALL: [Key; 218] = [
+    pub const ALL: [Key; 224] = [
         Key::AppLanguage,
         Key::AppLanguageEn,
         Key::AppLanguageVi,
@@ -531,6 +543,7 @@ impl Key {
         Key::SettingsOpenConfig,
         Key::SettingsSaveFailed,
         Key::SettingsLoadFailed,
+        Key::SettingsPreviewHelp,
         Key::SettingsUpdatesTitle,
         Key::SettingsUpdatesSubtitle,
         Key::SettingsUpdatesCurrent,
@@ -564,6 +577,11 @@ impl Key {
         Key::ThemeDark,
         Key::MaterialAuto,
         Key::MaterialTranslucent,
+        Key::MaterialAcrylic,
+        Key::MaterialBlur,
+        Key::MaterialMica,
+        Key::MaterialTransparent,
+        Key::MaterialLiquidGlass,
         Key::MaterialOpaque,
         Key::MotionFull,
         Key::MotionReduced,
@@ -674,7 +692,7 @@ impl Key {
     ];
 }
 
-const EN: [&str; 218] = [
+const EN: [&str; 224] = [
     "Language", "English", "Tiếng Việt",
     "Volume Control", "Volume Control Settings", "Volume Control Help",
     "Saved", "Saving…", "Close",
@@ -701,6 +719,7 @@ const EN: [&str; 218] = [
     "Auto-start is unavailable on this platform.", "Theme", "Material",
     "Motion", "Accent", "Modifier",
     "Open config.ini (advanced)", "Save failed", "Could not load settings",
+    "Preview follows the draft; only Save applies.",
     "Updates", "Check for new Volume Control releases", "Current version",
     "Check for updates", "Checking for updates…", "Volume Control is up to date",
     "New version available: {0}", "Downloading update in background…", "Version {0} is ready to install",
@@ -712,7 +731,9 @@ const EN: [&str; 218] = [
     "Configuration recovered from the legacy JSON backup after an invalid INI edit.", "Configuration files could not be loaded, so validated defaults are active. Your backup was not deleted.", "An external INI edit was invalid; the last valid configuration remains active. Correct the file and retry.",
     "Keyboard", "System", "Light",
     "Dark", "Auto", "Translucent",
-    "Opaque", "Full", "Reduced",
+    "Acrylic", "Blur", "Mica",
+    "Transparent", "Liquid Glass", "Opaque",
+    "Full", "Reduced",
     "Disabled", "System", "Blue",
     "Green", "Purple", "Orange",
     "Blocked application", "No blocked applications", "Volume Control will respond to shortcuts everywhere.",
@@ -750,7 +771,7 @@ const EN: [&str; 218] = [
     "Fallback", "Disabled",
 ];
 
-const VI: [&str; 218] = [
+const VI: [&str; 224] = [
     "Ngôn ngữ", "English", "Tiếng Việt",
     "Điều khiển âm lượng", "Cài đặt Điều khiển âm lượng", "Trợ giúp Điều khiển âm lượng",
     "Đã lưu", "Đang lưu…", "Đóng",
@@ -777,6 +798,7 @@ const VI: [&str; 218] = [
     "Tự khởi động không khả dụng trên nền tảng này.", "Chủ đề", "Chất liệu",
     "Chuyển động", "Màu nhấn", "Phím bổ trợ",
     "Mở config.ini (nâng cao)", "Lưu thất bại", "Không tải được cài đặt",
+    "Xem trước theo bản nháp; chỉ khi lưu mới áp dụng.",
     "Cập nhật", "Kiểm tra các bản phát hành Điều khiển âm lượng mới", "Phiên bản hiện tại",
     "Kiểm tra cập nhật", "Đang kiểm tra cập nhật…", "Điều khiển âm lượng đã là bản mới nhất",
     "Có phiên bản mới: {0}", "Đang tải bản cập nhật ngầm…", "Phiên bản {0} đã sẵn sàng cài đặt",
@@ -788,7 +810,9 @@ const VI: [&str; 218] = [
     "Cấu hình đã được phục hồi từ bản JSON dự phòng sau khi INI bị sửa sai.", "Không đọc được file cấu hình nên đang dùng giá trị mặc định hợp lệ. Bản dự phòng của bạn chưa bị xoá.", "File INI bị sửa sai từ bên ngoài; cấu hình hợp lệ gần nhất vẫn đang hoạt động. Sửa lại file rồi thử lại.",
     "Bàn phím", "Hệ thống", "Sáng",
     "Tối", "Tự động", "Trong mờ",
-    "Đục", "Đầy đủ", "Giảm",
+    "Acrylic", "Làm mờ", "Mica",
+    "Trong suốt", "Kính lỏng", "Đục",
+    "Đầy đủ", "Giảm",
     "Tắt", "Hệ thống", "Xanh dương",
     "Xanh lá", "Tím", "Cam",
     "Ứng dụng bị chặn", "Chưa chặn ứng dụng nào", "Điều khiển âm lượng sẽ phản hồi phím tắt ở mọi nơi.",

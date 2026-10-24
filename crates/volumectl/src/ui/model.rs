@@ -32,7 +32,20 @@ pub enum ThemeMode {
 pub enum MaterialMode {
     #[default]
     Auto,
+    /// Compositor blur with a translucent tint (Windows acrylic, macOS HUD).
     Translucent,
+    /// Windows Acrylic / macOS hudWindow material.
+    Acrylic,
+    /// Windows DWM blur / macOS behind-window blur.
+    Blur,
+    /// Windows 11 Mica; macOS sidebar material; no-op elsewhere.
+    Mica,
+    /// Per-pixel transparency only; the compositor shows the desktop.
+    Transparent,
+    /// Liquid Glass where the platform provides it (macOS 26+), otherwise the
+    /// closest acrylic/blur fallback.
+    LiquidGlass,
+    /// Fully opaque surfaces; no backdrop effect.
     Opaque,
 }
 

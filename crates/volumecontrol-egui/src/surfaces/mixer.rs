@@ -204,6 +204,7 @@ pub fn show(
                 ui.max_rect().top(),
                 egui::Stroke::new(1.0, tokens.border),
             );
+            ui.add_space(style::SPACE_3);
             ui.horizontal(|ui| {
                 ui.label(
                     RichText::new(footer_text(visible_rows.len(), language))
@@ -274,6 +275,8 @@ pub fn show(
             if options.sessions_supported {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
+                    // About 1.5 session cards stay visible before scrolling.
+                    .min_scrolled_height(style::MIXER_SESSION_ROW_HEIGHT * 1.5 + 16.0)
                     .max_height(ui.available_height().max(24.0))
                     .scroll_bar_visibility(
                         egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded,
@@ -314,14 +317,15 @@ fn header(
 ) {
     let language = options.language;
     ui.horizontal(|ui| {
+        let base = ui.style().text_styles[&egui::TextStyle::Body].size;
         ui.label(
             RichText::new(tr(Key::MixerTitle, language, &[]))
-                .size(13.0)
+                .size((base - 1.0).max(12.0))
                 .strong(),
         );
         ui.label(
             RichText::new(status_text(state, language))
-                .size(11.0)
+                .size((base - 3.5).max(10.0))
                 .color(tokens.muted),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -363,27 +367,49 @@ fn header(
 }
 
 fn search(ui: &mut egui::Ui, query: &mut String, tokens: Tokens, language: Language) {
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(egui_phosphor::regular::MAGNIFYING_GLASS)
-                .size(11.0)
-                .color(tokens.muted),
+    let width = ui.available_width();
+    let frame = egui::Frame::NONE
+        .fill(tokens.input)
+        .stroke(egui::Stroke::new(1.0, tokens.border))
+        .corner_radius(egui::CornerRadius::same(style::RADIUS_CONTROL))
+        .inner_margin(egui::Margin::symmetric(8, 3))
+        .show(ui, |ui| {
+            ui.set_min_width(width - 16.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(egui_phosphor::regular::MAGNIFYING_GLASS)
+                        .size(12.0)
+                        .color(tokens.muted),
+                );
+                let clear_width = if query.is_empty() { 0.0 } else { 24.0 };
+                let edit = egui::TextEdit::singleline(query)
+                    .frame(egui::Frame::NONE)
+                    .margin(egui::Margin::symmetric(2, 4))
+                    .hint_text(tr(Key::MixerSearchPlaceholder, language, &[]))
+                    .desired_width(ui.available_width() - clear_width);
+                let response = ui.add(edit);
+                if !query.is_empty()
+                    && icon_button(
+                        ui,
+                        egui_phosphor::regular::X,
+                        tr(Key::MixerClearSearch, language, &[]),
+                    )
+                    .clicked()
+                {
+                    query.clear();
+                }
+                response
+            })
+            .inner
+        });
+    if frame.inner.has_focus() {
+        ui.painter().rect_stroke(
+            frame.response.rect,
+            egui::CornerRadius::same(style::RADIUS_CONTROL),
+            egui::Stroke::new(1.0, tokens.accent),
+            egui::StrokeKind::Inside,
         );
-        let edit = egui::TextEdit::singleline(query)
-            .hint_text(tr(Key::MixerSearchPlaceholder, language, &[]))
-            .desired_width(ui.available_width() - 22.0);
-        ui.add(edit);
-        if !query.is_empty()
-            && icon_button(
-                ui,
-                egui_phosphor::regular::X,
-                tr(Key::MixerClearSearch, language, &[]),
-            )
-            .clicked()
-        {
-            query.clear();
-        }
-    });
+    }
 }
 
 fn system_row(
@@ -529,8 +555,16 @@ fn icon_button(
     icon: &str,
     tooltip: impl Into<egui::WidgetText>,
 ) -> egui::Response {
-    ui.add(egui::Button::new(RichText::new(icon).size(12.0)).frame(false))
-        .on_hover_text(tooltip)
+    let tooltip: egui::WidgetText = tooltip.into();
+    let label = tooltip.text().to_owned();
+    let response = ui
+        .add(egui::Button::new(RichText::new(icon).size(12.0)).frame(false))
+        .on_hover_text(tooltip);
+    ui.ctx().accesskit_node_builder(response.id, |node| {
+        node.set_role(egui::accesskit::Role::Button);
+        node.set_label(label);
+    });
+    response
 }
 
 /// Draw the SignalRail track/fill/thumb into `track`.

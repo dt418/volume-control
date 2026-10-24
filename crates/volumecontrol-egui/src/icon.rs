@@ -74,6 +74,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn packaged_app_icon_decodes() {
+        let icon = app_icon().expect("bundled 128x128 icon decodes");
+        assert_eq!(icon.width, 128);
+        assert_eq!(icon.height, 128);
+        assert_eq!(icon.rgba.len(), 128 * 128 * 4);
+    }
+
+    #[test]
     fn decodes_png_data_url_from_running_apps() {
         // 1x1 transparent PNG.
         let url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

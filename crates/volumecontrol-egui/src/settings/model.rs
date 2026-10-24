@@ -208,6 +208,11 @@ pub fn material_str(mode: MaterialMode) -> &'static str {
     match mode {
         MaterialMode::Auto => "Auto",
         MaterialMode::Translucent => "Translucent",
+        MaterialMode::Acrylic => "Acrylic",
+        MaterialMode::Blur => "Blur",
+        MaterialMode::Mica => "Mica",
+        MaterialMode::Transparent => "Transparent",
+        MaterialMode::LiquidGlass => "LiquidGlass",
         MaterialMode::Opaque => "Opaque",
     }
 }

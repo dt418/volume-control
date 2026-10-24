@@ -1139,6 +1139,11 @@ fn material_str(m: MaterialMode) -> &'static str {
     match m {
         MaterialMode::Auto => "Auto",
         MaterialMode::Translucent => "Translucent",
+        MaterialMode::Acrylic => "Acrylic",
+        MaterialMode::Blur => "Blur",
+        MaterialMode::Mica => "Mica",
+        MaterialMode::Transparent => "Transparent",
+        MaterialMode::LiquidGlass => "LiquidGlass",
         MaterialMode::Opaque => "Opaque",
     }
 }
@@ -1147,9 +1152,14 @@ fn parse_material(s: &str) -> Result<MaterialMode, String> {
     match s {
         "Auto" => Ok(MaterialMode::Auto),
         "Translucent" => Ok(MaterialMode::Translucent),
+        "Acrylic" => Ok(MaterialMode::Acrylic),
+        "Blur" => Ok(MaterialMode::Blur),
+        "Mica" => Ok(MaterialMode::Mica),
+        "Transparent" => Ok(MaterialMode::Transparent),
+        "LiquidGlass" => Ok(MaterialMode::LiquidGlass),
         "Opaque" => Ok(MaterialMode::Opaque),
         _ => Err(format!(
-            "unknown material {s:?} (expected Auto | Translucent | Opaque)"
+            "unknown material {s:?} (expected Auto | Translucent | Acrylic | Blur | Mica | Transparent | LiquidGlass | Opaque)"
         )),
     }
 }

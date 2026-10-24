@@ -1,7 +1,7 @@
 //! Egui/eframe runtime host for VolumeControl.
 //!
 //! Usage: `VolumeControl-Egui [--smoke] [--smoke-ms=N] [--show-all]
-//! [--surface=<mixer|settings|help|overlay>]`
+//! [--surface=<mixer|settings|help|overlay>] [--debug-ui]`
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -25,6 +25,7 @@ fn parse_options() -> LaunchOptions {
             "--smoke" => options.smoke = true,
             "--show-all" => options.show_all = true,
             "--overlay-demo" => options.overlay_demo = true,
+            "--debug-ui" => options.debug_ui = true,
             _ => {
                 if let Some(ms) = arg
                     .strip_prefix("--smoke-ms=")

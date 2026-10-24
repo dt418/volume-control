@@ -48,6 +48,8 @@ pub struct LaunchOptions {
     pub target_surface: Option<SurfaceId>,
     pub settings_tab: Option<Tab>,
     pub overlay_demo: bool,
+    /// Enable egui's debug overlay (widget rects, hit areas, layout).
+    pub debug_ui: bool,
 }
 
 impl Default for LaunchOptions {
@@ -59,6 +61,7 @@ impl Default for LaunchOptions {
             target_surface: None,
             settings_tab: None,
             overlay_demo: false,
+            debug_ui: false,
         }
     }
 }
@@ -83,6 +86,18 @@ pub fn builder_for(
     area: &WorkArea,
     language: Language,
 ) -> ViewportBuilder {
+    builder_for_at(surface, scale, area, language, None)
+}
+
+/// Like [`builder_for`], with an explicit logical position for popups.
+#[must_use]
+pub fn builder_for_at(
+    surface: SurfaceId,
+    scale: f32,
+    area: &WorkArea,
+    language: Language,
+    position: Option<egui::Pos2>,
+) -> ViewportBuilder {
     let frame = frame_for(surface, area, scale);
     let (logical_w, logical_h) = logical_size(surface);
     let scale = if scale.is_finite() && scale > 0.0 {
@@ -93,15 +108,20 @@ pub fn builder_for(
     let mut builder = ViewportBuilder::default()
         .with_title(vibrancy::title_for(surface, language))
         .with_inner_size(egui::vec2(logical_w, logical_h))
-        .with_position(egui::pos2(
-            (frame.x as f32 / scale).round(),
-            (frame.y as f32 / scale).round(),
-        ));
+        .with_position(position.unwrap_or_else(|| {
+            egui::pos2(
+                (frame.x as f32 / scale).round(),
+                (frame.y as f32 / scale).round(),
+            )
+        }));
     if let Some(icon) = crate::icon::app_icon() {
         builder = builder.with_icon(icon);
     }
     match surface {
+        // The root is revealed after its first complete frame: a hidden root
+        // still runs the loop, so this removes the initial white client area.
         SurfaceId::Mixer => builder
+            .with_visible(false)
             .with_decorations(false)
             .with_resizable(false)
             .with_always_on_top()
@@ -121,7 +141,11 @@ pub fn builder_for(
             .with_transparent(true)
             .with_min_inner_size(egui::vec2(420.0, 360.0))
             .with_taskbar(true),
-        SurfaceId::Tray => builder.with_visible(false),
+        SurfaceId::Tray => builder
+            .with_decorations(false)
+            .with_resizable(false)
+            .with_always_on_top()
+            .with_taskbar(false),
     }
 }
 
@@ -172,8 +196,13 @@ pub struct VolumeControlApp {
     tray: Option<Tray>,
     tray_actions: Receiver<TrayAction>,
     primary: Option<PrimaryGuard>,
-    tray_volume: u8,
-    tray_language: Language,
+    tray_menu_seen_focus: bool,
+    tray_menu_pos: Option<egui::Pos2>,
+    tray_open: bool,
+    tray_was_open: bool,
+    revealed: std::collections::HashSet<SurfaceId>,
+    root_revealed: bool,
+    debug_ui: bool,
     wheel: Option<WheelBridge>,
     wheel_actions: Option<Receiver<volumectl::hotkeys::HotkeyAction>>,
     smoke: bool,
@@ -236,7 +265,7 @@ impl VolumeControlApp {
         let config = payload.config.clone();
         let settings_draft = SettingsDraft::from_config(&config);
         let (tray_sender, tray_actions) = mpsc::channel();
-        let tray = Tray::new(config.language, payload.volume_pct, tray_sender)
+        let tray = Tray::new(tray_sender)
             .map_err(|error| log::warn!("tray unavailable: {error}"))
             .ok();
         log::info!(
@@ -253,8 +282,6 @@ impl VolumeControlApp {
                 log::debug!("wheel bridge unavailable: {error}");
                 (None, None)
             });
-        let tray_volume = payload.volume_pct;
-        let tray_language = config.language;
         Self {
             core,
             events,
@@ -302,8 +329,13 @@ impl VolumeControlApp {
             tray,
             tray_actions,
             primary: None,
-            tray_volume,
-            tray_language,
+            tray_menu_seen_focus: false,
+            tray_menu_pos: None,
+            tray_open: false,
+            tray_was_open: false,
+            revealed: std::collections::HashSet::new(),
+            root_revealed: false,
+            debug_ui: options.debug_ui,
             wheel,
             wheel_actions,
             smoke: options.smoke,
@@ -369,45 +401,74 @@ impl VolumeControlApp {
         }
         while let Ok(action) = self.tray_actions.try_recv() {
             log::info!("tray action {action:?}");
-            match action {
-                TrayAction::ToggleMute => self.dispatch(AppAction::ToggleMute),
-                TrayAction::Reset50 => self.dispatch(AppAction::ResetVolume),
-                TrayAction::ShowMixer => self.show_surface_exclusive(SurfaceId::Mixer, ctx),
-                TrayAction::ShowSettings => {
-                    self.dispatch(AppAction::ShowSurface(SurfaceId::Settings));
-                }
-                TrayAction::ShowHelp => {
-                    self.dispatch(AppAction::ShowSurface(SurfaceId::Help));
-                }
-                TrayAction::CheckUpdates => self.start_update_check(ctx),
-                TrayAction::ReloadConfig => self.dispatch(AppAction::ReloadConfig),
-                TrayAction::OpenConfig => self.dispatch(AppAction::OpenConfigLocation),
-                TrayAction::Exit => {
-                    self.quitting = true;
-                    self.state.hide(SurfaceId::Settings);
-                    self.state.hide(SurfaceId::Help);
-                    self.state.hide(SurfaceId::Overlay);
-                    ctx.send_viewport_cmd_to(
-                        viewport_id(SurfaceId::Settings),
-                        ViewportCommand::Close,
-                    );
-                    ctx.send_viewport_cmd_to(viewport_id(SurfaceId::Help), ViewportCommand::Close);
-                    ctx.send_viewport_cmd(ViewportCommand::Close);
-                }
-                TrayAction::Header => {}
+            if action == TrayAction::OpenMenu {
+                self.open_tray_menu(ctx);
+            } else {
+                self.handle_tray_action(action, ctx);
             }
         }
-        if self.state.volume_percent != self.tray_volume {
-            self.tray_volume = self.state.volume_percent;
-            if let Some(tray) = &mut self.tray {
-                tray.update_header(self.tray_volume);
-            }
+    }
+
+    fn open_tray_menu(&mut self, ctx: &egui::Context) {
+        if self.tray_open {
+            // A second right click must not close/reopen the popup: that made
+            // the menu flicker from its old position.
+            ctx.send_viewport_cmd_to(viewport_id(SurfaceId::Tray), ViewportCommand::Focus);
+            return;
         }
-        if self.state.language != self.tray_language {
-            self.tray_language = self.state.language;
-            if let Some(tray) = &mut self.tray {
-                tray.set_language(self.tray_language);
+        self.tray_open = true;
+        self.tray_menu_seen_focus = false;
+        self.tray_menu_pos = vibrancy::cursor_position().map(|(x, y)| {
+            let scale = ctx.pixels_per_point().max(0.1);
+            let (w, h) = crate::placement::logical_size(SurfaceId::Tray);
+            egui::pos2(x / scale - w + 8.0, y / scale - h - 8.0)
+        });
+    }
+
+    fn close_tray_menu(&mut self) {
+        self.tray_open = false;
+        self.state.hide(SurfaceId::Tray);
+        self.tray_menu_seen_focus = false;
+    }
+
+    fn handle_tray_action(&mut self, action: TrayAction, ctx: &egui::Context) {
+        match action {
+            TrayAction::ToggleMute => {
+                self.state.muted = !self.state.muted;
+                self.dispatch(AppAction::ToggleMute);
             }
+            TrayAction::Reset50 => self.dispatch(AppAction::ResetVolume),
+            TrayAction::ShowMixer => self.show_surface_exclusive(SurfaceId::Mixer, ctx),
+            TrayAction::ShowSettings => {
+                self.dispatch(AppAction::ShowSurface(SurfaceId::Settings));
+            }
+            TrayAction::ShowHelp => {
+                self.dispatch(AppAction::ShowSurface(SurfaceId::Help));
+            }
+            TrayAction::CheckUpdates => {
+                let message = crate::i18n::tr(
+                    crate::i18n::Key::SettingsUpdatesChecking,
+                    self.state.language,
+                    &[],
+                )
+                .to_string();
+                self.core.show_overlay_text(message);
+                self.start_update_check(ctx);
+            }
+            TrayAction::ReloadConfig => self.dispatch(AppAction::ReloadConfig),
+            TrayAction::OpenConfig => self.dispatch(AppAction::OpenConfigLocation),
+            TrayAction::Exit => {
+                self.quitting = true;
+                self.state.hide(SurfaceId::Settings);
+                self.state.hide(SurfaceId::Help);
+                self.state.hide(SurfaceId::Overlay);
+                self.state.hide(SurfaceId::Tray);
+                ctx.send_viewport_cmd_to(viewport_id(SurfaceId::Settings), ViewportCommand::Close);
+                ctx.send_viewport_cmd_to(viewport_id(SurfaceId::Help), ViewportCommand::Close);
+                ctx.send_viewport_cmd_to(viewport_id(SurfaceId::Tray), ViewportCommand::Close);
+                ctx.send_viewport_cmd(ViewportCommand::Close);
+            }
+            TrayAction::Header | TrayAction::OpenMenu => {}
         }
     }
 
@@ -750,7 +811,14 @@ impl VolumeControlApp {
                     self.update_rx = None;
                 }
                 Ok(Err(error)) => {
-                    self.update_card.failed(error);
+                    self.update_card.failed(error.clone());
+                    let message = crate::i18n::tr(
+                        crate::i18n::Key::SettingsUpdatesInstallFailed,
+                        self.settings_draft.language,
+                        &[&error],
+                    )
+                    .to_string();
+                    self.core.show_overlay_text(message);
                     self.update_rx = None;
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -800,6 +868,7 @@ impl VolumeControlApp {
                 self.recorder.cancel();
                 self.pending_modifier = None;
                 self.state.hide(SurfaceId::Settings);
+                ctx.send_viewport_cmd_to(viewport_id(SurfaceId::Settings), ViewportCommand::Close);
             }
             SettingsIntent::Reset => {
                 self.settings_draft.reset();
@@ -912,7 +981,6 @@ impl VolumeControlApp {
             .frame(
                 egui::Frame::NONE
                     .fill(tokens.background)
-                    .corner_radius(egui::CornerRadius::same(style::RADIUS_CARD))
                     .inner_margin(egui::Margin::same(14)),
             )
             .show(ui, |ui| {
@@ -1168,6 +1236,83 @@ impl VolumeControlApp {
             );
         }
 
+        {
+            // The popup viewport is kept alive for the whole session. Creating
+            // and closing it per click produced white flashes, ghost frames,
+            // and `No window` surface warnings.
+            let open = self.tray_open;
+            let pos = if open {
+                self.tray_menu_pos
+            } else {
+                Some(PARKED_POSITION)
+            };
+            let base = f32::from(self.config.ui_font_size);
+            let mut builder =
+                builder_for_at(SurfaceId::Tray, scale, &area, self.state.language, pos)
+                    .with_inner_size(egui::vec2(
+                        crate::surfaces::tray_menu::WIDTH,
+                        crate::surfaces::tray_menu::height(base),
+                    ));
+            if !open {
+                builder = builder.with_visible(false);
+            }
+            let mut chosen = None;
+            let mut focused = false;
+            let mut escape = false;
+            ctx.show_viewport_immediate(viewport_id(SurfaceId::Tray), builder, |ui, _| {
+                if open {
+                    escape = ui.input(|input| input.key_pressed(egui::Key::Escape));
+                    chosen = crate::surfaces::tray_menu::show(
+                        ui,
+                        crate::surfaces::tray_menu::MenuState {
+                            language: self.state.language,
+                            is_dark: self.is_dark,
+                            volume_pct: self.state.volume_percent,
+                            muted: self.state.muted,
+                        },
+                    );
+                    focused = ui.input(|input| input.viewport().focused).unwrap_or(true);
+                }
+            });
+            if open && !self.tray_was_open {
+                if let Some(pos) = pos {
+                    ctx.send_viewport_cmd_to(
+                        viewport_id(SurfaceId::Tray),
+                        ViewportCommand::OuterPosition(pos),
+                    );
+                }
+                ctx.send_viewport_cmd_to(
+                    viewport_id(SurfaceId::Tray),
+                    ViewportCommand::Visible(true),
+                );
+                ctx.send_viewport_cmd_to(viewport_id(SurfaceId::Tray), ViewportCommand::Focus);
+            } else if !open && self.tray_was_open {
+                ctx.send_viewport_cmd_to(
+                    viewport_id(SurfaceId::Tray),
+                    ViewportCommand::Visible(false),
+                );
+            }
+            if open {
+                self.vibrancy.apply(
+                    SurfaceId::Tray,
+                    vibrancy::material_for(SurfaceId::Tray),
+                    self.is_dark,
+                    self.state.language,
+                );
+                if focused {
+                    self.tray_menu_seen_focus = true;
+                }
+                let focus_lost = self.tray_menu_seen_focus && !focused;
+                if escape || focus_lost || chosen.is_some() {
+                    self.close_tray_menu();
+                    if let Some(action) = chosen {
+                        self.handle_tray_action(action, ctx);
+                    }
+                }
+            }
+            self.tray_was_open = self.tray_open;
+        }
+
         if self.state.is_visible(SurfaceId::Overlay) {
             let builder = builder_for(SurfaceId::Overlay, scale, &area, self.state.language);
             let id = viewport_id(SurfaceId::Overlay);
@@ -1244,8 +1389,20 @@ impl eframe::App for VolumeControlApp {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        if ctx.input(|input| input.key_pressed(egui::Key::F12)) {
+            self.debug_ui = !self.debug_ui;
+        }
+        if self.debug_ui {
+            ctx.all_styles_mut(|style| {
+                style.debug.debug_on_hover = true;
+                style.debug.show_interactive_widgets = true;
+                style.debug.show_widget_hits = true;
+                style.debug.show_focused_widget = true;
+            });
+        }
         if self.applied_dark != Some(self.is_dark) {
             style::apply(&ctx, self.is_dark, self.config.ui_font_size);
+            crate::vibrancy::set_system_menus_dark(self.is_dark);
             self.applied_dark = Some(self.is_dark);
         }
         if self.applied_title_language != Some(self.state.language) {
@@ -1298,6 +1455,25 @@ impl eframe::App for VolumeControlApp {
             self.smoke_toast_shown = true;
             self.core
                 .show_overlay_text(tr(Key::AppName, self.state.language, &[]).to_string());
+        }
+        for surface in [SurfaceId::Settings, SurfaceId::Help, SurfaceId::Overlay] {
+            if self.state.is_visible(surface) {
+                if self.revealed.insert(surface) {
+                    let id = viewport_id(surface);
+                    ctx.send_viewport_cmd_to(id, ViewportCommand::Visible(true));
+                    if matches!(surface, SurfaceId::Tray | SurfaceId::Settings) {
+                        ctx.send_viewport_cmd_to(id, ViewportCommand::Focus);
+                    }
+                }
+            } else if self.revealed.remove(&surface) {
+                ctx.send_viewport_cmd_to(viewport_id(surface), ViewportCommand::Close);
+            }
+        }
+        if !self.root_revealed {
+            self.root_revealed = true;
+            if self.state.is_visible(SurfaceId::Mixer) {
+                ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+            }
         }
         if self.smoke {
             for surface in [

@@ -29,7 +29,10 @@ pub fn logical_size(surface: SurfaceId) -> (f32, f32) {
         SurfaceId::Mixer => (MIXER_WIDTH, MIXER_HEIGHT),
         SurfaceId::Settings => (SETTINGS_DEFAULT_WIDTH, SETTINGS_DEFAULT_HEIGHT),
         SurfaceId::Help => (HELP_WIDTH, HELP_HEIGHT),
-        SurfaceId::Tray => (0.0, 0.0),
+        SurfaceId::Tray => (
+            crate::surfaces::tray_menu::WIDTH,
+            crate::surfaces::tray_menu::height(15.0),
+        ),
     }
 }
 

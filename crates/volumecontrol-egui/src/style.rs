@@ -49,7 +49,8 @@ pub const SPACING_CARD: f32 = SPACE_6;
 
 /// Surface geometry (logical points), shared with `placement.rs`.
 pub const MIXER_WIDTH: f32 = 400.0;
-pub const MIXER_HEIGHT: f32 = 240.0;
+/// Shows roughly 1.5 session cards plus the padded footer.
+pub const MIXER_HEIGHT: f32 = 280.0;
 pub const SETTINGS_DEFAULT_WIDTH: f32 = 760.0;
 pub const SETTINGS_DEFAULT_HEIGHT: f32 = 620.0;
 pub const SETTINGS_MIN_WIDTH: f32 = 620.0;

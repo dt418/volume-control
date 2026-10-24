@@ -87,6 +87,29 @@ pub fn resolve_material(requested: MaterialMode, caps: &UiCapabilities) -> Resol
                 ResolvedMaterial::Opaque
             }
         }
+        MaterialMode::Acrylic | MaterialMode::LiquidGlass | MaterialMode::Blur => {
+            if caps.blur {
+                ResolvedMaterial::Blurred
+            } else if caps.compositor {
+                ResolvedMaterial::Translucent
+            } else {
+                ResolvedMaterial::Opaque
+            }
+        }
+        MaterialMode::Mica => {
+            if caps.compositor {
+                ResolvedMaterial::Translucent
+            } else {
+                ResolvedMaterial::Opaque
+            }
+        }
+        MaterialMode::Transparent => {
+            if caps.compositor {
+                ResolvedMaterial::Translucent
+            } else {
+                ResolvedMaterial::Opaque
+            }
+        }
         MaterialMode::Opaque => ResolvedMaterial::Opaque,
     }
 }

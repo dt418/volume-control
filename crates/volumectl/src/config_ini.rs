@@ -520,6 +520,11 @@ fn material_name(value: MaterialMode) -> &'static str {
     match value {
         MaterialMode::Auto => "Auto",
         MaterialMode::Translucent => "Translucent",
+        MaterialMode::Acrylic => "Acrylic",
+        MaterialMode::Blur => "Blur",
+        MaterialMode::Mica => "Mica",
+        MaterialMode::Transparent => "Transparent",
+        MaterialMode::LiquidGlass => "LiquidGlass",
         MaterialMode::Opaque => "Opaque",
     }
 }

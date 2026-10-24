@@ -22,13 +22,13 @@ Legend: ✅ pass · ◐ partial · ⛔ gap.
 | Update flow | ✅ | Check (off-thread), localized phases, download with SHA-256 verification against `SHA256SUMS.txt`, payload magic validation, `Ready → Install` launches the verified installer after the host exits, and the Mixer shows an install banner. Live install against a real release is not exercised in this environment. |
 | Config live reload | ✅ | 50 ms core poll calls `reload_config_if_changed`; Storage tab documents INI SSOT. |
 | CLI verbs | ✅ | `get` / `set <0-100>` / `mute [on|off]`; verified 100 → 42 → mute → 0. |
-| Tray menu (10 items) | ✅ | Dark muda menu, live header, all nine actions wired; polling from the eframe loop. Tray tooltip `Volume Control (egui)` distinguishes it from the legacy tray during migration. Trailing-click automation is limited; `ShowSettings` was observed end-to-end from the tray. |
+| Tray menu (10 items) | ✅ | Egui-rendered popup (the native muda menu never dispatched WM_COMMAND): live header, nine actions, mute check column (check → icon → label), computed height, app theme, kept alive off-screen so reopening never flashes. Right-click opens at the cursor; tooltip `Volume Control (egui)`. Located/driven by `scripts/find-tray-icon.ps1` + `scripts/app-uia.ps1` (UIA name/index). |
 
 ## 2. Mixer
 
 | Row | Status | Evidence / deviation |
 |---|---|---|
-| 400×224 borderless, always-on-top | ◐ | Borderless/always-on-top/opaque; height is 240 so one full session card plus a scroll hint is visible (user-requested). Docking math follows the legacy 20/40/16 margins. |
+| 400×224 borderless, always-on-top | ◐ | Borderless/always-on-top; height is 280 so ~1.5 session cards are visible before scrolling (user-requested), footer has divider padding. Docking math follows the legacy 20/40/16 margins. |
 | Header title, live %, gear/help/close | ✅ | Chip header with localized status and icon buttons. |
 | Search filter + empty/no-match | ✅ | Case-insensitive over name/process/display name; empty and unsupported states. |
 | System row: value, mute, reset, slider | ✅ | Card layout, speaker icon by level, reset-50, SignalRail colors. |
@@ -82,7 +82,7 @@ baseline. Both coexist until cutover.
 
 ## Cutover blockers (remaining = explicit user decisions, not code gaps)
 
-1. Mixer height is 400×240 (user-requested scroll hint) instead of the legacy 224; docking uses the legacy margins but the y origin shifts by 16 px.
+1. Mixer height is 400×280 (user-requested ~1.5 cards) instead of the legacy 224; docking uses the legacy margins but the y origin shifts by 56 px.
 2. Hotkey ownership: only one host may own the global chords. The egui host behaves correctly when the legacy app is closed; coexistence requires closing the legacy app or changing the chords.
 3. Live installer execution against a real release was not exercised here (download/verify/launch paths are implemented and unit-tested).
 4. Cutover deletes/retires the old host renderer files; the user has not approved deletion yet.
