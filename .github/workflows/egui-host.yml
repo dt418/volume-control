@@ -1,0 +1,55 @@
+name: Egui host
+
+# Compile and unit-test the egui host on every desktop Rust target. Visual
+# runtime proof still needs real desktops (Linux/macOS GPU + tray); this job
+# catches platform-specific build/binding regressions on each push.
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    paths:
+      - "crates/volumecontrol-egui/**"
+      - "crates/volumectl/**"
+      - "crates/liquid_glass/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/egui-host.yml"
+  pull_request:
+    paths:
+      - "crates/volumecontrol-egui/**"
+      - "crates/volumectl/**"
+      - "crates/liquid_glass/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test egui host (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux windowing dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libx11-xcb-dev \
+            libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests
+        run: cargo test -p volumectl -p volumecontrol-egui -p liquid_glass
+      - name: Clippy
+        run: >-
+          cargo clippy -p volumectl -p volumecontrol-egui -p liquid_glass
+          --all-targets -- -D warnings
+      - name: Format
+        run: cargo fmt --all --check

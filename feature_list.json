@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T00:10",
+  "last_updated": "2026-10-26T00:40",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -87,6 +87,7 @@
       "user_visible_behavior": "A parallel egui/eframe binary hosts the Mixer as its root viewport with Settings, Help, and Overlay as child viewports, renders Vietnamese labels with the platform UI font, applies native Mica/Acrylic backdrop per HWND, and forwards every EventSink notification into the eframe loop. The legacy Tauri app and native host stay untouched as the reference.",
       "status": "passing",
       "verification": [
+        "2026-10-25: .github/workflows/egui-host.yml runs egui/volumectl/liquid_glass tests + clippy + fmt on windows/ubuntu/macos; exact CI test command verified locally.",
         "2026-10-25: cutover — removed crates/volumecontrol-host and crates/dioxus-settings-prototype; egui host is the renderer of record; liquid_glass retained; workspace tests/clippy/fmt green.",
         "2026-10-25: host adds --debug-ui/F12 (egui DebugOptions), persistent tray viewport, DWM rounded corners, window capture helper, VS Code launch configs; workspace tests 549 pass, clippy/fmt clean.",
         "cargo test -p volumecontrol-egui: 13 unit tests + 9 scaffold contract tests passed.",

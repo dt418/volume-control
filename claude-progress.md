@@ -1,3 +1,6 @@
+- Session 140 (2026-10-25) - Cross-platform egui CI
+  - Added `.github/workflows/egui-host.yml`: builds and tests `volumectl`, `volumecontrol-egui`, `liquid_glass` on windows-2025/ubuntu-24.04/macos-15, with Linux windowing deps, clippy `-D warnings`, and fmt. This closes the compile/unit portion of the Linux/macOS gap; visual runtime proof and the live installer still need real hardware/releases.
+  - Verified locally with the exact CI command (`cargo test -p volumectl -p volumecontrol-egui -p liquid_glass`) — all suites pass; YAML parses.
 - Session 139 (2026-10-25) - Final host binary naming
   - Renamed the egui bin from `VolumeControl-Egui` to `volumecontrol-host` (the native crate that owned that name is gone); updated scripts, VS Code launch configs, and the parity sweep.
   - Verification: `--smoke --smoke-ms=4000` exit 0 with `target/debug/volumecontrol-host.exe`; CLI `get` → 55; workspace check builds.
