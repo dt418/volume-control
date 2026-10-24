@@ -4486,3 +4486,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - A11y: 26–28px icon hit targets with hover/focus states, AccessKit labels, type ramp for titles; `--debug-ui`/F12, VS Code launch configs, hot-restart script.
   - Layout: mixer 400×280 with ~1.5 session cards, padded footer, search icon inside the input, blacklist spacing, DWM rounded corners and no black corner artifacts.
   - Layout verification (2026-10-25): captured mixer at 400×280 (≈1.4 session cards, padded footer) and the egui tray popup at 268×336 with all nine rows via the new `scripts/capture-window.ps1`. Windows tests pass (549 across suites); clippy/fmt clean.
+  - Dropdown/layout evidence (2026-10-25): captured the material/theme popup with the check column first and 30 px rows (no hover shift), Settings title at 19 px, icon+text footer buttons, and the appearance tab's localized preview via `scripts/capture-window.ps1` (now PrintWindow-based so occluded wgpu windows capture correctly).
