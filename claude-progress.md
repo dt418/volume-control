@@ -1,3 +1,8 @@
+- Session 138 (2026-10-25) - Cutover to egui foundation
+  - User accepted the four cutover deviations and authorized deletion. Removed `crates/volumecontrol-host` (native liquid-glass renderer) and `crates/dioxus-settings-prototype`; dropped them from workspace members and refreshed `Cargo.lock`.
+  - Kept `crates/liquid_glass` in the workspace (plan decision) and kept `src-tauri`/`frontend` as the separately packaged Tauri app until packaging moves to the egui binary.
+  - Docs updated: parity sweep native column marked historical, runtime-adapter marked retired, bench script targets `VolumeControl-Egui` only.
+  - Verification: workspace tests green across remaining suites; clippy `-D warnings` clean; fmt clean; workspace check builds without the removed crates.
 # Progress Log
 
 ## Session 135 (2026-10-23) - Restore native WGPU surfaces and computer-use accessibility

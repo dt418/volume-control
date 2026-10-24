@@ -1,5 +1,16 @@
 # Session Handoff
 
+## Session 138 (2026-10-25) - Egui cutover: legacy renderer retired
+
+- Summary: user approved the cutover deviations (mixer 400×280, single hotkey owner, live installer untested, deletion). Removed the native liquid-glass host renderer and the Dioxus settings prototype; the egui host is now the renderer of record.
+- Changes:
+  - Deleted `crates/volumecontrol-host` (paint/app/sync + binary) and `crates/dioxus-settings-prototype`; workspace members updated.
+  - `crates/liquid_glass` stays in the workspace with its own tests (explicit plan decision).
+  - `crates/volumecontrol-egui` keeps the `VolumeControl-Egui` binary name; `src-tauri` remains the separately packaged Tauri app until packaging is switched.
+  - Docs: parity-sweep native column marked historical; runtime-adapter marked retired; `scripts/bench-ui.ps1` targets the egui binary only.
+- Verification: `cargo test --workspace --no-default-features` green (474 tests across remaining suites); clippy `-D warnings` and `cargo fmt --all --check` clean; workspace check builds.
+- Remaining: frontend/src-tauri packaging cutover (release pipeline), Linux/macOS runtime proof, live installer smoke.
+
 ## Session 135 (2026-10-23) - Restore native WGPU surfaces and computer-use accessibility
 
 - Summary: fixed white/blank native surfaces, added deterministic main-loop rendering, per-window text viewports, and working AccessKit/computer-use controls.

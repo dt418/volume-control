@@ -3,6 +3,8 @@
 ## Status
 
 Implemented in `crates/volumecontrol-host` (native Winit/WGPU host executable).
+Retired 2026-10-25: the binary and crate were removed after the egui cutover;
+this document is historical.
 Windows visual and computer-use verification completed: all four surfaces and
 update toast render with readable Vietnamese text; AccessKit exposes semantic
 controls and computer-use toggles mute. WebView paths remain until native

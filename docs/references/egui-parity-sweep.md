@@ -76,9 +76,12 @@ window; RSS after idle; idle CPU over 10 s).
 | Idle CPU, second 10 s window | 7.66% | 15.16% |
 | Slider-drag CPU / 1% low | not measured (scripted drag) | not measured |
 
-Binary note: the egui host now builds as `VolumeControl-Egui.exe` (crate
-`volumecontrol-egui`); `volumecontrol-host.exe` remains the native liquid-glass
-baseline. Both coexist until cutover.
+Cutover (2026-10-25): `crates/volumecontrol-host` (native liquid-glass renderer)
+and `crates/dioxus-settings-prototype` were removed; the egui host
+(`VolumeControl-Egui.exe`, crate `volumecontrol-egui`) is the renderer of
+record. The native column above is historical baseline data only; the binary
+is no longer built. `crates/liquid_glass` stays in the workspace with its own
+tests.
 
 ## Cutover blockers (remaining = explicit user decisions, not code gaps)
 

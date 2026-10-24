@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-Get-Process volumecontrol-egui,volumecontrol-host -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process VolumeControl-Egui -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 300
 
 $sw = [Diagnostics.Stopwatch]::StartNew()
