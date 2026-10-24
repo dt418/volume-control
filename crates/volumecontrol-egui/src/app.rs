@@ -213,7 +213,17 @@ impl VolumeControlApp {
         let config = payload.config.clone();
         let settings_draft = SettingsDraft::from_config(&config);
         let (tray_sender, tray_actions) = mpsc::channel();
-        let tray = Tray::new(config.language, payload.volume_pct, tray_sender).ok();
+        let tray = Tray::new(config.language, payload.volume_pct, tray_sender)
+            .map_err(|error| log::warn!("tray unavailable: {error}"))
+            .ok();
+        log::info!(
+            "tray {}",
+            if tray.is_some() {
+                "ready"
+            } else {
+                "unavailable"
+            }
+        );
         let (wheel, wheel_actions) = crate::native_win32::install()
             .map(|(bridge, actions)| (Some(bridge), Some(actions)))
             .unwrap_or_else(|error| {
@@ -285,9 +295,13 @@ impl VolumeControlApp {
             for other in [SurfaceId::Mixer, SurfaceId::Settings, SurfaceId::Help] {
                 if other != surface {
                     self.state.hide(other);
-                    ctx.send_viewport_cmd_to(viewport_id(other), ViewportCommand::Close);
                     if other == SurfaceId::Mixer {
+                        // The root must stay alive: closing it ends the eframe
+                        // loop. Parking (1x1 off-screen) keeps child viewports
+                        // painting and the process resident.
                         self.root_shown = false;
+                    } else {
+                        ctx.send_viewport_cmd_to(viewport_id(other), ViewportCommand::Close);
                     }
                 }
             }
@@ -318,6 +332,7 @@ impl VolumeControlApp {
             while tray.poll().is_some() {}
         }
         while let Ok(action) = self.tray_actions.try_recv() {
+            log::info!("tray action {action:?}");
             match action {
                 TrayAction::ToggleMute => self.dispatch(AppAction::ToggleMute),
                 TrayAction::Reset50 => self.dispatch(AppAction::ResetVolume),
