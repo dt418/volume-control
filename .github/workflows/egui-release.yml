@@ -156,7 +156,7 @@ jobs:
           find dist -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.tar.gz' \) \
             -exec cp -n {} release/ \;
           find dist -type f -name 'SHA256SUMS.txt' -print0 |
-            xargs -0 cat | sort -u > release/SHA256SUMS.txt
+            xargs -0 cat | tr -d '\r' | sort -u > release/SHA256SUMS.txt
           if [[ -n "$GPG_KEY_ID" && -n "$GPG_PRIVATE_KEY_BASE64" ]]; then
             printf '%s' "$GPG_PRIVATE_KEY_BASE64" | base64 -d | gpg --batch --import
             gpg --batch --yes --armor --detach-sign -u "$GPG_KEY_ID" release/SHA256SUMS.txt

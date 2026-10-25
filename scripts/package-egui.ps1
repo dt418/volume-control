@@ -88,7 +88,9 @@ try {
     } finally {
         $sha.Dispose()
     }
-    Set-Content -Path (Join-Path $outDir 'SHA256SUMS.txt') -Value $lines -Encoding ascii
+    # LF keeps sha256sum -c and the Linux release manifest happy.
+    $sumFile = Join-Path $outDir 'SHA256SUMS.txt'
+    [System.IO.File]::WriteAllText($sumFile, (($lines -join "`n") + "`n"))
 
     Write-Host "artifacts in $outDir"
     Get-ChildItem $outDir -File | Select-Object Name, Length
