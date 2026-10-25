@@ -82,7 +82,7 @@ VC_DEB
       rpmrel=${version#*-}
       [[ "$rpmrel" == "$version" ]] && rpmrel=1
       rpmarch=$(uname -m)
-      top="$stage/rpmbuild"
+      top="$root/$out_root/stage/rpmbuild"
       rm -rf "$top"
       mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
       cp target/release/volumecontrol-host "$top/SOURCES/"
