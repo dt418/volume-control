@@ -67,6 +67,7 @@ jobs:
         shell: bash
         env:
           GPG_PRIVATE_KEY_BASE64: ${{ secrets.GPG_PRIVATE_KEY_BASE64 }}
+          REQUIRE_SIGNING: ${{ vars.EGUI_RELEASE_PUBLISH }}
         run: |
           printf '%s' "$GPG_PRIVATE_KEY_BASE64" | base64 -d | gpg --batch --import
       - name: Package
@@ -84,6 +85,7 @@ jobs:
           MACOS_APP_PASSWORD: ${{ secrets.MACOS_APP_PASSWORD }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
           GPG_PRIVATE_KEY_BASE64: ${{ secrets.GPG_PRIVATE_KEY_BASE64 }}
+          REQUIRE_SIGNING: ${{ vars.EGUI_RELEASE_PUBLISH }}
         run: ${{ matrix.script }} "${{ steps.version.outputs.value }}"
       - name: Verify artifacts
         shell: bash

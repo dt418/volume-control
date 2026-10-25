@@ -15,6 +15,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$requireSigning = $env:REQUIRE_SIGNING -eq 'true'
 
 function Resolve-SignTool {
     if ($SignTool) { return $SignTool }
@@ -31,6 +32,7 @@ function Resolve-SignTool {
 
 $tool = Resolve-SignTool
 if (-not $tool) {
+    if ($requireSigning) { throw 'REQUIRE_SIGNING=true but signtool was not found' }
     Write-Host 'signing skipped (signtool not found)'
     exit 0
 }
@@ -47,6 +49,7 @@ $pfx = $env:WINDOWS_CERT_PFX_BASE64
 $password = $env:WINDOWS_CERT_PASSWORD
 $thumbprint = $env:WINDOWS_CERT_THUMBPRINT
 if (-not $pfx -and -not $thumbprint) {
+    if ($requireSigning) { throw 'REQUIRE_SIGNING=true but no WINDOWS_CERT_* credentials are set' }
     Write-Host 'signing skipped (no WINDOWS_CERT_* credentials)'
     exit 0
 }
@@ -70,10 +73,18 @@ try {
             Write-Host "signed $file"
         }
     }
+    $allowUntrusted = $env:WINDOWS_ALLOW_UNTRUSTED_SIGNATURE -eq 'true'
     foreach ($file in $Files) {
         & $tool verify /pa $file
-        if ($LASTEXITCODE -ne 0) { throw "signature verification failed: $file" }
+        if ($LASTEXITCODE -ne 0) {
+            if ($allowUntrusted) {
+                Write-Warning "signature present but untrusted (test certificate): $file"
+            } else {
+                throw "signature verification failed: $file"
+            }
+        }
     }
 } finally {
     if ($temporary) { Remove-Item $temporary -Force -ErrorAction SilentlyContinue }
 }
+exit 0

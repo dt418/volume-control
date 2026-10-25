@@ -54,6 +54,10 @@ EOF
         -e 's#<string>volumectl</string>#<string>volumecontrol-host</string>#' \
         packaging/macos/Info.plist > "$app/Contents/Info.plist"
     identity=${MACOS_SIGN_IDENTITY:-${APPLE_SIGNING_IDENTITY:--}}
+    if [[ "${REQUIRE_SIGNING:-false}" == "true" && "$identity" == "-" ]]; then
+      echo "REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set" >&2
+      exit 1
+    fi
     keychain_dir=""
     cleanup_keychain() {
       if [[ -n "$keychain_dir" ]]; then
@@ -103,6 +107,10 @@ EOF
       rm -f "$out_root/volumecontrol-$version-macos.zip"
       (cd "$stage" && zip -qry "../volumecontrol-$version-macos.zip" "VolumeControl.app")
     elif [[ "$identity" != "-" ]]; then
+      if [[ "${REQUIRE_SIGNING:-false}" == "true" ]]; then
+        echo "REQUIRE_SIGNING=true but notarization credentials are not set" >&2
+        exit 1
+      fi
       echo "notarization skipped (MACOS_NOTARY_PROFILE or Apple credentials not set)" >&2
     fi
     ;;

@@ -33,7 +33,11 @@ Windows/Linux/macOS for every change to the Rust crates.
 | `GPG_KEY_ID` + `GPG_PRIVATE_KEY_BASE64` | Linux | import the base64 key and attach a detached ASCII signature for `SHA256SUMS.txt` |
 
 Every step degrades to a logged skip when its secrets are absent, so local and
-fork builds stay unsigned but complete. Verify signatures after a real run:
+fork builds stay unsigned but complete. When the release gate is enabled
+(`EGUI_RELEASE_PUBLISH=true`), the workflows pass `REQUIRE_SIGNING=true`:
+missing signtool/credentials, an unset Developer ID, or missing notarization
+credentials then fail the build instead of shipping unsigned artifacts. Verify
+signatures after a real run:
 
 ```powershell
 pwsh scripts/sign-windows.ps1 -Files <setup.exe>,<host.exe> -VerifyOnly
