@@ -55,6 +55,11 @@ GitHub release requires the repository variable:
 gh variable set EGUI_RELEASE_PUBLISH --body true --repo dt418/volume-control
 ```
 
+While `MACOS_SIGNING_DISABLED=true`, macOS artifacts are signed ad-hoc and the
+job logs a warning; Windows Authenticode (a self-signed certificate is allowed
+only together with `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE`) and the Linux GPG
+signature stay mandatory.
+
 The variable is enabled on this repository (2026-10-25) together with
 fail-closed signing enforcement. A tag dry run (`v0.1.11-egui-dryrun8`) proved
 that no artifact can attach without signatures:

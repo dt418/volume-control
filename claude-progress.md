@@ -4538,3 +4538,4 @@ fn get_window_pid_x11() -> Option<u32> {
     - `Attach to release` skipped; no GitHub release created; tag deleted locally and remotely.
   - Consequence: any future tag requires real Authenticode/Developer ID+notarization/GPG secrets before native artifacts can attach. Tauri release remains authoritative until those secrets exist.
   - Signing credentials guide: added `docs/dev/signing-secrets.md` — Windows options (Azure Trusted Signing/cloud HSM vs exportable PFX vs self-hosted token), macOS Developer ID + app-specific password/notary profile, GPG key export, exact `gh secret set` commands and local verification.
+  - Credentials provisioned (2026-10-25): self-signed Authenticode PFX + password + allow-untrusted flag, GPG release key `55DBA7F0F2C4B8201F2ECE1D9AF723AEAAD4A580` (expires 2028), `MACOS_SIGNING_DISABLED=true`; package jobs now sign Windows/Linux and ship macOS ad-hoc during the transition. Dry-run tags skip release upload.

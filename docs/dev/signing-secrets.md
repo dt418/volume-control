@@ -118,6 +118,17 @@ printf '%s' '<FINGERPRINT>' | gh secret set GPG_KEY_ID
 
 Keep the private key backed up offline; CI imports it only for tag builds.
 
+## Temporary unsigned macOS
+
+While Apple credentials are pending, set the repository variable
+`MACOS_SIGNING_DISABLED=true`. The macOS package then builds ad-hoc and logs a
+warning instead of failing the signing gate; Windows Authenticode and Linux GPG
+remain mandatory. Remove the variable when Developer ID credentials are added.
+
+For a self-signed Windows certificate (development only) also set
+`WINDOWS_ALLOW_UNTRUSTED_SIGNATURE=true`; the build signs and reports an
+untrusted-root warning. Never use this for a public release.
+
 ## Checklist after provisioning
 
 ```bash

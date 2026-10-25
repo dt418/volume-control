@@ -76,6 +76,8 @@ jobs:
           WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
           WINDOWS_CERT_THUMBPRINT: ${{ secrets.WINDOWS_CERT_THUMBPRINT }}
+          WINDOWS_ALLOW_UNTRUSTED_SIGNATURE: ${{ secrets.WINDOWS_ALLOW_UNTRUSTED_SIGNATURE }}
+          MACOS_SIGNING_DISABLED: ${{ vars.MACOS_SIGNING_DISABLED }}
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
@@ -118,6 +120,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag $TAG is a dry run (not semver); skipping release upload."
+            exit 0
+          fi
           find dist -type f \( -name 'VolumeControl*' -o -name 'volumecontrol-*' \
           -o -name 'SHA256SUMS.txt' -o -name 'SHA256SUMS.txt.asc' \) -print0 |
             xargs -0 gh release upload "$TAG" --clobber

@@ -55,8 +55,12 @@ EOF
         packaging/macos/Info.plist > "$app/Contents/Info.plist"
     identity=${MACOS_SIGN_IDENTITY:-${APPLE_SIGNING_IDENTITY:--}}
     if [[ "${REQUIRE_SIGNING:-false}" == "true" && "$identity" == "-" ]]; then
-      echo "REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set" >&2
-      exit 1
+      if [[ "${MACOS_SIGNING_DISABLED:-false}" == "true" ]]; then
+        echo "WARNING: macOS signing/notarization temporarily disabled; shipping ad-hoc build" >&2
+      else
+        echo "REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set" >&2
+        exit 1
+      fi
     fi
     keychain_dir=""
     cleanup_keychain() {
