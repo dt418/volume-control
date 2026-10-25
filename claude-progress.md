@@ -4523,3 +4523,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - Dry-run iteration 3: platform-aware tests (blacklist extension, update payload magic), Windows-only dead_code allows, cfg-gated vibrancy fields, and unused_mut fix for non-Windows; all found by the dry-run matrix.
   - Dry-run iteration 4: restored cross-platform `VibrancyState` fields with a non-Windows dead_code allow (tests read them) and added `libxkbcommon-x11-0` for winit X11; re-tagging.
   - Dry-run iteration 5: moved the Linux `HotkeySource` impl before `mod tests` (clippy items_after_test_module); macOS/Windows tests and both runtime smoke jobs already green in iteration 4.
+  - Runtime proof: host CI is fully green on Windows/Ubuntu/macOS tests plus both runtime smoke jobs (dry-run7). Runtime jobs now build first, launch the binary, capture a screenshot (scrot/screencapture), then run the smoke contract; artifacts upload for Linux and macOS.

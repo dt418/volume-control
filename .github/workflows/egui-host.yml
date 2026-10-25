@@ -70,7 +70,9 @@ jobs:
             libpulse-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libxkbcommon-x11-0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Render all surfaces under Xvfb
+      - name: Build host
+        run: cargo build -p volumecontrol-egui
+      - name: Render the Mixer under Xvfb
         run: |
           mkdir -p output/captures
           export XDG_RUNTIME_DIR=/tmp/runtime-egui
@@ -81,16 +83,18 @@ jobs:
           xvfb-run -a -s "-screen 0 1600x900x24" \
             env WGPU_BACKEND=vulkan WGPU_ADAPTER_NAME=llvmpipe \
             bash -c '
-              cargo run -q -p volumecontrol-egui -- --surface=mixer &
+              ./target/debug/volumecontrol-host --surface=mixer &
               app=$!
-              sleep 10
+              sleep 6
               scrot output/captures/linux-mixer.png || true
               kill "$app" 2>/dev/null || true
               wait "$app" 2>/dev/null || true
             '
+      - name: Smoke contract
+        run: |
           xvfb-run -a -s "-screen 0 1600x900x24" \
             env WGPU_BACKEND=vulkan \
-            cargo run -q -p volumecontrol-egui -- --smoke --smoke-ms=6000
+            ./target/debug/volumecontrol-host --smoke --smoke-ms=6000
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -108,5 +112,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run the host smoke contract
-        run: cargo run -q -p volumecontrol-egui -- --smoke --smoke-ms=6000
+      - name: Build host
+        run: cargo build -p volumecontrol-egui
+      - name: Capture the Mixer and run the smoke contract
+        run: |
+          mkdir -p output/captures
+          ./target/debug/volumecontrol-host --surface=mixer &
+          app=$!
+          sleep 6
+          screencapture -x output/captures/macos-mixer.png || true
+          kill "$app" 2>/dev/null || true
+          wait "$app" 2>/dev/null || true
+          ./target/debug/volumecontrol-host --smoke --smoke-ms=6000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: egui-macos-runtime
+          path: output/captures
+          if-no-files-found: warn
