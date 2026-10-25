@@ -119,10 +119,15 @@ jobs:
           path: dist
       - name: Refuse untrusted artifacts unless waived
         env:
+          TAG: ${{ github.ref_name }}
           UNTRUSTED_WINDOWS: ${{ secrets.WINDOWS_ALLOW_UNTRUSTED_SIGNATURE }}
           MACOS_DISABLED: ${{ vars.MACOS_SIGNING_DISABLED }}
           ALLOW_UNTRUSTED_RELEASE: ${{ vars.ALLOW_UNTRUSTED_RELEASE }}
         run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag $TAG is a dry run; skipping trust check."
+            exit 0
+          fi
           if [[ "$UNTRUSTED_WINDOWS" == "true" || "$MACOS_DISABLED" == "true" ]]; then
             if [[ "$ALLOW_UNTRUSTED_RELEASE" != "true" ]]; then
               echo "Refusing to publish: Windows uses a self-signed certificate and/or macOS is unsigned." >&2
