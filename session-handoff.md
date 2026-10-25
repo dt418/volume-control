@@ -1,5 +1,10 @@
 # Session Handoff
 
+## Session 143 (2026-10-25) - Signing paths, runtime CI, and git attributes
+
+- Summary: added Authenticode/notarization hooks that skip cleanly without credentials, Linux/macOS runtime smoke CI, and a complete `.gitattributes`.
+- Changes: `scripts/sign-windows.ps1` (new); `scripts/package-egui.ps1` calls it for host+setup; `scripts/package-egui.sh` keychain import, hardened runtime, notarytool/stapler, GPG; workflows map secrets and add runtime jobs; `docs/dev/packaging.md` secrets table + `gh variable set EGUI_RELEASE_PUBLISH`.
+- Verification: signing skip path exits 0; setup/zip/SHA256SUMS rebuilt; YAML parses. Real signing/notarization still needs repository secrets; Linux visual proof runs via CI Xvfb/lavapipe.
 ## Session 142 (2026-10-25) - Native packaging names aligned with the updater
 
 - Summary: packaged artifacts now use the host updater's asset contract so one file set serves both the in-app updater and the native release pipeline.

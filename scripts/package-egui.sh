@@ -53,10 +53,58 @@ EOF
     sed -e "s/@VERSION@/$version/g" \
         -e 's#<string>volumectl</string>#<string>volumecontrol-host</string>#' \
         packaging/macos/Info.plist > "$app/Contents/Info.plist"
+    identity=${MACOS_SIGN_IDENTITY:-${APPLE_SIGNING_IDENTITY:--}}
+    keychain_dir=""
+    cleanup_keychain() {
+      if [[ -n "$keychain_dir" ]]; then
+        security delete-keychain "$keychain_dir/signing.keychain-db" 2>/dev/null || true
+        rm -rf "$keychain_dir"
+      fi
+    }
+    trap cleanup_keychain EXIT
+    if [[ -n "${MACOS_CERT_P12_BASE64:-}" ]]; then
+      keychain_dir=$(mktemp -d)
+      keychain="$keychain_dir/signing.keychain-db"
+      printf '%s' "$MACOS_CERT_P12_BASE64" | base64 -D > "$keychain_dir/cert.p12"
+      security create-keychain -p "$MACOS_CERT_PASSWORD" "$keychain"
+      security import "$keychain_dir/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" \
+        -T /usr/bin/codesign
+      security set-key-partition-list -S apple-tool:,apple: -s \
+        -k "$MACOS_CERT_PASSWORD" "$keychain" >/dev/null
+      existing=()
+      while IFS= read -r line; do
+        existing+=("$line")
+      done < <(security list-keychains -d user | sed 's/^[[:space:]]*//; s/"//g')
+      security list-keychains -d user -s "$keychain" "${existing[@]}"
+    fi
     if command -v codesign >/dev/null 2>&1; then
-      codesign --force --deep --sign - "$app" || echo "ad-hoc signing failed" >&2
+      if [[ "$identity" != "-" ]]; then
+        codesign --force --deep --options runtime --timestamp --sign "$identity" "$app"
+      else
+        codesign --force --deep --sign - "$app" || echo "ad-hoc signing failed" >&2
+      fi
     fi
     (cd "$stage" && zip -qry "../volumecontrol-$version-macos.zip" "VolumeControl.app")
+    notary_profile=${MACOS_NOTARY_PROFILE:-}
+    apple_id=${MACOS_APPLE_ID:-${APPLE_ID:-}}
+    team_id=${MACOS_TEAM_ID:-${APPLE_TEAM_ID:-}}
+    app_password=${MACOS_APP_PASSWORD:-${APPLE_APP_PASSWORD:-}}
+    if [[ "$identity" != "-" ]] && { [[ -n "$notary_profile" ]] || \
+        { [[ -n "$apple_id" && -n "$team_id" && -n "$app_password" ]]; }; }; then
+      if [[ -n "$notary_profile" ]]; then
+        xcrun notarytool submit "$out_root/volumecontrol-$version-macos.zip" \
+          --keychain-profile "$notary_profile" --wait
+      else
+        xcrun notarytool submit "$out_root/volumecontrol-$version-macos.zip" \
+          --apple-id "$apple_id" --team-id "$team_id" \
+          --password "$app_password" --wait
+      fi
+      xcrun stapler staple "$app"
+      rm -f "$out_root/volumecontrol-$version-macos.zip"
+      (cd "$stage" && zip -qry "../volumecontrol-$version-macos.zip" "VolumeControl.app")
+    elif [[ "$identity" != "-" ]]; then
+      echo "notarization skipped (MACOS_NOTARY_PROFILE or Apple credentials not set)" >&2
+    fi
     ;;
   *)
     echo "unsupported platform: $(uname -s)" >&2
@@ -76,6 +124,11 @@ esac
     fi
   done
 )
+
+if [[ -n "${GPG_KEY_ID:-}" && -f "$out_root/SHA256SUMS.txt" ]]; then
+  gpg --batch --yes --armor --detach-sign -u "$GPG_KEY_ID" "$out_root/SHA256SUMS.txt"
+  echo "signed SHA256SUMS.txt with $GPG_KEY_ID"
+fi
 
 echo "artifacts in $out_root"
 ls -l "$out_root"

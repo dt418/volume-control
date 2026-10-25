@@ -42,7 +42,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libx11-xcb-dev \
-            libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev
+            libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev \
+            libpulse-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Tests
@@ -53,3 +54,59 @@ jobs:
           --all-targets -- -D warnings
       - name: Format
         run: cargo fmt --all --check
+
+  runtime-linux:
+    name: Runtime smoke (Ubuntu, software Vulkan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install X11, Mesa (lavapipe), and Pulse build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb scrot imagemagick mesa-vulkan-drivers libgl1-mesa-dri \
+            libxkbcommon-dev libwayland-dev libx11-xcb-dev \
+            libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev \
+            libpulse-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Render all surfaces under Xvfb
+        run: |
+          mkdir -p output/captures
+          export XDG_RUNTIME_DIR=/tmp/runtime-egui
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          # Software Vulkan (lavapipe): proves the renderer + windowing path,
+          # not real-GPU performance.
+          xvfb-run -a -s "-screen 0 1600x900x24" \
+            env WGPU_BACKEND=vulkan WGPU_ADAPTER_NAME=llvmpipe \
+            bash -c '
+              cargo run -q -p volumecontrol-egui -- --surface=mixer &
+              app=$!
+              sleep 10
+              scrot output/captures/linux-mixer.png || true
+              kill "$app" 2>/dev/null || true
+              wait "$app" 2>/dev/null || true
+            '
+          xvfb-run -a -s "-screen 0 1600x900x24" \
+            env WGPU_BACKEND=vulkan \
+            cargo run -q -p volumecontrol-egui -- --smoke --smoke-ms=6000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: egui-linux-runtime
+          path: output/captures
+          if-no-files-found: warn
+
+  runtime-macos:
+    name: Runtime smoke (macOS; best effort)
+    runs-on: macos-15
+    # GitHub macOS runners have no logged-in GUI session; keep this advisory
+    # until real hardware/lab evidence exists.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run the host smoke contract
+        run: cargo run -q -p volumecontrol-egui -- --smoke --smoke-ms=6000

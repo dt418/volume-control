@@ -22,9 +22,39 @@ signing decision are done.
 `.github/workflows/egui-host.yml` runs unit tests, clippy, and fmt on
 Windows/Linux/macOS for every change to the Rust crates.
 
+## Signing
+
+| Secret | Platform | Purpose |
+|---|---|---|
+| `WINDOWS_CERT_PFX_BASE64` + `WINDOWS_CERT_PASSWORD` | Windows | base64 .pfx imported for `signtool` (inner exe + setup, timestamped, `/pa` verified) |
+| `WINDOWS_CERT_THUMBPRINT` | Windows | alternative: certificate already installed in the store |
+| `MACOS_SIGN_IDENTITY` + `MACOS_CERT_P12_BASE64` + `MACOS_CERT_PASSWORD` | macOS | Developer ID import into a temporary keychain and hardened-runtime signing |
+| `MACOS_NOTARY_PROFILE` or `MACOS_APPLE_ID` + `MACOS_TEAM_ID` + `MACOS_APP_PASSWORD` | macOS | `notarytool submit --wait` + `stapler staple` |
+| `GPG_KEY_ID` + `GPG_PRIVATE_KEY_BASE64` | Linux | import the base64 key and attach a detached ASCII signature for `SHA256SUMS.txt` |
+
+Every step degrades to a logged skip when its secrets are absent, so local and
+fork builds stay unsigned but complete. Verify signatures after a real run:
+
+```powershell
+pwsh scripts/sign-windows.ps1 -Files <setup.exe>,<host.exe> -VerifyOnly
+```
+
+## Enabling release upload
+
+Artifacts upload to the workflow run unconditionally; attaching them to the
+GitHub release requires the repository variable:
+
+```bash
+gh variable set EGUI_RELEASE_PUBLISH --body true --repo dt418/volume-control
+```
+
+Do that only after a green `workflow_dispatch` dry run (no tag) of
+`egui-release.yml` and after signing secrets are configured. Until then the
+Tauri release stays authoritative.
+
 ## Not automated
 
-- Code signing (Windows Authenticode, macOS Developer ID + notarization).
+- Signing credentials themselves (they live in repository secrets).
 - Linux `.deb`/`.rpm`/AppImage; the tarball installs per user.
 - Winget manifest regeneration for the NSIS installer.
 

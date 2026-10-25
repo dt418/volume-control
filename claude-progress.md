@@ -1,3 +1,9 @@
+- Session 143 (2026-10-25) - Signing, runtime CI, and git attributes
+  - Windows: new `scripts/sign-windows.ps1` (PFX base64/thumbprint, sha256 timestamp, `/pa` verify, skip exit 0) called for the inner host binary before NSIS and for the setup afterwards.
+  - macOS: `MACOS_SIGN_IDENTITY` + temporary keychain import (`MACOS_CERT_P12_BASE64`), hardened runtime, `notarytool` via profile or Apple ID, `stapler`, re-zip after staple. Linux: optional GPG detached signature.
+  - CI: `egui-host.yml` adds Xvfb+lavapipe Linux runtime smoke (screenshot artifact) and an advisory macOS smoke; both jobs install `libpulse-dev`. `egui-release.yml` maps signing secrets and documents the `EGUI_RELEASE_PUBLISH` gate.
+  - Tooling: `.gitattributes` now pins source/config LF and marks images/archives/binaries binary.
+  - Verification: `sign-windows.ps1` skip path exits 0; packaging rebuilds setup 4.8 MB + zip 6.3 MB + SHA256SUMS with signing skipped; YAML parses.
 - Session 142 (2026-10-25) - Updater-compatible package names
   - Windows setup is `VolumeControl_<ver>_x64-setup.exe`, Linux `volumecontrol-<ver>-linux-amd64.tar.gz`, macOS `volumecontrol-<ver>-macos.zip` — matching `crates/volumecontrol-egui/src/updates.rs` so the in-app updater finds native release assets.
   - Verification: rebuilt artifacts + SHA256SUMS; silent install/uninstall round-trip clean.

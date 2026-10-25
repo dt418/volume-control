@@ -11,11 +11,13 @@
 param(
     [string]$Version,
     [string]$OutputRoot = "output/egui",
-    [string]$Makensis
+    [string]$Makensis,
+    [string]$SignTool
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+
 Push-Location $root
 try {
     if (-not $Version) {
@@ -44,6 +46,14 @@ try {
     Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $stage | Out-Null
     Copy-Item 'target/release/volumecontrol-host.exe' $stage
+    $signScript = Join-Path $PSScriptRoot 'sign-windows.ps1'
+    $inner = Join-Path $stage 'volumecontrol-host.exe'
+    if ($SignTool) {
+        & $signScript -Files $inner -SignTool $SignTool
+    } else {
+        & $signScript -Files $inner
+    }
+    if ($LASTEXITCODE -ne 0) { throw 'signing the host binary failed' }
 
     $zip = Join-Path $outDir "VolumeControl-$Version-x64.zip"
     Compress-Archive -Path (Join-Path $stage 'volumecontrol-host.exe') -DestinationPath $zip -Force
@@ -57,6 +67,12 @@ try {
         "/DICON=$icon" `
         (Join-Path $root 'packaging/egui/windows.nsi')
     if ($LASTEXITCODE -ne 0) { throw 'makensis failed' }
+    if ($SignTool) {
+        & $signScript -Files $setup -SignTool $SignTool
+    } else {
+        & $signScript -Files $setup
+    }
+    if ($LASTEXITCODE -ne 0) { throw 'signing the installer failed' }
 
     $sha = [System.Security.Cryptography.SHA256]::Create()
     try {
