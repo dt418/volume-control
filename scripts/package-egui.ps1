@@ -30,6 +30,7 @@ try {
         $candidates = @(
             "$env:LOCALAPPDATA\tauri\NSIS\makensis.exe",
             "$env:LOCALAPPDATA\tauri\NSIS\Bin\makensis.exe",
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
             "$env:ProgramFiles\NSIS\makensis.exe"
         )
         $Makensis = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1

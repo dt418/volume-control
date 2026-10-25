@@ -224,6 +224,17 @@ fn apply_action(ctx: &mut HostCtx, action: &AppAction) {
             ctx.config.appearance.motion = *motion;
             ctx.state.motion = *motion;
         }
+        AppAction::SetAccent(accent) => {
+            ctx.config.appearance.accent = *accent;
+            ctx.state.accent = *accent;
+        }
+        AppAction::SetLanguage(language) => {
+            ctx.config.language = *language;
+            ctx.state.language = *language;
+        }
+        AppAction::ApplyConfigDraft(_)
+        | AppAction::SetSessionVolume { .. }
+        | AppAction::SetSessionMute { .. } => log_deferred(action),
         AppAction::CheckUpdates => {
             // The fetch blocks for seconds; keep it off the AppKit main
             // thread. This host has no tray or overlay text channel yet

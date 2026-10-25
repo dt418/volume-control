@@ -1,3 +1,8 @@
+- Session 144 (2026-10-25) - Dry-run CI fixes
+  - Linux jobs: install `libgtk-3-dev` + `libayatana-appindicator3-dev` (tray-icon's Linux backend pulls glib/GTK) alongside `libpulse-dev`.
+  - Windows packaging job: `choco install nsis` and resolve `%ProgramFiles(x86)%\NSIS\makensis.exe`.
+  - macOS: completed `macos_app::apply_action` for `ApplyConfigDraft`, `SetAccent`, `SetLanguage`, `SetSessionVolume`, `SetSessionMute` (E0004 caught by the dry-run tag).
+  - Dry-run tag `v0.1.11-egui-dryrun` proved fail-closed release gating: Egui release artifacts ran (unsigned skips), Release preflight failed on the non-semver tag as intended.
 - Session 143 (2026-10-25) - Signing, runtime CI, and git attributes
   - Windows: new `scripts/sign-windows.ps1` (PFX base64/thumbprint, sha256 timestamp, `/pa` verify, skip exit 0) called for the inner host binary before NSIS and for the setup afterwards.
   - macOS: `MACOS_SIGN_IDENTITY` + temporary keychain import (`MACOS_CERT_P12_BASE64`), hardened runtime, `notarytool` via profile or Apple ID, `stapler`, re-zip after staple. Linux: optional GPG detached signature.
