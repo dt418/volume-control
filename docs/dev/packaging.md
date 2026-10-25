@@ -52,9 +52,20 @@ GitHub release requires the repository variable:
 gh variable set EGUI_RELEASE_PUBLISH --body true --repo dt418/volume-control
 ```
 
-Do that only after a green `workflow_dispatch` dry run (no tag) of
-`egui-release.yml` and after signing secrets are configured. Until then the
-Tauri release stays authoritative.
+The variable is enabled on this repository (2026-10-25) together with
+fail-closed signing enforcement. A tag dry run (`v0.1.11-egui-dryrun8`) proved
+that no artifact can attach without signatures:
+
+| Platform | Gate failure |
+|---|---|
+| Windows | `REQUIRE_SIGNING=true but no WINDOWS_CERT_* credentials are set` |
+| Ubuntu | `REQUIRE_SIGNING=true but GPG_KEY_ID is not set` |
+| macOS | `REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set` |
+
+`Attach to release` stayed skipped, no GitHub release was created, and the tag
+was deleted. Real `WINDOWS_CERT_*` / `MACOS_*` / `GPG_*` secrets are still
+required before a signed tag can attach native artifacts; the Tauri release
+stays authoritative until then.
 
 ## Not automated
 

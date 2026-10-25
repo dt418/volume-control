@@ -1,5 +1,10 @@
 # Session Handoff
 
+## Session 144 (2026-10-25) - Release gate enabled with fail-closed signing
+
+- Summary: `EGUI_RELEASE_PUBLISH=true` is now set. Signing is mandatory when the gate is on; a tag dry run failed closed on all three platforms instead of uploading unsigned installers.
+- Evidence: run 40172128470 — Windows `REQUIRE_SIGNING=true but no WINDOWS_CERT_* credentials are set`, Ubuntu `REQUIRE_SIGNING=true but GPG_KEY_ID is not set`, macOS `REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set`; `Attach to release` skipped; no release for the tag; tag deleted.
+- Still required: real Authenticode PFX, Apple Developer ID + notarization credentials, GPG key. Until then any tag fails native packaging by design (Tauri release unaffected).
 ## Session 143 (2026-10-25) - Signing paths, runtime CI, and git attributes
 
 - Summary: added Authenticode/notarization hooks that skip cleanly without credentials, Linux/macOS runtime smoke CI, and a complete `.gitattributes`.
