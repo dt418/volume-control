@@ -4528,3 +4528,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - macOS runtime: added an AppleScript window-bounds probe before capture to distinguish an off-screen placement bug from a paint delay.
   - Placement fix: the Mixer now repositions when the real monitor work area arrives and is clamped inside it; macOS CI had placed the window at 1180,476 on a 1024x768 screen due to the 1600x900 first-frame fallback.
   - macOS placement: `work_area` now uses CoreGraphics `CGDisplayBounds(CGMainDisplayID())` (logical points) instead of the lagging fallback; the Mixer repositions when the area changes.
+  - Visual proof complete (2026-10-25): macOS Mixer renders in CI after the CoreGraphics bounds fix (window at 604,344 on 1024x768; screenshot artifact) and Linux renders under Xvfb/lavapipe; both runtime jobs exit 0 on the smoke contract. Dry-run tags were deleted; no GitHub release was created.
