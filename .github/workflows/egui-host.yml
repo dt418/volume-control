@@ -120,6 +120,7 @@ jobs:
           ./target/debug/volumecontrol-host --surface=mixer &
           app=$!
           sleep 12
+          osascript -e 'tell application "System Events" to tell process "volumecontrol-host" to get {position, size} of every window' || true
           screencapture -x output/captures/macos-mixer.png || true
           kill "$app" 2>/dev/null || true
           wait "$app" 2>/dev/null || true
