@@ -10,6 +10,8 @@
 //! On non-Windows:
 //!   - [`acquire`] always returns [`Launch::Primary`].
 
+#![cfg_attr(not(target_os = "windows"), allow(dead_code, unused_imports))]
+
 #[path = "../src/single_instance.rs"]
 mod single_instance;
 

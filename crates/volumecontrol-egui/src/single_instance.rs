@@ -11,6 +11,8 @@
 //! - On non-Windows platforms, single-instance enforcement is a no-op that
 //!   always returns [`Launch::Primary`].
 
+#![cfg_attr(not(target_os = "windows"), allow(dead_code))]
+
 #[cfg(target_os = "windows")]
 use std::sync::RwLock;
 

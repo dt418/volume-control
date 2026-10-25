@@ -98,6 +98,7 @@ fn main() -> Result<(), String> {
     let options = parse_options();
     let (config, notice) = config::load_with_notice();
     let area = WorkArea::new(0.0, 0.0, 1600.0, 900.0);
+    #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
     let mut native_options = eframe::NativeOptions {
         viewport: builder_for(SurfaceId::Mixer, 1.0, &area, config.language),
         persist_window: false,

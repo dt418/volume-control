@@ -160,8 +160,14 @@ fn recorder_escape_cancels_and_backspace_clears() {
 fn blacklist_add_normalizes_and_rejects_duplicates() {
     let mut list = Vec::new();
     assert!(blacklist::add(&mut list, "  CHROME.EXE "));
-    assert_eq!(list, vec!["chrome.exe"]);
-    assert!(!blacklist::add(&mut list, "chrome.exe"));
+    #[cfg(target_os = "windows")]
+    let expected = "chrome.exe";
+    #[cfg(target_os = "macos")]
+    let expected = "chrome.exe.app";
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let expected = "chrome.exe";
+    assert_eq!(list, vec![expected]);
+    assert!(!blacklist::add(&mut list, expected));
     assert!(!blacklist::add(&mut list, "   "));
 }
 
