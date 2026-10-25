@@ -137,11 +137,11 @@ esac
   done
 )
 
-if [[ "${REQUIRE_SIGNING:-false}" == "true" && -z "${GPG_KEY_ID:-}" ]]; then
+if [[ "$(uname -s)" == "Linux" && "${REQUIRE_SIGNING:-false}" == "true" && -z "${GPG_KEY_ID:-}" ]]; then
   echo "REQUIRE_SIGNING=true but GPG_KEY_ID is not set" >&2
   exit 1
 fi
-if [[ -n "${GPG_KEY_ID:-}" && -f "$out_root/SHA256SUMS.txt" ]]; then
+if [[ "$(uname -s)" == "Linux" && -n "${GPG_KEY_ID:-}" && -f "$out_root/SHA256SUMS.txt" ]]; then
   gpg --batch --yes --armor --detach-sign -u "$GPG_KEY_ID" "$out_root/SHA256SUMS.txt"
   echo "signed SHA256SUMS.txt with $GPG_KEY_ID"
 fi
