@@ -40,8 +40,8 @@ MANIFEST
 tmp_*
 wsl-*
 .freebuff/
+WATCHDOG.yml
 /VolumeControl_*_x64-setup.exe
-
 # Python
 __pycache__/
 *.py[cod]
