@@ -4537,3 +4537,4 @@ fn get_window_pid_x11() -> Option<u32> {
     - macOS: `REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set`
     - `Attach to release` skipped; no GitHub release created; tag deleted locally and remotely.
   - Consequence: any future tag requires real Authenticode/Developer ID+notarization/GPG secrets before native artifacts can attach. Tauri release remains authoritative until those secrets exist.
+  - Signing credentials guide: added `docs/dev/signing-secrets.md` — Windows options (Azure Trusted Signing/cloud HSM vs exportable PFX vs self-hosted token), macOS Developer ID + app-specific password/notary profile, GPG key export, exact `gh secret set` commands and local verification.

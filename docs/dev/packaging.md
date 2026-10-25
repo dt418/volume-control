@@ -24,6 +24,9 @@ Windows/Linux/macOS for every change to the Rust crates.
 
 ## Signing
 
+Where each credential comes from (costs, CA/B Forum hardware rules, exact
+commands): [`signing-secrets.md`](signing-secrets.md).
+
 | Secret | Platform | Purpose |
 |---|---|---|
 | `WINDOWS_CERT_PFX_BASE64` + `WINDOWS_CERT_PASSWORD` | Windows | base64 .pfx imported for `signtool` (inner exe + setup, timestamped, `/pa` verified) |
