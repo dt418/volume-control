@@ -33,9 +33,10 @@
         "326 volumectl + 26 egui + 16 host tests passed; clippy 'No issues found'; fmt clean.",
         "Background launch parked the root at (-32000,-32000,1,1); a second launch surfaced the Mixer at 400x280.",
         "SkipBuild packaging produced setup.exe, zip, and SHA256SUMS.txt.",
-        "Version extraction mapped egui-dryrun-0.1.12 -> 0.1.12 and 0.1.11-unt.8 -> 0.1.11."
+        "Version extraction mapped egui-dryrun-0.1.12 -> 0.1.12 and 0.1.11-unt.8 -> 0.1.11.",
+        "Review follow-up: duplicate --background launches stayed parked at (-32000,-32000,1,1); exclusive-switch reveal showed Mixer at 400x280; workspace clippy and tests stayed clean after the updater/desktop-entry/PID-wait fixes."
       ],
-      "notes": "Linux updater install branch is compile-checked in CI only on this Windows host."
+      "notes": "Linux updater install branch is compile-checked in CI only on this Windows host; updater starts the replacement after the parent exits."
     },
     {
       "id": "vol-120",

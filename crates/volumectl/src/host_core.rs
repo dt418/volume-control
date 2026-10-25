@@ -656,6 +656,14 @@ impl AppCore {
         }
     }
 
+    /// Restore a previously captured config after a failed persist attempt.
+    ///
+    /// Used by the shell when saving fails: the on-disk state may be absent or
+    /// older, so the caller's last known-good snapshot is authoritative.
+    pub fn restore_config(&mut self, config: crate::config::Config) {
+        self.adopt_saved_config(config);
+    }
+
     /// Persist the current config and adopt the normalized result (re-register
     /// hotkeys when the modifier changed, refresh status, publish state).
     pub fn save_config(&mut self) -> Result<(), String> {

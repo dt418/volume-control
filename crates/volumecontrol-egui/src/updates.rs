@@ -202,7 +202,6 @@ pub fn launch_installer(installer: &Path, parent_pid: u32) -> Result<(), String>
         // The Linux asset is a tarball (binary + desktop entry + icon). Install
         // it per-user and start the installed binary; executing the archive
         // itself can never work.
-        let _ = parent_pid;
         let home = std::env::var_os("HOME")
             .map(std::path::PathBuf::from)
             .ok_or("HOME is not set")?;
@@ -231,25 +230,36 @@ pub fn launch_installer(installer: &Path, parent_pid: u32) -> Result<(), String>
         std::fs::create_dir_all(&bin_dir)
             .map_err(|e| format!("create {}: {e}", bin_dir.display()))?;
         let installed_host = bin_dir.join("volumecontrol-host");
-        std::fs::copy(&staged_host, &installed_host)
-            .map_err(|e| format!("install {}: {e}", installed_host.display()))?;
+        // Copy beside the target, then rename over it: overwriting a running
+        // executable in place fails with ETXTBSY on Linux.
+        let staged_install = bin_dir.join("volumecontrol-host.new");
+        let _ = std::fs::remove_file(&staged_install);
+        std::fs::copy(&staged_host, &staged_install)
+            .map_err(|e| format!("install {}: {e}", staged_install.display()))?;
         use std::os::unix::fs::PermissionsExt as _;
-        let mut permissions = std::fs::metadata(&installed_host)
-            .map_err(|e| format!("stat {}: {e}", installed_host.display()))?
+        let mut permissions = std::fs::metadata(&staged_install)
+            .map_err(|e| format!("stat {}: {e}", staged_install.display()))?
             .permissions();
         permissions.set_mode(0o755);
-        std::fs::set_permissions(&installed_host, permissions)
-            .map_err(|e| format!("chmod {}: {e}", installed_host.display()))?;
+        std::fs::set_permissions(&staged_install, permissions)
+            .map_err(|e| format!("chmod {}: {e}", staged_install.display()))?;
+        std::fs::rename(&staged_install, &installed_host)
+            .map_err(|e| format!("install {}: {e}", installed_host.display()))?;
 
         let apps_dir = home.join(".local/share/applications");
         if staging.join("volumecontrol.desktop").is_file() {
             std::fs::create_dir_all(&apps_dir)
                 .map_err(|e| format!("create {}: {e}", apps_dir.display()))?;
-            std::fs::copy(
-                staging.join("volumecontrol.desktop"),
-                apps_dir.join("volumecontrol.desktop"),
-            )
-            .map_err(|e| format!("install desktop entry: {e}"))?;
+            // Point the launcher at the installed absolute path: ~/.local/bin
+            // is not guaranteed to be on the session PATH.
+            let desktop = std::fs::read_to_string(staging.join("volumecontrol.desktop"))
+                .map_err(|e| format!("read desktop entry: {e}"))?
+                .replace(
+                    "Exec=volumecontrol-host",
+                    &format!("Exec={}", installed_host.display()),
+                );
+            std::fs::write(apps_dir.join("volumecontrol.desktop"), desktop)
+                .map_err(|e| format!("install desktop entry: {e}"))?;
         }
         let icons_dir = home.join(".local/share/icons/hicolor/128x128/apps");
         if staging.join("volumecontrol.png").is_file() {
@@ -263,7 +273,19 @@ pub fn launch_installer(installer: &Path, parent_pid: u32) -> Result<(), String>
         }
         let _ = std::fs::remove_dir_all(&staging);
 
-        std::process::Command::new(&installed_host)
+        // Start the replacement only after this process exits, so the old host
+        // releases the single-instance lock before the new one starts.
+        std::process::Command::new("sh")
+            .args([
+                "-c",
+                "while kill -0 \"$1\" 2>/dev/null; do sleep 0.2; done; exec \"$2\"",
+                "sh",
+                &parent_pid.to_string(),
+            ])
+            .arg(&installed_host)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .map_err(|e| format!("start {}: {e}", installed_host.display()))?;
     }

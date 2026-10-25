@@ -50,10 +50,10 @@ jobs:
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             raw="${GITHUB_REF_NAME#v}"
           fi
-          # Accept dry-run tags by extracting the numeric semver core.
-          numeric="$(printf '%s' "$raw" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
-          if [[ -n "$numeric" ]]; then
-            value="$numeric"
+          # Dry-run tags have no installable version; extract the numeric core.
+          # Real tags keep prerelease suffixes so artifact names match the tag.
+          if [[ "$raw" == egui-dryrun-* ]]; then
+            value="$(printf '%s' "$raw" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
           elif [[ -n "$raw" ]]; then
             value="$raw"
           else
@@ -191,6 +191,12 @@ jobs:
               gh release create "$TAG" --latest \
                 --title "VolumeControl $TAG" \
                 --notes "Free egui build. Signatures are not trusted yet: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Windows SmartScreen and macOS Gatekeeper will warn until purchase-backed certificates are configured."
+            fi
+          else
+            if [[ "$TAG" == *-unt.* ]]; then
+              gh release edit "$TAG" --prerelease --latest=false
+            else
+              gh release edit "$TAG" --prerelease=false --latest
             fi
           fi
           mkdir -p release

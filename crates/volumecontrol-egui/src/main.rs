@@ -89,16 +89,18 @@ fn main() -> Result<(), String> {
         return Ok(());
     }
 
+    let options = parse_options();
     let guard = match single_instance::acquire() {
         Launch::Primary(guard) => guard,
         Launch::Secondary => {
-            // Ask the resident primary to reveal its Mixer, then exit.
-            let _ = single_instance::signal_show_mixer();
+            // A background autostart duplicate must stay invisible; only an
+            // interactive launch asks the resident primary for its Mixer.
+            if !options.background {
+                let _ = single_instance::signal_show_mixer();
+            }
             return Ok(());
         }
     };
-
-    let options = parse_options();
     let (config, notice) = config::load_with_notice();
     let area = WorkArea::new(0.0, 0.0, 1600.0, 900.0);
     #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]

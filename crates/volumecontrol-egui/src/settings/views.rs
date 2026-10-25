@@ -899,6 +899,13 @@ fn update_card(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec
 
 fn footer(ui: &mut egui::Ui, view: &mut SettingsView<'_>, intents: &mut Vec<SettingsIntent>) {
     let pristine = view.draft.is_pristine();
+    if let Some(error) = view.error.filter(|error| error.field == "config") {
+        ui.add_space(style::SPACE_2);
+        ui.colored_label(
+            style::tokens(view.is_dark).danger,
+            RichText::new(&error.message).size(9.0),
+        );
+    }
     ui.add_space(style::SPACE_4);
     ui.separator();
     ui.add_space(style::SPACE_2);

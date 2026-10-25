@@ -431,14 +431,15 @@ impl VolumeControlApp {
         }
     }
 
-    fn poll_single_instance(&mut self) {
+    fn poll_single_instance(&mut self, ctx: &egui::Context) {
         if self
             .primary
             .as_ref()
             .is_some_and(|guard| guard.poll_show_mixer())
         {
-            self.state.show(SurfaceId::Mixer);
-            self.root_shown = true;
+            // Modal surfaces never stack: route the wakeup through the same
+            // exclusive switch as tray and hotkey activations.
+            self.show_surface_exclusive(SurfaceId::Mixer, ctx);
         }
     }
 
@@ -1029,11 +1030,12 @@ impl VolumeControlApp {
         let patch = self.settings_draft.patch();
         let autostart = self.settings_draft.autostart;
         let language = self.settings_draft.language;
-        let modifier = self.pending_modifier.take();
+        let modifier = self.pending_modifier;
+        let snapshot = self.core.config().clone();
         if let Err(message) = self.core.apply_settings_draft(patch) {
-            // Persistence failed: restore the on-disk config so the UI never
-            // reports unsaved edits as saved, and keep the dirty draft.
-            self.core.force_reload_config();
+            // Persistence failed: restore the last known-good config (the file
+            // may be absent) and keep the dirty draft.
+            self.core.restore_config(snapshot);
             self.config = self.core.config();
             self.settings_error = Some(crate::settings::model::FieldError {
                 tab: self.settings_tab,
@@ -1042,6 +1044,7 @@ impl VolumeControlApp {
             });
             return;
         }
+        self.pending_modifier = None;
         if let Some(modifier) = modifier {
             if let Err(error) = self.core.set_modifier(modifier) {
                 log::warn!("modifier change rejected: {error}");
@@ -1519,7 +1522,7 @@ impl eframe::App for VolumeControlApp {
         self.poll_core();
         self.poll_wheel();
         self.poll_updates(&ctx);
-        self.poll_single_instance();
+        self.poll_single_instance(&ctx);
         self.poll_tray(&ctx);
         self.sync_root_visibility(&ctx);
 
