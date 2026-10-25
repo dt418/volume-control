@@ -14,7 +14,9 @@ Rust workspace.
 ## CI
 
 `.github/workflows/egui-release.yml` builds all three on tag pushes and manual
-dispatch, verifies the artifacts, and uploads them to the workflow run. Release
+dispatch. Use an `egui-dryrun-<n>` tag for dry runs: it exercises packaging
+without triggering the Release workflow, which only accepts semver `v*` tags
+and fails closed otherwise, verifies the artifacts, and uploads them to the workflow run. Release
 attachment is gated behind the repository variable `EGUI_RELEASE_PUBLISH=true`
 so the current Tauri release stays authoritative until a dry run and the
 signing decision are done.

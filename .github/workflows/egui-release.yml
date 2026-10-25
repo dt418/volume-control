@@ -8,7 +8,9 @@ name: Egui release artifacts
 
 on:
   push:
-    tags: ["v*"]
+    # `egui-dryrun-*` tags exercise packaging without triggering the Release
+    # workflow (which only accepts semver v* tags and fails closed otherwise).
+    tags: ["v*", "egui-dryrun-*"]
   workflow_dispatch:
     inputs:
       version:
