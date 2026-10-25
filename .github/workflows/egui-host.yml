@@ -1,0 +1,133 @@
+name: Egui host
+
+# Compile and unit-test the egui host on every desktop Rust target. Visual
+# runtime proof still needs real desktops (Linux/macOS GPU + tray); this job
+# catches platform-specific build/binding regressions on each push.
+
+on:
+  push:
+    branches: [main, "feat/**"]
+    paths:
+      - "crates/volumecontrol-egui/**"
+      - "crates/volumectl/**"
+      - "crates/liquid_glass/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/egui-host.yml"
+  pull_request:
+    paths:
+      - "crates/volumecontrol-egui/**"
+      - "crates/volumectl/**"
+      - "crates/liquid_glass/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test egui host (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux windowing dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libx11-xcb-dev \
+            libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev \
+            libpulse-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libxkbcommon-x11-0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests
+        run: cargo test -p volumectl -p volumecontrol-egui -p liquid_glass
+      - name: Clippy
+        run: >-
+          cargo clippy -p volumectl -p volumecontrol-egui -p liquid_glass
+          --all-targets -- -D warnings
+      - name: Format
+        run: cargo fmt --all --check
+
+  runtime-linux:
+    name: Runtime smoke (Ubuntu, software Vulkan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install X11, Mesa (lavapipe), and Pulse build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb scrot imagemagick mesa-vulkan-drivers libgl1-mesa-dri \
+            libxkbcommon-dev libwayland-dev libx11-xcb-dev \
+            libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev \
+            libpulse-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libxkbcommon-x11-0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build host
+        run: cargo build -p volumecontrol-egui
+      - name: Render the Mixer under Xvfb
+        run: |
+          mkdir -p output/captures
+          export XDG_RUNTIME_DIR=/tmp/runtime-egui
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          # Software Vulkan (lavapipe): proves the renderer + windowing path,
+          # not real-GPU performance.
+          xvfb-run -a -s "-screen 0 1600x900x24" \
+            env WGPU_BACKEND=vulkan WGPU_ADAPTER_NAME=llvmpipe \
+            bash -c '
+              ./target/debug/volumecontrol-host --surface=mixer &
+              app=$!
+              sleep 6
+              scrot output/captures/linux-mixer.png || true
+              kill "$app" 2>/dev/null || true
+              wait "$app" 2>/dev/null || true
+            '
+      - name: Smoke contract
+        run: |
+          xvfb-run -a -s "-screen 0 1600x900x24" \
+            env WGPU_BACKEND=vulkan \
+            ./target/debug/volumecontrol-host --smoke --smoke-ms=6000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: egui-linux-runtime
+          path: output/captures
+          if-no-files-found: warn
+
+  runtime-macos:
+    name: Runtime smoke (macOS; best effort)
+    runs-on: macos-15
+    # GitHub macOS runners have no logged-in GUI session; keep this advisory
+    # until real hardware/lab evidence exists.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build host
+        run: cargo build -p volumecontrol-egui
+      - name: Capture the Mixer and run the smoke contract
+        run: |
+          mkdir -p output/captures
+          ./target/debug/volumecontrol-host --surface=mixer &
+          app=$!
+          sleep 12
+          osascript -e 'tell application "System Events" to tell process "volumecontrol-host" to get {position, size} of every window' || true
+          screencapture -x output/captures/macos-mixer.png || true
+          kill "$app" 2>/dev/null || true
+          wait "$app" 2>/dev/null || true
+          ./target/debug/volumecontrol-host --smoke --smoke-ms=6000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: egui-macos-runtime
+          path: output/captures
+          if-no-files-found: warn

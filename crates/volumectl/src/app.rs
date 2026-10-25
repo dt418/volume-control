@@ -967,6 +967,18 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
         // ── Settings (Task 10): the host owns every config/hotkey mutation.
         //    The window posts draft intents; the host drives the commit,
         //    adopts the saved config, re-registers hotkeys only after a
+        A::ApplyConfigDraft(_patch) => {
+            let result = ctx.settings.apply();
+            match result {
+                Ok(saved) => {
+                    ctx.config = saved;
+                    ctx.settings.reload(&ctx.config);
+                    ctx.ui_state.surfaces.settings = SurfaceVisibility::Hidden;
+                    publish_confirmed_state(ctx, false);
+                }
+                Err(error) => log::warn!("Settings apply failed: {error}"),
+            }
+        }
         //    successful modifier change, and reports the result back. ─────
         A::ApplyConfig => {
             let result = ctx.settings.apply();
@@ -1011,6 +1023,23 @@ fn handle_action(ctx: &mut AppContext, action: AppAction) {
                 Ok(saved) => adopt_saved_config(ctx, saved),
                 Err(e) => log::warn!("motion persist failed: {e}"),
             }
+        }
+        A::SetAccent(accent) => {
+            ctx.config.appearance.accent = accent;
+            match crate::config::save_validated(&ctx.config) {
+                Ok(saved) => adopt_saved_config(ctx, saved),
+                Err(e) => log::warn!("accent persist failed: {e}"),
+            }
+        }
+        A::SetLanguage(language) => {
+            ctx.config.language = language;
+            match crate::config::save_validated(&ctx.config) {
+                Ok(saved) => adopt_saved_config(ctx, saved),
+                Err(e) => log::warn!("language persist failed: {e}"),
+            }
+        }
+        A::SetSessionVolume { .. } | A::ToggleSessionMute { .. } => {
+            log::debug!("session action in app.rs: {action:?}");
         }
         // Blacklist edits from external callers update the settings window's
         // in-memory draft; nothing touches disk until the user applies.

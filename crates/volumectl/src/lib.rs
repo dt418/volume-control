@@ -4,6 +4,8 @@
 //! (tray, overlay, hotkey window) are compiled only on `target_os="windows"`
 //! and wired in by `main.rs` via [`app`].
 
+#![allow(clippy::chunks_exact_to_as_chunks, clippy::manual_is_multiple_of)]
+
 pub mod audio;
 #[cfg(target_os = "linux")]
 pub mod audio_linux;

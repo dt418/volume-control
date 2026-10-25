@@ -12,14 +12,15 @@ mod settings;
 mod signal_rail;
 mod surface;
 mod theme;
+mod tray;
 
 pub mod platform;
 
 pub use canvas::{Canvas, MixerLayout, OverlayContentRenderer, PointF, RectF, TextAlign};
 pub use capabilities::{resolve_material, resolve_motion, ResolvedMaterial, UiCapabilities};
 pub use model::{
-    AccentMode, AppAction, AppState, MaterialMode, MotionMode, SurfaceId, SurfaceVisibility,
-    SurfaceVisibilityState, ThemeMode, UiStatus,
+    AccentMode, AppAction, AppState, AudioSessionState, MaterialMode, MotionMode, SurfaceId,
+    SurfaceVisibility, SurfaceVisibilityState, ThemeMode, UiStatus,
 };
 pub use renderer::{HostHandle, NativeRenderer};
 pub use settings::SettingsDraft;
@@ -36,6 +37,7 @@ pub use theme::{
     SignalGlassTokens, SpacingTokens, TextRole, ThemeTokens, TypographyTokens,
     VolumeThresholdColors,
 };
+pub use tray::TrayDispatcher;
 
 /// Windows rendering primitives (compile-gated; absent on other targets).
 #[cfg(target_os = "windows")]

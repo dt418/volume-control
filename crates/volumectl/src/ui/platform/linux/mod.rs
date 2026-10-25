@@ -26,4 +26,5 @@
 #[cfg(feature = "gtk-renderer")]
 mod canvas;
 
+pub mod layer_shell;
 pub mod renderer;

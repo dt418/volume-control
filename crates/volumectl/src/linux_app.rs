@@ -32,6 +32,7 @@ mod gtk_host {
             blur: false,
             high_contrast: false,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: 1.0,
             work_area: WorkArea::new(0, 0, 1600, 900),
         }
@@ -68,6 +69,7 @@ mod gtk_host {
             blur: display.backend().is_wayland(),
             high_contrast: false,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: monitor.scale_factor().max(1) as f32,
             work_area: WorkArea::new(
                 geometry.x(),

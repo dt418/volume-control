@@ -56,6 +56,8 @@ pub struct SettingsPatch {
     /// [`crate::autostart`]; this field keeps the typed config in sync for
     /// bootstrap and migration compatibility.
     pub autostart: Option<bool>,
+    /// Base UI font size in logical points (9..=24).
+    pub ui_font_size: Option<u8>,
 }
 
 /// Optional beep feedback patch (mirrors [`crate::config::BeepConfig`]).
@@ -567,11 +569,42 @@ impl AppCore {
                 self.config.appearance.motion = motion;
                 self.save_and_adopt();
             }
-            // ── Not wired yet (host integration / webview surfaces). ─────
-            A::ApplyConfig | A::CancelConfig | A::ResetConfig => {
-                log::debug!(
-                    "settings-window intents are driven by the webview surface (later task)"
-                );
+            A::SetAccent(accent) => {
+                self.config.appearance.accent = accent;
+                self.save_and_adopt();
+            }
+            A::SetLanguage(language) => {
+                self.config.language = language;
+                self.save_and_adopt();
+            }
+            A::ApplyConfigDraft(patch) => {
+                if let Err(error) = self.update_settings(*patch) {
+                    log::warn!("Settings draft rejected: {error}");
+                } else if let Err(error) = self.save_config() {
+                    log::warn!("Settings draft persist failed: {error}");
+                }
+            }
+            A::ApplyConfig => {
+                self.save_and_adopt();
+            }
+            A::CancelConfig => {
+                self.force_reload_config();
+            }
+            A::ResetConfig => {
+                self.config = crate::config::Config::default();
+                self.save_and_adopt();
+            }
+            A::SetSessionVolume { id, percent } => {
+                if let Err(e) = self.set_session_volume(&id, percent) {
+                    log::warn!("Failed to set session volume for {}: {}", id, e);
+                }
+                self.publish_confirmed_state(false);
+            }
+            A::ToggleSessionMute { id } => {
+                if let Err(e) = self.mute_session(&id) {
+                    log::warn!("Failed to toggle session mute for {}: {}", id, e);
+                }
+                self.publish_confirmed_state(false);
             }
             A::OpenConfigLocation => {
                 crate::config::open_in_editor();
@@ -707,6 +740,12 @@ impl AppCore {
             }
         }
 
+        if let Some(size) = patch.ui_font_size {
+            if !(9..=24).contains(&size) {
+                return Err("ui_font_size: must be between 9 and 24".into());
+            }
+        }
+
         // Colour thresholds: prospective values through the shared
         // config::validate_thresholds (0..=100 + monotonic band order).
         if let Some(thresholds) = &patch.color_thresholds {
@@ -783,6 +822,9 @@ impl AppCore {
         }
         if let Some(autostart) = patch.autostart {
             self.config.autostart = autostart;
+        }
+        if let Some(size) = patch.ui_font_size {
+            self.config.ui_font_size = size;
         }
         if let Some(lang) = language {
             self.config.language = lang;
@@ -1097,6 +1139,11 @@ fn material_str(m: MaterialMode) -> &'static str {
     match m {
         MaterialMode::Auto => "Auto",
         MaterialMode::Translucent => "Translucent",
+        MaterialMode::Acrylic => "Acrylic",
+        MaterialMode::Blur => "Blur",
+        MaterialMode::Mica => "Mica",
+        MaterialMode::Transparent => "Transparent",
+        MaterialMode::LiquidGlass => "LiquidGlass",
         MaterialMode::Opaque => "Opaque",
     }
 }
@@ -1105,9 +1152,14 @@ fn parse_material(s: &str) -> Result<MaterialMode, String> {
     match s {
         "Auto" => Ok(MaterialMode::Auto),
         "Translucent" => Ok(MaterialMode::Translucent),
+        "Acrylic" => Ok(MaterialMode::Acrylic),
+        "Blur" => Ok(MaterialMode::Blur),
+        "Mica" => Ok(MaterialMode::Mica),
+        "Transparent" => Ok(MaterialMode::Transparent),
+        "LiquidGlass" => Ok(MaterialMode::LiquidGlass),
         "Opaque" => Ok(MaterialMode::Opaque),
         _ => Err(format!(
-            "unknown material {s:?} (expected Auto | Translucent | Opaque)"
+            "unknown material {s:?} (expected Auto | Translucent | Acrylic | Blur | Mica | Transparent | LiquidGlass | Opaque)"
         )),
     }
 }

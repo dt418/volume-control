@@ -1,4 +1,56 @@
+- Session 144 (2026-10-25) - Dry-run CI fixes
+  - Linux jobs: install `libgtk-3-dev` + `libayatana-appindicator3-dev` (tray-icon's Linux backend pulls glib/GTK) alongside `libpulse-dev`.
+  - Windows packaging job: `choco install nsis` and resolve `%ProgramFiles(x86)%\NSIS\makensis.exe`.
+  - macOS: completed `macos_app::apply_action` for `ApplyConfigDraft`, `SetAccent`, `SetLanguage`, `SetSessionVolume`, `SetSessionMute` (E0004 caught by the dry-run tag).
+  - Dry-run tag `v0.1.11-egui-dryrun` proved fail-closed release gating: Egui release artifacts ran (unsigned skips), Release preflight failed on the non-semver tag as intended.
+- Session 143 (2026-10-25) - Signing, runtime CI, and git attributes
+  - Windows: new `scripts/sign-windows.ps1` (PFX base64/thumbprint, sha256 timestamp, `/pa` verify, skip exit 0) called for the inner host binary before NSIS and for the setup afterwards.
+  - macOS: `MACOS_SIGN_IDENTITY` + temporary keychain import (`MACOS_CERT_P12_BASE64`), hardened runtime, `notarytool` via profile or Apple ID, `stapler`, re-zip after staple. Linux: optional GPG detached signature.
+  - CI: `egui-host.yml` adds Xvfb+lavapipe Linux runtime smoke (screenshot artifact) and an advisory macOS smoke; both jobs install `libpulse-dev`. `egui-release.yml` maps signing secrets and documents the `EGUI_RELEASE_PUBLISH` gate.
+  - Tooling: `.gitattributes` now pins source/config LF and marks images/archives/binaries binary.
+  - Verification: `sign-windows.ps1` skip path exits 0; packaging rebuilds setup 4.8 MB + zip 6.3 MB + SHA256SUMS with signing skipped; YAML parses.
+- Session 142 (2026-10-25) - Updater-compatible package names
+  - Windows setup is `VolumeControl_<ver>_x64-setup.exe`, Linux `volumecontrol-<ver>-linux-amd64.tar.gz`, macOS `volumecontrol-<ver>-macos.zip` — matching `crates/volumecontrol-egui/src/updates.rs` so the in-app updater finds native release assets.
+  - Verification: rebuilt artifacts + SHA256SUMS; silent install/uninstall round-trip clean.
+- Session 141 (2026-10-25) - Native packaging pipeline
+  - Added NSIS installer (`packaging/egui/windows.nsi`), `scripts/package-egui.ps1` (setup + portable zip + SHA256), and `scripts/package-egui.sh` (Linux tar.gz with desktop entry; macOS .app zip with ad-hoc signing).
+  - Added `.github/workflows/egui-release.yml` (Windows/Ubuntu/macOS artifacts, gated release upload via `EGUI_RELEASE_PUBLISH`) and `docs/dev/packaging.md`.
+  - Fixed release build: egui gates `Style::debug` on `debug_assertions`; the host now applies DebugOptions only in debug builds and logs a release warning.
+  - Verification: release build succeeds; installer built (4.8 MB) and zip (6.3 MB); silent install/uninstall cleaned files, desktop shortcut, and HKCU key; release `--smoke` exit 0; CLI get 55.
+- Session 140 (2026-10-25) - Cross-platform egui CI
+  - Added `.github/workflows/egui-host.yml`: builds and tests `volumectl`, `volumecontrol-egui`, `liquid_glass` on windows-2025/ubuntu-24.04/macos-15, with Linux windowing deps, clippy `-D warnings`, and fmt. This closes the compile/unit portion of the Linux/macOS gap; visual runtime proof and the live installer still need real hardware/releases.
+  - Verified locally with the exact CI command (`cargo test -p volumectl -p volumecontrol-egui -p liquid_glass`) — all suites pass; YAML parses.
+- Session 139 (2026-10-25) - Final host binary naming
+  - Renamed the egui bin from `VolumeControl-Egui` to `volumecontrol-host` (the native crate that owned that name is gone); updated scripts, VS Code launch configs, and the parity sweep.
+  - Verification: `--smoke --smoke-ms=4000` exit 0 with `target/debug/volumecontrol-host.exe`; CLI `get` → 55; workspace check builds.
+- Session 138 (2026-10-25) - Cutover to egui foundation
+  - User accepted the four cutover deviations and authorized deletion. Removed `crates/volumecontrol-host` (native liquid-glass renderer) and `crates/dioxus-settings-prototype`; dropped them from workspace members and refreshed `Cargo.lock`.
+  - Kept `crates/liquid_glass` in the workspace (plan decision) and kept `src-tauri`/`frontend` as the separately packaged Tauri app until packaging moves to the egui binary.
+  - Docs updated: parity sweep native column marked historical, runtime-adapter marked retired, bench script targets `VolumeControl-Egui` only.
+  - Verification: workspace tests green across remaining suites; clippy `-D warnings` clean; fmt clean; workspace check builds without the removed crates.
 # Progress Log
+
+## Session 135 (2026-10-23) - Restore native WGPU surfaces and computer-use accessibility
+
+- Goal: native Winit/WGPU surfaces were white or blank; user could see no colored content. Restore real rendering and verify through `orca computer`.
+- Root cause:
+  - One shared `TextSystem` began with a 0x0 Glyphon viewport, and the first-window dimensions prevented the only resize path from running, so glyphs were clipped or projected outside the viewport.
+  - Continuous redraw requests could starve `WM_PAINT` delivery on Windows. Mixer rendered, but Settings, Help, and Overlay did not receive frames.
+  - Host had an unused AccessKit wrapper; no adapters or published semantic trees existed.
+- What landed:
+  - `crates/volumecontrol-host/src/paint.rs`: per-window `TextSystem` initialized at actual surface dimensions and synchronized every frame; nonzero window validation; ordinary WGPU presentation retained; failed DirectComposition experiment removed.
+  - `crates/volumecontrol-host/src/app.rs`: renders published scenes on the main event loop; adds AccessKit adapters before first show, semantic tree publication after rebuilds, and main-thread action dispatch.
+  - `crates/liquid_glass/src/text/system.rs`: nonzero viewport initialization plus resolution accessor; text tests assert the nonzero invariant and real resize.
+  - `crates/volumectl/src/audio/mod.rs`: Windows `default_backend()` now exposes the existing WASAPI backend through the shared factory.
+  - Added bounded `--smoke-ms=<milliseconds>` smoke dwell for actual GUI verification; default remains 2500 ms.
+- Verification:
+  - `cargo test --workspace --no-default-features`: 462 passed across 11 suites.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: no issues.
+  - `cargo fmt --all --check`: clean.
+  - Desktop screenshot `C:\Users\Thanh\AppData\Local\Temp\volumecontrol-host-all-final.png`: all four native surfaces and update toast render with dark materials and Vietnamese text.
+  - Computer-use on live `volumecontrol-host`: semantic tree contains Mute button; click changes it to Unmute; second click restores Mute.
+  - `cargo run -p volumecontrol-host -- --smoke`: exit 0 with all four scenes and update toast through the production loop.
+- Records: registered `vol-117` as passing. WebView paths remain; native keyboard/IME integration and macOS/Linux visual proof are still pending.
 
 ## Session 134 (2026-10-23) - Localized update toast with Windows actions and in-app install affordances
 
@@ -4393,3 +4445,117 @@ fn get_window_pid_x11() -> Option<u32> {
   (`0 */3 * * *`); `on.schedule` is parsed statically, so secrets/variables
   cannot configure it. `workflow_dispatch` remains available for immediate
   checks.
+
+## Session 136 (2026-10-24) - Native UI/UX computer-use debugging, surface overlap remediation, and Dioxus prototype evaluation
+
+- Goal: use computer use to build and debug UI/UX across all native surfaces, fix window placement and overlap bugs, implement keyboard/IME navigation, evaluate an isolated Dioxus Native prototype for Settings, and integrate native OS window vibrancy (window-vibrancy 0.8.1).
+- Landed:
+  - `crates/volumecontrol-host/src/vibrancy.rs`: cross-platform backdrop vibrancy module calling `window-vibrancy` on Windows (Mica for Settings, Acrylic for HUDs/Mixer) and macOS (`NSVisualEffectView` with `HudWindow`/`Sidebar`); Linux X11 sets `_KDE_NET_WM_BLUR_BEHIND_REGION` via x11rb after extracting the XID through raw-window-handle rwh_06 (winit 0.30's public `WindowExtX11` is an empty marker trait — the initial `xlib_window()` call was caught by a linux-target replica check and replaced with the verified `HasWindowHandle`/`as_raw` chain); Wayland protocol blur documented as compositor-rule owned.
+  - `crates/liquid_glass/src/gpu/surface.rs`: `SurfaceManager::new` gained a `transparent` flag selecting `CompositeAlphaMode::PreMultiplied` (Opaque fallback when unsupported) so the native Mica/Acrylic/NSVisualEffectView backdrop shows through the swapchain instead of being hidden behind an opaque frame.
+  - `crates/volumecontrol-host/src/placement.rs`: corrected `Mixer` and `Help` docking to bottom-right directly above the volume overlay (`MIXER_OVERLAY_GAP = 8px`) and tray clearance.
+  - `crates/liquid_glass/src/surfaces/mixer.rs`: added visual Accent fill indicators to master and audio session volume sliders; resolved `@%SystemRoot%\System32\AudioSrv.Dll` to friendly label "System Sounds"; fixed Unicode lowercasing in search.
+  - `crates/volumectl/src/linux_host_core.rs`: enforced mutual exclusion (`show_surface_exclusive`) among interactive menu surfaces (`Mixer`, `Settings`, `Help`) so opening one closes competing surfaces while keeping HUD overlay intact.
+  - `crates/volumecontrol-host/src/app.rs`: added CLI `--surface=<mixer|settings|help|overlay>` for targeted debugging; wired keyboard focus traversal (`Tab`, `Shift+Tab`), `Enter`/`Space` activation, `Escape` surface dismiss, and Winit IME text commit for Mixer search.
+  - `crates/dioxus-settings-prototype`: standalone isolated Dioxus 0.7.10 prototype evaluating declarative RSX ergonomics and VirtualDom reactivity without touching production host or config.
+  - Visual polish pass: text-alignment engine in `paint.rs collect_text_areas` (vertical centering everywhere, horizontal centering for `Control`/`Accent` roles, 8 px label padding) + `SceneNode::text_centered` override; mixer layout polish (64 px mute buttons, 190 px sliders, "Tìm ứng dụng…" search placeholder, `fit_label` 104 px labels with ellipsis, session-count footer "N phiên ứng dụng · Esc để đóng"); a11y keeps the full display name while the pill shows the fitted one (verified live: slider announces "System Sounds volume").
+  - Full-app review and test pass: fixed the smoke acceptance regression where `show_surface_exclusive` prevented `Mixer`+`Settings`+`Help` from being open simultaneously — `HostApp` now tracks `smoke_seen: HashSet<SurfaceId>` across scene rebuilds and cycles `ShowSurface` in `pump_host` until every surface has been presented once. `volumecontrol-host --smoke` exits 0 again.
+- Verification:
+  - `cargo test --workspace --no-default-features`: 467 tests passed across 11 suites.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings`: 0 errors, 0 warnings.
+  - `cargo fmt --all --check`: clean.
+  - `cargo run -p volumecontrol-host -- --smoke --smoke-ms=10000`: exit 0 with all surfaces presented through the production loop.
+  - Computer-use interactive inspection: validated isolated Mixer slider drag, Mute click toggle, Settings tab navigation and draft cancel, Help shortcut list and Escape dismiss, and Overlay HUD rendering with native backdrop vibrancy.
+- Decision: keep production on native `liquid_glass` WGPU/Winit renderer with native OS vibrancy enhancements.
+- Legacy reference capture (2026-10-24, computer use on installed v0.1.11): full UIA enumeration + screenshots of Mixer, all 6 Settings tabs (top + scrolled-bottom), Help, Overlay toast, and hotkey/tray behaviors; saved to `docs/references/legacy-app/img/` and documented in `docs/references/legacy-app/feature-reference.md` with e2e coverage mapping and the native-parity gap table (tray, hotkey recorders, blacklist/beep/threshold UI, update install flow, mixer header controls, and 9 stubbed `AppAction`s are the dominant gaps).
+- Visual polish pass (2026-10-24): text is now vertically centered in every node and horizontally centered for button-like roles (`Control`/`Accent`, per-node override `SceneNode::text_centered` + `with_text_centered`), left-aligned text gains 8 px padding; Mixer mute buttons widened to 64 px, sliders re-flowed to 190 px, labels fit to a 104 px column with `…` truncation (`fit_label`), search field shows the "Tìm ứng dụng…" placeholder, and a legacy-parity footer "N phiên ứng dụng · Esc để đóng" was added. Verified by computer-use screenshots (Mixer + Settings) and full gates: 467 tests / clippy clean / fmt clean.
+
+## Session 137 (2026-10-24) - Egui foundation migration Task 1: scaffold host
+
+- Goal: start the egui/eframe foundation migration without touching the legacy Tauri app; scaffold a parallel host that binds the full `volumectl::host_core::AppCore` reducer, hosts the Mixer as root plus Settings/Help/Overlay child viewports, and proves rendering with computer use.
+- Landed:
+  - New `crates/volumecontrol-egui` binary (eframe/egui 0.36.2, wgpu 30, DX12 on Windows), added to workspace members; workspace MSRV and `clippy.toml` raised to 1.95 (eframe requires it).
+  - `i18n.rs`: all 215 legacy EN/VI keys ported verbatim from `frontend/src/lib/i18n.tsx` with typed `enum Key`, fixed-size tables, and `tr(key, lang, args)` `{n}` interpolation.
+  - `sink.rs`: `EguiSink: EventSink` forwards volume/hotkeys/sessions/backend/open/close/toggle/overlay/tray/exit over mpsc and requests a repaint; `surface_for_label` maps the legacy `window-*` labels.
+  - `app.rs`: `VolumeControlApp` (root Mixer, immediate child viewports, event drain, 150 ms hotkey/audio/config poll, Esc hide, root-close cancel, off-screen root parking), `builder_for` per-surface flags/geometry.
+  - `placement.rs`, `style.rs`, `fonts.rs`, `vibrancy.rs` (PID-scoped HWND lookup, Mica/Acrylic, per-HWND cache; macOS/Linux recorded degradation).
+  - Fixes found by computer use: Vietnamese tofu (Segoe UI installed as primary face), header text collision (Phosphor icon buttons), full-window glass background, Vulkan crash (DX12 pin).
+- Verification:
+  - `cargo test -p volumecontrol-egui`: 13 unit + 9 scaffold tests pass.
+  - `cargo test --workspace --no-default-features`: all suites green, 0 failed.
+  - `cargo clippy --workspace --all-targets --no-default-features -- -D warnings` and `cargo fmt --all --check`: clean.
+  - Live `--show-all` on Windows: all four surfaces at legacy geometry; screenshots in `%TEMP%\egui-final-*.png`; UIA tree announces full Vietnamese labels.
+- Records: registered `vol-118` (in_progress). Legacy `frontend/`, `src-tauri/`, `crates/volumecontrol-host/`, and `crates/liquid_glass/` stay untouched as the reference per the user's directive.
+- Task 2 (Mixer parity) landed in the same session: `src/surfaces/mixer.rs` model + view, SignalRail-style slider (band colors, gray fill + diamond thumb while muted, AccessKit slider info), search filter, app-label styles, sorted session rows, system mute/reset, 1.5 s re-poll gated on visibility, unsupported state, footer.
+  - Verification: 15 unit + 8 mixer + 9 scaffold tests pass; clippy clean; fmt clean; live screenshot `%TEMP%\egui-mixer-t2.png`; UIA tree lists search, sliders, and "2 phiên ứng dụng" / "Esc để đóng".
+  - Registered `vol-119` (in_progress). Update banner deferred to the host update manager; not faked.
+- UI/UX fix round (same session, goal `fix-ui`):
+  - Design tokens: `docs/references/egui-design-tokens.md` + `style.rs` (semantic colors, spacing/radius/type/control/motion scales, user font size 9..=24 persisted in config.ini, default 14).
+  - Mixer: card blocks for system/session rows, pinned footer with background + top border, bounded scrollable app list, speaker icons by level (mute/none/low/medium/high), optimistic volume updates + 50 ms core heartbeat so hotkey/mouse changes render immediately.
+  - Placement matches legacy: overlay 20/40 px, mixer 16 px above overlay, Help 24/48 px, Settings centered.
+  - HUD: 336x120 with wrap-safe text payloads; click-through is applied after window creation because the builder flag prevented the window from appearing on Windows.
+  - Settings: full-height content card, legacy stacked fields, localized window title, uniform recorder chips, Phosphor close icon; tab flag `--settings-tab=` for verification.
+  - Help surface, native tray, CLI verbs (`get/set/mute`), and single-instance modules landed (parallel subagents) and are wired into the host; app/tray icons load from `src-tauri/icons`.
+  - Verification: `cargo test -p volumecontrol-egui` 70 tests pass; clippy `-D warnings` clean; fmt clean; screenshots: `%TEMP%\egui-mixer-latest.png`, `egui-hotkeys-v3.png`, `egui-help4.png`, `egui-hud-final2.png`.
+  - Records: `vol-121` (in_progress), `vol-120` (not_started backlog for the next UI/UX optimization pass, per user request).
+  - Follow-up fixes from live feedback: opaque Mixer background (desktop no longer bleeds through), content/footer laid out from `available_rect_before_wrap` (no top clipping), footer drawn as a foreground Area with solid card fill and top border (no gap/overlap), session list clipped at the footer top with a visible scrollbar, HUD shown for every confirmed volume/mute change (external hotkeys/media keys included) via the Volume event path.
+  - Hotkey conflict note: while the installed `VolumeControl.exe` is running it owns the registered hotkeys, so the egui host logs "already registered" and receives none. Hotkey handling inside egui works only when the legacy app is closed; external changes still keep the egui HUD/mixer in sync. This is expected coexistence behavior during migration, not a registration bug.
+  - Tray + host follow-up: muda/tray-icon events are now polled from the eframe loop (`Tray::poll`) instead of a global handler, so every menu action (mute, reset, mixer, settings, help, update check, reload config, open config, exit) reaches the host; update checks run off-thread and show the localized result in the HUD. Added a hidden Windows message window so the mouse-wheel bridge posts decoded actions into the host loop; Settings hotkey rows show the legacy "hotkey already registered by another application" badge; the running-app picker is a floating dropdown (opaque card) and content width no longer overflows; the root Mixer is parked off-screen when launching Settings/Help so no black block remains; Mixer/Settings/Help are mutually exclusive.
+  - Verification: 70 crate tests pass; clippy `-D warnings` clean; fmt clean.
+  - Tray fix: root window must never receive `ViewportCommand::Close` when switching surfaces (closing the root ends the eframe loop and looked like "the app closed"); only Settings/Help child windows are closed, the Mixer root parks. Tray actions are logged and all nine items are wired. Settings hotkey rows show the conflict badge, the running-app picker is a floating opaque dropdown, and content width no longer overflows horizontally. Help now uses an opaque shell with an outer header; HUD is 336×88 with the legacy layout.
+  - Design-token consolidation: surface sizes, docking margins, component widths/heights (mixer footer/session rows, hotkey rows/chips/buttons, picker) now live in style.rs and are documented in docs/references/egui-design-tokens.md §9; placement.rs re-exports the geometry tokens. Mixer restored to a scroll-friendly 400x240 (one full item + part of the next) with a pinned panel footer; tray menu forced to the dark theme via muda MenuTheme.
+  - Task 7 smoke contract implemented: `--smoke` (with `--smoke-ms`) shows all four surfaces plus the toast, records each presentation, sets a shared verification flag, and exits 0; failure to present them exits non-zero. Verified `cargo run -p volumecontrol-egui -- --smoke --smoke-ms=5000` → exit 0. CLI verbs verified: `get` 100 → `set 42` → `get` 42 → `mute on` → `get` 0. Tray tooltip is now "Volume Control (egui)" to distinguish it from the legacy tray icon while both run.
+  - Text sharpness: Mixer no longer uses Acrylic/transparent composition (opaque window + opaque surface); default UI font raised to 15. egui rasterizes with grayscale anti-aliasing (no ClearType hinting), so small Segoe UI sizes look softer than the legacy WebView2 surface; users can raise ui_font_size in Settings (9..=24).
+  - Added `--overlay-demo` for deterministic HUD verification and Tray tooltip "Volume Control (egui)" to distinguish from the legacy tray icon.
+  - Task 6: parity sweep written to docs/references/egui-parity-sweep.md — every feature-reference §1–§5 row graded pass/partial/gap, cutover blockers listed (update download/install + mixer banner, mixer focus-loss close, picker app icons, overlay slide animation, hotkey coexistence). Benchmarks with scripts/bench-ui.ps1 (debug, Windows 11): egui 2,907 ms startup / 490 MB RSS / 7.19% idle CPU vs native host 3,373 ms / 506 MB / 12.03%.
+- Poll split: hotkeys/config reload stay on the 150 ms tick; external audio sync drops to 1 s and only while the Mixer or Overlay is visible. Cuts idle wgpu frames caused by redundant WASAPI probes.
+  - Task 8 blockers (code): Mixer focus-loss auto-close, picker app icons, Overlay 180 ms entrance animation, update download/verify/install handoff, and the Mixer install banner. `docs/references/egui-parity-sweep.md` updated; remaining blockers are user decisions (mixer 240 px, hotkey coexistence, live installer proof, deletion approval).
+  - Binary naming + performance pass: egui host builds as `VolumeControl-Egui.exe` (avoids the Tauri `VolumeControl.exe` collision; `volumecontrol-host.exe` stays the baseline). Poll split cut idle CPU from 14.7% to 7.66% (native 15.16%). Mixer labels/sliders gained hover tooltips. Full workspace: 543 tests pass, clippy clean, fmt clean; `--smoke` exit 0; CLI get/set round-trip.
+- Session 137 (2026-10-25) - Egui tray menu, materials, accessibility, and layout polish
+  - Tray: replaced the native menu (items never dispatched) with an egui popup kept alive off-screen; right-click at the pointer, checkmark order (check, icon, label), computed height, theme-synced colors, UIA locator scripts.
+  - Materials: Auto/Translucent/Acrylic/Blur/Mica/Transparent/LiquidGlass/Opaque; Windows acrylic/mica/blur mapping with documented macOS/Linux degradation. Legacy config indices preserved.
+  - A11y: 26–28px icon hit targets with hover/focus states, AccessKit labels, type ramp for titles; `--debug-ui`/F12, VS Code launch configs, hot-restart script.
+  - Layout: mixer 400×280 with ~1.5 session cards, padded footer, search icon inside the input, blacklist spacing, DWM rounded corners and no black corner artifacts.
+  - Layout verification (2026-10-25): captured mixer at 400×280 (≈1.4 session cards, padded footer) and the egui tray popup at 268×336 with all nine rows via the new `scripts/capture-window.ps1`. Windows tests pass (549 across suites); clippy/fmt clean.
+  - Dropdown/layout evidence (2026-10-25): captured the material/theme popup with the check column first and 30 px rows (no hover shift), Settings title at 19 px, icon+text footer buttons, and the appearance tab's localized preview via `scripts/capture-window.ps1` (now PrintWindow-based so occluded wgpu windows capture correctly).
+  - Records (2026-10-25): vol-120 moved to in_progress and evidence added to vol-117/118/119/120 for the tray menu, material modes, accessibility, layout, and automation tooling batch.
+- Final review pass (2026-10-25): fixed 6 findings — INI parser now accepts Acrylic/Blur/Mica/Transparent/LiquidGlass (+ round-trip test), tray close sends Visible(false) and keeps the frame-start transition, saved material preference is applied per surface, tray rows take initial focus so UIA `-TrayIndex 4` opens Settings, F12 resets all DebugOptions, dev.ps1 waits for edits after a failed first build.
+  - Dry-run iteration 2: fixed the macOS `ToggleSessionMute` arm name and added `libxdo-dev` (tray-icon/muda Linux backend) to both CI workflows; re-tagging for a full matrix run.
+  - Dry-run iteration 3: platform-aware tests (blacklist extension, update payload magic), Windows-only dead_code allows, cfg-gated vibrancy fields, and unused_mut fix for non-Windows; all found by the dry-run matrix.
+  - Dry-run iteration 4: restored cross-platform `VibrancyState` fields with a non-Windows dead_code allow (tests read them) and added `libxkbcommon-x11-0` for winit X11; re-tagging.
+  - Dry-run iteration 5: moved the Linux `HotkeySource` impl before `mod tests` (clippy items_after_test_module); macOS/Windows tests and both runtime smoke jobs already green in iteration 4.
+  - Runtime proof: host CI is fully green on Windows/Ubuntu/macOS tests plus both runtime smoke jobs (dry-run7). Runtime jobs now build first, launch the binary, capture a screenshot (scrot/screencapture), then run the smoke contract; artifacts upload for Linux and macOS.
+  - Runtime proof (2026-10-25): downloaded CI artifacts — Linux Xvfb/lavapipe screenshot shows the Mixer rendering (audio init fails as expected with no Pulse server); macOS capture is being retried with a longer settle time.
+  - macOS runtime: added an AppleScript window-bounds probe before capture to distinguish an off-screen placement bug from a paint delay.
+  - Placement fix: the Mixer now repositions when the real monitor work area arrives and is clamped inside it; macOS CI had placed the window at 1180,476 on a 1024x768 screen due to the 1600x900 first-frame fallback.
+  - macOS placement: `work_area` now uses CoreGraphics `CGDisplayBounds(CGMainDisplayID())` (logical points) instead of the lagging fallback; the Mixer repositions when the area changes.
+  - Visual proof complete (2026-10-25): macOS Mixer renders in CI after the CoreGraphics bounds fix (window at 604,344 on 1024x768; screenshot artifact) and Linux renders under Xvfb/lavapipe; both runtime jobs exit 0 on the smoke contract. Dry-run tags were deleted; no GitHub release was created.
+  - Publish guard: workflows pass `REQUIRE_SIGNING=${{ vars.EGUI_RELEASE_PUBLISH }}`; Windows fails without signtool/credentials, macOS fails without Developer ID/notary credentials, so enabling publish cannot upload unsigned artifacts. Verified locally: skip=0, require-without-creds=1, self-signed require+allow-untrusted=0.
+  - Linux packaging also fails closed when `REQUIRE_SIGNING=true` without `GPG_KEY_ID`; all three package jobs now enforce signatures before the publish job can run.
+  - Publish gate enabled (2026-10-25): `EGUI_RELEASE_PUBLISH=true` on the repository; tag dry run `v0.1.11-egui-dryrun8` proved fail-closed signing enforcement:
+    - Windows: `REQUIRE_SIGNING=true but no WINDOWS_CERT_* credentials are set`
+    - Ubuntu: `REQUIRE_SIGNING=true but GPG_KEY_ID is not set`
+    - macOS: `REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set`
+    - `Attach to release` skipped; no GitHub release created; tag deleted locally and remotely.
+  - Consequence: any future tag requires real Authenticode/Developer ID+notarization/GPG secrets before native artifacts can attach. Tauri release remains authoritative until those secrets exist.
+  - Signing credentials guide: added `docs/dev/signing-secrets.md` — Windows options (Azure Trusted Signing/cloud HSM vs exportable PFX vs self-hosted token), macOS Developer ID + app-specific password/notary profile, GPG key export, exact `gh secret set` commands and local verification.
+  - Credentials provisioned (2026-10-25): self-signed Authenticode PFX + password + allow-untrusted flag, GPG release key `55DBA7F0F2C4B8201F2ECE1D9AF723AEAAD4A580` (expires 2028), `MACOS_SIGNING_DISABLED=true`; package jobs now sign Windows/Linux and ship macOS ad-hoc during the transition. Dry-run tags skip release upload.
+  - Signed dry run 9: Windows and Ubuntu package jobs succeeded (Authenticode + GPG), Attach skipped; macOS failed because the GPG signing block ran there without an imported key. GPG signing is now Linux-only.
+  - Signed dry run 10 green: Windows Authenticode (self-signed), Ubuntu GPG (`SHA256SUMS.txt.asc`), macOS ad-hoc, Attach skipped; the separate Release workflow failed only on the non-semver tag as designed. Future dry runs use the `egui-dryrun-*` namespace so Release is not triggered.
+  - Clean dry run (2026-10-25, `egui-dryrun-1`): Egui release artifacts run success — Windows setup signed by `CN=VolumeControl Self-Signed (dev)`, Linux `SHA256SUMS.txt.asc` valid PGP block, macOS ad-hoc warning, Attach success (dry-run tag skip). Release workflow was not triggered. Artifacts inspected, tag deleted, no release created.
+  - Publish safety: semver tags now run a `Refuse untrusted artifacts` step; while `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE=true` or `MACOS_SIGNING_DISABLED=true`, publishing fails unless `ALLOW_UNTRUSTED_RELEASE=true` is set as an explicit waiver. Dry-run tags stay unaffected.
+  - Publish trust check skips non-semver dry-run tags before refusing, so `egui-dryrun-*` runs remain green while real semver tags require trusted signatures or an explicit waiver.
+  - Guard verification: `egui-dryrun-2` (trust gate active) green on all package jobs and Attach; logic checked for dry-run skip / untrusted refuse / waiver allow. All dry-run tags removed locally and remotely.
+  - UNTRUSTED prerelease path: `vX.Y.Z-unt.N` tags bypass the Tauri Release workflow, pass the trust gate only with `ALLOW_UNTRUSTED_RELEASE=true`, create a GitHub prerelease titled "(untrusted egui build)", and attach the signed/unsigned artifacts.
+  - Untrusted prerelease attempt 1: package jobs green; attach failed because the publish job lacked a git repo for `gh release upload` and the create block had not applied. Added `GH_REPO` and an explicit `gh release create --prerelease` step, then retagged.
+  - Untrusted prerelease attempt 2 created the prerelease and attached Windows/Linux assets, but the bulk `xargs` upload hit an uploads.github 404 and stopped before macOS. Uploads now run per file with dedupe and three retries; the partial prerelease and tag were removed before retagging.
+  - Untrusted prerelease manifest fix: attach now concatenates every per-platform SHA256SUMS.txt into one release-level manifest, signs it with GPG, and uploads payloads + the combined manifest (per-platform manifests are not uploaded). This prevents dedupe from selecting a manifest that lacks the other platforms' assets.
+  - Checksum manifests normalized to LF: the combined release manifest strips CRLF from Windows-generated lines and the Windows packager writes LF; `sha256sum -c` now passes on downloaded assets.
+  - UNTRUSTED prerelease published: https://github.com/dt418/volume-control/releases/tag/v0.1.11-unt.6 — assets: Windows setup + portable zip, macOS zip, Linux tar.gz, combined SHA256SUMS.txt and .asc; all package/attach jobs green. Hashes verified with Python hashlib (local `sha256sum -c` binary is broken); Windows setup carries the self-signed Authenticode signature, macOS is ad-hoc, Linux manifest is PGP-signed.
+  - Policy (2026-10-25): free builds intentionally ship without purchased certificates. Windows stays self-signed, macOS ad-hoc, published only as `vX.Y.Z-unt.N` prereleases with warnings; `ALLOW_UNTRUSTED_RELEASE=true` is the standing waiver. Trusted certificate/notarization deferred until funded.
+  - Release naming standardized: `volumecontrol-<ver>-<os>-<arch>[-role].<ext>` with lowercase hyphens and one arch vocabulary (`x86_64`/`arm64`); Windows setup/zip, macOS dmg+zip, Linux tar.gz/deb/rpm/AppImage. Updater asset names follow the same contract.
+  - Multi-format build attempt 1: Windows and macOS succeeded with the new names (dmg+zip); Ubuntu failed at rpmbuild because `_topdir` was relative and `%install` resolved SOURCES under BUILD. `_topdir` is now absolute.
+  - Published v0.1.11-unt.8 with canonical names and all formats: Windows setup+zip (x86_64), macOS dmg+zip (arm64), Linux tar.gz/deb/rpm/AppImage (x86_64), combined GPG-signed SHA256SUMS. Verified every hash with hashlib, deb control fields, rpm v3 x86_64, AppImage ELF x86-64, DMG `koly` trailer. Superseded unt.6/unt.7 removed.
+- Session 145 (2026-10-25) - Release 0.1.12 and official egui release path
+  - Bumped every version surface to 0.1.12 (`check-version-sync.sh v0.1.12` passes) and added the 0.1.12 changelog entry.
+  - `RELEASE_ENGINE=egui`: the Tauri Release jobs skip, and `egui-release.yml` now creates a normal (non-prerelease, latest) GitHub release with the native assets and an explicit untrusted-signature note.
+  - Preparations for PR + squash merge into `main`, then tag `v0.1.12`.

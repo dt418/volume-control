@@ -2,6 +2,29 @@
 
 All notable changes to VolumeControl are documented here.
 
+## [0.1.12] - 2026-10-25
+
+### Changed
+
+- The desktop UI now runs on the egui/eframe foundation: Mixer, Settings
+  (six tabs), Help, Overlay, and a fully egui-rendered tray menu replace the
+  previous Winit/WGPU scene renderer.
+- Settings and the tray share the same theme tokens; the tray menu is
+  keyboard-navigable and driven by the same actions as the legacy menu.
+- Material modes now cover Auto, Translucent, Acrylic, Blur, Mica,
+  Transparent, Liquid Glass (fallback), and Opaque, mapped per platform.
+- Release packaging is native to the egui host: NSIS setup + portable zip,
+  macOS dmg + zip, and Linux tar.gz/deb/rpm/AppImage, all with one combined
+  GPG-signed `SHA256SUMS.txt` and canonical asset names.
+- Free builds currently ship with a self-signed Windows certificate and an
+  ad-hoc macOS app; trusted Authenticode/notarization is deferred until
+  certificates are funded.
+
+### Removed
+
+- The native liquid-glass renderer crate (`crates/volumecontrol-host`) and the
+  Dioxus settings prototype.
+
 ## [0.1.11] - 2026-10-23
 
 ### Added

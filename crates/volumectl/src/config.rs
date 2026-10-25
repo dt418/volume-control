@@ -275,6 +275,13 @@ pub struct Config {
     /// How app names are shown in the mixer and app picker.
     #[serde(default)]
     pub app_label_style: AppLabelStyle,
+    /// Base UI font size in logical points (9..=24).
+    #[serde(default = "default_ui_font_size")]
+    pub ui_font_size: u8,
+}
+
+fn default_ui_font_size() -> u8 {
+    15
 }
 
 /// Beep feedback settings (mirrors VolumePro's `[Beep]` section).
@@ -333,6 +340,7 @@ impl Default for Config {
             autostart: false,
             language: Language::default(),
             app_label_style: AppLabelStyle::default(),
+            ui_font_size: default_ui_font_size(),
         }
     }
 }
@@ -645,6 +653,9 @@ pub fn validate(cfg: &Config) -> Result<(), ConfigValidationError> {
         ));
     }
     validate_hotkeys(cfg.hotkeys.as_ref().unwrap_or(&HotkeyBindings::default()))?;
+    if !(9..=24).contains(&cfg.ui_font_size) {
+        return Err(validation("ui_font_size", "must be between 9 and 24"));
+    }
     Ok(())
 }
 

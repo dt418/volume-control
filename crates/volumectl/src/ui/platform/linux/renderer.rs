@@ -739,6 +739,7 @@ mod tests {
             blur: true,
             high_contrast: false,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: dpi,
             work_area: WorkArea::new(0, 0, 2560, 1400),
         }
@@ -753,8 +754,10 @@ mod tests {
             theme: ThemeMode::Dark,
             material: MaterialMode::Auto,
             motion: MotionMode::Full,
+            accent: crate::ui::AccentMode::System,
             language: Language::En,
             status: crate::ui::UiStatus::Ready,
+            sessions: Vec::new(),
         }
     }
 

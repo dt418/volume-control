@@ -125,6 +125,10 @@ pub fn parse_ini(text: &str) -> Result<Config, ConfigError> {
                     ensure_unique(&mut seen, section_name, key)?;
                     config.app_label_style = parse_app_label_style(value)?;
                 }
+                "ui_font_size" => {
+                    ensure_unique(&mut seen, section_name, key)?;
+                    config.ui_font_size = parse_decimal(value, "ui_font_size")?;
+                }
                 _ => unknown_key(section_name, key),
             },
             "hotkeys" => match key {
@@ -261,6 +265,7 @@ pub fn serialize_ini(config: &Config) -> Result<String, ConfigError> {
         "app_label_style={}\n",
         config.app_label_style.as_str()
     ));
+    output.push_str(&format!("ui_font_size={}\n", config.ui_font_size));
 
     let default_hotkeys = HotkeyBindings::default();
     let hotkeys = config.hotkeys.as_ref().unwrap_or(&default_hotkeys);
@@ -463,6 +468,11 @@ fn parse_material(value: &str) -> Result<MaterialMode, ConfigError> {
     match value {
         "Auto" => Ok(MaterialMode::Auto),
         "Translucent" => Ok(MaterialMode::Translucent),
+        "Acrylic" => Ok(MaterialMode::Acrylic),
+        "Blur" => Ok(MaterialMode::Blur),
+        "Mica" => Ok(MaterialMode::Mica),
+        "Transparent" => Ok(MaterialMode::Transparent),
+        "LiquidGlass" => Ok(MaterialMode::LiquidGlass),
         "Opaque" => Ok(MaterialMode::Opaque),
         _ => Err(ini_error(
             "appearance.material",
@@ -515,6 +525,11 @@ fn material_name(value: MaterialMode) -> &'static str {
     match value {
         MaterialMode::Auto => "Auto",
         MaterialMode::Translucent => "Translucent",
+        MaterialMode::Acrylic => "Acrylic",
+        MaterialMode::Blur => "Blur",
+        MaterialMode::Mica => "Mica",
+        MaterialMode::Transparent => "Transparent",
+        MaterialMode::LiquidGlass => "LiquidGlass",
         MaterialMode::Opaque => "Opaque",
     }
 }
@@ -627,6 +642,7 @@ mod tests {
             autostart: true,
             language: Language::Vi,
             app_label_style: AppLabelStyle::FriendlyAndProcess,
+            ui_font_size: 20,
             hotkeys: Some(HotkeyBindings::for_modifier(HotkeyModifier::Alt)),
             blacklist: vec!["game.exe".into(), "chat.exe".into()],
             color_thresholds: ColorThresholds {
@@ -660,6 +676,26 @@ mod tests {
 
         // Parsing adopts the platform blacklist normalization contract.
         assert_eq!(decoded, expected);
+    }
+
+    #[test]
+    fn every_material_round_trips_through_ini() {
+        for material in [
+            MaterialMode::Auto,
+            MaterialMode::Translucent,
+            MaterialMode::Acrylic,
+            MaterialMode::Blur,
+            MaterialMode::Mica,
+            MaterialMode::Transparent,
+            MaterialMode::LiquidGlass,
+            MaterialMode::Opaque,
+        ] {
+            let mut config = full_config();
+            config.appearance.material = material;
+            let encoded = serialize_ini(&config).expect("serialize material");
+            let decoded = parse_ini(&encoded).expect("parse material");
+            assert_eq!(decoded.appearance.material, material, "{material:?}");
+        }
     }
 
     #[test]

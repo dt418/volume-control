@@ -92,6 +92,7 @@ mod tests {
             blur: true,
             high_contrast: false,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: 1.25,
             work_area: WorkArea::new(0, 0, 2560, 1400),
         }

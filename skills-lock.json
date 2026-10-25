@@ -55,6 +55,12 @@
       "skillPath": "plugins/systems-programming/skills/rust-async-patterns/SKILL.md",
       "computedHash": "9203b9abc8238c578887994730421879778720184b027859fecda3f76d31ab05"
     },
+    "rust-skills": {
+      "source": "leonardomso/rust-skills",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "9251cf53b34b0921f8216cf444ffaf714096aaa1dce17ba438f8e7421485d8e8"
+    },
     "slidev": {
       "source": "git@github.com:antfu/skills.git",
       "sourceUrl": "git@github.com:antfu/skills.git",

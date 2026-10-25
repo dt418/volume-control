@@ -77,6 +77,7 @@ fn detect_caps() -> UiCapabilities {
             blur: true,
             high_contrast: false,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: 1.0,
             work_area: FALLBACK_WORK_AREA,
         };
@@ -88,6 +89,7 @@ fn detect_caps() -> UiCapabilities {
             blur: true,
             high_contrast: false,
             reduced_motion: false,
+            reduced_transparency: false,
             dpi_scale: 1.0,
             work_area: FALLBACK_WORK_AREA,
         };
@@ -114,6 +116,7 @@ fn detect_caps() -> UiCapabilities {
         // in this first host slice. Renderer fallback remains deterministic.
         high_contrast: false,
         reduced_motion: false,
+        reduced_transparency: false,
         dpi_scale: scale,
         work_area,
     }
@@ -221,6 +224,17 @@ fn apply_action(ctx: &mut HostCtx, action: &AppAction) {
             ctx.config.appearance.motion = *motion;
             ctx.state.motion = *motion;
         }
+        AppAction::SetAccent(accent) => {
+            ctx.config.appearance.accent = *accent;
+            ctx.state.accent = *accent;
+        }
+        AppAction::SetLanguage(language) => {
+            ctx.config.language = *language;
+            ctx.state.language = *language;
+        }
+        AppAction::ApplyConfigDraft(_)
+        | AppAction::SetSessionVolume { .. }
+        | AppAction::ToggleSessionMute { .. } => log_deferred(action),
         AppAction::CheckUpdates => {
             // The fetch blocks for seconds; keep it off the AppKit main
             // thread. This host has no tray or overlay text channel yet

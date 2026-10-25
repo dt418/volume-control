@@ -1,5 +1,49 @@
 # Session Handoff
 
+## Session 144 (2026-10-25) - Release gate enabled with fail-closed signing
+
+- Summary: `EGUI_RELEASE_PUBLISH=true` is now set. Signing is mandatory when the gate is on; a tag dry run failed closed on all three platforms instead of uploading unsigned installers.
+- Evidence: run 40172128470 — Windows `REQUIRE_SIGNING=true but no WINDOWS_CERT_* credentials are set`, Ubuntu `REQUIRE_SIGNING=true but GPG_KEY_ID is not set`, macOS `REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set`; `Attach to release` skipped; no release for the tag; tag deleted.
+- Still required: real Authenticode PFX, Apple Developer ID + notarization credentials, GPG key. Until then any tag fails native packaging by design (Tauri release unaffected).
+## Session 143 (2026-10-25) - Signing paths, runtime CI, and git attributes
+
+- Summary: added Authenticode/notarization hooks that skip cleanly without credentials, Linux/macOS runtime smoke CI, and a complete `.gitattributes`.
+- Changes: `scripts/sign-windows.ps1` (new); `scripts/package-egui.ps1` calls it for host+setup; `scripts/package-egui.sh` keychain import, hardened runtime, notarytool/stapler, GPG; workflows map secrets and add runtime jobs; `docs/dev/packaging.md` secrets table + `gh variable set EGUI_RELEASE_PUBLISH`.
+- Verification: signing skip path exits 0; setup/zip/SHA256SUMS rebuilt; YAML parses. Real signing/notarization still needs repository secrets; Linux visual proof runs via CI Xvfb/lavapipe.
+## Session 142 (2026-10-25) - Native packaging names aligned with the updater
+
+- Summary: packaged artifacts now use the host updater's asset contract so one file set serves both the in-app updater and the native release pipeline.
+- Changes: Windows setup `VolumeControl_<ver>_x64-setup.exe`; Linux `volumecontrol-<ver>-linux-amd64.tar.gz`; macOS `volumecontrol-<ver>-macos.zip`. NSIS, package scripts, workflow globs, and `docs/dev/packaging.md` updated.
+- Verification: setup rebuilt (4.8 MB) + zip (6.3 MB) + SHA256SUMS; silent install into a temp dir installed `volumecontrol-host.exe`, silent uninstall removed everything.
+## Session 139 (2026-10-25) - Host binary name finalized
+
+- Summary: after removing the native host crate, the egui binary takes the plan's final name `volumecontrol-host` (no collision remains). Tauri `VolumeControl.exe` still exists for its separate packaging path.
+- Changes: `crates/volumecontrol-egui/Cargo.toml` bin name; `main.rs` usage; `scripts/app-uia.ps1`, `scripts/bench-ui.ps1`, `scripts/dev.ps1`, `.vscode/launch.json`, parity sweep.
+- Verification: `cargo run -p volumecontrol-egui -- --smoke --smoke-ms=4000` exit 0; CLI `get` returns 55; workspace check builds; clippy/fmt clean via hook.
+## Session 138 (2026-10-25) - Egui cutover: legacy renderer retired
+
+- Summary: user approved the cutover deviations (mixer 400×280, single hotkey owner, live installer untested, deletion). Removed the native liquid-glass host renderer and the Dioxus settings prototype; the egui host is now the renderer of record.
+- Changes:
+  - Deleted `crates/volumecontrol-host` (paint/app/sync + binary) and `crates/dioxus-settings-prototype`; workspace members updated.
+  - `crates/liquid_glass` stays in the workspace with its own tests (explicit plan decision).
+  - `crates/volumecontrol-egui` keeps the `VolumeControl-Egui` binary name; `src-tauri` remains the separately packaged Tauri app until packaging is switched.
+  - Docs: parity-sweep native column marked historical; runtime-adapter marked retired; `scripts/bench-ui.ps1` targets the egui binary only.
+- Verification: `cargo test --workspace --no-default-features` green (474 tests across remaining suites); clippy `-D warnings` and `cargo fmt --all --check` clean; workspace check builds.
+- Remaining: frontend/src-tauri packaging cutover (release pipeline), Linux/macOS runtime proof, live installer smoke.
+
+## Session 135 (2026-10-23) - Restore native WGPU surfaces and computer-use accessibility
+
+- Summary: fixed white/blank native surfaces, added deterministic main-loop rendering, per-window text viewports, and working AccessKit/computer-use controls.
+- Changes:
+  - `crates/volumecontrol-host/src/app.rs`: AccessKit adapters before first show, semantic trees after rebuilds, main-thread action dispatch, all-scene rendering.
+  - `crates/volumecontrol-host/src/paint.rs`: per-window `TextSystem`, actual physical-pixel sizes, nonzero dimension validation, normal WGPU surfaces.
+  - `crates/liquid_glass/src/text/system.rs`: nonzero initial Glyphon viewport and test accessor.
+  - `crates/volumectl/src/audio/mod.rs`: shared `default_backend()` supports Windows WASAPI.
+  - `docs/plans/rust-ui-liquid-glass/runtime-adapter.md`: Windows visual and computer-use proof recorded.
+  - `feature_list.json` and `claude-progress.md`: `vol-117`, Session 135.
+- Verification: workspace tests 462 passed across 11 suites; clippy `-D warnings` clean; fmt clean. Desktop screenshot has all four native surfaces and toast. Computer-use clicked Mute -> Unmute -> Mute.
+- Remaining: keyboard/IME integration and macOS/Linux visual proof; WebView paths remain until full parity.
+
 ## Session 131 (2026-10-23) - VolumeControl v0.1.11 version bump and release preparation
 
 - Summary: Bumped version from 0.1.10 to 0.1.11 across all package manifests and lock files, updated CHANGELOG.md, verified version sync, and prepared tag v0.1.11 for release publishing.

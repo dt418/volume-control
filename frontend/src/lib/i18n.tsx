@@ -77,6 +77,8 @@ const EN = {
   "settings.appLabelFriendly": "Friendly name",
   "settings.appLabelFriendlyAndProcess": "Friendly name + process",
   "settings.appLabelProcess": "Process name only",
+  "settings.fontSize": "Interface font size",
+  "settings.fontSizeHelp": "Base text size for every surface (9–24).",
   "settings.volumeStep": "Volume step",
   "settings.volumeStepHelp": "Small change applied by ↑ / ↓.",
   "settings.volumeStepLarge": "Large volume step",
@@ -202,6 +204,7 @@ const EN = {
   "help.shortcuts": "Keyboard shortcuts",
   "help.close": "Close",
 
+  "hotkey.conflictBadge": "hotkey already registered by another application",
   "hotkey.volumeUp": "Volume Up",
   "hotkey.volumeUpHelp": "Increase volume by the small step.",
   "hotkey.volumeDown": "Volume Down",
@@ -308,6 +311,8 @@ const VI: Record<TranslationKey, string> = {
   "settings.appLabelFriendly": "Tên thân thiện",
   "settings.appLabelFriendlyAndProcess": "Tên thân thiện + tên gốc",
   "settings.appLabelProcess": "Chỉ tên gốc",
+  "settings.fontSize": "Cỡ chữ giao diện",
+  "settings.fontSizeHelp": "Cỡ chữ cơ bản cho mọi màn hình (9–24).",
   "settings.volumeStep": "Bước âm lượng",
   "settings.volumeStepHelp": "Mức thay đổi nhỏ khi nhấn ↑ / ↓.",
   "settings.volumeStepLarge": "Bước âm lượng lớn",
@@ -433,6 +438,7 @@ const VI: Record<TranslationKey, string> = {
   "help.shortcuts": "Phím tắt bàn phím",
   "help.close": "Đóng",
 
+  "hotkey.conflictBadge": "hotkey already registered by another application",
   "hotkey.volumeUp": "Tăng âm lượng",
   "hotkey.volumeUpHelp": "Tăng âm lượng theo bước nhỏ.",
   "hotkey.volumeDown": "Giảm âm lượng",

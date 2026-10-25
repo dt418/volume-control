@@ -1,0 +1,22 @@
+advisors:
+  - name: default
+    enabled: false
+  - name: Advisor 2
+    model: google-antigravity/gemini-3.8-flash:high
+    enabled: false
+  - name: Advisor 3
+    model: google-antigravity/claude-sonnet-4-6:high
+    enabled: false
+  - name: Advisor 4
+    model: freeflow/deepseek-v4.1-flash-free:max
+    enabled: false
+  - name: Advisor 5
+    model: freeflow/mimo-v2.6-flash-free:xhigh
+    enabled: false
+  - name: Advisor 6
+    model: freeflow/glm-5.3-flash-free:max
+    enabled: false
+  - name: Advisor 7
+    model: freeflow/beam-free:max
+  - name: Advisor 8
+    model: magpie/zcode/GLM-5.3-Flash:max

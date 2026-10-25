@@ -1,0 +1,131 @@
+# Native packaging (egui host)
+
+The egui host packages without Tauri:
+
+| Platform | Script | Output |
+|---|---|---|
+| Windows | `scripts/package-egui.ps1` | `volumecontrol-<ver>-windows-<arch>-setup.exe` (NSIS, per-user), portable `.zip`, `SHA256SUMS.txt` |
+| Linux | `scripts/package-egui.sh` | `volumecontrol-<ver>-linux-<arch>.tar.gz`, `.deb`, `.rpm`, `.AppImage`, `SHA256SUMS.txt` |
+| macOS | `scripts/package-egui.sh` | `volumecontrol-<ver>-macos-<arch>.dmg` + `.zip` (`VolumeControl.app`), `SHA256SUMS.txt` |
+
+Version defaults to `src-tauri/tauri.conf.json` until versioning moves into the
+Rust workspace.
+
+## Asset naming
+
+Canonical form: `volumecontrol-<version>-<os>-<arch>[-role].<ext>` — all
+lowercase, hyphens, one architecture vocabulary (`x86_64`, `arm64`).
+
+| Platform | Assets |
+|---|---|
+| Windows | `...-windows-x86_64-setup.exe`, `...-windows-x86_64.zip` |
+| macOS | `...-macos-arm64.dmg`, `...-macos-arm64.zip` (or x86_64) |
+| Linux | `...-linux-x86_64.tar.gz`, `.deb`, `.rpm`, `.AppImage` |
+
+Debian control fields keep their native `Architecture: amd64`; RPM uses its
+own target names. Only the release filenames are normalized.
+
+## CI
+
+`.github/workflows/egui-release.yml` builds all three on tag pushes and manual
+dispatch. Use an `egui-dryrun-<n>` tag for dry runs: it exercises packaging
+without triggering the Release workflow, which only accepts semver `v*` tags
+and fails closed otherwise, verifies the artifacts, and uploads them to the workflow run. Release
+attachment is gated behind the repository variable `EGUI_RELEASE_PUBLISH=true`
+so the current Tauri release stays authoritative until a dry run and the
+signing decision are done.
+
+`.github/workflows/egui-host.yml` runs unit tests, clippy, and fmt on
+Windows/Linux/macOS for every change to the Rust crates.
+
+## Signing
+
+Where each credential comes from (costs, CA/B Forum hardware rules, exact
+commands): [`signing-secrets.md`](signing-secrets.md).
+
+| Secret | Platform | Purpose |
+|---|---|---|
+| `WINDOWS_CERT_PFX_BASE64` + `WINDOWS_CERT_PASSWORD` | Windows | base64 .pfx imported for `signtool` (inner exe + setup, timestamped, `/pa` verified) |
+| `WINDOWS_CERT_THUMBPRINT` | Windows | alternative: certificate already installed in the store |
+| `MACOS_SIGN_IDENTITY` + `MACOS_CERT_P12_BASE64` + `MACOS_CERT_PASSWORD` | macOS | Developer ID import into a temporary keychain and hardened-runtime signing |
+| `MACOS_NOTARY_PROFILE` or `MACOS_APPLE_ID` + `MACOS_TEAM_ID` + `MACOS_APP_PASSWORD` | macOS | `notarytool submit --wait` + `stapler staple` |
+| `GPG_KEY_ID` + `GPG_PRIVATE_KEY_BASE64` | Linux | import the base64 key and attach a detached ASCII signature for `SHA256SUMS.txt` |
+
+Every step degrades to a logged skip when its secrets are absent, so local and
+fork builds stay unsigned but complete. When the release gate is enabled
+(`EGUI_RELEASE_PUBLISH=true`), the workflows pass `REQUIRE_SIGNING=true`:
+missing signtool/credentials, an unset Developer ID, or missing notarization
+credentials then fail the build instead of shipping unsigned artifacts. Verify
+signatures after a real run:
+
+```powershell
+pwsh scripts/sign-windows.ps1 -Files <setup.exe>,<host.exe> -VerifyOnly
+```
+
+## Enabling release upload
+
+Artifacts upload to the workflow run unconditionally; attaching them to the
+GitHub release requires the repository variable:
+
+```bash
+gh variable set EGUI_RELEASE_PUBLISH --body true --repo dt418/volume-control
+```
+
+The project currently ships **free builds without purchased certificates**:
+Windows uses the self-signed certificate and macOS is ad-hoc. These are always
+published as `vX.Y.Z-unt.N` prereleases with an explicit warning; the trusted
+Authenticode/Developer ID path stays wired for when certificates are funded.
+
+Official free releases use a normal `vX.Y.Z` tag; with
+`RELEASE_ENGINE=egui`, the Tauri Release jobs are skipped and
+`egui-release.yml` creates the GitHub release and uploads the native assets.
+The release notes state that signatures are not trusted yet.
+
+Untrusted test releases can still use a `vX.Y.Z-unt.N` tag: it bypasses the Tauri Release
+workflow (`!v*-unt.*`) and creates a GitHub prerelease titled
+"(untrusted egui build)" directly from `egui-release.yml`.
+
+Publishing refuses artifacts while `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE=true` or
+`MACOS_SIGNING_DISABLED=true`; a semver tag fails at the `Refuse untrusted
+artifacts` step unless `ALLOW_UNTRUSTED_RELEASE=true` is set as an explicit
+waiver for a private/test release.
+
+While `MACOS_SIGNING_DISABLED=true`, macOS artifacts are signed ad-hoc and the
+job logs a warning; Windows Authenticode (a self-signed certificate is allowed
+only together with `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE`) and the Linux GPG
+signature stay mandatory.
+
+The variable is enabled on this repository (2026-10-25) together with
+fail-closed signing enforcement. A tag dry run (`v0.1.11-egui-dryrun8`) proved
+that no artifact can attach without signatures:
+
+| Platform | Gate failure |
+|---|---|
+| Windows | `REQUIRE_SIGNING=true but no WINDOWS_CERT_* credentials are set` |
+| Ubuntu | `REQUIRE_SIGNING=true but GPG_KEY_ID is not set` |
+| macOS | `REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set` |
+
+`Attach to release` stayed skipped, no GitHub release was created, and the tag
+was deleted. Real `WINDOWS_CERT_*` / `MACOS_*` / `GPG_*` secrets are still
+required before a signed tag can attach native artifacts; the Tauri release
+stays authoritative until then.
+
+## Not automated
+
+- Signing credentials themselves (they live in repository secrets).
+- Debian relations for `.rpm` are Fedora package names; both are built on the Ubuntu runner.
+- Winget manifest regeneration for the NSIS installer.
+
+Signing/notarization and winget require credentials and a real tag; they stay
+manual until the first verified native release.
+
+## Verified locally (2026-10-25)
+
+- `scripts/package-egui.ps1` → `VolumeControl_0.1.11_x64-setup.exe` (4.8 MB) +
+  portable zip (6.3 MB) + `SHA256SUMS.txt`.
+- Silent install into a temp dir produced the app and uninstaller; silent
+  uninstall removed both, the desktop shortcut, and the HKCU uninstall key.
+- Release binary `target/release/volumecontrol-host.exe --smoke --smoke-ms=4000`
+  exits 0; the CLI reports the live volume.
+- Release builds ignore `--debug-ui`/F12 (`Style::debug` exists only with
+  `debug_assertions`); a warning is logged.

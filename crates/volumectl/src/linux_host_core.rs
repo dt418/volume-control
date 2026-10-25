@@ -9,6 +9,7 @@ use std::time::SystemTime;
 
 use crate::audio::{AudioBackend, AudioError};
 use crate::config::{self, Config, HotkeyModifier};
+use crate::host_core::{NoopSessions, SessionsSource};
 use crate::hotkeys::HotkeyAction;
 use crate::ui::{AppAction, AppState, SurfaceId, SurfaceVisibility, UiCapabilities, UiStatus};
 
@@ -28,6 +29,7 @@ const MAX_AUDIO_RETRIES: u8 = 20;
 pub struct HostCore {
     audio: Option<Box<dyn AudioBackend>>,
     hotkeys: Option<Box<dyn HotkeySource>>,
+    sessions: Box<dyn SessionsSource>,
     config: Config,
     last_config_mtime: Option<SystemTime>,
     config_reload_requested: bool,
@@ -51,6 +53,7 @@ impl HostCore {
         let mut host = Self {
             audio,
             hotkeys,
+            sessions: Box::new(NoopSessions),
             config,
             last_config_mtime: None,
             config_reload_requested: false,
@@ -77,6 +80,7 @@ impl HostCore {
                 blur: false,
                 high_contrast: false,
                 reduced_motion: false,
+                reduced_transparency: false,
                 dpi_scale: 1.0,
                 work_area: crate::ui::WorkArea::new(0, 0, 1600, 900),
             },
@@ -142,6 +146,93 @@ impl HostCore {
         self.hotkeys = hotkeys;
     }
 
+    /// Set the authoritative platform audio-session source and publish it.
+    pub fn set_sessions_source(&mut self, sessions: Box<dyn SessionsSource>) {
+        self.sessions = sessions;
+        self.refresh_sessions();
+    }
+
+    /// Refresh the host-owned session list without renderer-owned copies.
+    pub fn refresh_sessions(&mut self) {
+        self.state.sessions = self
+            .sessions
+            .list()
+            .into_iter()
+            .map(|session| crate::ui::AudioSessionState {
+                id: session.id,
+                name: session.name,
+                process: session.process,
+                display_name: session.display_name,
+                volume_percent: session.pct,
+                muted: session.muted,
+                active: session.active,
+                system: session.system,
+            })
+            .collect();
+    }
+
+    /// Apply and persist a validated settings draft through the host path.
+    fn apply_settings_patch(
+        &mut self,
+        patch: crate::host_core::SettingsPatch,
+    ) -> Result<(), String> {
+        if let Some(theme) = patch.theme {
+            self.config.appearance.theme = match theme.as_str() {
+                "System" => crate::ui::ThemeMode::System,
+                "Light" => crate::ui::ThemeMode::Light,
+                "Dark" => crate::ui::ThemeMode::Dark,
+                other => return Err(format!("unknown theme: {other}")),
+            };
+        }
+        if let Some(material) = patch.material {
+            self.config.appearance.material = match material.as_str() {
+                "Auto" => crate::ui::MaterialMode::Auto,
+                "Translucent" => crate::ui::MaterialMode::Translucent,
+                "Opaque" => crate::ui::MaterialMode::Opaque,
+                other => return Err(format!("unknown material: {other}")),
+            };
+        }
+        if let Some(motion) = patch.motion {
+            self.config.appearance.motion = match motion.as_str() {
+                "Full" => crate::ui::MotionMode::Full,
+                "Reduced" => crate::ui::MotionMode::Reduced,
+                "Disabled" => crate::ui::MotionMode::Disabled,
+                other => return Err(format!("unknown motion: {other}")),
+            };
+        }
+        if let Some(accent) = patch.accent {
+            self.config.appearance.accent = match accent.as_str() {
+                "System" => crate::ui::AccentMode::System,
+                "Blue" => crate::ui::AccentMode::Blue,
+                "Green" => crate::ui::AccentMode::Green,
+                "Purple" => crate::ui::AccentMode::Purple,
+                "Orange" => crate::ui::AccentMode::Orange,
+                other => return Err(format!("unknown accent: {other}")),
+            };
+        }
+        if let Some(language) = patch.language {
+            self.config.language = match language.as_str() {
+                "en" => crate::config::Language::En,
+                "vi" => crate::config::Language::Vi,
+                other => return Err(format!("unknown language: {other}")),
+            };
+        }
+        if let Some(step) = patch.volume_step {
+            self.config.volume_step = step;
+        }
+        if let Some(large) = patch.volume_step_large {
+            self.config.volume_step_large = large;
+        }
+        if let Some(autostart) = patch.autostart {
+            self.config.autostart = autostart;
+            crate::autostart::set_enabled(autostart)?;
+        }
+        let saved = crate::config::save_validated(&self.config).map_err(|e| e.to_string())?;
+        self.apply_reloaded_config(saved, crate::host_core::config_mtime());
+        self.last_config_mtime = crate::host_core::config_mtime();
+        Ok(())
+    }
+
     /// Apply one renderer or translated hotkey intent.
     pub fn apply_action(&mut self, action: &AppAction) {
         match action {
@@ -164,15 +255,19 @@ impl HostCore {
                 self.mutate_audio(|audio| audio.set_volume(0.5));
             }
             AppAction::ShowSurface(surface) => {
-                self.state
-                    .set_visibility(*surface, SurfaceVisibility::Visible);
+                show_surface_exclusive(&mut self.state, *surface);
             }
             AppAction::HideSurface(surface) => {
                 self.state
                     .set_visibility(*surface, SurfaceVisibility::Hidden);
             }
             AppAction::ToggleSurface(surface) => {
-                self.state.toggle(*surface);
+                if self.state.is_visible(*surface) {
+                    self.state
+                        .set_visibility(*surface, SurfaceVisibility::Hidden);
+                } else {
+                    show_surface_exclusive(&mut self.state, *surface);
+                }
             }
             AppAction::SetTheme(theme) => {
                 self.config.appearance.theme = *theme;
@@ -185,6 +280,31 @@ impl HostCore {
             AppAction::SetMotion(motion) => {
                 self.config.appearance.motion = *motion;
                 self.sync_appearance();
+            }
+            AppAction::SetAccent(accent) => {
+                self.config.appearance.accent = *accent;
+                self.sync_appearance();
+            }
+            AppAction::SetLanguage(language) => {
+                self.config.language = *language;
+                self.sync_appearance();
+            }
+            AppAction::ApplyConfigDraft(patch) => {
+                if let Err(error) = self.apply_settings_patch(*patch.clone()) {
+                    log::warn!("Settings draft rejected: {error}");
+                }
+            }
+            AppAction::SetSessionVolume { id, percent } => {
+                if let Err(error) = self.sessions.set_volume(id, *percent) {
+                    log::warn!("Session volume failed: {error}");
+                }
+                self.refresh_sessions();
+            }
+            AppAction::ToggleSessionMute { id } => {
+                if let Err(error) = self.sessions.mute(id) {
+                    log::warn!("Session mute failed: {error}");
+                }
+                self.refresh_sessions();
             }
             AppAction::OpenTrayMenu => {
                 log::info!("Linux tray/menu unavailable in this host");
@@ -252,9 +372,8 @@ impl HostCore {
             }
         }
         self.sync_appearance();
+        self.refresh_sessions();
     }
-
-    /// Replace the current configuration after an already-loaded valid edit.
     ///
     /// The GTK adapter owns mtime/file I/O. This method keeps replacement and
     /// hotkey modifier synchronization deterministic and testable.
@@ -338,8 +457,27 @@ impl HostCore {
         self.state.theme = self.config.appearance.theme;
         self.state.material = self.config.appearance.material;
         self.state.motion = self.config.appearance.motion;
+        self.state.accent = self.config.appearance.accent;
         self.state.language = self.config.language;
     }
+}
+
+/// Show an interactive desktop surface while keeping competing menus closed.
+///
+/// The transient overlay remains independent because a volume change may show
+/// feedback while another surface is open.
+fn show_surface_exclusive(state: &mut AppState, surface: SurfaceId) {
+    if matches!(
+        surface,
+        SurfaceId::Mixer | SurfaceId::Settings | SurfaceId::Help
+    ) {
+        for competing in [SurfaceId::Mixer, SurfaceId::Settings, SurfaceId::Help] {
+            if competing != surface {
+                state.set_visibility(competing, SurfaceVisibility::Hidden);
+            }
+        }
+    }
+    state.set_visibility(surface, SurfaceVisibility::Visible);
 }
 
 fn hotkey_to_action(action: HotkeyAction, config: &Config) -> AppAction {
@@ -376,5 +514,25 @@ impl HotkeySource for crate::hotkeys_global::GlobalHotkeys {
 
     fn set_modifier(&self, modifier: HotkeyModifier) {
         self.set_modifier(modifier)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn showing_menu_surface_hides_other_menu_surfaces_but_keeps_overlay() {
+        let mut state = AppState::default();
+        state.show(SurfaceId::Overlay);
+        state.show(SurfaceId::Mixer);
+        state.show(SurfaceId::Help);
+
+        show_surface_exclusive(&mut state, SurfaceId::Settings);
+
+        assert!(state.is_visible(SurfaceId::Overlay));
+        assert!(state.is_visible(SurfaceId::Settings));
+        assert!(!state.is_visible(SurfaceId::Mixer));
+        assert!(!state.is_visible(SurfaceId::Help));
     }
 }

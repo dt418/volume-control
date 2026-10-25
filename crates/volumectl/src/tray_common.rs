@@ -45,6 +45,21 @@ impl TrayCommand {
             _ => None,
         }
     }
+
+    /// Convert the tray command to a host intent [`crate::ui::AppAction`].
+    pub fn to_app_action(self) -> crate::ui::AppAction {
+        match self {
+            Self::ToggleMute => crate::ui::AppAction::ToggleMute,
+            Self::Reset50 => crate::ui::AppAction::ResetVolume,
+            Self::OpenMixer => crate::ui::AppAction::ShowSurface(crate::ui::SurfaceId::Mixer),
+            Self::Help => crate::ui::AppAction::ShowSurface(crate::ui::SurfaceId::Help),
+            Self::Settings => crate::ui::AppAction::ShowSurface(crate::ui::SurfaceId::Settings),
+            Self::EditConfig => crate::ui::AppAction::OpenConfigLocation,
+            Self::ReloadConfig => crate::ui::AppAction::ReloadConfig,
+            Self::CheckUpdates => crate::ui::AppAction::CheckUpdates,
+            Self::Exit => crate::ui::AppAction::Exit,
+        }
+    }
 }
 
 /// A simple speaker glyph as RGBA pixels (32×32).
