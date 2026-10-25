@@ -13,17 +13,21 @@ use sha2::{Digest, Sha256};
 /// Installer filename for the current platform.
 #[must_use]
 pub fn asset_filename(version: &str) -> String {
+    let arch = match std::env::consts::ARCH {
+        "aarch64" | "arm64" => "arm64",
+        _ => "x86_64",
+    };
     #[cfg(target_os = "windows")]
     {
-        format!("VolumeControl_{version}_x64-setup.exe")
+        format!("volumecontrol-{version}-windows-{arch}-setup.exe")
     }
     #[cfg(target_os = "macos")]
     {
-        format!("volumecontrol-{version}-macos.zip")
+        format!("volumecontrol-{version}-macos-{arch}.dmg")
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        format!("volumecontrol-{version}-linux-amd64.tar.gz")
+        format!("volumecontrol-{version}-linux-{arch}.tar.gz")
     }
 }
 
@@ -85,8 +89,24 @@ pub fn validate_payload(path: &Path) -> Result<(), String> {
         return Err("downloaded file is not a Windows executable".into());
     }
     #[cfg(target_os = "macos")]
-    if &magic[..2] != b"PK" {
-        return Err("downloaded file is not a zip archive".into());
+    {
+        // UDIF/UDZO images end with a 512-byte trailer starting with "koly".
+        use std::io::{Seek, SeekFrom};
+        let length = file
+            .metadata()
+            .map_err(|e| format!("stat {}: {e}", path.display()))?
+            .len();
+        if length < 512 {
+            return Err("downloaded file is too small to be a DMG".into());
+        }
+        let mut trailer = [0u8; 512];
+        file.seek(SeekFrom::End(-512))
+            .map_err(|e| format!("seek {}: {e}", path.display()))?;
+        file.read_exact(&mut trailer)
+            .map_err(|e| format!("read DMG trailer: {e}"))?;
+        if &trailer[..4] != b"koly" {
+            return Err("downloaded file is not a DMG image".into());
+        }
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     if magic != [0x1f, 0x8b, 0x08, 0x00] && magic != [0x1f, 0x8b, 0x08, 0x08] {
@@ -166,7 +186,15 @@ pub fn launch_installer(installer: &Path, parent_pid: u32) -> Result<(), String>
             .spawn()
             .map_err(|e| format!("spawn installer helper: {e}"))?;
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        let _ = parent_pid;
+        std::process::Command::new("open")
+            .arg(&installer)
+            .spawn()
+            .map_err(|e| format!("open dmg: {e}"))?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let _ = parent_pid;
         std::process::Command::new(&installer)

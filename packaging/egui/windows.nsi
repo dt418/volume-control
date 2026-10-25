@@ -13,7 +13,7 @@ Unicode true
   !error "SRC must point at the directory holding volumecontrol-host.exe"
 !endif
 !ifndef OUT
-  !define OUT "VolumeControl_${VERSION}_x64-setup.exe"
+  !define OUT "volumecontrol-${VERSION}-windows-x86_64-setup.exe"
 !endif
 !ifndef ICON
   !define ICON "..\..\src-tauri\icons\icon.ico"

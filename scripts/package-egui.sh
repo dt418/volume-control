@@ -3,8 +3,8 @@
 #
 #   scripts/package-egui.sh [version] [output-root]
 #
-# Linux:  volumecontrol-<ver>-linux-amd64.tar.gz (binary + .desktop + icon)
-# macOS:  volumecontrol-<ver>-macos.zip (.app bundle)
+# Linux:  volumecontrol-<ver>-linux-<x86_64|arm64>.tar.gz/.deb/.rpm/.AppImage
+# macOS:  volumecontrol-<ver>-macos-<x86_64|arm64>.dmg and .zip
 # Names match the host updater's asset contract.
 # plus SHA256SUMS.txt. Signing/notarization is out of scope.
 set -euo pipefail
@@ -42,7 +42,106 @@ Install (per user):
 The host needs a compositor for translucency; blur is compositor-controlled
 (KWin, GNOME Blur My Shell, Hyprland).
 EOF
-    tar -C "$stage" -czf "$out_root/volumecontrol-$version-linux-amd64.tar.gz" .
+    namearch=x86_64
+    [[ "$(uname -m)" == "aarch64" ]] && namearch=arm64
+    tar -C "$stage" -czf "$out_root/volumecontrol-$version-linux-$namearch.tar.gz" .
+
+    # Debian/Ubuntu package
+    debarch=amd64
+    [[ "$(uname -m)" == "aarch64" ]] && debarch=arm64
+    debroot="$stage/deb"
+    rm -rf "$debroot"
+    mkdir -p "$debroot/DEBIAN" "$debroot/usr/bin" \
+      "$debroot/usr/share/applications" \
+      "$debroot/usr/share/icons/hicolor/128x128/apps"
+    install -m 0755 target/release/volumecontrol-host "$debroot/usr/bin/volumecontrol-host"
+    install -m 0644 packaging/egui/volumecontrol.desktop "$debroot/usr/share/applications/volumecontrol.desktop"
+    install -m 0644 src-tauri/icons/128x128.png "$debroot/usr/share/icons/hicolor/128x128/apps/volumecontrol.png"
+    cat > "$debroot/DEBIAN/control" <<VC_DEB
+Package: volumecontrol
+Version: $version
+Section: sound
+Priority: optional
+Architecture: $debarch
+Maintainer: VolumeControl <releases@volumecontrol.local>
+Depends: libpulse0, libgtk-3-0, libayatana-appindicator3-1, libxkbcommon0, libxkbcommon-x11-0, libgl1
+Description: Volume mixer, hotkeys, and on-screen volume HUD
+ Native egui host with a system tray, global hotkeys, per-app mixer,
+ volume overlay, and draft-based settings.
+VC_DEB
+    if command -v dpkg-deb >/dev/null 2>&1; then
+      dpkg-deb --build --root-owner-group "$debroot" \
+        "$out_root/volumecontrol-$version-linux-$namearch.deb" >/dev/null
+    else
+      echo "dpkg-deb not found; skipping .deb" >&2
+    fi
+
+    # Fedora/RHEL package
+    if command -v rpmbuild >/dev/null 2>&1; then
+      rpmbase=${version%%-*}
+      rpmrel=${version#*-}
+      [[ "$rpmrel" == "$version" ]] && rpmrel=1
+      rpmarch=$(uname -m)
+      top="$stage/rpmbuild"
+      rm -rf "$top"
+      mkdir -p "$top"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+      cp target/release/volumecontrol-host "$top/SOURCES/"
+      cp packaging/egui/volumecontrol.desktop "$top/SOURCES/"
+      cp src-tauri/icons/128x128.png "$top/SOURCES/volumecontrol.png"
+      cat > "$top/SPECS/volumecontrol.spec" <<VC_RPM
+%global debug_package %{nil}
+Name: volumecontrol
+Version: $rpmbase
+Release: $rpmrel
+Summary: Volume mixer, hotkeys, and on-screen volume HUD
+License: MIT
+Requires: pulseaudio-libs, gtk3, libayatana-appindicator-gtk3, libxkbcommon
+Source0: volumecontrol-host
+Source1: volumecontrol.desktop
+Source2: volumecontrol.png
+%description
+Native egui host with a system tray, global hotkeys, per-app mixer,
+volume overlay, and draft-based settings.
+%install
+mkdir -p %{buildroot}/usr/bin %{buildroot}/usr/share/applications \
+  %{buildroot}/usr/share/icons/hicolor/128x128/apps
+install -m 0755 %{_sourcedir}/volumecontrol-host %{buildroot}/usr/bin/volumecontrol-host
+install -m 0644 %{_sourcedir}/volumecontrol.desktop %{buildroot}/usr/share/applications/volumecontrol.desktop
+install -m 0644 %{_sourcedir}/volumecontrol.png %{buildroot}/usr/share/icons/hicolor/128x128/apps/volumecontrol.png
+%files
+/usr/bin/volumecontrol-host
+/usr/share/applications/volumecontrol.desktop
+/usr/share/icons/hicolor/128x128/apps/volumecontrol.png
+VC_RPM
+      rpmbuild -bb --define "_topdir $top" --target "$rpmarch" \
+        "$top/SPECS/volumecontrol.spec" >/dev/null
+      find "$top/RPMS" -name '*.rpm' -exec cp {} "$out_root/volumecontrol-$version-linux-$namearch.rpm" \;
+    else
+      echo "rpmbuild not found; skipping .rpm" >&2
+    fi
+
+    # Portable AppImage
+    if command -v appimagetool >/dev/null 2>&1; then
+      appdir="$stage/VolumeControl.AppDir"
+      rm -rf "$appdir"
+      mkdir -p "$appdir/usr/bin" "$appdir/usr/share/applications" \
+        "$appdir/usr/share/icons/hicolor/128x128/apps"
+      install -m 0755 target/release/volumecontrol-host "$appdir/usr/bin/volumecontrol-host"
+      install -m 0644 packaging/egui/volumecontrol.desktop "$appdir/volumecontrol.desktop"
+      install -m 0644 packaging/egui/volumecontrol.desktop "$appdir/usr/share/applications/volumecontrol.desktop"
+      install -m 0644 src-tauri/icons/128x128.png "$appdir/volumecontrol.png"
+      cp src-tauri/icons/128x128.png "$appdir/.DirIcon"
+      install -m 0644 src-tauri/icons/128x128.png \
+        "$appdir/usr/share/icons/hicolor/128x128/apps/volumecontrol.png"
+      printf '%s\n' '#!/bin/sh' 'exec "$APPDIR/usr/bin/volumecontrol-host" "$@"' > "$appdir/AppRun"
+      chmod 0755 "$appdir/AppRun"
+      apparch=x86_64
+      [[ "$(uname -m)" == "aarch64" ]] && apparch=aarch64
+      ARCH="$apparch" APPIMAGE_EXTRACT_AND_RUN=1 appimagetool "$appdir" \
+        "$out_root/volumecontrol-$version-linux-$namearch.AppImage" >/dev/null
+    else
+      echo "appimagetool not found; skipping .AppImage" >&2
+    fi
     ;;
   Darwin)
     arch=$(uname -m)
@@ -92,7 +191,13 @@ EOF
         codesign --force --deep --sign - "$app" || echo "ad-hoc signing failed" >&2
       fi
     fi
-    (cd "$stage" && zip -qry "../volumecontrol-$version-macos.zip" "VolumeControl.app")
+    namearch=x86_64
+    [[ "$(uname -m)" == "arm64" || "$(uname -m)" == "aarch64" ]] && namearch=arm64
+    dmg="$out_root/volumecontrol-$version-macos-$namearch.dmg"
+    zip="$out_root/volumecontrol-$version-macos-$namearch.zip"
+    rm -f "$dmg"
+    hdiutil create -volname "Volume Control" -srcfolder "$app" \
+      -ov -format UDZO "$dmg" >/dev/null
     notary_profile=${MACOS_NOTARY_PROFILE:-}
     apple_id=${MACOS_APPLE_ID:-${APPLE_ID:-}}
     team_id=${MACOS_TEAM_ID:-${APPLE_TEAM_ID:-}}
@@ -100,16 +205,13 @@ EOF
     if [[ "$identity" != "-" ]] && { [[ -n "$notary_profile" ]] || \
         { [[ -n "$apple_id" && -n "$team_id" && -n "$app_password" ]]; }; }; then
       if [[ -n "$notary_profile" ]]; then
-        xcrun notarytool submit "$out_root/volumecontrol-$version-macos.zip" \
-          --keychain-profile "$notary_profile" --wait
+        xcrun notarytool submit "$dmg" --keychain-profile "$notary_profile" --wait
       else
-        xcrun notarytool submit "$out_root/volumecontrol-$version-macos.zip" \
-          --apple-id "$apple_id" --team-id "$team_id" \
+        xcrun notarytool submit "$dmg" --apple-id "$apple_id" --team-id "$team_id" \
           --password "$app_password" --wait
       fi
-      xcrun stapler staple "$app"
-      rm -f "$out_root/volumecontrol-$version-macos.zip"
-      (cd "$stage" && zip -qry "../volumecontrol-$version-macos.zip" "VolumeControl.app")
+      xcrun stapler staple "$dmg"
+      rm -f "$zip"
     elif [[ "$identity" != "-" ]]; then
       if [[ "${REQUIRE_SIGNING:-false}" == "true" ]]; then
         echo "REQUIRE_SIGNING=true but notarization credentials are not set" >&2
@@ -117,6 +219,7 @@ EOF
       fi
       echo "notarization skipped (MACOS_NOTARY_PROFILE or Apple credentials not set)" >&2
     fi
+    (cd "$stage" && zip -qry "../$(basename "$zip")" "VolumeControl.app")
     ;;
   *)
     echo "unsupported platform: $(uname -s)" >&2
@@ -127,7 +230,7 @@ esac
 (
   cd "$out_root"
   rm -f SHA256SUMS.txt
-  for f in volumecontrol-*.tar.gz volumecontrol-*.zip VolumeControl-*.zip; do
+  for f in volumecontrol-*.tar.gz volumecontrol-*.dmg volumecontrol-*.zip volumecontrol-*.deb volumecontrol-*.rpm volumecontrol-*.AppImage; do
     [[ -e "$f" ]] || continue
     if command -v sha256sum >/dev/null 2>&1; then
       sha256sum "$f" >> SHA256SUMS.txt

@@ -10,11 +10,11 @@ use volumecontrol_egui::updates::{
 fn asset_name_matches_release_contract() {
     let name = asset_filename("0.2.0");
     #[cfg(target_os = "windows")]
-    assert_eq!(name, "VolumeControl_0.2.0_x64-setup.exe");
+    assert_eq!(name, "volumecontrol-0.2.0-windows-x86_64-setup.exe");
     #[cfg(target_os = "macos")]
-    assert_eq!(name, "volumecontrol-0.2.0-macos.zip");
+    assert_eq!(name, "volumecontrol-0.2.0-macos-arm64.dmg");
     #[cfg(all(unix, not(target_os = "macos")))]
-    assert_eq!(name, "volumecontrol-0.2.0-linux-amd64.tar.gz");
+    assert_eq!(name, "volumecontrol-0.2.0-linux-x86_64.tar.gz");
 }
 
 #[test]
@@ -37,7 +37,11 @@ fn checksum_verification_rejects_corruption() {
     #[cfg(target_os = "windows")]
     file.write_all(b"MZpayload").unwrap();
     #[cfg(target_os = "macos")]
-    file.write_all(b"PK\x03\x04payload").unwrap();
+    {
+        let mut dmg = vec![0u8; 512];
+        dmg[..4].copy_from_slice(b"koly");
+        file.write_all(&dmg).unwrap();
+    }
     #[cfg(all(unix, not(target_os = "macos")))]
     file.write_all(b"\x1f\x8b\x08\x00payload").unwrap();
     drop(file);

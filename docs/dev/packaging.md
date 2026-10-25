@@ -4,12 +4,26 @@ The egui host packages without Tauri:
 
 | Platform | Script | Output |
 |---|---|---|
-| Windows | `scripts/package-egui.ps1` | `VolumeControl_<ver>_x64-setup.exe` (NSIS, per-user; updater contract), portable `.zip`, `SHA256SUMS.txt` |
-| Linux | `scripts/package-egui.sh` | `volumecontrol-<ver>-linux-amd64.tar.gz` (binary + `.desktop` + icon), `SHA256SUMS.txt` |
-| macOS | `scripts/package-egui.sh` | `volumecontrol-<ver>-macos.zip` (`VolumeControl.app`), `SHA256SUMS.txt` |
+| Windows | `scripts/package-egui.ps1` | `volumecontrol-<ver>-windows-<arch>-setup.exe` (NSIS, per-user), portable `.zip`, `SHA256SUMS.txt` |
+| Linux | `scripts/package-egui.sh` | `volumecontrol-<ver>-linux-<arch>.tar.gz`, `.deb`, `.rpm`, `.AppImage`, `SHA256SUMS.txt` |
+| macOS | `scripts/package-egui.sh` | `volumecontrol-<ver>-macos-<arch>.dmg` + `.zip` (`VolumeControl.app`), `SHA256SUMS.txt` |
 
 Version defaults to `src-tauri/tauri.conf.json` until versioning moves into the
 Rust workspace.
+
+## Asset naming
+
+Canonical form: `volumecontrol-<version>-<os>-<arch>[-role].<ext>` — all
+lowercase, hyphens, one architecture vocabulary (`x86_64`, `arm64`).
+
+| Platform | Assets |
+|---|---|
+| Windows | `...-windows-x86_64-setup.exe`, `...-windows-x86_64.zip` |
+| macOS | `...-macos-arm64.dmg`, `...-macos-arm64.zip` (or x86_64) |
+| Linux | `...-linux-x86_64.tar.gz`, `.deb`, `.rpm`, `.AppImage` |
+
+Debian control fields keep their native `Architecture: amd64`; RPM uses its
+own target names. Only the release filenames are normalized.
 
 ## CI
 
@@ -94,7 +108,7 @@ stays authoritative until then.
 ## Not automated
 
 - Signing credentials themselves (they live in repository secrets).
-- Linux `.deb`/`.rpm`/AppImage; the tarball installs per user.
+- Debian relations for `.rpm` are Fedora package names; both are built on the Ubuntu runner.
 - Winget manifest regeneration for the NSIS installer.
 
 Signing/notarization and winget require credentials and a real tag; they stay

@@ -53,8 +53,8 @@ Verify locally before tagging:
 ```powershell
 $env:WINDOWS_CERT_PFX_BASE64 = '<base64>'
 $env:WINDOWS_CERT_PASSWORD = '<password>'
-pwsh scripts/sign-windows.ps1 -Files output\egui\VolumeControl_<ver>_x64-setup.exe
-pwsh scripts/sign-windows.ps1 -Files output\egui\VolumeControl_<ver>_x64-setup.exe -VerifyOnly
+pwsh scripts/sign-windows.ps1 -Files output\egui\volumecontrol-<ver>-windows-x64-setup.exe
+pwsh scripts/sign-windows.ps1 -Files output\egui\volumecontrol-<ver>-windows-x64-setup.exe -VerifyOnly
 ```
 
 `-VerifyOnly` must print `Successfully verified` and exit 0.
