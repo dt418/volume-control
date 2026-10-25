@@ -57,6 +57,11 @@ GitHub release requires the repository variable:
 gh variable set EGUI_RELEASE_PUBLISH --body true --repo dt418/volume-control
 ```
 
+The project currently ships **free builds without purchased certificates**:
+Windows uses the self-signed certificate and macOS is ad-hoc. These are always
+published as `vX.Y.Z-unt.N` prereleases with an explicit warning; the trusted
+Authenticode/Developer ID path stays wired for when certificates are funded.
+
 Untrusted prereleases use a `vX.Y.Z-unt.N` tag: it bypasses the Tauri Release
 workflow (`!v*-unt.*`) and creates a GitHub prerelease titled
 "(untrusted egui build)" directly from `egui-release.yml`.

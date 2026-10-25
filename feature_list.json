@@ -23,6 +23,7 @@
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25: free-build policy — self-signed Windows + ad-hoc macOS released as vX.Y.Z-unt.N prereleases; trusted cert/notarization deferred until funded.",
         "2026-10-25: UNTRUSTED prerelease v0.1.11-unt.6 published with all assets; hashes verified via hashlib; self-signed Windows, ad-hoc macOS, GPG-signed combined manifest.",
         "2026-10-25: checksum manifests normalized to LF (combined manifest + Windows packager); sha256sum -c verification on release assets pending the next tag.",
         "2026-10-25: prerelease uploads use one combined, GPG-signed SHA256SUMS.txt covering all platforms instead of per-platform manifests.",
