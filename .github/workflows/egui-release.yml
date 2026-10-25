@@ -140,6 +140,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PRIVATE_KEY_BASE64: ${{ secrets.GPG_PRIVATE_KEY_BASE64 }}
         run: |
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Tag $TAG is a dry run (not semver); skipping release upload."
@@ -150,14 +152,18 @@ jobs:
               --title "VolumeControl $TAG (untrusted egui build)" \
               --notes "UNTRUSTED build: Windows installer is self-signed (untrusted chain), macOS app is unsigned/ad-hoc, Linux checksums are GPG-signed. Do not use for general distribution."
           fi
-          declare -A seen
+          mkdir -p release
+          find dist -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.tar.gz' \) \
+            -exec cp -n {} release/ \;
+          find dist -type f -name 'SHA256SUMS.txt' -print0 |
+            xargs -0 cat | sort -u > release/SHA256SUMS.txt
+          if [[ -n "$GPG_KEY_ID" && -n "$GPG_PRIVATE_KEY_BASE64" ]]; then
+            printf '%s' "$GPG_PRIVATE_KEY_BASE64" | base64 -d | gpg --batch --import
+            gpg --batch --yes --armor --detach-sign -u "$GPG_KEY_ID" release/SHA256SUMS.txt
+          fi
           failed=0
           while IFS= read -r -d '' file; do
             base=$(basename "$file")
-            if [[ -n "${seen[$base]:-}" ]]; then
-              continue
-            fi
-            seen[$base]=1
             uploaded=false
             for attempt in 1 2 3; do
               if gh release upload "$TAG" "$file" --clobber; then
@@ -171,6 +177,5 @@ jobs:
               echo "could not upload $base" >&2
               failed=1
             fi
-          done < <(find dist -type f \( -name 'VolumeControl*' -o -name 'volumecontrol-*' \
-            -o -name 'SHA256SUMS.txt' -o -name 'SHA256SUMS.txt.asc' \) -print0)
+          done < <(find release -type f -print0)
           exit "$failed"
