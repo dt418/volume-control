@@ -138,11 +138,17 @@ jobs:
       - name: Upload native artifacts
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Tag $TAG is a dry run (not semver); skipping release upload."
             exit 0
+          fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease \
+              --title "VolumeControl $TAG (untrusted egui build)" \
+              --notes "UNTRUSTED build: Windows installer is self-signed (untrusted chain), macOS app is unsigned/ad-hoc, Linux checksums are GPG-signed. Do not use for general distribution."
           fi
           find dist -type f \( -name 'VolumeControl*' -o -name 'volumecontrol-*' \
           -o -name 'SHA256SUMS.txt' -o -name 'SHA256SUMS.txt.asc' \) -print0 |
