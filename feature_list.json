@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T04:00",
+  "last_updated": "2026-10-26T04:25",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -23,6 +23,7 @@
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25 dry-run iteration 5: Linux clippy items_after_test_module fixed; macOS/Windows tests and Linux runtime smoke (Xvfb/lavapipe, screenshot artifact) green.",
         "2026-10-25 dry-run iteration 4: VibrancyState fields kept cross-platform with allow(dead_code); libxkbcommon-x11-0 added for the Xvfb runtime job.",
         "2026-10-25 dry-run iteration 3: platform-aware blacklist/payload tests, cfg-gated vibrancy state, single-instance test allows, and main unused_mut; Windows check green, full matrix re-tagged.",
         "2026-10-25 dry-run iteration 2: fixed macOS ToggleSessionMute arm and added libxdo-dev for tray-icon; CI re-tagged.",

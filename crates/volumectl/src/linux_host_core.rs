@@ -502,6 +502,21 @@ fn hotkey_to_action(action: HotkeyAction, config: &Config) -> AppAction {
     }
 }
 
+#[cfg(target_os = "linux")]
+impl HotkeySource for crate::hotkeys_global::GlobalHotkeys {
+    fn try_recv(&self) -> Option<HotkeyAction> {
+        self.try_recv()
+    }
+
+    fn listener_failure(&self) -> Option<String> {
+        self.listener_failure()
+    }
+
+    fn set_modifier(&self, modifier: HotkeyModifier) {
+        self.set_modifier(modifier)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -519,20 +534,5 @@ mod tests {
         assert!(state.is_visible(SurfaceId::Settings));
         assert!(!state.is_visible(SurfaceId::Mixer));
         assert!(!state.is_visible(SurfaceId::Help));
-    }
-}
-
-#[cfg(target_os = "linux")]
-impl HotkeySource for crate::hotkeys_global::GlobalHotkeys {
-    fn try_recv(&self) -> Option<HotkeyAction> {
-        self.try_recv()
-    }
-
-    fn listener_failure(&self) -> Option<String> {
-        self.listener_failure()
-    }
-
-    fn set_modifier(&self, modifier: HotkeyModifier) {
-        self.set_modifier(modifier)
     }
 }
