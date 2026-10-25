@@ -4531,3 +4531,9 @@ fn get_window_pid_x11() -> Option<u32> {
   - Visual proof complete (2026-10-25): macOS Mixer renders in CI after the CoreGraphics bounds fix (window at 604,344 on 1024x768; screenshot artifact) and Linux renders under Xvfb/lavapipe; both runtime jobs exit 0 on the smoke contract. Dry-run tags were deleted; no GitHub release was created.
   - Publish guard: workflows pass `REQUIRE_SIGNING=${{ vars.EGUI_RELEASE_PUBLISH }}`; Windows fails without signtool/credentials, macOS fails without Developer ID/notary credentials, so enabling publish cannot upload unsigned artifacts. Verified locally: skip=0, require-without-creds=1, self-signed require+allow-untrusted=0.
   - Linux packaging also fails closed when `REQUIRE_SIGNING=true` without `GPG_KEY_ID`; all three package jobs now enforce signatures before the publish job can run.
+  - Publish gate enabled (2026-10-25): `EGUI_RELEASE_PUBLISH=true` on the repository; tag dry run `v0.1.11-egui-dryrun8` proved fail-closed signing enforcement:
+    - Windows: `REQUIRE_SIGNING=true but no WINDOWS_CERT_* credentials are set`
+    - Ubuntu: `REQUIRE_SIGNING=true but GPG_KEY_ID is not set`
+    - macOS: `REQUIRE_SIGNING=true but MACOS_SIGN_IDENTITY is not set`
+    - `Attach to release` skipped; no GitHub release created; tag deleted locally and remotely.
+  - Consequence: any future tag requires real Authenticode/Developer ID+notarization/GPG secrets before native artifacts can attach. Tauri release remains authoritative until those secrets exist.
