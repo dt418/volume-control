@@ -117,6 +117,19 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+      - name: Refuse untrusted artifacts unless waived
+        env:
+          UNTRUSTED_WINDOWS: ${{ secrets.WINDOWS_ALLOW_UNTRUSTED_SIGNATURE }}
+          MACOS_DISABLED: ${{ vars.MACOS_SIGNING_DISABLED }}
+          ALLOW_UNTRUSTED_RELEASE: ${{ vars.ALLOW_UNTRUSTED_RELEASE }}
+        run: |
+          if [[ "$UNTRUSTED_WINDOWS" == "true" || "$MACOS_DISABLED" == "true" ]]; then
+            if [[ "$ALLOW_UNTRUSTED_RELEASE" != "true" ]]; then
+              echo "Refusing to publish: Windows uses a self-signed certificate and/or macOS is unsigned." >&2
+              echo "Replace them with a trusted certificate/Developer ID, or set ALLOW_UNTRUSTED_RELEASE=true explicitly." >&2
+              exit 1
+            fi
+          fi
       - name: Upload native artifacts
         env:
           GH_TOKEN: ${{ github.token }}

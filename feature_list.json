@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T10:10",
+  "last_updated": "2026-10-26T10:40",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -23,6 +23,7 @@
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25: publish job refuses self-signed Windows/ad-hoc macOS unless ALLOW_UNTRUSTED_RELEASE=true; dry-run tags unaffected.",
         "2026-10-25: egui-dryrun-1 packaging green; downloaded artifacts confirm Authenticode signer CN=VolumeControl Self-Signed (dev) and a PGP-signed SHA256SUMS.txt.asc; macOS ad-hoc per user; no Release run, no release, tag deleted.",
         "2026-10-25: signed dry run 10 green on all package jobs (Windows Authenticode self-signed, Linux GPG .asc, macOS ad-hoc); dry-run tags moved to egui-dryrun-* so Release is not triggered.",
         "2026-10-25: signed dry run — Windows Authenticode and Linux GPG jobs succeeded; macOS GPG block restricted to Linux after failing without an imported key.",

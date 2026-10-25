@@ -57,6 +57,11 @@ GitHub release requires the repository variable:
 gh variable set EGUI_RELEASE_PUBLISH --body true --repo dt418/volume-control
 ```
 
+Publishing refuses artifacts while `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE=true` or
+`MACOS_SIGNING_DISABLED=true`; a semver tag fails at the `Refuse untrusted
+artifacts` step unless `ALLOW_UNTRUSTED_RELEASE=true` is set as an explicit
+waiver for a private/test release.
+
 While `MACOS_SIGNING_DISABLED=true`, macOS artifacts are signed ad-hoc and the
 job logs a warning; Windows Authenticode (a self-signed certificate is allowed
 only together with `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE`) and the Linux GPG
