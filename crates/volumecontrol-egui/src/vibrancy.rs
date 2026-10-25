@@ -7,7 +7,6 @@
 //! (egui translucent visuals still read as glass); the platform hooks live
 //! behind `cfg` so a later task can attach them without touching call sites.
 
-#[cfg(target_os = "windows")]
 use std::collections::HashMap;
 
 use volumectl::ui::{MaterialMode, SurfaceId};
@@ -61,10 +60,9 @@ pub fn title_for(surface: SurfaceId, language: volumectl::config::Language) -> S
 
 /// Cache of applied effects keyed by live HWND.
 #[derive(Debug, Default)]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub struct VibrancyState {
-    #[cfg(target_os = "windows")]
     applied: HashMap<isize, (SurfaceId, MaterialMode, bool)>,
-    #[cfg(target_os = "windows")]
     taskbar_hidden: std::collections::HashSet<isize>,
 }
 
