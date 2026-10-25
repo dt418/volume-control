@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T02:45",
+  "last_updated": "2026-10-26T03:05",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -23,6 +23,7 @@
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25 dry-run iteration 2: fixed macOS ToggleSessionMute arm and added libxdo-dev for tray-icon; CI re-tagged.",
         "2026-10-25 dry run: v0.1.11-egui-dryrun triggered egui packaging + host CI and failed closed (release preflight rejected the tag). Fixed CI deps (GTK/appindicator/pulse), NSIS install, and macOS action match; re-run pending.",
         "2026-10-25: signing hooks (Authenticode PFX/thumbprint, Developer ID keychain+notarytool, GPG) with clean skip; CI runtime smoke on Ubuntu Xvfb/lavapipe and advisory macOS; .gitattributes binary/LF rules. Skip path and packaging re-verified locally.",
         "2026-10-25: native package names match updates::asset_filename (VolumeControl_<ver>_x64-setup.exe, volumecontrol-<ver>-linux-amd64.tar.gz, volumecontrol-<ver>-macos.zip); silent install/uninstall re-verified.",

@@ -234,7 +234,7 @@ fn apply_action(ctx: &mut HostCtx, action: &AppAction) {
         }
         AppAction::ApplyConfigDraft(_)
         | AppAction::SetSessionVolume { .. }
-        | AppAction::SetSessionMute { .. } => log_deferred(action),
+        | AppAction::ToggleSessionMute { .. } => log_deferred(action),
         AppAction::CheckUpdates => {
             // The fetch blocks for seconds; keep it off the AppKit main
             // thread. This host has no tray or overlay text channel yet
