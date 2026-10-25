@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T04:50",
+  "last_updated": "2026-10-26T05:10",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -23,6 +23,7 @@
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25: Linux runtime artifact shows the rendered Mixer under Xvfb/lavapipe; macOS runtime job passes --smoke and is retried with a longer settle time for the screenshot.",
         "2026-10-25: host CI green on Windows/Ubuntu/macOS (tests+clippy+fmt) and both runtime smoke jobs (dry-run7); runtime jobs capture screenshots before running --smoke.",
         "2026-10-25 dry-run iteration 5: Linux clippy items_after_test_module fixed; macOS/Windows tests and Linux runtime smoke (Xvfb/lavapipe, screenshot artifact) green.",
         "2026-10-25 dry-run iteration 4: VibrancyState fields kept cross-platform with allow(dead_code); libxkbcommon-x11-0 added for the Xvfb runtime job.",

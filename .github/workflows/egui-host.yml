@@ -119,7 +119,7 @@ jobs:
           mkdir -p output/captures
           ./target/debug/volumecontrol-host --surface=mixer &
           app=$!
-          sleep 6
+          sleep 12
           screencapture -x output/captures/macos-mixer.png || true
           kill "$app" 2>/dev/null || true
           wait "$app" 2>/dev/null || true

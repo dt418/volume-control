@@ -4524,3 +4524,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - Dry-run iteration 4: restored cross-platform `VibrancyState` fields with a non-Windows dead_code allow (tests read them) and added `libxkbcommon-x11-0` for winit X11; re-tagging.
   - Dry-run iteration 5: moved the Linux `HotkeySource` impl before `mod tests` (clippy items_after_test_module); macOS/Windows tests and both runtime smoke jobs already green in iteration 4.
   - Runtime proof: host CI is fully green on Windows/Ubuntu/macOS tests plus both runtime smoke jobs (dry-run7). Runtime jobs now build first, launch the binary, capture a screenshot (scrot/screencapture), then run the smoke contract; artifacts upload for Linux and macOS.
+  - Runtime proof (2026-10-25): downloaded CI artifacts — Linux Xvfb/lavapipe screenshot shows the Mixer rendering (audio init fails as expected with no Pulse server); macOS capture is being retried with a longer settle time.
