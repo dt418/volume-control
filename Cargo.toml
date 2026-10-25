@@ -5,7 +5,7 @@ default-members = ["crates/volumectl", "crates/liquid_glass", "crates/volumecont
 
 [workspace.package]
 edition = "2021"
-version = "0.1.11"
+version = "0.1.12"
 license = "MIT"
 rust-version = "1.95"
 

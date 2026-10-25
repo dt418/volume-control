@@ -20,6 +20,8 @@ permissions:
 jobs:
   preflight:
     name: Validate release tag
+    # Set RELEASE_ENGINE=egui to make egui-release.yml the release owner.
+    if: vars.RELEASE_ENGINE != 'egui'
     runs-on: ubuntu-24.04
     outputs:
       release_tag: ${{ steps.release-tag.outputs.release_tag }}
@@ -84,6 +86,7 @@ jobs:
 
   validate:
     name: Validate desktop artifacts
+    if: vars.RELEASE_ENGINE != 'egui'
     needs: preflight
     uses: ./.github/workflows/desktop-validation.yml
     with:
@@ -93,6 +96,7 @@ jobs:
 
   publish:
     name: Create GitHub release
+    if: vars.RELEASE_ENGINE != 'egui'
     needs: [preflight, validate]
     runs-on: ubuntu-24.04
     steps:

@@ -76,7 +76,12 @@ Windows uses the self-signed certificate and macOS is ad-hoc. These are always
 published as `vX.Y.Z-unt.N` prereleases with an explicit warning; the trusted
 Authenticode/Developer ID path stays wired for when certificates are funded.
 
-Untrusted prereleases use a `vX.Y.Z-unt.N` tag: it bypasses the Tauri Release
+Official free releases use a normal `vX.Y.Z` tag; with
+`RELEASE_ENGINE=egui`, the Tauri Release jobs are skipped and
+`egui-release.yml` creates the GitHub release and uploads the native assets.
+The release notes state that signatures are not trusted yet.
+
+Untrusted test releases can still use a `vX.Y.Z-unt.N` tag: it bypasses the Tauri Release
 workflow (`!v*-unt.*`) and creates a GitHub prerelease titled
 "(untrusted egui build)" directly from `egui-release.yml`.
 

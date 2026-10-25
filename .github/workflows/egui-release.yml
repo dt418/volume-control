@@ -158,9 +158,9 @@ jobs:
             exit 0
           fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --prerelease \
-              --title "VolumeControl $TAG (untrusted egui build)" \
-              --notes "UNTRUSTED build: Windows installer is self-signed (untrusted chain), macOS app is unsigned/ad-hoc, Linux checksums are GPG-signed. Do not use for general distribution."
+            gh release create "$TAG" --latest \
+              --title "VolumeControl $TAG" \
+              --notes "Free egui build. Signatures are not trusted yet: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Windows SmartScreen and macOS Gatekeeper will warn until purchase-backed certificates are configured."
           fi
           mkdir -p release
           find dist -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) \

@@ -4555,3 +4555,7 @@ fn get_window_pid_x11() -> Option<u32> {
   - Release naming standardized: `volumecontrol-<ver>-<os>-<arch>[-role].<ext>` with lowercase hyphens and one arch vocabulary (`x86_64`/`arm64`); Windows setup/zip, macOS dmg+zip, Linux tar.gz/deb/rpm/AppImage. Updater asset names follow the same contract.
   - Multi-format build attempt 1: Windows and macOS succeeded with the new names (dmg+zip); Ubuntu failed at rpmbuild because `_topdir` was relative and `%install` resolved SOURCES under BUILD. `_topdir` is now absolute.
   - Published v0.1.11-unt.8 with canonical names and all formats: Windows setup+zip (x86_64), macOS dmg+zip (arm64), Linux tar.gz/deb/rpm/AppImage (x86_64), combined GPG-signed SHA256SUMS. Verified every hash with hashlib, deb control fields, rpm v3 x86_64, AppImage ELF x86-64, DMG `koly` trailer. Superseded unt.6/unt.7 removed.
+- Session 145 (2026-10-25) - Release 0.1.12 and official egui release path
+  - Bumped every version surface to 0.1.12 (`check-version-sync.sh v0.1.12` passes) and added the 0.1.12 changelog entry.
+  - `RELEASE_ENGINE=egui`: the Tauri Release jobs skip, and `egui-release.yml` now creates a normal (non-prerelease, latest) GitHub release with the native assets and an explicit untrusted-signature note.
+  - Preparations for PR + squash merge into `main`, then tag `v0.1.12`.
