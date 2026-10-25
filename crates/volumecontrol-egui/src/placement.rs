@@ -37,7 +37,7 @@ pub fn logical_size(surface: SurfaceId) -> (f32, f32) {
 }
 
 /// Work area the placement math positions into, in physical device pixels.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WorkArea {
     pub x: f32,
     pub y: f32,

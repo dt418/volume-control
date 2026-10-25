@@ -178,6 +178,7 @@ pub struct VolumeControlApp {
     overlay_started: Instant,
     parked: bool,
     root_positioned: bool,
+    root_area: Option<crate::placement::WorkArea>,
     settings_draft: SettingsDraft,
     settings_tab: Tab,
     settings_error: Option<FieldError>,
@@ -312,6 +313,7 @@ impl VolumeControlApp {
             overlay_started: Instant::now(),
             parked: false,
             root_positioned: false,
+            root_area: None,
             settings_draft,
             settings_tab: options.settings_tab.unwrap_or_default(),
             settings_error: None,
@@ -737,7 +739,15 @@ impl VolumeControlApp {
     /// receiving UI passes (eframe 0.36 skips `App::ui` for hidden roots).
     fn sync_root_visibility(&mut self, ctx: &egui::Context) {
         let place_root = |ctx: &egui::Context, area: WorkArea| {
-            let frame = frame_for(SurfaceId::Mixer, &area, ctx.pixels_per_point());
+            let mut frame = frame_for(SurfaceId::Mixer, &area, ctx.pixels_per_point());
+            // Never place the Mixer outside the monitor, even when the first
+            // frame still reports the 1600×900 fallback (macOS headless).
+            let min_x = area.x as i32;
+            let min_y = area.y as i32;
+            let max_x = (area.x + area.width - frame.width as f32).max(area.x) as i32;
+            let max_y = (area.y + area.height - frame.height as f32).max(area.y) as i32;
+            frame.x = frame.x.clamp(min_x, max_x.max(min_x));
+            frame.y = frame.y.clamp(min_y, max_y.max(min_y));
             let scale = ctx.pixels_per_point();
             ctx.send_viewport_cmd(ViewportCommand::OuterPosition(egui::pos2(
                 (frame.x as f32 / scale).round(),
@@ -750,8 +760,18 @@ impl VolumeControlApp {
         };
 
         if self.root_shown && !self.root_positioned {
-            place_root(ctx, self.work_area(ctx));
+            let area = self.work_area(ctx);
+            place_root(ctx, area);
             self.root_positioned = true;
+            self.root_area = Some(area);
+        } else if self.root_shown {
+            // The first frames can report the fallback area before the window
+            // server reports the real monitor; reposition when it changes.
+            let area = self.work_area(ctx);
+            if self.root_area != Some(area) {
+                place_root(ctx, area);
+                self.root_area = Some(area);
+            }
         }
         if self.root_shown != self.root_visible_last {
             if self.root_shown {
@@ -765,6 +785,7 @@ impl VolumeControlApp {
                 ctx.send_viewport_cmd(ViewportCommand::OuterPosition(PARKED_POSITION));
                 ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(1.0, 1.0)));
                 self.root_positioned = false;
+                self.root_area = None;
             }
             self.parked = !self.root_shown;
             self.root_visible_last = self.root_shown;
