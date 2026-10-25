@@ -66,6 +66,46 @@ impl Default for LaunchOptions {
     }
 }
 
+/// Main display bounds in logical points (macOS).
+///
+/// `ViewportInfo::monitor_size` can lag or report the initial fallback on a
+/// headless runner; CoreGraphics has the real screen.
+#[cfg(target_os = "macos")]
+fn macos_display_bounds(ctx: &egui::Context) -> Option<WorkArea> {
+    #[repr(C)]
+    struct CGPoint {
+        x: f64,
+        y: f64,
+    }
+    #[repr(C)]
+    struct CGSize {
+        width: f64,
+        height: f64,
+    }
+    #[repr(C)]
+    struct CGRect {
+        origin: CGPoint,
+        size: CGSize,
+    }
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGMainDisplayID() -> u32;
+        fn CGDisplayBounds(display: u32) -> CGRect;
+    }
+    // SAFETY: CoreGraphics returns the bounds of the main display; no
+    // ownership is transferred.
+    let rect = unsafe { CGDisplayBounds(CGMainDisplayID()) };
+    let scale = f64::from(ctx.pixels_per_point().max(0.1));
+    (rect.size.width > 0.0 && rect.size.height > 0.0).then(|| {
+        WorkArea::new(
+            (rect.origin.x / scale) as f32,
+            (rect.origin.y / scale) as f32,
+            (rect.size.width / scale) as f32,
+            (rect.size.height / scale) as f32,
+        )
+    })
+}
+
 /// Stable viewport id for a surface.
 #[must_use]
 pub fn viewport_id(surface: SurfaceId) -> ViewportId {
@@ -703,6 +743,10 @@ impl VolumeControlApp {
     }
 
     fn work_area(&self, ctx: &egui::Context) -> WorkArea {
+        #[cfg(target_os = "macos")]
+        if let Some(area) = macos_display_bounds(ctx) {
+            return area;
+        }
         #[cfg(target_os = "windows")]
         {
             use windows_sys::Win32::Foundation::RECT;

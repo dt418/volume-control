@@ -4527,3 +4527,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - Runtime proof (2026-10-25): downloaded CI artifacts — Linux Xvfb/lavapipe screenshot shows the Mixer rendering (audio init fails as expected with no Pulse server); macOS capture is being retried with a longer settle time.
   - macOS runtime: added an AppleScript window-bounds probe before capture to distinguish an off-screen placement bug from a paint delay.
   - Placement fix: the Mixer now repositions when the real monitor work area arrives and is clamped inside it; macOS CI had placed the window at 1180,476 on a 1024x768 screen due to the 1600x900 first-frame fallback.
+  - macOS placement: `work_area` now uses CoreGraphics `CGDisplayBounds(CGMainDisplayID())` (logical points) instead of the lagging fallback; the Mixer repositions when the area changes.

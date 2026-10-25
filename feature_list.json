@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T05:45",
+  "last_updated": "2026-10-26T06:05",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -23,6 +23,7 @@
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25: macOS work area now read from CGDisplayBounds; Mixer repositions when the area resolves.",
         "2026-10-25: macOS probe showed 1180,476 on a 1024x768 screen; Mixer now repositions on work-area change and clamps inside the monitor.",
         "2026-10-25: macOS runtime probe added (window bounds via AppleScript) after two captures showed no window though the app was frontmost.",
         "2026-10-25: Linux runtime artifact shows the rendered Mixer under Xvfb/lavapipe; macOS runtime job passes --smoke and is retried with a longer settle time for the screenshot.",
