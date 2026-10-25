@@ -23,6 +23,7 @@
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25: prerelease upload hardened (per-file dedupe + retries) after a bulk upload 404 stopped before the macOS asset.",
         "2026-10-25: untrusted prerelease upload fixed with GH_REPO and explicit gh release create --prerelease; package jobs already green.",
         "2026-10-25: vX.Y.Z-unt.N prerelease path creates an untrusted egui prerelease; Release workflow excludes these tags; ALLOW_UNTRUSTED_RELEASE=true waiver enabled.",
         "2026-10-25: egui-dryrun-2 green with trust gate active; logic check covers dry-run skip, untrusted refusal, and waiver allow; all dry-run tags removed.",

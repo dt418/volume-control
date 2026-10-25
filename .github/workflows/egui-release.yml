@@ -150,6 +150,27 @@ jobs:
               --title "VolumeControl $TAG (untrusted egui build)" \
               --notes "UNTRUSTED build: Windows installer is self-signed (untrusted chain), macOS app is unsigned/ad-hoc, Linux checksums are GPG-signed. Do not use for general distribution."
           fi
-          find dist -type f \( -name 'VolumeControl*' -o -name 'volumecontrol-*' \
-          -o -name 'SHA256SUMS.txt' -o -name 'SHA256SUMS.txt.asc' \) -print0 |
-            xargs -0 gh release upload "$TAG" --clobber
+          declare -A seen
+          failed=0
+          while IFS= read -r -d '' file; do
+            base=$(basename "$file")
+            if [[ -n "${seen[$base]:-}" ]]; then
+              continue
+            fi
+            seen[$base]=1
+            uploaded=false
+            for attempt in 1 2 3; do
+              if gh release upload "$TAG" "$file" --clobber; then
+                uploaded=true
+                break
+              fi
+              echo "upload failed for $base (attempt $attempt); retrying" >&2
+              sleep 3
+            done
+            if [[ "$uploaded" != true ]]; then
+              echo "could not upload $base" >&2
+              failed=1
+            fi
+          done < <(find dist -type f \( -name 'VolumeControl*' -o -name 'volumecontrol-*' \
+            -o -name 'SHA256SUMS.txt' -o -name 'SHA256SUMS.txt.asc' \) -print0)
+          exit "$failed"
