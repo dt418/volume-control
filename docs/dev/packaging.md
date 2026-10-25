@@ -57,6 +57,10 @@ GitHub release requires the repository variable:
 gh variable set EGUI_RELEASE_PUBLISH --body true --repo dt418/volume-control
 ```
 
+Untrusted prereleases use a `vX.Y.Z-unt.N` tag: it bypasses the Tauri Release
+workflow (`!v*-unt.*`) and creates a GitHub prerelease titled
+"(untrusted egui build)" directly from `egui-release.yml`.
+
 Publishing refuses artifacts while `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE=true` or
 `MACOS_SIGNING_DISABLED=true`; a semver tag fails at the `Refuse untrusted
 artifacts` step unless `ALLOW_UNTRUSTED_RELEASE=true` is set as an explicit

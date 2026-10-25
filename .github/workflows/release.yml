@@ -5,7 +5,8 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    # `${tag}-unt.*` are egui-only untrusted prereleases; Release must not run.
+    tags: ["v*", "!v*-unt.*"]
   workflow_dispatch:
     inputs:
       tag:

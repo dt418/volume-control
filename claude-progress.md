@@ -4545,3 +4545,4 @@ fn get_window_pid_x11() -> Option<u32> {
   - Publish safety: semver tags now run a `Refuse untrusted artifacts` step; while `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE=true` or `MACOS_SIGNING_DISABLED=true`, publishing fails unless `ALLOW_UNTRUSTED_RELEASE=true` is set as an explicit waiver. Dry-run tags stay unaffected.
   - Publish trust check skips non-semver dry-run tags before refusing, so `egui-dryrun-*` runs remain green while real semver tags require trusted signatures or an explicit waiver.
   - Guard verification: `egui-dryrun-2` (trust gate active) green on all package jobs and Attach; logic checked for dry-run skip / untrusted refuse / waiver allow. All dry-run tags removed locally and remotely.
+  - UNTRUSTED prerelease path: `vX.Y.Z-unt.N` tags bypass the Tauri Release workflow, pass the trust gate only with `ALLOW_UNTRUSTED_RELEASE=true`, create a GitHub prerelease titled "(untrusted egui build)", and attach the signed/unsigned artifacts.

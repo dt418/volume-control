@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T11:20",
+  "last_updated": "2026-10-26T11:55",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -23,6 +23,7 @@
       "user_visible_behavior": "Planned polish after the current fix-ui round: unify session-row icon/color states with the live volume, improve HUD/notification contrast and typography, tighten Settings spacing, and verify tray icon/menu visuals against the legacy capture.",
       "status": "in_progress",
       "verification": [
+        "2026-10-25: vX.Y.Z-unt.N prerelease path creates an untrusted egui prerelease; Release workflow excludes these tags; ALLOW_UNTRUSTED_RELEASE=true waiver enabled.",
         "2026-10-25: egui-dryrun-2 green with trust gate active; logic check covers dry-run skip, untrusted refusal, and waiver allow; all dry-run tags removed.",
         "2026-10-25: trust refusal skips non-semver dry-run tags first; only semver tags require trusted signatures or ALLOW_UNTRUSTED_RELEASE.",
         "2026-10-25: publish job refuses self-signed Windows/ad-hoc macOS unless ALLOW_UNTRUSTED_RELEASE=true; dry-run tags unaffected.",
