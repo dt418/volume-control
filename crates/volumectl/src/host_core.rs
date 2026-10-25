@@ -688,6 +688,12 @@ impl AppCore {
     pub fn set_volume_percent(&mut self, percent: u8) -> Result<(), String> {
         let target = f32::from(percent.min(100)) / 100.0;
         self.audio.set_volume(target).map_err(|e| e.to_string())?;
+        if target > 0.0 {
+            // Positive direct writes resume audible output, matching the
+            // AppAction path; ignore unmute failures as that path does.
+            let _ = self.audio.set_mute(false);
+            self.mute_restore_volume = None;
+        }
         self.publish_confirmed_state(true);
         Ok(())
     }

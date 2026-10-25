@@ -231,6 +231,28 @@ fn core_with(sink: Arc<RecordingSink>) -> AppCore {
     .unwrap()
 }
 
+#[test]
+fn cli_volume_write_unmutes_like_an_action() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = AppCore::new_without_native_hotkeys(
+        Box::new(StubAudio {
+            state: Mutex::new(VolumeState {
+                volume: 0.5,
+                muted: true,
+            }),
+        }),
+        Config::default(),
+        HotkeyModifier::CtrlAlt,
+        sink,
+        None,
+    )
+    .unwrap();
+    core.set_volume_percent(40).unwrap();
+    let state = core.last_state();
+    assert!(!state.muted, "positive volume write must unmute");
+    assert_eq!(state.percent(), 40);
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn linux_core_uses_a_supported_sessions_source() {
