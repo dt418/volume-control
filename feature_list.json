@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T12:20",
+  "last_updated": "2026-10-25T15:55",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -15,6 +15,28 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-122",
+      "priority": 99,
+      "area": "release",
+      "title": "Egui release blockers: honest launch, CLI, updater, and signing isolation",
+      "user_visible_behavior": "Autostart stays tray-resident, a second launch reveals the Mixer, CLI set/mute failures surface instead of reporting fake success, failed settings saves keep the draft, and release builds compile before signing material is exposed.",
+      "status": "passing",
+      "verification": [
+        "cargo test -p volumecontrol-egui -p volumectl",
+        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings",
+        "cargo fmt --all --check",
+        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-egui.ps1 -SkipBuild",
+        "bash -n scripts/package-egui.sh and YAML parse of .github/workflows/egui-release.yml"
+      ],
+      "evidence": [
+        "326 volumectl + 26 egui + 16 host tests passed; clippy 'No issues found'; fmt clean.",
+        "Background launch parked the root at (-32000,-32000,1,1); a second launch surfaced the Mixer at 400x280.",
+        "SkipBuild packaging produced setup.exe, zip, and SHA256SUMS.txt.",
+        "Version extraction mapped egui-dryrun-0.1.12 -> 0.1.12 and 0.1.11-unt.8 -> 0.1.11."
+      ],
+      "notes": "Linux updater install branch is compile-checked in CI only on this Windows host."
+    },
     {
       "id": "vol-120",
       "priority": 120,
@@ -59,7 +81,8 @@
         "2026-10-25: signing hooks (Authenticode PFX/thumbprint, Developer ID keychain+notarytool, GPG) with clean skip; CI runtime smoke on Ubuntu Xvfb/lavapipe and advisory macOS; .gitattributes binary/LF rules. Skip path and packaging re-verified locally.",
         "2026-10-25: native package names match updates::asset_filename (VolumeControl_<ver>_x64-setup.exe, volumecontrol-<ver>-linux-amd64.tar.gz, volumecontrol-<ver>-macos.zip); silent install/uninstall re-verified.",
         "2026-10-25: native packaging — NSIS setup.exe (silent install/uninstall verified, shortcuts+registry cleaned), portable zip, Linux tar.gz and macOS .app scripts, gated release workflow; release build no longer references Style::debug.",
-        "2026-10-25: UI/UX pass under way — tray popup, material modes, 26–28 px icon targets, type ramp, mixer 400×280, dropdown check/icon/label order, padded footer; docs in docs/dev/ui-system.md."],
+        "2026-10-25: UI/UX pass under way — tray popup, material modes, 26–28 px icon targets, type ramp, mixer 400×280, dropdown check/icon/label order, padded footer; docs in docs/dev/ui-system.md."
+      ],
       "evidence": [],
       "notes": "Requested by the user to be scheduled after the current goal. Start from docs/references/egui-design-tokens.md and docs/references/legacy-app/feature-reference.md."
     },

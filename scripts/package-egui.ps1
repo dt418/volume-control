@@ -12,7 +12,8 @@ param(
     [string]$Version,
     [string]$OutputRoot = "output/egui",
     [string]$Makensis,
-    [string]$SignTool
+    [string]$SignTool,
+    [switch]$SkipBuild
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,9 +38,11 @@ try {
     }
     if (-not $Makensis) { throw 'makensis.exe not found; install NSIS or pass -Makensis' }
 
-    Write-Host "building volumecontrol-host $Version"
-    cargo build --release -p volumecontrol-egui
-    if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
+    if (-not $SkipBuild) {
+        Write-Host "building volumecontrol-host $Version"
+        cargo build --release -p volumecontrol-egui
+        if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
+    }
 
     $outDir = Join-Path $root $OutputRoot
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null

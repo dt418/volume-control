@@ -94,16 +94,10 @@ pub fn apply(core: &mut AppCore, verb: Verb) -> Result<(), String> {
             if pct > 100 {
                 return Err(format!("volume {pct}% exceeds 100%"));
             }
-            core.handle_action(AppAction::SetVolumePercent {
-                percent: pct as u16,
-            });
+            core.set_volume_percent(pct)?;
         }
-        Verb::Mute(Some(muted)) => {
-            core.handle_action(AppAction::SetMute { muted });
-        }
-        Verb::Mute(None) => {
-            core.handle_action(AppAction::ToggleMute);
-        }
+        Verb::Mute(Some(muted)) => core.set_muted(muted)?,
+        Verb::Mute(None) => core.toggle_muted()?,
     }
     Ok(())
 }

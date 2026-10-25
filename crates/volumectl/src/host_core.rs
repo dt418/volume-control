@@ -664,6 +664,40 @@ impl AppCore {
         Ok(())
     }
 
+    /// Validate and apply a settings draft, then persist it.
+    ///
+    /// Unlike `ApplyConfigDraft`, a persistence failure is returned so callers
+    /// keep the dirty draft instead of presenting unsaved edits as saved.
+    pub fn apply_settings_draft(
+        &mut self,
+        patch: crate::host_core::SettingsPatch,
+    ) -> Result<(), String> {
+        self.update_settings(patch)?;
+        self.save_config()
+    }
+
+    /// Set the master volume for CLI callers, propagating backend errors.
+    pub fn set_volume_percent(&mut self, percent: u8) -> Result<(), String> {
+        let target = f32::from(percent.min(100)) / 100.0;
+        self.audio.set_volume(target).map_err(|e| e.to_string())?;
+        self.publish_confirmed_state(true);
+        Ok(())
+    }
+
+    /// Set the master mute state for CLI callers, propagating backend errors.
+    pub fn set_muted(&mut self, muted: bool) -> Result<(), String> {
+        self.audio.set_mute(muted).map_err(|e| e.to_string())?;
+        self.publish_confirmed_state(true);
+        Ok(())
+    }
+
+    /// Toggle the master mute state for CLI callers, propagating backend errors.
+    pub fn toggle_muted(&mut self) -> Result<(), String> {
+        self.audio.toggle_mute().map_err(|e| e.to_string())?;
+        self.publish_confirmed_state(true);
+        Ok(())
+    }
+
     /// Show a short text card on the overlay (host-facing seam used by the
     /// tray update check and other asynchronous results).
     pub fn show_overlay_text(&mut self, text: String) {

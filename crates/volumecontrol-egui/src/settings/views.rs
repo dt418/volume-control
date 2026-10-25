@@ -972,7 +972,7 @@ fn capture_keys(ui: &egui::Ui, draft: &mut SettingsDraft, recorder: &mut Recorde
                 ctrl: modifiers.ctrl,
                 alt: modifiers.alt,
                 shift: modifiers.shift,
-                meta: modifiers.command,
+                meta: modifiers.mac_cmd,
             },
         };
         match recorder.feed(key_event) {

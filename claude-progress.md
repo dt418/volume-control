@@ -1,3 +1,11 @@
+- Session 145 (2026-10-25) - Egui release blockers fixed
+  - Launch: added `--background` for autostart (tray-resident, root parked) and made a second launch signal the resident instance to reveal the Mixer.
+  - CLI: uses the real audio backend and propagates set/mute errors; the degraded backend is GUI-only.
+  - Settings: persistence failure restores the on-disk config, keeps the dirty draft, and surfaces the error via `AppCore::apply_settings_draft`.
+  - Updater: Linux extracts the tarball and installs `volumecontrol-host` under `~/.local` instead of executing the archive; Windows escapes apostrophes in the PowerShell helper path.
+  - Workflow: compiles in a secret-free step, scopes each platform's signing secrets to its own package step, parses dry-run tags to the numeric semver core, marks `-unt` releases prerelease/non-latest, and supports `SKIP_BUILD`/`-SkipBuild`.
+  - Release CI: compile step runs before any signing secret is exported; each platform's package step sees only its own secrets; dry-run tags extract the numeric semver core; `-unt` releases publish as prereleases and never claim GitHub latest.
+  - Verification: 326 volumectl + 26 egui + 16 host tests, clippy `-D warnings`, fmt clean; background/second-launch behavior observed via UIA; `-SkipBuild` packaging produced setup.exe + zip + SHA256SUMS; YAML/bash/PowerShell parse clean.
 - Session 144 (2026-10-25) - Dry-run CI fixes
   - Linux jobs: install `libgtk-3-dev` + `libayatana-appindicator3-dev` (tray-icon's Linux backend pulls glib/GTK) alongside `libpulse-dev`.
   - Windows packaging job: `choco install nsis` and resolve `%ProgramFiles(x86)%\NSIS\makensis.exe`.

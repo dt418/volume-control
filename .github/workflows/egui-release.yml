@@ -44,13 +44,22 @@ jobs:
         id: version
         shell: bash
         run: |
+          raw=""
           if [[ -n "${{ inputs.version }}" ]]; then
-            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            raw="${{ inputs.version }}"
           elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=" >> "$GITHUB_OUTPUT"
+            raw="${GITHUB_REF_NAME#v}"
           fi
+          # Accept dry-run tags by extracting the numeric semver core.
+          numeric="$(printf '%s' "$raw" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+          if [[ -n "$numeric" ]]; then
+            value="$numeric"
+          elif [[ -n "$raw" ]]; then
+            value="$raw"
+          else
+            value=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' src-tauri/tauri.conf.json | head -n1)
+          fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
       - name: Install Linux windowing dependencies
         if: runner.os == 'Linux'
         run: |
@@ -70,21 +79,39 @@ jobs:
         run: choco install nsis --no-progress -y
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Import GPG key (Linux)
-        if: runner.os == 'Linux' && env.GPG_PRIVATE_KEY_BASE64 != ''
+      # Compile with NO signing material in the environment: dependency build
+      # scripts must never see certificates or private keys.
+      - name: Compile host
         shell: bash
-        env:
-          GPG_PRIVATE_KEY_BASE64: ${{ secrets.GPG_PRIVATE_KEY_BASE64 }}
-          REQUIRE_SIGNING: ${{ vars.EGUI_RELEASE_PUBLISH }}
-        run: |
-          printf '%s' "$GPG_PRIVATE_KEY_BASE64" | base64 -d | gpg --batch --import
-      - name: Package
-        shell: bash
+        run: cargo build --release -p volumecontrol-egui
+      - name: Package and sign (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         env:
           WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
           WINDOWS_CERT_THUMBPRINT: ${{ secrets.WINDOWS_CERT_THUMBPRINT }}
           WINDOWS_ALLOW_UNTRUSTED_SIGNATURE: ${{ secrets.WINDOWS_ALLOW_UNTRUSTED_SIGNATURE }}
+          REQUIRE_SIGNING: ${{ vars.EGUI_RELEASE_PUBLISH }}
+        run: |
+          pwsh -File scripts/package-egui.ps1 `
+            "${{ steps.version.outputs.value }}" -SkipBuild
+      - name: Package and sign (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PRIVATE_KEY_BASE64: ${{ secrets.GPG_PRIVATE_KEY_BASE64 }}
+          REQUIRE_SIGNING: ${{ vars.EGUI_RELEASE_PUBLISH }}
+        run: |
+          if [[ -n "$GPG_PRIVATE_KEY_BASE64" ]]; then
+            printf '%s' "$GPG_PRIVATE_KEY_BASE64" | base64 -d | gpg --batch --import
+          fi
+          SKIP_BUILD=1 bash scripts/package-egui.sh "${{ steps.version.outputs.value }}"
+      - name: Package and sign (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
           MACOS_SIGNING_DISABLED: ${{ vars.MACOS_SIGNING_DISABLED }}
           MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
@@ -93,10 +120,8 @@ jobs:
           MACOS_APPLE_ID: ${{ secrets.MACOS_APPLE_ID }}
           MACOS_TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
           MACOS_APP_PASSWORD: ${{ secrets.MACOS_APP_PASSWORD }}
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-          GPG_PRIVATE_KEY_BASE64: ${{ secrets.GPG_PRIVATE_KEY_BASE64 }}
           REQUIRE_SIGNING: ${{ vars.EGUI_RELEASE_PUBLISH }}
-        run: ${{ matrix.script }} "${{ steps.version.outputs.value }}"
+        run: SKIP_BUILD=1 bash scripts/package-egui.sh "${{ steps.version.outputs.value }}"
       - name: Verify artifacts
         shell: bash
         run: |
@@ -158,9 +183,15 @@ jobs:
             exit 0
           fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --latest \
-              --title "VolumeControl $TAG" \
-              --notes "Free egui build. Signatures are not trusted yet: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Windows SmartScreen and macOS Gatekeeper will warn until purchase-backed certificates are configured."
+            if [[ "$TAG" == *-unt.* ]]; then
+              gh release create "$TAG" --prerelease --latest=false \
+                --title "VolumeControl $TAG (untrusted egui build)" \
+                --notes "UNTRUSTED build: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Do not use for general distribution."
+            else
+              gh release create "$TAG" --latest \
+                --title "VolumeControl $TAG" \
+                --notes "Free egui build. Signatures are not trusted yet: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Windows SmartScreen and macOS Gatekeeper will warn until purchase-backed certificates are configured."
+            fi
           fi
           mkdir -p release
           find dist -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) \

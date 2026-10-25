@@ -20,7 +20,10 @@ if [[ -z "$version" ]]; then
 fi
 [[ -n "$version" ]] || { echo "cannot resolve version" >&2; exit 1; }
 
-cargo build --release -p volumecontrol-egui
+# SKIP_BUILD=1 reuses target/release (the workflow compiles without secrets).
+if [[ -z "${SKIP_BUILD:-}" ]]; then
+  cargo build --release -p volumecontrol-egui
+fi
 mkdir -p "$out_root"
 stage="$out_root/stage"
 rm -rf "$stage"

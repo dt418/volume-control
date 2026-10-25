@@ -172,6 +172,9 @@ pub fn launch_installer(installer: &Path, parent_pid: u32) -> Result<(), String>
     let installer = installer.display().to_string();
     #[cfg(target_os = "windows")]
     {
+        // PowerShell single-quoted string: escape embedded apostrophes so a
+        // redirected LOCALAPPDATA such as C:\Users\O'Brien stays valid.
+        let installer = installer.replace('\'', "''");
         let script = format!(
             "Wait-Process -Id {parent_pid} -Timeout 60 -ErrorAction SilentlyContinue; Start-Process -FilePath '{installer}' -ArgumentList '/S'"
         );
@@ -196,10 +199,73 @@ pub fn launch_installer(installer: &Path, parent_pid: u32) -> Result<(), String>
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
+        // The Linux asset is a tarball (binary + desktop entry + icon). Install
+        // it per-user and start the installed binary; executing the archive
+        // itself can never work.
         let _ = parent_pid;
-        std::process::Command::new(&installer)
+        let home = std::env::var_os("HOME")
+            .map(std::path::PathBuf::from)
+            .ok_or("HOME is not set")?;
+        let staging = home
+            .join(".local/share/volumecontrol")
+            .join(format!("staging-{parent_pid}"));
+        if staging.exists() {
+            std::fs::remove_dir_all(&staging)
+                .map_err(|e| format!("clean {}: {e}", staging.display()))?;
+        }
+        std::fs::create_dir_all(&staging)
+            .map_err(|e| format!("create {}: {e}", staging.display()))?;
+        let status = std::process::Command::new("tar")
+            .args(["xzf", installer.as_str(), "-C"])
+            .arg(&staging)
+            .status()
+            .map_err(|e| format!("extract {installer}: {e}"))?;
+        if !status.success() {
+            return Err(format!("extract {installer} failed"));
+        }
+        let staged_host = staging.join("volumecontrol-host");
+        if !staged_host.is_file() {
+            return Err(format!("archive has no volumecontrol-host: {installer}"));
+        }
+        let bin_dir = home.join(".local/bin");
+        std::fs::create_dir_all(&bin_dir)
+            .map_err(|e| format!("create {}: {e}", bin_dir.display()))?;
+        let installed_host = bin_dir.join("volumecontrol-host");
+        std::fs::copy(&staged_host, &installed_host)
+            .map_err(|e| format!("install {}: {e}", installed_host.display()))?;
+        use std::os::unix::fs::PermissionsExt as _;
+        let mut permissions = std::fs::metadata(&installed_host)
+            .map_err(|e| format!("stat {}: {e}", installed_host.display()))?
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&installed_host, permissions)
+            .map_err(|e| format!("chmod {}: {e}", installed_host.display()))?;
+
+        let apps_dir = home.join(".local/share/applications");
+        if staging.join("volumecontrol.desktop").is_file() {
+            std::fs::create_dir_all(&apps_dir)
+                .map_err(|e| format!("create {}: {e}", apps_dir.display()))?;
+            std::fs::copy(
+                staging.join("volumecontrol.desktop"),
+                apps_dir.join("volumecontrol.desktop"),
+            )
+            .map_err(|e| format!("install desktop entry: {e}"))?;
+        }
+        let icons_dir = home.join(".local/share/icons/hicolor/128x128/apps");
+        if staging.join("volumecontrol.png").is_file() {
+            std::fs::create_dir_all(&icons_dir)
+                .map_err(|e| format!("create {}: {e}", icons_dir.display()))?;
+            std::fs::copy(
+                staging.join("volumecontrol.png"),
+                icons_dir.join("volumecontrol.png"),
+            )
+            .map_err(|e| format!("install icon: {e}"))?;
+        }
+        let _ = std::fs::remove_dir_all(&staging);
+
+        std::process::Command::new(&installed_host)
             .spawn()
-            .map_err(|e| format!("spawn installer: {e}"))?;
+            .map_err(|e| format!("start {}: {e}", installed_host.display()))?;
     }
     Ok(())
 }
