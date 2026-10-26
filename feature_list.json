@@ -2062,13 +2062,15 @@
       "verification": [
         "ci.yml parses; every run block in ubuntu, ubuntu-e2e, ubuntu-bundle and release-gate passes bash -n (0 failures).",
         "release-gate simulation: all green exits 0; ubuntu-e2e failure, ubuntu-e2e cancelled and ubuntu-bundle cancelled each exit 1 with the per-job results printed; docs-only scope with all four skipped exits 0; docs-only scope where a skipped job actually ran exits 1.",
-        "Step timings from the last serialised run (40212348706 / job 121226123583) drove the split: E2E 271 s, release bundle 203 s, rust-cache 54 s, apt install 47 s, gtk smoke 60 s, remaining cargo steps 49 s."
+        "Step timings from the last serialised run (40212348706 / job 121226123583) drove the split: E2E 271 s, release bundle 203 s, rust-cache 54 s, apt install 47 s, gtk smoke 60 s, remaining cargo steps 49 s.",
+        "scripts/test-ship.sh contract updated to the new job set and passing: the release gate must list [scope, checks, windows, macos, ubuntu, ubuntu-e2e, ubuntu-bundle], and all four scoped desktop jobs must declare needs: scope plus the platform_required condition. Full local fast-gate run: ci-diff-check, check-records, test-check-records, test-ship, test-records-merge and check-tauri-deadlock all pass."
       ],
       "evidence": [
         "Session 146 (2026-10-26): the Ubuntu job took 12 m 13 s while Windows took 10 m 41 s and macOS 5 m 23 s. The serialised job summed three independent workloads (E2E 271 s, release bundle 203 s, feature matrix ~110 s) plus one dependency install.",
         "Split into ubuntu (feature matrix), ubuntu-e2e (WebDriver, timeout-minutes 18 on the run step and 25 on the job) and ubuntu-bundle (release bundles, own cache key because it builds --release). release-gate now requires all three and prints each result on failure.",
         "A stuck WebDriver session held the job for 45 minutes before a manual cancel and hung again on rerun; it had no timeout, so the new 18-minute step timeout is what makes that class of failure visible.",
-        "apt calls now carry Acquire::Retries=5 and explicit http/https timeouts and run as one resolving install instead of three; DEBIAN_FRONTEND=noninteractive avoids prompt stalls."
+        "apt calls now carry Acquire::Retries=5 and explicit http/https timeouts and run as one resolving install instead of three; DEBIAN_FRONTEND=noninteractive avoids prompt stalls.",
+        "The first CI run on this branch failed 'Smoke-test ship-flow wiring' because scripts/test-ship.sh hardcoded the old needs list and the old two-job desktop loop; the contract was updated rather than the workflow reverted, so a future job added to the matrix must also be added to the gate."
       ],
       "notes": "Wall clock is bounded by the slowest job (ubuntu-e2e, ~5-6 min warm) instead of the sum. Cold-cache runs still pay three rust-cache restores in parallel; that was preferred over a shared key that would serialise cache writes."
     }
