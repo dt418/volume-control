@@ -4635,3 +4635,13 @@ fn get_window_pid_x11() -> Option<u32> {
   6. Installers accepted any positive `-LifetimeDays` while the audit called anything above 14 days `unbounded`. Both now use one `$script:DevTaskMaxLifetimeDays = 30` cap, and the installer rejects above it.
   7. The records promised developer tasks never outlive an app uninstall, which the skill itself contradicts. Corrected: nothing in the install/uninstall path knows about these tasks, which is exactly why `dev-tasks.ps1` exists.
 - Verification: launcher wait argument asserted; installer + inventory produce identical arguments; `\SomewhereElse\StrayName` (renamed, moved, original arguments) is unregistered by `check-winget-merge.ps1 -StopOnTerminal` and the status log records it; `-Id winget-validation -Verify` ignores the merge watcher and exits 0; forcing `Settings.Hidden=$true` yields `hiddenUI` and exit 1; `-LifetimeDays 3650` throws while 21 is accepted and shown as `P21D`.
+
+## Session 148 (2026-10-26) - Ubuntu CI: parallel jobs instead of one serialised job
+
+- Symptom: the Ubuntu 24.04 job took 12 m 13 s while Windows took 10 m 41 s and macOS 5 m 23 s, and a hung WebDriver session held it for 45 minutes before a manual cancel (then hung again on rerun).
+- Evidence from the last serialised run (40212348706 / job 121226123583): E2E under Xvfb 271 s, `tauri build --bundles deb,rpm,appimage` 203 s, rust-cache 54 s, apt install 47 s, gtk-renderer smoke 60 s, the remaining cargo steps 49 s. The job summed three independent workloads.
+- Change: split the Ubuntu job into `ubuntu` (feature matrix + clippy), `ubuntu-e2e` (the 7-spec Tauri WebDriver run) and `ubuntu-bundle` (`tauri build` + deb/rpm/AppImage validation). They share only the toolchain, so wall clock is now the slowest job rather than the sum. `release-gate` requires all three and prints each result on failure.
+- Fail-fast: `timeout-minutes: 25` per job and `timeout-minutes: 18` on the E2E run step. A stuck session previously had no timeout at all (the GitHub default is 6 hours).
+- apt: one resolving `apt-get install` instead of three, `Acquire::Retries=5` plus explicit http/https timeouts, and `DEBIAN_FRONTEND=noninteractive`.
+- `ubuntu-bundle` uses its own rust-cache key because it builds `--release`, which shares almost no artifacts with the debug builds.
+- Verification: ci.yml parses; `bash -n` clean on every run block in the four touched jobs; release-gate simulated for all-green (exit 0), e2e failure, e2e cancelled, bundle cancelled (each exit 1 with per-job results) and the docs-only skip path (exit 0 when all four skip, exit 1 when a skipped job ran).

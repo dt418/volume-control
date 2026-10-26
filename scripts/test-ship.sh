@@ -132,7 +132,7 @@ else
     report FAIL 'ci.yml: scope job classifies pull-request diffs and fails open when uncertain'
 fi
 
-for desktop_job in macos ubuntu; do
+for desktop_job in macos ubuntu ubuntu-e2e ubuntu-bundle; do
     desktop_block="$(job_block "$desktop_job")"
     if grep -Eq '^    needs: scope$' <<<"$desktop_block" && \
        grep -Eq 'needs\.scope\.outputs\.platform_required == '\''true'\''' <<<"$desktop_block"; then
@@ -144,7 +144,7 @@ done
 
 release_gate_block="$(job_block release-gate)"
 if grep -q '^    if:.*always' <<<"$release_gate_block" && \
-   grep -q 'needs: \[scope, checks, windows, macos, ubuntu\]' <<<"$release_gate_block" && \
+   grep -q 'needs: \[scope, checks, windows, macos, ubuntu, ubuntu-e2e, ubuntu-bundle\]' <<<"$release_gate_block" && \
    grep -q 'PLATFORM_REQUIRED' <<<"$release_gate_block"; then
     report ok 'ci.yml: release gate evaluates every required job and skipped-platform policy'
 else
