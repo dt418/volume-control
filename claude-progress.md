@@ -4584,6 +4584,58 @@ fn get_window_pid_x11() -> Option<u32> {
 - Verification: `git ls-files WATCHDOG.yml` returns nothing; the file is still on disk (670 B); `git status --short` no longer lists it; a local edit produces no diff; history still reaches earlier revisions.
 - Migration note for other clones: this commit records the deletion, so pulling it removes `WATCHDOG.yml` from the working tree. The ignore rule only keeps the path untracked afterwards; it cannot preserve the previously tracked copy. Recover the latest committed version with `git show <parent>:WATCHDOG.yml > WATCHDOG.yml` (or from the reflog of your own clone) before or after pulling, and keep it out of git from then on. A clone with uncommitted edits to the file will see the update blocked by a delete/modify conflict instead, which is the safe outcome.
 
+## Session 146 (2026-10-26) - Developer scheduled tasks: hidden, bounded, self-cleaning
+
+- Symptom: a `powershell.exe` console window appeared on the desktop roughly every 10 minutes with no user action, on a machine where the app had already been uninstalled.
+- Root cause:
+  - `\VolumeControl-WingetMergeWatch` was registered on 2026-10-22 with `-NoProfile -ExecutionPolicy Bypass -File ...`, i.e. without `-WindowStyle Hidden`/`-NonInteractive`. Commit `3c3bcde` (2026-10-23) added both flags to the installer, but the already-registered task was never re-registered, so the fix never reached the machine.
+  - The task had no `TASK_FLAG_HIDDEN` (neither installer passed `-Hidden`), used an interactive principal, and repeated every 10 minutes for 3650 days.
+  - `check-winget-merge.ps1` never hid anything and only logged out after the `gh pr view` round-trip, so the window was visible for ~3 seconds per run. The checker's own log proved the cadence (one line per 10 minutes; task start 19:40:34, log entry 19:40:37).
+  - The app uninstaller cannot remove these tasks: they live in the Task Scheduler store (`C:\Windows\System32\Tasks`), not in the install directory or the Uninstall registry key, so nothing enumerated or cleaned them.
+- What landed:
+  - `scripts/lib/DevTask.ps1` is now the single catalog for developer tasks (id, interval, lifetime, checker, state dir) plus install/uninstall/inventory helpers. Unknown tasks cannot be half-registered because both installers go through it.
+  - Tasks register under `\VolumeControl-Dev\` with a `volume-control-dev-task|id=...` description marker and are created with `-Hidden` (TASK_FLAG_HIDDEN, the reliable knob since the console window exists before PowerShell parses its arguments).
+  - Repetition lifetime is bounded to 14 days instead of 3650; register is idempotent and self-correcting, printing `Re-registered (drift detected: ...)` when arguments, hidden flag or task path no longer match the catalog. Registration also removes any legacy root task so a stale copy cannot double-fire.
+  - `scripts/dev-tasks.ps1` is the one command that answers "what is this repository leaving running?": inventory table (path, state, hidden, interval, lifetime, last/next run, state size) plus flags `legacy`, `drift`, `visible`, `unbounded`, `expired`, `orphan`, `missing`, `-Verify` (exit 1 on any flag), `-Json`, and `-Unregister [-Purge]`.
+  - Both checkers gained `-TaskPath` and now **unregister** (namespaced and legacy root) on a terminal state instead of leaving a disabled entry behind; `-KeepTask` retains the old inspect-only behavior. Task-path comparisons normalize the trailing separator because `Get-ScheduledTask` silently matches nothing without it.
+  - `winget-publish` skill (`.agents` + mirrored `.claude`) documents the lifecycle: inspect before/after, register only through the installers, never drop `-Hidden` or restore a multi-year repetition, and run `-Unregister -Purge` when the submission finishes.
+- Verification: PS 5.1 parser clean on all six scripts; registration XML asserts `<Hidden>true</Hidden>`, `-WindowStyle Hidden`, `-NonInteractive`, `<Duration>P14D</Duration>`; `-Verify` returned 0 healthy, 1 on forced drift (`drift,visible`) and 1 on a legacy root registration, then 0 after reinstall repaired it; a real checker run against a closed-unmerged PR unregistered both the namespaced and legacy tasks and logged it; `-Unregister -Purge` left no task and no state directory.
+  - Tasks register under `\VolumeControl-Dev\` with a `volume-control-dev-task|id=...` description marker and start through `scripts/lib/run-hidden.vbs` via `wscript.exe`, which has no console attached, so the child console window is created already hidden. (Round 2 corrected this: the earlier `-Hidden` task flag was measured not to hide the process at all.)
+  - Repetition lifetime is bounded to 14 days instead of 3650; register is idempotent and self-correcting, printing `Re-registered (drift detected: ...)` when arguments, hidden flag or task path no longer match the catalog. Registration also removes that definition's legacy root task so a stale copy cannot double-fire, without touching any other watcher.
+  - `winget-publish` skill (`.agents` + mirrored `.claude`) documents the lifecycle: inspect before/after, register only through the installers, never bypass the `run-hidden.vbs` launcher or restore a multi-year repetition, and run `-Unregister -Purge` when the submission finishes.
+- Verification: PS 5.1 parser clean on all six scripts; registration asserts `Command=wscript.exe`, `//nologo` + `run-hidden.vbs`, and `<Duration>P14D</Duration>`; `-Verify` returned 0 healthy, 1 on forced drift (`drift,visible`) and 1 on a legacy root registration, then 0 after reinstall repaired it; a real checker run against a closed-unmerged PR unregistered both the namespaced and legacy tasks and logged it; `-Unregister -Purge` left no task and no state directory.
+
+## Session 149 (2026-10-26) - Dev tasks review round 2: launcher, scoping, audit accuracy
+
+- Six review findings on #88, all valid:
+  1. Legacy cleanup was catalog-wide, so installing the merge watcher deleted a legacy validation watcher.
+  2. `New-ScheduledTaskSettingsSet -Hidden` was documented as process-level hiding; it only hides the task in the Task Scheduler UI.
+  3. Inventory listed a legacy-only registration twice (once as the catalog row, once as a legacy row).
+  4. A marked task renamed/moved outside the namespace was undiscoverable, so `-Verify` and `-Unregister` missed it.
+  5. Inventory compared only arguments, so a swapped action executable still reported `ok`.
+  6. A repetition with an interval and no duration reported `ok`, although Task Scheduler repeats indefinitely without a duration.
+- Measured hiding mechanisms with a probe task that reports its own `GetConsoleWindow()` + `IsWindowVisible`:
+  - plain PowerShell action -> `visible=True` (the original bug)
+  - `-WindowStyle Hidden` -> `visible=False`
+  - `-Hidden` setting + plain action -> `visible=True`, so `-Hidden` does not hide the process
+  - `scripts/lib/run-hidden.vbs` via `wscript.exe`, as the catalog now builds it -> `visible=False`, `ConsoleWindowClass` created hidden
+- Change: `-Hidden` dropped on purpose, because a hidden registration is undiscoverable and discoverability is what this feature is for. Launch through `scripts/lib/run-hidden.vbs` with window style 0, falling back to `-WindowStyle Hidden` when `wscript.exe` is unavailable.
+- Change: `Find-DevTaskRegistrations` matches the description marker plus the namespaced and legacy names, so moved or renamed tasks are still owned; `Remove-DevTaskRegistration` targets one definition only; the inventory deduplicates by task path+name and reports `unclaimed` markers that no catalog entry claims.
+- Change: the audit compares the action executable, and treats a missing repetition duration as `unbounded`.
+- Verification: installer output asserts `Command=wscript.exe`, `//nologo` + `run-hidden.vbs`, no `<Hidden>`, `P14D`; installing merge leaves the legacy validation task untouched; a legacy-only registration appears once; `MovedWatcher` is discovered by its marker; swapping the executable to `cmd.exe` reports `drift,visible`; an interval without a duration reports `unbounded`; reinstall prints `Re-registered (drift detected: ...)` and then `-Verify` returns 0; `-Unregister -Purge` leaves nothing behind.
+
+## Session 150 (2026-10-26) - Dev tasks review round 3
+
+- Seven further findings on #88, all reproduced before fixing:
+  1. `run-hidden.vbs` passed `wait=False`, so wscript exited immediately and the still-running PowerShell checker escaped both `ExecutionTimeLimit` and `MultipleInstances=IgnoreNew`. Now `sh.Run cmd, 0, True`.
+  2. The PowerShell fallback branch called `$launcher.Arguments`, which the round-2 refactor had removed; the fallback now builds its own argument string.
+  3. A marked task renamed or moved still embeds the original `-TaskName` in its action arguments, so the checkers' exact-name lookups found nothing and it kept firing forever. Both checkers now also match the action arguments for their own task name.
+  4. `dev-tasks.ps1 -Id` was only honoured by `-Unregister`; inventory, JSON and `-Verify` ignored it. Now scoped.
+  5. `Settings.Hidden` drifting to true reported `ok`; a UI-hidden registration is undiscoverable, so it is now flagged `hiddenUI`.
+  6. Installers accepted any positive `-LifetimeDays` while the audit called anything above 14 days `unbounded`. Both now use one `$script:DevTaskMaxLifetimeDays = 30` cap, and the installer rejects above it.
+  7. The records promised developer tasks never outlive an app uninstall, which the skill itself contradicts. Corrected: nothing in the install/uninstall path knows about these tasks, which is exactly why `dev-tasks.ps1` exists.
+- Verification: launcher wait argument asserted; installer + inventory produce identical arguments; `\SomewhereElse\StrayName` (renamed, moved, original arguments) is unregistered by `check-winget-merge.ps1 -StopOnTerminal` and the status log records it; `-Id winget-validation -Verify` ignores the merge watcher and exits 0; forcing `Settings.Hidden=$true` yields `hiddenUI` and exit 1; `-LifetimeDays 3650` throws while 21 is accepted and shown as `P21D`.
+
 ## Session 148 (2026-10-26) - Ubuntu CI: parallel jobs instead of one serialised job
 
 - Symptom: the Ubuntu 24.04 job took 12 m 13 s while Windows took 10 m 41 s and macOS 5 m 23 s, and a hung WebDriver session held it for 45 minutes before a manual cancel (then hung again on rerun).

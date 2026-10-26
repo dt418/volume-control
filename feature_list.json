@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T21:40",
+  "last_updated": "2026-10-26T23:59",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -2032,7 +2032,7 @@
       "evidence": [
         "Session 125 (2026-10-22): added the mirrored `winget-publish` skill, manifest/shims/status helpers, scheduled validation and merge watchers, the 3-hour GitHub Actions watcher (static cron; manual dispatch remains available), the `.gitignore` skill exceptions, and the compressed `CLAUDE.md` guidance. Pre-push review found and fixed the API fallback, Sandbox host-write, PowerShell 7, localized-output, and documentation/records issues."
       ],
-      "notes": "Pinned to PR #454508 / 0.1.9. CI is not active until this commit lands on main; upstream moderation and catalog publication are still pending. The publication result must be appended only after `winget show` and a catalog-based install succeed."
+      "notes": "Pinned to PR #454508 / 0.1.9. CI is not active until this commit lands on main; upstream moderation and catalog publication are still pending. The publication result must be appended only after `winget show` and a catalog-based install succeed. Developer task lifecycle, hidden registration and cleanup now live in vol-122 / scripts/lib/DevTask.ps1; watchers register under VolumeControl-Dev and unregister themselves on a terminal state."
     },
     {
       "id": "vol-124",
@@ -2051,6 +2051,46 @@
         "Session 147 (2026-10-26): PR #84 (aed3c76) added WATCHDOG.yml to .gitignore but did not untrack it, so the rule had no effect on an already-tracked path and every local advisor/model edit kept showing up as an uncommitted change. Fixed with git rm --cached; the existing ignore rule from #84 is kept as the only source of truth."
       ],
       "notes": "Untracking records a deletion, so pulling this commit removes the file from the working tree; that is the documented, recoverable path. The ignore rule only prevents re-adding. No consumer of WATCHDOG.yml exists in the repository. History keeps earlier revisions."
+    },
+    {
+      "id": "vol-123",
+      "priority": 122,
+      "area": "tooling",
+      "title": "Developer scheduled tasks are visible, hidden, bounded and self-cleaning",
+      "user_visible_behavior": "Developers can list, verify and remove every background watcher this repository registers on their machine with one command; those watchers never paint a console window, stay discoverable in the Task Scheduler UI, expire within a bounded lifetime, and unregister themselves when their watched condition is terminal. They are NOT removed by the application uninstaller: nothing in the install or uninstall path knows about them, which is why dev-tasks.ps1 exists.",
+      "status": "passing",
+      "verification": [
+        "PS 5.1 parser accepted scripts/lib/DevTask.ps1, scripts/dev-tasks.ps1, both installers and both checkers.",
+        "scripts/install-winget-merge-task.ps1 registered \\VolumeControl-Dev\\WingetMergeWatch; Export-ScheduledTask showed the wscript.exe launcher (run-hidden.vbs, no console host), a bounded repetition, and <Hidden>false</Hidden> in the Task Scheduler UI on purpose (discoverability; the console window is suppressed by the launcher, not by hiding the task).",
+        "scripts/dev-tasks.ps1 -Verify returned 0 with the task healthy, 1 after forcing drift (windowed action, Hidden=false) reporting flags drift,visible, and 0 again after the installer printed Re-registered (drift detected: arguments, hidden).",
+        "A legacy root registration (VolumeControl-WingetMergeWatch) is reported as a (legacy) row with flag legacy and -Verify returns 1.",
+        "Terminal-state cleanup exercised end to end: check-winget-merge.ps1 -PrNumber <closed-unmerged PR> -StopOnTerminal was called against a fake StateDir and unregistered both VolumeControl-DevWingetMergeWatch and the legacy VolumeControl-WingetMergeWatch, logging two unregistered lines.",
+        "scripts/dev-tasks.ps1 -Unregister -Purge left no task and no state directory behind (Get-ScheduledTask returns nothing, %LOCALAPPDATA%VolumeControlwinget-merge absent).",
+        "Installed task asserts: Command=wscript.exe, arguments start with //nologo and run scripts/lib/run-hidden.vbs, <Hidden>true</Hidden> absent (registration stays visible), repetition duration P14D.",
+        "Console-window probe (a task reporting its own GetConsoleWindow() + IsWindowVisible): plain PowerShell action -> visible=True (the original bug), -WindowStyle Hidden -> visible=False, wscript launcher as built by the catalog -> visible=False with ConsoleWindowClass created hidden. Also proved New-ScheduledTaskSettingsSet -Hidden with a plain PowerShell action still shows a window (visible=True), so -Hidden hides only the UI entry.",
+        "Installing winget-merge leaves a legacy VolumeControl-WingetValidation registration untouched (scoped legacy cleanup).",
+        "Inventory deduplicates: a legacy-only registration appears once and is attributed to its catalog id.",
+        "A marked task renamed to MovedWatcher and moved out of the namespace is still discovered by its description marker (row + flags).",
+        "Executable drift is caught: swapping the action Command to cmd.exe while keeping the arguments reports drift,visible and -Verify exits 1.",
+        "A repetition with an interval and no duration reports unbounded and -Verify exits 1.",
+        "Re-running the installer after drift prints 'Re-registered (drift detected: ...)' and -Verify returns 0.",
+        "scripts/dev-tasks.ps1 -Unregister -Purge left no task and no state directory behind.",
+        "Round 3 (7 findings): wscript launcher passes wait=True, so the checker process is still governed by the task's ExecutionTimeLimit and MultipleInstances policy instead of escaping when wscript exits.",
+        "Round 3: the PowerShell fallback branch builds its own argument string; nothing reads the removed $launcher.Arguments scriptblock (INSTALL and inventory produce identical arguments on the wscript path).",
+        "Round 3: a task renamed to \\SomewhereElse\\StrayName while keeping its action arguments is removed by check-winget-merge.ps1 -StopOnTerminal; the status log records 'unregistered task \\SomewhereElse\\StrayName'.",
+        "Round 3: dev-tasks.ps1 -Id winget-validation -Verify scopes the inventory and the exit code to that watcher only.",
+        "Round 3: Settings.Hidden forced back to true on a healthy registration is reported as hiddenUI and -Verify exits 1.",
+        "Round 3: installers reject -LifetimeDays above the 30-day cap with an explicit error, and the audit flags durations above the same cap as unbounded (the two can no longer disagree).",
+        "Merge review (2026-10-26): registered both catalog tasks, `dev-tasks.ps1 -Verify` exited 0 with no flags, and `-Unregister -Purge` removed both registrations; the post-clean inventory shows no catalog task registered and no leftover state."
+      ],
+      "evidence": [
+        "Session 146 (2026-10-26): the machine showed a powershell console window every 10 minutes. Root cause: a VolumeControl-WingetMergeWatch registration created 2026-10-22, before commit 3c3bcde added -NonInteractive -WindowStyle Hidden, so the fix never reached the installed task; it also carried no TASK_FLAG_HIDDEN and a 3650-day repetition. The task survived the app uninstall because developer tasks live in the Task Scheduler store, which no installer or uninstaller touches. Fixed by a shared catalog (scripts/lib/DevTask.ps1), a namespaced VolumeControl-Dev folder, hidden+bounded registration, drift-repairing installers, unregister-on-terminal checkers and scripts/dev-tasks.ps1 for inventory/verify/removal.",
+        "Local cleanup on the reporting machine: unregistered VolumeControl-WingetValidation, deleted %LOCALAPPDATA%VolumeControl (303.9 KB).",
+        "Session 146/149 (2026-10-26): the machine showed a powershell console window every 10 minutes. Root cause: a \\VolumeControl-WingetMergeWatch registration created 2026-10-22, before commit 3c3bcde added -NonInteractive -WindowStyle Hidden, so the fix never reached the installed task; it also had a 3650-day repetition and no launcher that suppresses the console. The task survived the app uninstall because developer tasks live in the Task Scheduler store, which no installer or uninstaller touches.",
+        "Review round 2 (6 findings) changed the design: the wscript launcher replaces the claim that TASK_FLAG_HIDDEN hides the process (it does not); the registration is deliberately left visible in the Task Scheduler UI; legacy cleanup, inventory deduplication and marker-based discovery are scoped so one watcher cannot remove or hide another; the audit now also compares the action executable and treats a missing repetition duration as unbounded.",
+        "Local cleanup on the reporting machine: unregistered VolumeControl-WingetValidation, deleted %LOCALAPPDATA%\\VolumeControl (303.9 KB)."
+      ],
+      "notes": "Watchers stay pinned to PR #454508 / 0.1.9. Bulk state logs (runtime.log, status.log) are still unbounded; rotation was scoped out of this change."
     },
     {
       "id": "vol-125",
