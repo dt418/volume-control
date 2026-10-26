@@ -656,11 +656,61 @@ impl AppCore {
         }
     }
 
+    /// Restore a previously captured config after a failed persist attempt.
+    ///
+    /// Used by the shell when saving fails: the on-disk state may be absent or
+    /// older, so the caller's last known-good snapshot is authoritative.
+    pub fn restore_config(&mut self, config: crate::config::Config) {
+        self.adopt_saved_config(config);
+    }
+
     /// Persist the current config and adopt the normalized result (re-register
     /// hotkeys when the modifier changed, refresh status, publish state).
     pub fn save_config(&mut self) -> Result<(), String> {
         let saved = crate::config::save_validated(&self.config).map_err(|e| e.to_string())?;
         self.adopt_saved_config(saved);
+        Ok(())
+    }
+
+    /// Validate and apply a settings draft, then persist it.
+    ///
+    /// Unlike `ApplyConfigDraft`, a persistence failure is returned so callers
+    /// keep the dirty draft instead of presenting unsaved edits as saved.
+    pub fn apply_settings_draft(
+        &mut self,
+        patch: crate::host_core::SettingsPatch,
+    ) -> Result<(), String> {
+        self.update_settings(patch)?;
+        self.save_config()
+    }
+
+    /// Set the master volume for CLI callers, propagating backend errors.
+    pub fn set_volume_percent(&mut self, percent: u8) -> Result<(), String> {
+        let target = f32::from(percent.min(100)) / 100.0;
+        self.audio.set_volume(target).map_err(|e| e.to_string())?;
+        if target > 0.0 {
+            // Positive direct writes resume audible output, matching the
+            // AppAction path. A failed unmute leaves the endpoint silent, so
+            // it is reported instead of being discarded: the caller must not
+            // be told a positive volume took effect while output stays muted.
+            self.audio.set_mute(false).map_err(|e| e.to_string())?;
+            self.mute_restore_volume = None;
+        }
+        self.publish_confirmed_state(true);
+        Ok(())
+    }
+
+    /// Set the master mute state for CLI callers, propagating backend errors.
+    pub fn set_muted(&mut self, muted: bool) -> Result<(), String> {
+        self.audio.set_mute(muted).map_err(|e| e.to_string())?;
+        self.publish_confirmed_state(true);
+        Ok(())
+    }
+
+    /// Toggle the master mute state for CLI callers, propagating backend errors.
+    pub fn toggle_muted(&mut self) -> Result<(), String> {
+        self.audio.toggle_mute().map_err(|e| e.to_string())?;
+        self.publish_confirmed_state(true);
         Ok(())
     }
 

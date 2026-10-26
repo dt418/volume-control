@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T12:20",
+  "last_updated": "2026-10-25T15:55",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -15,6 +15,36 @@
     "passing": "Required verification has passed and evidence is recorded."
   },
   "features": [
+    {
+      "id": "vol-122",
+      "priority": 99,
+      "area": "release",
+      "title": "Egui release blockers: honest launch, CLI, updater, and signing isolation",
+      "user_visible_behavior": "Autostart stays tray-resident, a second launch reveals the Mixer, CLI set/mute failures surface instead of reporting fake success, failed settings saves keep the draft, and release builds compile in a secret-free job before any signing material is exposed.",
+      "status": "passing",
+      "verification": [
+        "cargo test -p volumecontrol-egui -p volumectl",
+        "cargo clippy --workspace --all-targets --no-default-features -- -D warnings",
+        "cargo fmt --all --check",
+        "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-egui.ps1 -SkipBuild",
+        "bash -n scripts/package-egui.sh and YAML parse of .github/workflows/egui-release.yml",
+        "cargo test -p volumectl --test host_core cli_volume_write_unmutes_like_an_action",
+        "cargo test -p volumectl --test host_core cli_volume_write_reports_unmute_failure (new: a backend that accepts set_volume but refuses set_mute must surface the error and leave the endpoint muted).",
+        "YAML parse of the restructured .github/workflows/egui-release.yml via python yaml.safe_load."
+      ],
+      "evidence": [
+        "326 volumectl + 26 egui + 16 host tests passed; clippy 'No issues found'; fmt clean.",
+        "Background launch parked the root at (-32000,-32000,1,1); a second launch surfaced the Mixer at 400x280.",
+        "SkipBuild packaging produced setup.exe, zip, and SHA256SUMS.txt.",
+        "Version extraction mapped egui-dryrun-0.1.12 -> 0.1.12 and 0.1.11-unt.8 -> 0.1.11.",
+        "Review follow-up: duplicate --background launches stayed parked at (-32000,-32000,1,1); exclusive-switch reveal showed Mixer at 400x280; workspace clippy and tests stayed clean after the updater/desktop-entry/PID-wait fixes.",
+        "cli_volume_write_unmutes_like_an_action passes: a muted backend unmutes on a positive CLI volume write.",
+        "Review round 2: compile and package are now separate jobs. The compile job has no secrets by construction and uploads target/release/volumecontrol-host*; the package job starts from a fresh checkout, downloads only that binary, and runs the packaging script with its platform secrets. The publish job downloads only egui-* artifacts so a raw volumecontrol-host.exe can never be uploaded as a release asset.",
+        "Review round 2: any semver tag with a suffix is now classified as a prerelease (--prerelease=true --latest=false) on both the create and rerun paths, instead of only *-unt.* tags. This keeps suffixed tags off /releases/latest, which the client validate_release rejects.",
+        "Review round 2: set_volume_percent propagates set_mute(false) failures instead of discarding them, so volumecontrol-host set N cannot report success while output stays muted. Covered by cli_volume_write_reports_unmute_failure; 28 host_core tests pass, clippy clean, fmt clean."
+      ],
+      "notes": "Linux updater install branch is compile-checked in CI only on this Windows host; updater starts the replacement after the parent exits."
+    },
     {
       "id": "vol-120",
       "priority": 120,
@@ -59,7 +89,8 @@
         "2026-10-25: signing hooks (Authenticode PFX/thumbprint, Developer ID keychain+notarytool, GPG) with clean skip; CI runtime smoke on Ubuntu Xvfb/lavapipe and advisory macOS; .gitattributes binary/LF rules. Skip path and packaging re-verified locally.",
         "2026-10-25: native package names match updates::asset_filename (VolumeControl_<ver>_x64-setup.exe, volumecontrol-<ver>-linux-amd64.tar.gz, volumecontrol-<ver>-macos.zip); silent install/uninstall re-verified.",
         "2026-10-25: native packaging — NSIS setup.exe (silent install/uninstall verified, shortcuts+registry cleaned), portable zip, Linux tar.gz and macOS .app scripts, gated release workflow; release build no longer references Style::debug.",
-        "2026-10-25: UI/UX pass under way — tray popup, material modes, 26–28 px icon targets, type ramp, mixer 400×280, dropdown check/icon/label order, padded footer; docs in docs/dev/ui-system.md."],
+        "2026-10-25: UI/UX pass under way — tray popup, material modes, 26–28 px icon targets, type ramp, mixer 400×280, dropdown check/icon/label order, padded footer; docs in docs/dev/ui-system.md."
+      ],
       "evidence": [],
       "notes": "Requested by the user to be scheduled after the current goal. Start from docs/references/egui-design-tokens.md and docs/references/legacy-app/feature-reference.md."
     },

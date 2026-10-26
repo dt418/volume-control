@@ -48,6 +48,8 @@ pub struct LaunchOptions {
     pub target_surface: Option<SurfaceId>,
     pub settings_tab: Option<Tab>,
     pub overlay_demo: bool,
+    /// Login/autostart launch: tray-resident, no surface on screen.
+    pub background: bool,
     /// Enable egui's debug overlay (widget rects, hit areas, layout).
     pub debug_ui: bool,
 }
@@ -61,6 +63,7 @@ impl Default for LaunchOptions {
             target_surface: None,
             settings_tab: None,
             overlay_demo: false,
+            background: false,
             debug_ui: false,
         }
     }
@@ -279,13 +282,15 @@ impl VolumeControlApp {
         }
 
         let target = options.target_surface;
-        let mut root_shown = !matches!(target, Some(surface) if surface != SurfaceId::Mixer);
+        let background = options.background && target.is_none();
+        let mut root_shown =
+            !background && !matches!(target, Some(surface) if surface != SurfaceId::Mixer);
         if options.show_all {
             root_shown = true;
         }
         if let Some(surface) = target {
             state.show(surface);
-        } else {
+        } else if !background {
             state.show(SurfaceId::Mixer);
         }
         if options.show_all || options.smoke {
@@ -426,14 +431,15 @@ impl VolumeControlApp {
         }
     }
 
-    fn poll_single_instance(&mut self) {
+    fn poll_single_instance(&mut self, ctx: &egui::Context) {
         if self
             .primary
             .as_ref()
             .is_some_and(|guard| guard.poll_show_mixer())
         {
-            self.state.show(SurfaceId::Mixer);
-            self.root_shown = true;
+            // Modal surfaces never stack: route the wakeup through the same
+            // exclusive switch as tray and hotkey activations.
+            self.show_surface_exclusive(SurfaceId::Mixer, ctx);
         }
     }
 
@@ -1024,8 +1030,21 @@ impl VolumeControlApp {
         let patch = self.settings_draft.patch();
         let autostart = self.settings_draft.autostart;
         let language = self.settings_draft.language;
-        let modifier = self.pending_modifier.take();
-        self.dispatch(AppAction::ApplyConfigDraft(Box::new(patch)));
+        let modifier = self.pending_modifier;
+        let snapshot = self.core.config().clone();
+        if let Err(message) = self.core.apply_settings_draft(patch) {
+            // Persistence failed: restore the last known-good config (the file
+            // may be absent) and keep the dirty draft.
+            self.core.restore_config(snapshot);
+            self.config = self.core.config();
+            self.settings_error = Some(crate::settings::model::FieldError {
+                tab: self.settings_tab,
+                field: "config".to_string(),
+                message,
+            });
+            return;
+        }
+        self.pending_modifier = None;
         if let Some(modifier) = modifier {
             if let Err(error) = self.core.set_modifier(modifier) {
                 log::warn!("modifier change rejected: {error}");
@@ -1068,11 +1087,7 @@ impl VolumeControlApp {
                     picker: &mut self.picker,
                     running_apps: &self.running_apps,
                     update: &self.update_card,
-                    autostart_supported: cfg!(any(
-                        target_os = "windows",
-                        target_os = "macos",
-                        target_os = "linux"
-                    )),
+                    autostart_supported: cfg!(target_os = "windows"),
                     config_path: volumectl::config::config_path().display().to_string(),
                     config_notice: notice.as_deref(),
                     saved_blacklist: &self.config.blacklist,
@@ -1507,7 +1522,7 @@ impl eframe::App for VolumeControlApp {
         self.poll_core();
         self.poll_wheel();
         self.poll_updates(&ctx);
-        self.poll_single_instance();
+        self.poll_single_instance(&ctx);
         self.poll_tray(&ctx);
         self.sync_root_visibility(&ctx);
 

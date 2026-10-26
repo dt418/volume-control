@@ -35,6 +35,14 @@ attachment is gated behind the repository variable `EGUI_RELEASE_PUBLISH=true`
 so the current Tauri release stays authoritative until a dry run and the
 signing decision are done.
 
+Build and packaging are separate jobs on purpose. `compile` has no secrets at
+all and only produces `target/release/volumecontrol-host*`; `package` starts
+from a fresh checkout, downloads just that binary, stages it, and runs
+`scripts/package-egui.*` with its platform's signing secrets. A compromised
+dependency `build.rs` therefore cannot rewrite a packaging script and have it
+executed next to the certificates. The `publish` job downloads only `egui-*`
+artifacts, so a raw `volumecontrol-host.exe` never becomes a release asset.
+
 `.github/workflows/egui-host.yml` runs unit tests, clippy, and fmt on
 Windows/Linux/macOS for every change to the Rust crates.
 
@@ -84,6 +92,11 @@ The release notes state that signatures are not trusted yet.
 Untrusted test releases can still use a `vX.Y.Z-unt.N` tag: it bypasses the Tauri Release
 workflow (`!v*-unt.*`) and creates a GitHub prerelease titled
 "(untrusted egui build)" directly from `egui-release.yml`.
+
+Any semver tag with a suffix (`-beta.1`, `-rc.2`, `-unt.8`) is published as a
+prerelease and is never marked GitHub Latest. The client's `validate_release`
+rejects suffixed tags, so marking one Latest would break update checks for
+every client until another release took the slot.
 
 Publishing refuses artifacts while `WINDOWS_ALLOW_UNTRUSTED_SIGNATURE=true` or
 `MACOS_SIGNING_DISABLED=true`; a semver tag fails at the `Refuse untrusted

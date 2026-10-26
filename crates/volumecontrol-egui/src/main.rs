@@ -26,6 +26,7 @@ fn parse_options() -> LaunchOptions {
             "--show-all" => options.show_all = true,
             "--overlay-demo" => options.overlay_demo = true,
             "--debug-ui" => options.debug_ui = true,
+            "--background" => options.background = true,
             _ => {
                 if let Some(ms) = arg
                     .strip_prefix("--smoke-ms=")
@@ -75,10 +76,8 @@ fn main() -> Result<(), String> {
     if let Some(verb) = cli::parse(&raw_args) {
         let (config, notice) = config::load_with_notice();
         let (sink, _events) = EguiSink::new(eframe::egui::Context::default());
-        let audio = match audio::default_backend() {
-            Ok(backend) => backend,
-            Err(error) => Box::new(audio::UnavailableAudio::new(error.to_string())),
-        };
+        let audio =
+            audio::default_backend().map_err(|error| format!("audio unavailable: {error}"))?;
         let mut core =
             AppCore::new_with_notice(audio, config.clone(), config.modifier, sink, notice)
                 .map_err(|error| format!("core init failed: {error}"))?;
@@ -90,12 +89,18 @@ fn main() -> Result<(), String> {
         return Ok(());
     }
 
+    let options = parse_options();
     let guard = match single_instance::acquire() {
         Launch::Primary(guard) => guard,
-        Launch::Secondary => return Ok(()),
+        Launch::Secondary => {
+            // A background autostart duplicate must stay invisible; only an
+            // interactive launch asks the resident primary for its Mixer.
+            if !options.background {
+                let _ = single_instance::signal_show_mixer();
+            }
+            return Ok(());
+        }
     };
-
-    let options = parse_options();
     let (config, notice) = config::load_with_notice();
     let area = WorkArea::new(0.0, 0.0, 1600.0, 900.0);
     #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
