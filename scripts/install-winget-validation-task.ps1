@@ -4,75 +4,52 @@
   Register a Windows scheduled task that checks the winget PR validation.
 
 .DESCRIPTION
-  Runs scripts/check-winget-validation.ps1 every -IntervalMinutes. The checker
-  logs to %LOCALAPPDATA%\VolumeControl\winget-validation\, posts one ping when
-  Validation-Completed appears, then disables this task.
+  Registers the "winget-validation" developer task defined in
+  scripts/lib/DevTask.ps1 and runs scripts/check-winget-validation.ps1 every
+  -IntervalMinutes. The checker logs to
+  %LOCALAPPDATA%\VolumeControl\winget-validation\, posts one ping when
+  Validation-Completed appears, then unregisters this task.
+
+  The task is created hidden at the process level and runs with
+  -WindowStyle Hidden, so it never flashes a console window. Re-running this
+  script repairs a stale registration instead of leaving it in place.
+
+  List or remove every developer task with scripts/dev-tasks.ps1.
 
 .PARAMETER IntervalMinutes
   Check interval. Default: 5.
 
-.PARAMETER TaskName
-  Scheduled task name. Default: VolumeControl-WingetValidation.
+.PARAMETER LifetimeDays
+  How long the repetition may keep firing before giving up. Default: 14.
 
 .PARAMETER Unregister
-  Remove the scheduled task instead of creating it.
+  Remove the scheduled task instead of creating it, including any legacy root
+  registration.
+
+.PARAMETER Purge
+  With -Unregister, also delete the task's state directory.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts/install-winget-validation-task.ps1
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File scripts/install-winget-validation-task.ps1 -Unregister
+  powershell -ExecutionPolicy Bypass -File scripts/install-winget-validation-task.ps1 -Unregister -Purge
 #>
 [CmdletBinding()]
 param(
-  [int]$IntervalMinutes = 5,
-  [string]$TaskName = "VolumeControl-WingetValidation",
-  [switch]$Unregister
+  [int]$IntervalMinutes = 0,
+  [int]$LifetimeDays = 0,
+  [switch]$Unregister,
+  [switch]$Purge
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 
-$repo = Split-Path $PSScriptRoot -Parent
-$checker = Join-Path $PSScriptRoot "check-winget-validation.ps1"
+. (Join-Path $PSScriptRoot 'lib/DevTask.ps1')
 
 if ($Unregister) {
-  Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-  Write-Host "Removed task: $TaskName"
+  Uninstall-DevTask -Id 'winget-validation' -Purge:$Purge | Out-Null
   exit 0
 }
 
-if (-not (Test-Path $checker -PathType Leaf)) {
-  throw "Checker not found: $checker"
-}
-if ($IntervalMinutes -lt 1) {
-  throw "IntervalMinutes must be at least 1"
-}
-
-$powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-$arguments = "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$checker`" -PingOnGreen -StopOnTerminal -TaskName `"$TaskName`""
-
-$action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $repo
-$trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(1)) `
-  -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
-  -RepetitionDuration (New-TimeSpan -Days 3650)
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
-  -MultipleInstances IgnoreNew `
-  -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
-  -AllowStartIfOnBatteries `
-  -DontStopIfGoingOnBatteries
-$principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" `
-  -LogonType Interactive -RunLevel Limited
-
-Register-ScheduledTask -TaskName $TaskName `
-  -Action $action `
-  -Trigger $trigger `
-  -Settings $settings `
-  -Principal $principal `
-  -Description "Checks microsoft/winget-pkgs PR #454508 validation; logs to %LOCALAPPDATA%\VolumeControl\winget-validation." `
-  -Force | Out-Null
-
-$task = Get-ScheduledTask -TaskName $TaskName
-$info = Get-ScheduledTaskInfo -TaskName $TaskName
-Write-Host "Registered: $($task.TaskName) [$($task.State)]"
-Write-Host "Next run: $($info.NextRunTime)"
-Write-Host "Log: $(Join-Path $env:LOCALAPPDATA 'VolumeControl\winget-validation\status.log')"
+Install-DevTask -Id 'winget-validation' -IntervalMinutes $IntervalMinutes -LifetimeDays $LifetimeDays | Out-Null

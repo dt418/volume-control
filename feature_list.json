@@ -2032,7 +2032,7 @@
       "evidence": [
         "Session 125 (2026-10-22): added the mirrored `winget-publish` skill, manifest/shims/status helpers, scheduled validation and merge watchers, the 3-hour GitHub Actions watcher (static cron; manual dispatch remains available), the `.gitignore` skill exceptions, and the compressed `CLAUDE.md` guidance. Pre-push review found and fixed the API fallback, Sandbox host-write, PowerShell 7, localized-output, and documentation/records issues."
       ],
-      "notes": "Pinned to PR #454508 / 0.1.9. CI is not active until this commit lands on main; upstream moderation and catalog publication are still pending. The publication result must be appended only after `winget show` and a catalog-based install succeed."
+      "notes": "Pinned to PR #454508 / 0.1.9. CI is not active until this commit lands on main; upstream moderation and catalog publication are still pending. The publication result must be appended only after `winget show` and a catalog-based install succeed. Developer task lifecycle, hidden registration and cleanup now live in vol-122 / scripts/lib/DevTask.ps1; watchers register under VolumeControl-Dev and unregister themselves on a terminal state."
     },
     {
       "id": "vol-124",
@@ -2051,6 +2051,27 @@
         "Session 147 (2026-10-26): PR #84 (aed3c76) added WATCHDOG.yml to .gitignore but did not untrack it, so the rule had no effect on an already-tracked path and every local advisor/model edit kept showing up as an uncommitted change. Fixed with git rm --cached; the existing ignore rule from #84 is kept as the only source of truth."
       ],
       "notes": "Untracking records a deletion, so pulling this commit removes the file from the working tree; that is the documented, recoverable path. The ignore rule only prevents re-adding. No consumer of WATCHDOG.yml exists in the repository. History keeps earlier revisions."
+    },
+    {
+      "id": "vol-123",
+      "priority": 122,
+      "area": "tooling",
+      "title": "Developer scheduled tasks are visible, hidden, bounded and self-cleaning",
+      "user_visible_behavior": "Developers can list, verify and remove every background watcher this repository registers on their machine with one command, and those watchers never flash a console window and never outlive their purpose or an app uninstall.",
+      "status": "passing",
+      "verification": [
+        "PS 5.1 parser accepted scripts/lib/DevTask.ps1, scripts/dev-tasks.ps1, both installers and both checkers.",
+        "scripts/install-winget-merge-task.ps1 registered VolumeControl-DevWingetMergeWatch; Export-ScheduledTask showed <Hidden>true</Hidden>, -WindowStyle Hidden, -NonInteractive and <Duration>P14D</Duration>.",
+        "scripts/dev-tasks.ps1 -Verify returned 0 with the task healthy, 1 after forcing drift (windowed action, Hidden=false) reporting flags drift,visible, and 0 again after the installer printed Re-registered (drift detected: arguments, hidden).",
+        "A legacy root registration (VolumeControl-WingetMergeWatch) is reported as a (legacy) row with flag legacy and -Verify returns 1.",
+        "Terminal-state cleanup exercised end to end: check-winget-merge.ps1 -PrNumber <closed-unmerged PR> -StopOnTerminal was called against a fake StateDir and unregistered both VolumeControl-DevWingetMergeWatch and the legacy VolumeControl-WingetMergeWatch, logging two unregistered lines.",
+        "scripts/dev-tasks.ps1 -Unregister -Purge left no task and no state directory behind (Get-ScheduledTask returns nothing, %LOCALAPPDATA%VolumeControlwinget-merge absent)."
+      ],
+      "evidence": [
+        "Session 146 (2026-10-26): the machine showed a powershell console window every 10 minutes. Root cause: a VolumeControl-WingetMergeWatch registration created 2026-10-22, before commit 3c3bcde added -NonInteractive -WindowStyle Hidden, so the fix never reached the installed task; it also carried no TASK_FLAG_HIDDEN and a 3650-day repetition. The task survived the app uninstall because developer tasks live in the Task Scheduler store, which no installer or uninstaller touches. Fixed by a shared catalog (scripts/lib/DevTask.ps1), a namespaced VolumeControl-Dev folder, hidden+bounded registration, drift-repairing installers, unregister-on-terminal checkers and scripts/dev-tasks.ps1 for inventory/verify/removal.",
+        "Local cleanup on the reporting machine: unregistered VolumeControl-WingetValidation, deleted %LOCALAPPDATA%VolumeControl (303.9 KB)."
+      ],
+      "notes": "Watchers stay pinned to PR #454508 / 0.1.9. Bulk state logs (runtime.log, status.log) are still unbounded; rotation was scoped out of this change."
     }
   ]
 }

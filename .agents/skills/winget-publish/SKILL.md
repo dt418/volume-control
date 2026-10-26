@@ -218,27 +218,74 @@ with:
 powershell -ExecutionPolicy Bypass -File scripts/install-winget-validation-task.ps1
 ```
 
+## 4a. Developer tasks: know what is running in the background
+
+The watchers are Windows scheduled tasks in the `\VolumeControl-Dev\` folder.
+They run outside the application, so **uninstalling the app does not remove
+them** and nothing in the app UI lists them. Treat them as machine state that
+you own while developing and must remove afterwards.
+
+Always inspect before and after:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev-tasks.ps1          # inventory
+powershell -ExecutionPolicy Bypass -File scripts/dev-tasks.ps1 -Verify  # exit 1 on any flag
+powershell -ExecutionPolicy Bypass -File scripts/dev-tasks.ps1 -Unregister -Purge
+```
+
+The inventory reports, per task: registration path, state, `Hidden`, interval,
+repetition lifetime, last/next run, state-directory size and flags:
+
+- `legacy` - registered at the task root instead of `\VolumeControl-Dev\`
+- `drift` - arguments or hidden flag no longer match `scripts/lib/DevTask.ps1`
+- `visible` - would show a console window (not hidden, or no `-WindowStyle Hidden`)
+- `unbounded` - repetition lifetime longer than the catalog value
+- `expired` - repetition lifetime elapsed; it will never fire again
+- `orphan` - state directory left behind with no task registered
+- `missing` - task registered but the checker script is gone
+
+Task definitions, hidden/interval/lifetime defaults and the remove logic live in
+`scripts/lib/DevTask.ps1`. Change behavior there, not in the installers.
+
+Rules that keep these tasks invisible and self-cleaning:
+
+- Register through `scripts/install-winget-*-task.ps1` only. Re-running repairs a
+  stale registration (it prints `Re-registered (drift detected: ...)`), so after
+  pulling a change to `scripts/lib/DevTask.ps1`, re-run the installer instead of
+  trusting the existing task.
+- Tasks are created with `TASK_FLAG_HIDDEN` plus `-WindowStyle Hidden
+  -NonInteractive`. `TASK_FLAG_HIDDEN` is the reliable part: the console window
+  is created before PowerShell parses its arguments. Never register a watcher
+  without it.
+- `-RepetitionDuration` is bounded (14 days by default). Do not go back to a
+  multi-year "forever" repetition.
+- With `-StopOnTerminal` the checkers **unregister** the task (namespaced and any
+  legacy root registration) when the watched condition is terminal. Pass
+  `-KeepTask` to leave a disabled registration for inspection instead.
+- Run `scripts/dev-tasks.ps1 -Unregister -Purge` when you finish a submission.
+  It removes the task, the legacy registration and the state directory.
+
 The bundled watchers are pinned to the current new-package submission,
 **PR #454508 / version 0.1.9**. Before using them for another PR, update the
 default `PrNumber` and expected version in both checkers (the scheduled task
 inherits them), change `PR_NUMBER` in
-`.github/workflows/winget-publish-watch.yml`, and re-enable the scheduled task
-or workflow if it self-disabled. Otherwise they keep reporting the old
+`.github/workflows/winget-publish-watch.yml`, and re-register the task or
+re-enable the workflow if it stopped. Otherwise they keep reporting the old
 submission.
 
 The scheduled task runs with `-PingOnGreen -StopOnTerminal`: it posts one short
-moderator ping when validation turns green and then disables itself. Use the
-checker directly without those switches for read-only polling. It disables on
-red validation too, so after fixing a red run, reinstall or re-enable the task.
-Before posting any ping, check the PR comments for the `winget-review-ping`
-marker and do not add a duplicate.
+moderator ping when validation turns green and then removes itself. Use the
+checker directly without those switches for read-only polling. It also stops on
+red validation, so after fixing a red run, reinstall the task. Before posting
+any ping, check the PR comments for the `winget-review-ping` marker and do not
+add a duplicate.
 
 For a machine-independent merge check, the repo's
 `.github/workflows/winget-publish-watch.yml` runs every 3 hours (the cron
 expression is static; secrets and repository variables cannot change
 `on.schedule`), confirms the upstream PR is merged and the versioned manifest
 exists on winget-pkgs master, then disables its own schedule. CI cannot
-approve or merge the PR; the local `VolumeControl-WingetMergeWatch` task still
+approve or merge the PR; the local `WingetMergeWatch` developer task still
 verifies the Windows client catalog with `winget show`.
 
 The GitHub App reports validation through PR labels and comments. Do not rely

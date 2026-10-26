@@ -29,8 +29,10 @@
 param(
   [int]$PrNumber = 454508,
   [string]$StateDir = (Join-Path $env:LOCALAPPDATA "VolumeControl\winget-merge"),
-  [string]$TaskName = "VolumeControl-WingetMergeWatch",
-  [switch]$StopOnTerminal
+  [string]$TaskName = "WingetMergeWatch",
+  [string]$TaskPath = "\VolumeControl-Dev",
+  [switch]$StopOnTerminal,
+  [switch]$KeepTask
 )
 
 $ErrorActionPreference = "Stop"
@@ -56,16 +58,46 @@ function Get-GhPath {
   throw "GitHub CLI (gh.exe) not found"
 }
 
-function Disable-WatchTask {
+# Terminal state removes the task instead of leaving a disabled entry behind:
+# a developer task outlives the application uninstall, so nothing else would
+# ever clean it up. -KeepTask keeps a disabled registration for inspection.
+function Stop-WatchTask {
   if (-not $StopOnTerminal) { return }
-  try {
-    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
-    if ($task.State -ne "Disabled") {
-      Disable-ScheduledTask -TaskName $TaskName | Out-Null
-      Add-Content -Path $logPath -Value "$(Get-Date -Format o) disabled task $TaskName"
+
+  # Task Scheduler only matches a folder path that ends with the separator.
+  if (-not $TaskPath.EndsWith('\')) { $TaskPath = "$TaskPath\" }
+
+  $candidates = New-Object System.Collections.Generic.List[object]
+  $seen = @{}
+  $paths = @(
+    @{ Name = $TaskName; Path = $TaskPath },
+    @{ Name = $TaskName; Path = '\' },
+    @{ Name = "VolumeControl-$TaskName"; Path = '\' }
+  )
+  foreach ($candidate in $paths) {
+    $task = Get-ScheduledTask -TaskName $candidate.Name -TaskPath $candidate.Path -ErrorAction SilentlyContinue
+    if (-not $task) { continue }
+    $key = "$($task.TaskPath)$($task.TaskName)"
+    if ($seen.ContainsKey($key)) { continue }
+    $seen[$key] = $true
+    $candidates.Add($task)
+  }
+
+  foreach ($task in $candidates) {
+    $key = "$($task.TaskPath)$($task.TaskName)"
+    try {
+      if ($KeepTask) {
+        if ($task.State -ne "Disabled") {
+          Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath | Out-Null
+        }
+        Add-Content -Path $logPath -Value "$(Get-Date -Format o) disabled task $key"
+      } else {
+        Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false
+        Add-Content -Path $logPath -Value "$(Get-Date -Format o) unregistered task $key"
+      }
+    } catch {
+      Add-Content -Path $logPath -Value "$(Get-Date -Format o) WARN could not remove task ${key}: $($_.Exception.Message)"
     }
-  } catch {
-    Add-Content -Path $logPath -Value "$(Get-Date -Format o) WARN could not disable task ${TaskName}: $($_.Exception.Message)"
   }
 }
 
@@ -142,7 +174,7 @@ try {
   Add-Content -Path $logPath -Value ("{0} {1} expected={2} catalog={3}" -f $snapshot.checkedAt, $state, $version, $catalogVersion)
 
   if ($state -in @("published", "closed_not_merged")) {
-    Disable-WatchTask
+    Stop-WatchTask
   }
   exit 0
 } catch {
