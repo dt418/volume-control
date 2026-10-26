@@ -1,6 +1,6 @@
 {
   "project": "volume-control",
-  "last_updated": "2026-10-26T21:40",
+  "last_updated": "2026-10-26T23:59",
   "rules": {
     "single_active_feature": false,
     "passing_requires_evidence": true,
@@ -2061,7 +2061,7 @@
       "status": "passing",
       "verification": [
         "PS 5.1 parser accepted scripts/lib/DevTask.ps1, scripts/dev-tasks.ps1, both installers and both checkers.",
-        "scripts/install-winget-merge-task.ps1 registered VolumeControl-DevWingetMergeWatch; Export-ScheduledTask showed <Hidden>true</Hidden>, -WindowStyle Hidden, -NonInteractive and <Duration>P14D</Duration>.",
+        "scripts/install-winget-merge-task.ps1 registered \\VolumeControl-Dev\\WingetMergeWatch; Export-ScheduledTask showed the wscript.exe launcher (run-hidden.vbs, no console host), a bounded repetition, and <Hidden>false</Hidden> in the Task Scheduler UI on purpose (discoverability; the console window is suppressed by the launcher, not by hiding the task).",
         "scripts/dev-tasks.ps1 -Verify returned 0 with the task healthy, 1 after forcing drift (windowed action, Hidden=false) reporting flags drift,visible, and 0 again after the installer printed Re-registered (drift detected: arguments, hidden).",
         "A legacy root registration (VolumeControl-WingetMergeWatch) is reported as a (legacy) row with flag legacy and -Verify returns 1.",
         "Terminal-state cleanup exercised end to end: check-winget-merge.ps1 -PrNumber <closed-unmerged PR> -StopOnTerminal was called against a fake StateDir and unregistered both VolumeControl-DevWingetMergeWatch and the legacy VolumeControl-WingetMergeWatch, logging two unregistered lines.",
@@ -2080,7 +2080,8 @@
         "Round 3: a task renamed to \\SomewhereElse\\StrayName while keeping its action arguments is removed by check-winget-merge.ps1 -StopOnTerminal; the status log records 'unregistered task \\SomewhereElse\\StrayName'.",
         "Round 3: dev-tasks.ps1 -Id winget-validation -Verify scopes the inventory and the exit code to that watcher only.",
         "Round 3: Settings.Hidden forced back to true on a healthy registration is reported as hiddenUI and -Verify exits 1.",
-        "Round 3: installers reject -LifetimeDays above the 30-day cap with an explicit error, and the audit flags durations above the same cap as unbounded (the two can no longer disagree)."
+        "Round 3: installers reject -LifetimeDays above the 30-day cap with an explicit error, and the audit flags durations above the same cap as unbounded (the two can no longer disagree).",
+        "Merge review (2026-10-26): registered both catalog tasks, `dev-tasks.ps1 -Verify` exited 0 with no flags, and `-Unregister -Purge` removed both registrations; the post-clean inventory shows no catalog task registered and no leftover state."
       ],
       "evidence": [
         "Session 146 (2026-10-26): the machine showed a powershell console window every 10 minutes. Root cause: a VolumeControl-WingetMergeWatch registration created 2026-10-22, before commit 3c3bcde added -NonInteractive -WindowStyle Hidden, so the fix never reached the installed task; it also carried no TASK_FLAG_HIDDEN and a 3650-day repetition. The task survived the app uninstall because developer tasks live in the Task Scheduler store, which no installer or uninstaller touches. Fixed by a shared catalog (scripts/lib/DevTask.ps1), a namespaced VolumeControl-Dev folder, hidden+bounded registration, drift-repairing installers, unregister-on-terminal checkers and scripts/dev-tasks.ps1 for inventory/verify/removal.",
