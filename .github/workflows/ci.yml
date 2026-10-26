@@ -13,6 +13,15 @@
 # Pull requests that only touch docs/tooling keep the hosted Linux/macOS cost
 # bounded; code, UI, E2E, workflow, and release changes still exercise all
 # desktop platforms before merge. Pushes to main always run the full matrix.
+#
+# Speed notes (Ubuntu):
+# - Rust caches are only SAVED from main. PRs restore main's cache but never
+#   write their own, so PR branches cannot evict main's caches from the 10 GB
+#   repository cache budget (the usual cause of "cold" Rust builds).
+# - apt installs skip the man-db trigger, fsync, and translation indexes.
+# - Dev/test builds use line-tables-only debuginfo (smaller, faster to link).
+# - The release-bundle job caches Tauri's bundler tools and, on pull requests,
+#   builds only the .deb; main/tags still validate deb + rpm + AppImage.
 
 name: CI
 
@@ -23,6 +32,11 @@ on:
 
 permissions:
   contents: read
+
+# A new push to a PR cancels the superseded run. Runs on main are never cancelled.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   scope:
@@ -36,6 +50,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # Only commit/tree history is needed to compute the merge base;
+          # skipping historical blobs makes this gate (which every platform job
+          # waits on) much faster on large histories.
+          filter: blob:none
       - name: Classify change set
         id: scope
         shell: bash
@@ -56,7 +74,9 @@ jobs:
             platform_required=true
             reason="pull request SHAs were unavailable; fail open to full platform coverage"
           else
-            if ! changed_files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"; then
+            # --no-renames: a tree-only diff (no blob fetches), and a file moved
+            # out of a runtime path is reported under both its old and new path.
+            if ! changed_files="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")"; then
               platform_required=true
               reason="unable to inspect pull request diff; fail open to full platform coverage"
             else
@@ -137,11 +157,16 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          # e2e/tauri has its own lockfile; cache it too.
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/tauri/package-lock.json
       - name: Frontend build
         working-directory: frontend
         run: |
@@ -198,11 +223,15 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/tauri/package-lock.json
       - name: Frontend build
         working-directory: frontend
         run: |
@@ -259,33 +288,58 @@ jobs:
           rm -rf "$tmp"
 
   ubuntu:
-    name: Ubuntu 24.04 (GTK4/libadwaita + layer-shell)
+    name: Ubuntu 24.04 (build + tests)
+    # This job used to be ~12 min wall clock because it serialised the apt
+    # install, the 7-spec WebDriver E2E (271 s) and the release bundle build
+    # (203 s). Those are independent, so they now run as three parallel jobs
+    # and the critical path is the slowest one instead of their sum.
+    timeout-minutes: 25
     needs: scope
     runs-on: ubuntu-24.04
     if: ${{ needs.scope.outputs.platform_required == 'true' }}
+    env:
+      # Keep file:line in panics/backtraces but skip full debuginfo: faster
+      # compile + link and a much smaller target/ cache.
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install GTK4/libadwaita/Xvfb + Tauri deps
+      - name: Install GTK4/libadwaita + Tauri deps + Xvfb
+        shell: bash
+        timeout-minutes: 14
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev libpulse-dev libx11-dev libxi-dev libxtst-dev xvfb
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
-            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config libasound2-dev
+          export DEBIAN_FRONTEND=noninteractive
+          # Skip the man-db trigger: -dev packages ship hundreds of man pages
+          # and re-indexing them costs 20-60 s for nothing on a throwaway runner.
+          echo 'set man-db/auto-update false' | sudo debconf-communicate >/dev/null || true
+          sudo dpkg-reconfigure man-db || true
+          # GitHub-hosted Ubuntu 24.04 can stall on the Azure APT mirror.
+          # Preserve the runner's mirror list structure while switching its host.
+          if [[ -f /etc/apt/apt-mirrors.txt ]] && grep -q 'azure.archive.ubuntu.com' /etc/apt/apt-mirrors.txt; then
+            echo "Switching Azure Ubuntu mirror to archive.ubuntu.com"
+            sudo sed -i 's#azure.archive.ubuntu.com#archive.ubuntu.com#g' /etc/apt/apt-mirrors.txt
+          fi
+          APT=(sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25 -o Acquire::Languages=none -o Dpkg::Use-Pty=0)
+          timeout -k 15s 2m "${APT[@]}" update
+          PKGS=(libgtk-4-dev libadwaita-1-dev libpulse-dev libx11-dev libxi-dev libxtst-dev libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config libasound2-dev xvfb xauth)
           # GTK4 layer-shell is optional. Ubuntu 24.04 may not provide the
           # development package yet, so probe before installing and use the
           # X11 fallback without raising a CI warning when it is unavailable.
           if apt-cache show libgtk4-layer-shell-dev >/dev/null 2>&1; then
-            sudo apt-get install -y libgtk4-layer-shell-dev
+            PKGS+=(libgtk4-layer-shell-dev)
           else
             echo "GTK4 layer-shell development package unavailable; using the X11 fallback."
           fi
+          # One resolving call; --force-unsafe-io skips fsync during unpack.
+          timeout -k 15s 10m "${APT[@]}" install -y -o Dpkg::Options::=--force-unsafe-io "${PKGS[@]}"
       - name: Frontend build
         working-directory: frontend
         run: |
@@ -293,26 +347,6 @@ jobs:
           npm run build
       - name: Lint (clippy, workspace)
         run: cargo clippy --workspace --all-targets --no-default-features -- -D warnings
-      - name: Install isolated Tauri E2E dependencies
-        working-directory: e2e/tauri
-        run: npm ci
-      - name: Run Linux Tauri WebDriver E2E under Xvfb
-        env:
-          E2E_DRIVER_PROVIDER: embedded
-        run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-linux --virtual-audio
-      - name: Upload Linux Tauri E2E artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: tauri-e2e-linux
-          path: |
-            output/tauri-e2e/ci-linux/**/junit
-            output/tauri-e2e/ci-linux/**/manifest.json
-            output/tauri-e2e/ci-linux/**/timings.json
-            output/tauri-e2e/ci-linux/**/screenshot.png
-            output/tauri-e2e/ci-linux/**/accessibility-snapshot.json
-            output/tauri-e2e/ci-linux/**/logs
-          if-no-files-found: error
       - name: Build (no features — CLI fallback)
         run: cargo build
       - name: Test (no features — pure planning)
@@ -328,19 +362,155 @@ jobs:
           else
             echo "GTK4 layer-shell library unavailable; optional layer-shell build skipped."
           fi
+
+  ubuntu-e2e:
+    name: Ubuntu 24.04 (Tauri WebDriver E2E)
+    # The 7-spec WebDriver run is ~271 s. It shares nothing with the feature
+    # matrix, so it runs in parallel. The timeouts make a hung session fail
+    # fast and visibly: a stuck WebDriver session previously burned 45 minutes
+    # before it was cancelled by hand.
+    timeout-minutes: 25
+    needs: scope
+    runs-on: ubuntu-24.04
+    if: ${{ needs.scope.outputs.platform_required == 'true' }}
+    env:
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          # e2e/tauri has its own lockfile; without it here its `npm ci`
+          # re-downloads everything on every run.
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/tauri/package-lock.json
+      - name: Install E2E dependencies
+        shell: bash
+        timeout-minutes: 14
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          echo 'set man-db/auto-update false' | sudo debconf-communicate >/dev/null || true
+          sudo dpkg-reconfigure man-db || true
+          # GitHub-hosted Ubuntu 24.04 can stall on the Azure APT mirror.
+          # Preserve the runner's mirror list structure while switching its host.
+          if [[ -f /etc/apt/apt-mirrors.txt ]] && grep -q 'azure.archive.ubuntu.com' /etc/apt/apt-mirrors.txt; then
+            echo "Switching Azure Ubuntu mirror to archive.ubuntu.com"
+            sudo sed -i 's#azure.archive.ubuntu.com#archive.ubuntu.com#g' /etc/apt/apt-mirrors.txt
+          fi
+          APT=(sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25 -o Acquire::Languages=none -o Dpkg::Use-Pty=0)
+          timeout -k 15s 2m "${APT[@]}" update
+          timeout -k 15s 10m "${APT[@]}" install -y -o Dpkg::Options::=--force-unsafe-io libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config libasound2-dev libpulse-dev xvfb xauth
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Install isolated Tauri E2E dependencies
+        working-directory: e2e/tauri
+        run: npm ci
+      - name: Run Linux Tauri WebDriver E2E under Xvfb
+        env:
+          E2E_DRIVER_PROVIDER: embedded
+        timeout-minutes: 18
+        run: xvfb-run -a bash scripts/verify-tauri-e2e.sh --surface all --output-root output/tauri-e2e/ci-linux --virtual-audio
+      - name: Upload Linux Tauri E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tauri-e2e-linux
+          path: |
+            output/tauri-e2e/ci-linux/**/junit
+            output/tauri-e2e/ci-linux/**/manifest.json
+            output/tauri-e2e/ci-linux/**/timings.json
+            output/tauri-e2e/ci-linux/**/screenshot.png
+            output/tauri-e2e/ci-linux/**/accessibility-snapshot.json
+            output/tauri-e2e/ci-linux/**/logs
+          if-no-files-found: error
+
+  ubuntu-bundle:
+    name: Ubuntu 24.04 (release bundle validation)
+    # `tauri build --bundles deb,rpm,appimage` is ~203 s and shares only the
+    # toolchain with the feature matrix, so it runs in parallel too.
+    timeout-minutes: 25
+    needs: scope
+    runs-on: ubuntu-24.04
+    if: ${{ needs.scope.outputs.platform_required == 'true' }}
+    env:
+      # Pull requests only prove that bundling works end to end with the fast
+      # .deb target. Pushes to main (and therefore release tags cut from it)
+      # still validate every package format. To always build all formats,
+      # replace this expression with 'deb,rpm,appimage'.
+      BUNDLES: ${{ github.event_name == 'pull_request' && 'deb' || 'deb,rpm,appimage' }}
+      # Optional (disabled): drop LTO for a noticeably faster release compile.
+      # The CI artifact then no longer matches the real release 1:1.
+      # CARGO_PROFILE_RELEASE_LTO: "off"
+      # CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Own cache: this job builds --release, which shares almost no
+          # artifacts with the debug builds in the other Ubuntu jobs.
+          key: ubuntu-bundle
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Cache Tauri bundler tools (linuxdeploy, AppImage plugins)
+        # Tauri downloads these from GitHub on every cold run; the CLI version
+        # is pinned by the frontend lockfile, so key the cache on it.
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/tauri
+          key: tauri-bundler-tools-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            tauri-bundler-tools-${{ runner.os }}-
+      - name: Install GTK4/libadwaita + Tauri bundling deps
+        shell: bash
+        timeout-minutes: 14
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          echo 'set man-db/auto-update false' | sudo debconf-communicate >/dev/null || true
+          sudo dpkg-reconfigure man-db || true
+          # GitHub-hosted Ubuntu 24.04 can stall on the Azure APT mirror.
+          # Preserve the runner's mirror list structure while switching its host.
+          if [[ -f /etc/apt/apt-mirrors.txt ]] && grep -q 'azure.archive.ubuntu.com' /etc/apt/apt-mirrors.txt; then
+            echo "Switching Azure Ubuntu mirror to archive.ubuntu.com"
+            sudo sed -i 's#azure.archive.ubuntu.com#archive.ubuntu.com#g' /etc/apt/apt-mirrors.txt
+          fi
+          APT=(sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=25 -o Acquire::https::Timeout=25 -o Acquire::Languages=none -o Dpkg::Use-Pty=0)
+          timeout -k 15s 2m "${APT[@]}" update
+          timeout -k 15s 10m "${APT[@]}" install -y -o Dpkg::Options::=--force-unsafe-io libgtk-4-dev libadwaita-1-dev libpulse-dev libx11-dev libxi-dev libxtst-dev libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config libasound2-dev
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
       - name: Build release Tauri host and validate artifact (FE + BE)
         shell: bash
         run: |
-          frontend/node_modules/.bin/tauri build --bundles deb,rpm,appimage --ci
+          echo "Bundling: $BUNDLES"
+          frontend/node_modules/.bin/tauri build --bundles "$BUNDLES" --ci
           test -s target/release/VolumeControl && echo "VolumeControl present and non-empty"
           ls -la target/release/VolumeControl
           file target/release/VolumeControl
-          ls -la target/release/bundle/deb target/release/bundle/rpm target/release/bundle/appimage
+          for kind in ${BUNDLES//,/ }; do
+            ls -la "target/release/bundle/$kind"
+          done
 
   release-gate:
     name: Release gate (required)
     if: ${{ always() }}
-    needs: [scope, checks, windows, macos, ubuntu]
+    needs: [scope, checks, windows, macos, ubuntu, ubuntu-e2e, ubuntu-bundle]
     runs-on: ubuntu-24.04
     steps:
       - name: Enforce the selected platform matrix
@@ -352,6 +522,8 @@ jobs:
           WINDOWS_RESULT: ${{ needs.windows.result }}
           MACOS_RESULT: ${{ needs.macos.result }}
           UBUNTU_RESULT: ${{ needs.ubuntu.result }}
+          UBUNTU_E2E_RESULT: ${{ needs.ubuntu-e2e.result }}
+          UBUNTU_BUNDLE_RESULT: ${{ needs.ubuntu-bundle.result }}
         run: |
           set -euo pipefail
           if [[ "$SCOPE_RESULT" != "success" ]]; then
@@ -364,16 +536,20 @@ jobs:
             exit 1
           fi
           if [[ "$PLATFORM_REQUIRED" == "true" ]]; then
-            if [[ "$MACOS_RESULT" != "success" || "$UBUNTU_RESULT" != "success" ]]; then
-              echo "Cross-platform coverage was required but Linux/macOS did not succeed." >&2
-              printf 'macos=%s ubuntu=%s\n' "$MACOS_RESULT" "$UBUNTU_RESULT" >&2
+            if [[ "$MACOS_RESULT" != "success" || "$UBUNTU_RESULT" != "success" \
+                  || "$UBUNTU_E2E_RESULT" != "success" || "$UBUNTU_BUNDLE_RESULT" != "success" ]]; then
+              echo "Cross-platform coverage was required but a Linux/macOS job did not succeed." >&2
+              printf 'macos=%s ubuntu=%s ubuntu_e2e=%s ubuntu_bundle=%s\n' \
+                "$MACOS_RESULT" "$UBUNTU_RESULT" "$UBUNTU_E2E_RESULT" "$UBUNTU_BUNDLE_RESULT" >&2
               exit 1
             fi
             echo "Full Windows/Linux/macOS platform matrix passed."
           else
-            if [[ "$MACOS_RESULT" != "skipped" || "$UBUNTU_RESULT" != "skipped" ]]; then
+            if [[ "$MACOS_RESULT" != "skipped" || "$UBUNTU_RESULT" != "skipped" \
+                  || "$UBUNTU_E2E_RESULT" != "skipped" || "$UBUNTU_BUNDLE_RESULT" != "skipped" ]]; then
               echo "Docs/tooling-only scope expected Linux/macOS jobs to be skipped." >&2
-              printf 'macos=%s ubuntu=%s\n' "$MACOS_RESULT" "$UBUNTU_RESULT" >&2
+              printf 'macos=%s ubuntu=%s ubuntu_e2e=%s ubuntu_bundle=%s\n' \
+                "$MACOS_RESULT" "$UBUNTU_RESULT" "$UBUNTU_E2E_RESULT" "$UBUNTU_BUNDLE_RESULT" >&2
               exit 1
             fi
             echo "Docs/tooling-only pull request used the bounded-cost platform path."
