@@ -70,6 +70,13 @@ if ($Unregister) {
 }
 
 $inventory = @(Get-DevTaskInventory)
+# -Id scopes the inventory, the JSON output and -Verify, not just -Unregister:
+# restricting the check to one watcher is the common case when a single release
+# is in flight and another watcher is knowingly parked.
+if ($Id) {
+  $scoped = (Get-DevTaskDefinition -Id $Id).Id
+  $inventory = @($inventory | Where-Object { $_.Id -eq $scoped -or $_.Id -eq '(unclaimed marker)' })
+}
 $flagged = @($inventory | Where-Object { $_.Flags -ne 'ok' })
 
 if ($Json) {

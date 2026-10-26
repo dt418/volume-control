@@ -4623,3 +4623,15 @@ fn get_window_pid_x11() -> Option<u32> {
 - Change: `Find-DevTaskRegistrations` matches the description marker plus the namespaced and legacy names, so moved or renamed tasks are still owned; `Remove-DevTaskRegistration` targets one definition only; the inventory deduplicates by task path+name and reports `unclaimed` markers that no catalog entry claims.
 - Change: the audit compares the action executable, and treats a missing repetition duration as `unbounded`.
 - Verification: installer output asserts `Command=wscript.exe`, `//nologo` + `run-hidden.vbs`, no `<Hidden>`, `P14D`; installing merge leaves the legacy validation task untouched; a legacy-only registration appears once; `MovedWatcher` is discovered by its marker; swapping the executable to `cmd.exe` reports `drift,visible`; an interval without a duration reports `unbounded`; reinstall prints `Re-registered (drift detected: ...)` and then `-Verify` returns 0; `-Unregister -Purge` leaves nothing behind.
+
+## Session 150 (2026-10-26) - Dev tasks review round 3
+
+- Seven further findings on #88, all reproduced before fixing:
+  1. `run-hidden.vbs` passed `wait=False`, so wscript exited immediately and the still-running PowerShell checker escaped both `ExecutionTimeLimit` and `MultipleInstances=IgnoreNew`. Now `sh.Run cmd, 0, True`.
+  2. The PowerShell fallback branch called `$launcher.Arguments`, which the round-2 refactor had removed; the fallback now builds its own argument string.
+  3. A marked task renamed or moved still embeds the original `-TaskName` in its action arguments, so the checkers' exact-name lookups found nothing and it kept firing forever. Both checkers now also match the action arguments for their own task name.
+  4. `dev-tasks.ps1 -Id` was only honoured by `-Unregister`; inventory, JSON and `-Verify` ignored it. Now scoped.
+  5. `Settings.Hidden` drifting to true reported `ok`; a UI-hidden registration is undiscoverable, so it is now flagged `hiddenUI`.
+  6. Installers accepted any positive `-LifetimeDays` while the audit called anything above 14 days `unbounded`. Both now use one `$script:DevTaskMaxLifetimeDays = 30` cap, and the installer rejects above it.
+  7. The records promised developer tasks never outlive an app uninstall, which the skill itself contradicts. Corrected: nothing in the install/uninstall path knows about these tasks, which is exactly why `dev-tasks.ps1` exists.
+- Verification: launcher wait argument asserted; installer + inventory produce identical arguments; `\SomewhereElse\StrayName` (renamed, moved, original arguments) is unregistered by `check-winget-merge.ps1 -StopOnTerminal` and the status log records it; `-Id winget-validation -Verify` ignores the merge watcher and exits 0; forcing `Settings.Hidden=$true` yields `hiddenUI` and exit 1; `-LifetimeDays 3650` throws while 21 is accepted and shown as `P21D`.

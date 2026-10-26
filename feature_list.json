@@ -2057,7 +2057,7 @@
       "priority": 122,
       "area": "tooling",
       "title": "Developer scheduled tasks are visible, hidden, bounded and self-cleaning",
-      "user_visible_behavior": "Developers can list, verify and remove every background watcher this repository registers on their machine with one command; those watchers never paint a console window, keep their registration visible in the Task Scheduler UI, and never outlive their purpose or an app uninstall.",
+      "user_visible_behavior": "Developers can list, verify and remove every background watcher this repository registers on their machine with one command; those watchers never paint a console window, stay discoverable in the Task Scheduler UI, expire within a bounded lifetime, and unregister themselves when their watched condition is terminal. They are NOT removed by the application uninstaller: nothing in the install or uninstall path knows about them, which is why dev-tasks.ps1 exists.",
       "status": "passing",
       "verification": [
         "PS 5.1 parser accepted scripts/lib/DevTask.ps1, scripts/dev-tasks.ps1, both installers and both checkers.",
@@ -2074,7 +2074,13 @@
         "Executable drift is caught: swapping the action Command to cmd.exe while keeping the arguments reports drift,visible and -Verify exits 1.",
         "A repetition with an interval and no duration reports unbounded and -Verify exits 1.",
         "Re-running the installer after drift prints 'Re-registered (drift detected: ...)' and -Verify returns 0.",
-        "scripts/dev-tasks.ps1 -Unregister -Purge left no task and no state directory behind."
+        "scripts/dev-tasks.ps1 -Unregister -Purge left no task and no state directory behind.",
+        "Round 3 (7 findings): wscript launcher passes wait=True, so the checker process is still governed by the task's ExecutionTimeLimit and MultipleInstances policy instead of escaping when wscript exits.",
+        "Round 3: the PowerShell fallback branch builds its own argument string; nothing reads the removed $launcher.Arguments scriptblock (INSTALL and inventory produce identical arguments on the wscript path).",
+        "Round 3: a task renamed to \\SomewhereElse\\StrayName while keeping its action arguments is removed by check-winget-merge.ps1 -StopOnTerminal; the status log records 'unregistered task \\SomewhereElse\\StrayName'.",
+        "Round 3: dev-tasks.ps1 -Id winget-validation -Verify scopes the inventory and the exit code to that watcher only.",
+        "Round 3: Settings.Hidden forced back to true on a healthy registration is reported as hiddenUI and -Verify exits 1.",
+        "Round 3: installers reject -LifetimeDays above the 30-day cap with an explicit error, and the audit flags durations above the same cap as unbounded (the two can no longer disagree)."
       ],
       "evidence": [
         "Session 146 (2026-10-26): the machine showed a powershell console window every 10 minutes. Root cause: a VolumeControl-WingetMergeWatch registration created 2026-10-22, before commit 3c3bcde added -NonInteractive -WindowStyle Hidden, so the fix never reached the installed task; it also carried no TASK_FLAG_HIDDEN and a 3650-day repetition. The task survived the app uninstall because developer tasks live in the Task Scheduler store, which no installer or uninstaller touches. Fixed by a shared catalog (scripts/lib/DevTask.ps1), a namespaced VolumeControl-Dev folder, hidden+bounded registration, drift-repairing installers, unregister-on-terminal checkers and scripts/dev-tasks.ps1 for inventory/verify/removal.",

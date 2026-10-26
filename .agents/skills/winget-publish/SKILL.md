@@ -273,6 +273,9 @@ Rules that keep these tasks quiet and self-cleaning:
   `-KeepTask` to leave a disabled registration for inspection instead.
 - Run `scripts/dev-tasks.ps1 -Unregister -Purge` when you finish a submission.
   It removes the task, the legacy registration and the state directory.
+- Nothing else cleans these up. The application installer and uninstaller never touch
+  the Task Scheduler store, so a watcher outlives both the repo checkout and an app
+  uninstall until you remove it here. That is the reason this command exists.
 
 The bundled watchers are pinned to the current new-package submission,
 **PR #454508 / version 0.1.9**. Before using them for another PR, update the

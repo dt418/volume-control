@@ -89,6 +89,22 @@ function Stop-CheckTask {
     $candidates.Add($task)
   }
 
+  # A registration that was renamed or moved still carries this task's name in
+  # its own arguments, so exact-name lookups miss it and the task would keep
+  # firing forever. Match the action arguments instead: they embed the
+  # -TaskName this checker was started with.
+  foreach ($task in (Get-ScheduledTask -ErrorAction SilentlyContinue)) {
+    $key = "$($task.TaskPath)$($task.TaskName)"
+    if ($seen.ContainsKey($key)) { continue }
+    $arguments = [string]$task.Actions[0].Arguments
+    # Two argument shapes occur: `-TaskName Name` (plain powershell) and
+    # `"-TaskName" "Name"` (the wscript launcher quotes every token).
+    $pattern = '-TaskName"?\s+"?' + [regex]::Escape($TaskName) + '"?'
+    if ($arguments -notmatch $pattern) { continue }
+    $seen[$key] = $true
+    $candidates.Add($task)
+  }
+
   foreach ($task in $candidates) {
     $key = "$($task.TaskPath)$($task.TaskName)"
     try {

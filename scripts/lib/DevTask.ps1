@@ -31,6 +31,9 @@ $script:DevTaskFolder = '\VolumeControl-Dev'
 # trailing separator; registration accepts either form.
 $script:DevTaskFolderQuery = '\VolumeControl-Dev\'
 $script:DevTaskMarker = 'volume-control-dev-task'
+# Upper bound accepted by the installers. The inventory flags anything above it
+# as `unbounded`, so the two cannot disagree about what a valid lifetime is.
+$script:DevTaskMaxLifetimeDays = 30
 $script:DevTaskCatalog = @(
   @{
     Id              = 'winget-merge'
@@ -139,7 +142,7 @@ function Get-DevTaskAction {
     $quoted = @($vbs, $powershell, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $checker) + $extra
     $argument = '//nologo ' + (($quoted | ForEach-Object { "`"$_`"" }) -join ' ')
   } else {
-    $argument = "$(($launcher.Arguments.Invoke($checker))) $($extra -join ' ')"
+    $argument = "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$checker`" $($extra -join ' ')"
   }
 
   $params = @{ Execute = $launcher.Execute; Argument = $argument }
@@ -231,6 +234,9 @@ function Install-DevTask {
   $definition = Get-DevTaskDefinition -Id $Id
   if ($IntervalMinutes -lt 1) { $IntervalMinutes = $definition.IntervalMinutes }
   if ($LifetimeDays -lt 1) { $LifetimeDays = $definition.LifetimeDays }
+  if ($LifetimeDays -gt $script:DevTaskMaxLifetimeDays) {
+    throw "LifetimeDays $LifetimeDays exceeds the supported maximum of $($script:DevTaskMaxLifetimeDays) days; a watcher must not outlive a release cycle. Use -LifetimeDays $($script:DevTaskMaxLifetimeDays) or less."
+  }
 
   $checker = Join-Path (Split-Path $PSScriptRoot -Parent) $definition.Checker
   if (-not (Test-Path $checker -PathType Leaf)) { throw "Checker not found: $checker" }
@@ -369,6 +375,10 @@ function Get-DevTaskInventory {
       # Hidden, or anything else that allocates a console it will show.
       $hiddenLauncher = ($execute -match '(?i)wscript\.exe$') -or ($arguments -match '-WindowStyle\s+Hidden')
       if (-not $hiddenLauncher) { $flags.Add('visible') }
+      # A registration hidden in the Task Scheduler UI is undiscoverable by
+      # design-breaking drift, even though the launcher still suppresses the
+      # console window.
+      if ($task.Settings.Hidden) { $flags.Add('hiddenUI') }
       if (-not (Test-Path $checker -PathType Leaf)) { $flags.Add('missing') }
 
       $interval = $null
@@ -381,7 +391,7 @@ function Get-DevTaskInventory {
           $durationFound = $true
           try {
             $span = [System.Xml.XmlConvert]::ToTimeSpan([string]$trigger.Repetition.Duration)
-            if ($span.TotalDays -gt $definition.LifetimeDays) { $unbounded = $true }
+            if ($span.TotalDays -gt $script:DevTaskMaxLifetimeDays) { $unbounded = $true }
           } catch {
             $unbounded = $true
           }
