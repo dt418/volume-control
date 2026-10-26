@@ -43,6 +43,7 @@
   - Kept `crates/liquid_glass` in the workspace (plan decision) and kept `src-tauri`/`frontend` as the separately packaged Tauri app until packaging moves to the egui binary.
   - Docs updated: parity sweep native column marked historical, runtime-adapter marked retired, bench script targets `VolumeControl-Egui` only.
   - Verification: workspace tests green across remaining suites; clippy `-D warnings` clean; fmt clean; workspace check builds without the removed crates.
+
 # Progress Log
 
 ## Session 135 (2026-10-23) - Restore native WGPU surfaces and computer-use accessibility
@@ -4574,3 +4575,11 @@ fn get_window_pid_x11() -> Option<u32> {
   - Bumped every version surface to 0.1.12 (`check-version-sync.sh v0.1.12` passes) and added the 0.1.12 changelog entry.
   - `RELEASE_ENGINE=egui`: the Tauri Release jobs skip, and `egui-release.yml` now creates a normal (non-prerelease, latest) GitHub release with the native assets and an explicit untrusted-signature note.
   - Preparations for PR + squash merge into `main`, then tag `v0.1.12`.
+
+## Session 147 (2026-10-26) - Untrack personal WATCHDOG.yml
+
+- `WATCHDOG.yml` is personal orca advisor configuration (advisor list, model ids, `enabled` flags); nothing in the repository reads it (grep over workflows, scripts, skills, docs and JSON returns nothing).
+- PR #84 (`aed3c76`, merged 2026-10-25) added `WATCHDOG.yml` to `.gitignore` but did not untrack the file. `.gitignore` never applies to an already-tracked path, so the rule was inert: `git ls-tree origin/main --name-only` still listed it and every local edit kept appearing as an uncommitted change.
+- Fixed the actual problem with `git rm --cached WATCHDOG.yml` on top of `origin/main`, keeping the #84 ignore rule as the only source of truth (no duplicate entry). The working copy survives with the local advisor edits intact.
+- Verification: `git ls-files WATCHDOG.yml` returns nothing; the file is still on disk (670 B); `git status --short` no longer lists it; a local edit produces no diff; history still reaches earlier revisions.
+- Migration note for other clones: this commit records the deletion, so pulling it removes `WATCHDOG.yml` from the working tree. The ignore rule only keeps the path untracked afterwards; it cannot preserve the previously tracked copy. Recover the latest committed version with `git show <parent>:WATCHDOG.yml > WATCHDOG.yml` (or from the reflog of your own clone) before or after pulling, and keep it out of git from then on. A clone with uncommitted edits to the file will see the update blocked by a delete/modify conflict instead, which is the safe outcome.
