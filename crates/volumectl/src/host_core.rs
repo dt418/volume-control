@@ -690,8 +690,10 @@ impl AppCore {
         self.audio.set_volume(target).map_err(|e| e.to_string())?;
         if target > 0.0 {
             // Positive direct writes resume audible output, matching the
-            // AppAction path; ignore unmute failures as that path does.
-            let _ = self.audio.set_mute(false);
+            // AppAction path. A failed unmute leaves the endpoint silent, so
+            // it is reported instead of being discarded: the caller must not
+            // be told a positive volume took effect while output stays muted.
+            self.audio.set_mute(false).map_err(|e| e.to_string())?;
             self.mute_restore_volume = None;
         }
         self.publish_confirmed_state(true);

@@ -1,3 +1,9 @@
+- Session 146 (2026-10-26) - Release-blocker review round 2
+  - Signing isolation moved from step scope to job scope: `egui-release.yml` now has a `compile` job with no secrets that builds and uploads `target/release/volumecontrol-host*`, and a `package` job that starts from a fresh checkout, downloads only that binary, stages it into `target/release`, and runs the packaging script with its platform secrets. A `build.rs` in the compile job can no longer rewrite `scripts/package-egui.*` and have it executed next to certificates.
+  - The `publish` job downloads only `egui-*` artifacts (`pattern` + `merge-multiple`), so the raw `volumecontrol-host.exe` from the compile job can never reach a release.
+  - Prerelease classification widened from `*-unt.*` to any suffixed semver tag: `--prerelease=true --latest=false` on both create and rerun paths, so `v1.2.3-beta.1` cannot claim GitHub Latest and break `validate_release` for every client.
+  - `set_volume_percent` propagates `set_mute(false)` failures instead of discarding them; `volumecontrol-host set N` can no longer exit 0 while output stays muted. New test `cli_volume_write_reports_unmute_failure` drives a backend that accepts volume writes and refuses unmute.
+  - Verification: `cargo test -p volumectl --test host_core` 28 passed (including the new case), workspace clippy `-D warnings` clean, `cargo fmt --all --check` clean, workflow YAML parses.
 - Session 145 (2026-10-25) - Egui release blockers fixed
   - Launch: added `--background` for autostart (tray-resident, root parked) and made a second launch signal the resident instance to reveal the Mixer.
   - CLI: uses the real audio backend and propagates set/mute errors; the degraded backend is GUI-only.

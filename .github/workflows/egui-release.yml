@@ -5,6 +5,13 @@ name: Egui release artifacts
 # to the GitHub release only when the repository variable
 # EGUI_RELEASE_PUBLISH=true (flip after a dry run + signing decision), so the
 # existing Tauri release remains authoritative until the cutover is verified.
+#
+# Compile and package are separate jobs on purpose. A dependency build script
+# runs during `cargo build`; if the signing steps shared that runner and
+# workspace, a compromised build.rs could rewrite scripts/package-egui.* and
+# have it executed with the certificate and GPG secrets in its environment.
+# The compile job below has no secrets at all, and the package job starts from
+# a fresh checkout and receives only the built binary.
 
 on:
   push:
@@ -22,8 +29,44 @@ permissions:
   contents: write
 
 jobs:
+  compile:
+    name: Compile host (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            artifact: windows
+          - os: ubuntu-24.04
+            artifact: linux
+          - os: macos-15
+            artifact: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libx11-xcb-dev \
+            libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev \
+            libpulse-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libxkbcommon-x11-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # No signing material in this job, by construction: it has no secrets.
+      - name: Compile host
+        shell: bash
+        run: cargo build --release -p volumecontrol-egui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hostbin-${{ matrix.artifact }}
+          path: target/release/volumecontrol-host*
+          if-no-files-found: error
+
   package:
     name: Package (${{ matrix.os }})
+    needs: compile
     strategy:
       fail-fast: false
       matrix:
@@ -31,12 +74,15 @@ jobs:
           - os: windows-2025
             script: pwsh -File scripts/package-egui.ps1
             artifact: egui-windows
+            hostbin: windows
           - os: ubuntu-24.04
             script: bash scripts/package-egui.sh
             artifact: egui-linux
+            hostbin: linux
           - os: macos-15
             script: bash scripts/package-egui.sh
             artifact: egui-macos
+            hostbin: macos
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -60,14 +106,11 @@ jobs:
             value=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' src-tauri/tauri.conf.json | head -n1)
           fi
           echo "value=$value" >> "$GITHUB_OUTPUT"
-      - name: Install Linux windowing dependencies
+      - name: Install packaging tools (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libwayland-dev libx11-xcb-dev \
-            libxrandr-dev libxi-dev libxcursor-dev libgl1-mesa-dev \
-            libpulse-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libxkbcommon-x11-0 rpm
+          sudo apt-get install -y rpm
       - name: Install appimagetool (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -77,13 +120,18 @@ jobs:
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
         run: choco install nsis --no-progress -y
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # Compile with NO signing material in the environment: dependency build
-      # scripts must never see certificates or private keys.
-      - name: Compile host
+      # The binary comes from the secret-free compile job; this job starts from
+      # a fresh checkout, so no build script can have altered the workspace.
+      - uses: actions/download-artifact@v4
+        with:
+          name: hostbin-${{ matrix.hostbin }}
+          path: .hostbin
+      - name: Stage compiled host
         shell: bash
-        run: cargo build --release -p volumecontrol-egui
+        run: |
+          mkdir -p target/release
+          cp .hostbin/volumecontrol-host* target/release/
+          ls -la target/release
       - name: Package and sign (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -149,9 +197,13 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/') && vars.EGUI_RELEASE_PUBLISH == 'true'
     runs-on: ubuntu-24.04
     steps:
+      # Only the packaged artifacts, never the raw compiled binaries: a bare
+      # `volumecontrol-host.exe` must not be uploaded as a release asset.
       - uses: actions/download-artifact@v4
         with:
+          pattern: egui-*
           path: dist
+          merge-multiple: true
       - name: Refuse untrusted artifacts unless waived
         env:
           TAG: ${{ github.ref_name }}
@@ -182,22 +234,34 @@ jobs:
             echo "Tag $TAG is a dry run (not semver); skipping release upload."
             exit 0
           fi
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            if [[ "$TAG" == *-unt.* ]]; then
-              gh release create "$TAG" --prerelease --latest=false \
-                --title "VolumeControl $TAG (untrusted egui build)" \
-                --notes "UNTRUSTED build: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Do not use for general distribution."
-            else
-              gh release create "$TAG" --latest \
-                --title "VolumeControl $TAG" \
-                --notes "Free egui build. Signatures are not trusted yet: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Windows SmartScreen and macOS Gatekeeper will warn until purchase-backed certificates are configured."
-            fi
+          # Any semver tag with a suffix is a prerelease, not just `-unt.*`.
+          # The client's validate_release rejects suffixed tags, so a suffixed
+          # tag marked Latest would break update checks for every client.
+          prerelease=false
+          latest=true
+          if [[ "$TAG" == *-* ]]; then
+            prerelease=true
+            latest=false
+          fi
+          if [[ "$prerelease" == true && "$TAG" != *-unt.* ]]; then
+            title="VolumeControl $TAG (prerelease)"
+          elif [[ "$TAG" == *-unt.* ]]; then
+            title="VolumeControl $TAG (untrusted egui build)"
           else
-            if [[ "$TAG" == *-unt.* ]]; then
-              gh release edit "$TAG" --prerelease --latest=false
-            else
-              gh release edit "$TAG" --prerelease=false --latest
-            fi
+            title="VolumeControl $TAG"
+          fi
+          if [[ "$TAG" == *-unt.* ]]; then
+            notes="UNTRUSTED build: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Do not use for general distribution."
+          elif [[ "$prerelease" == true ]]; then
+            notes="Prerelease build of $TAG. Not served as the latest release; clients validating stable tags ignore suffixed versions."
+          else
+            notes="Free egui build. Signatures are not trusted yet: the Windows installer is self-signed, the macOS app is ad-hoc signed, and the Linux checksums are GPG-signed. Windows SmartScreen and macOS Gatekeeper will warn until purchase-backed certificates are configured."
+          fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease="$prerelease" --latest="$latest" \
+              --title "$title" --notes "$notes"
+          else
+            gh release edit "$TAG" --prerelease="$prerelease" --latest="$latest"
           fi
           mkdir -p release
           find dist -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.dmg' -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' \) \

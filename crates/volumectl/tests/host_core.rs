@@ -253,6 +253,63 @@ fn cli_volume_write_unmutes_like_an_action() {
     assert_eq!(state.percent(), 40);
 }
 
+/// [`StubAudio`] that accepts volume writes but refuses to unmute, so the
+/// positive-write unmute path has an observable failure.
+struct UnmuteFailingAudio {
+    state: Mutex<VolumeState>,
+}
+
+impl AudioBackend for UnmuteFailingAudio {
+    fn get_state(&self) -> Result<VolumeState, AudioError> {
+        Ok(*self.state.lock().unwrap())
+    }
+    fn set_volume(&self, volume: f32) -> Result<(), AudioError> {
+        self.state.lock().unwrap().volume = volume;
+        Ok(())
+    }
+    fn toggle_mute(&self) -> Result<VolumeState, AudioError> {
+        let mut state = self.state.lock().unwrap();
+        state.muted = !state.muted;
+        Ok(*state)
+    }
+    fn set_mute(&self, muted: bool) -> Result<(), AudioError> {
+        if muted {
+            self.state.lock().unwrap().muted = true;
+            Ok(())
+        } else {
+            Err(AudioError::DeviceLost)
+        }
+    }
+}
+
+#[test]
+fn cli_volume_write_reports_unmute_failure() {
+    let sink = Arc::new(RecordingSink::default());
+    let mut core = AppCore::new_without_native_hotkeys(
+        Box::new(UnmuteFailingAudio {
+            state: Mutex::new(VolumeState {
+                volume: 0.5,
+                muted: true,
+            }),
+        }),
+        Config::default(),
+        HotkeyModifier::CtrlAlt,
+        sink,
+        None,
+    )
+    .unwrap();
+
+    // The volume write itself succeeded, but the endpoint stayed muted. The
+    // CLI must not exit 0 here, otherwise `volumecontrol-host set 50` claims
+    // success while output is silent.
+    let err = core.set_volume_percent(40).unwrap_err();
+    assert!(!err.is_empty(), "unmute failure must be reported: {err}");
+    assert!(
+        core.last_state().muted,
+        "the endpoint is still muted, so the error must not be swallowed"
+    );
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn linux_core_uses_a_supported_sessions_source() {
