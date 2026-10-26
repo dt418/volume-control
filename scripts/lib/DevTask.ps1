@@ -11,15 +11,16 @@
   remove them.
 
   Every task is:
-    * registered under the \VolumeControl-Dev\ task folder (visible in the Task
-      Scheduler UI as one group, never mixed with Windows or app tasks),
-    * stamped with a description marker so the audit can find it even if the
-      folder is changed,
-    * created hidden at the process level (TASK_FLAG_HIDDEN) and with
-      -WindowStyle Hidden -NonInteractive on the command line, so it never
-      flashes a console window,
+    * registered under the \VolumeControl-Dev\ task folder, with a description
+      marker so it stays attributable even if the folder is renamed,
+    * started through scripts/lib/run-hidden.vbs (a GUI-subsystem host) with
+      window style 0, so no console window is ever created visibly,
     * bounded in lifetime instead of a decade-long repetition,
     * unregistered (not merely disabled) when the watched condition is terminal.
+
+  The task itself stays VISIBLE in the Task Scheduler UI on purpose. Hiding it
+  there is what makes background work undiscoverable; discoverability is the
+  point of this module and of scripts/dev-tasks.ps1.
 
   Dot-source it:
       . "$PSScriptRoot/lib/DevTask.ps1"
@@ -55,10 +56,6 @@ $script:DevTaskCatalog = @(
   }
 )
 
-# Leaf names used by the pre-namespace installers. Kept so the audit can report
-# and remove tasks registered before the move into \VolumeControl-Dev\.
-$script:DevTaskLegacyNames = @('VolumeControl-WingetMergeWatch', 'VolumeControl-WingetValidation')
-
 function Get-DevTaskCatalog {
   <#
   .SYNOPSIS
@@ -80,6 +77,18 @@ function Get-DevTaskDefinition {
   throw "Unknown dev task '$Id'. Known: $((($script:DevTaskCatalog | ForEach-Object { $_.Id }) -join ', '))"
 }
 
+function Get-DevTaskLegacyName {
+  <#
+  .SYNOPSIS
+    Leaf name used by the pre-namespace installers for one definition.
+  .DESCRIPTION
+    Scoped to a single definition: installing one watcher must never remove the
+    legacy registration of a different watcher.
+  #>
+  param([Parameter(Mandatory)]$Definition)
+  return "VolumeControl-$($Definition.Name)"
+}
+
 function Get-DevTaskDescription {
   <#
   .SYNOPSIS
@@ -90,35 +99,117 @@ function Get-DevTaskDescription {
   return "$($script:DevTaskMarker)|id=$($Definition.Id)|$($Definition.Description)"
 }
 
-function Get-DevTaskArguments {
+function Get-DevTaskLauncher {
   <#
   .SYNOPSIS
-    Build the desired powershell.exe argument string for a definition.
+    Resolve the launcher for a task action.
+  .DESCRIPTION
+    Prefers scripts/lib/run-hidden.vbs, run by wscript.exe: that host has no
+    console attached, so the child's console window is created already hidden
+    and no frame is ever painted. `powershell.exe -WindowStyle Hidden` is the
+    fallback when wscript.exe is unavailable (the window is created first and
+    hidden once PowerShell parses its arguments, which can flash).
   #>
-  param([Parameter(Mandatory)]$Definition)
+  $vbs = Join-Path $PSScriptRoot 'run-hidden.vbs'
+  $wscript = Join-Path $env:SystemRoot 'System32\wscript.exe'
+  $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+
+  if ((Test-Path $vbs -PathType Leaf) -and (Test-Path $wscript -PathType Leaf)) {
+    return [pscustomobject]@{ Execute = $wscript; Kind = 'wscript' }
+  }
+  return [pscustomobject]@{ Execute = $powershell; Kind = 'powershell-windowstyle' }
+}
+
+function Get-DevTaskAction {
+  <#
+  .SYNOPSIS
+    Build the scheduled task action for a definition.
+  #>
+  param([Parameter(Mandatory)]$Definition, [string]$WorkingDirectory = '')
 
   $checker = Join-Path (Split-Path $PSScriptRoot -Parent) $Definition.Checker
   $extra = @($Definition.CheckerArgs) + @('-TaskName', $Definition.Name, '-TaskPath', $script:DevTaskFolder)
-  return "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$checker`" $($extra -join ' ')"
+  $launcher = Get-DevTaskLauncher
+
+  # The launcher arguments are quoted for wscript, so the checker path and the
+  # checker switches travel as separate quoted argv entries.
+  if ($launcher.Kind -eq 'wscript') {
+    $vbs = Join-Path $PSScriptRoot 'run-hidden.vbs'
+    $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $quoted = @($vbs, $powershell, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $checker) + $extra
+    $argument = '//nologo ' + (($quoted | ForEach-Object { "`"$_`"" }) -join ' ')
+  } else {
+    $argument = "$(($launcher.Arguments.Invoke($checker))) $($extra -join ' ')"
+  }
+
+  $params = @{ Execute = $launcher.Execute; Argument = $argument }
+  if ($WorkingDirectory) { $params.WorkingDirectory = $WorkingDirectory }
+  return New-ScheduledTaskAction @params
+}
+
+function Find-DevTaskRegistrations {
+  <#
+  .SYNOPSIS
+    Every registration this repository owns, wherever it currently lives.
+  .DESCRIPTION
+    Enumerates all scheduled tasks and matches on (a) the description marker,
+    (b) the namespaced name, and (c) the legacy root name. The marker is what
+    keeps a task attributable after a folder rename or a hand-moved task; an
+    exact-name lookup alone would report "not registered" and leave it running.
+  #>
+  param([Parameter(Mandatory)]$Definition)
+
+  $marker = "$($script:DevTaskMarker)|id=$($Definition.Id)"
+  $wanted = @($Definition.Name, (Get-DevTaskLegacyName -Definition $Definition))
+
+  $results = New-Object System.Collections.Generic.List[object]
+  $seen = @{}
+
+  $all = Get-ScheduledTask -ErrorAction SilentlyContinue
+  foreach ($task in $all) {
+    $description = [string]$task.Description
+    $match = $description.StartsWith($marker, [System.StringComparison]::Ordinal) -or
+      ($wanted -contains $task.TaskName -and ($task.TaskPath -eq $script:DevTaskFolderQuery -or $task.TaskPath -eq '\'))
+    if (-not $match) { continue }
+
+    $key = "$($task.TaskPath)$($task.TaskName)"
+    if ($seen.ContainsKey($key)) { continue }
+    $seen[$key] = $true
+    $results.Add($task)
+  }
+
+  return $results
 }
 
 function Get-DevTaskRegistration {
   <#
   .SYNOPSIS
-    Find the registered task that belongs to a definition, if any.
-  .DESCRIPTION
-    Checks the namespaced folder first, then the legacy root registration.
-    Returns $null when the task is not registered.
+    The single registration that owns a definition, preferring the namespaced one.
   #>
   param([Parameter(Mandatory)]$Definition)
 
-  $task = Get-ScheduledTask -TaskName $Definition.Name -TaskPath $script:DevTaskFolderQuery -ErrorAction SilentlyContinue
-  if ($task) { return $task }
+  $all = @(Find-DevTaskRegistrations -Definition $Definition)
+  if ($all.Count -eq 0) { return $null }
+  foreach ($task in $all) {
+    if ($task.TaskPath -eq $script:DevTaskFolderQuery) { return $task }
+  }
+  return $all[0]
+}
 
-  $legacy = Get-ScheduledTask -TaskName "VolumeControl-$($Definition.Name)" -TaskPath '\' -ErrorAction SilentlyContinue
-  if ($legacy) { return $legacy }
+function Remove-DevTaskRegistration {
+  <#
+  .SYNOPSIS
+    Remove every registration of one definition, namespaced and legacy.
+  #>
+  param([Parameter(Mandatory)]$Definition)
 
-  return $null
+  $removed = 0
+  foreach ($task in (Find-DevTaskRegistrations -Definition $Definition)) {
+    Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false
+    Write-Host "Removed task: $($task.TaskPath)$($task.TaskName)"
+    $removed++
+  }
+  return $removed
 }
 
 function Install-DevTask {
@@ -127,7 +218,7 @@ function Install-DevTask {
     Register (or repair) a developer task so it matches the catalog.
   .DESCRIPTION
     Registration is idempotent and self-correcting: an existing task whose
-    arguments, principal or hidden flag no longer match the catalog is
+    launcher, arguments, hidden flag or folder no longer match the catalog is
     re-registered. This closes the drift that let a stale, visibly-flashing
     registration keep running after the installer had been fixed.
   #>
@@ -145,47 +236,46 @@ function Install-DevTask {
   if (-not (Test-Path $checker -PathType Leaf)) { throw "Checker not found: $checker" }
 
   $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-  $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-  $arguments = Get-DevTaskArguments -Definition $definition
+  $desiredAction = Get-DevTaskAction -Definition $definition -WorkingDirectory $repo
 
-  $action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $repo
   $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(1)) `
     -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes) `
     -RepetitionDuration (New-TimeSpan -Days $LifetimeDays)
+  # No -Hidden: the task stays visible in the Task Scheduler UI so a developer
+  # can find it. The console window is suppressed by the launcher instead.
   $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
     -MultipleInstances IgnoreNew `
     -ExecutionTimeLimit (New-TimeSpan -Minutes $definition.TimeLimitMin) `
     -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries `
-    -Hidden
+    -DontStopIfGoingOnBatteries
   $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" `
     -LogonType Interactive -RunLevel Limited
 
   $existing = Get-DevTaskRegistration -Definition $definition
   $drift = @()
   if ($existing) {
-    if ($existing.Actions[0].Execute -ne $powershell) { $drift += 'execute' }
-    if ($existing.Actions[0].Arguments -ne $arguments) { $drift += 'arguments' }
-    if (-not $existing.Settings.Hidden) { $drift += 'hidden' }
+    if ($existing.Actions[0].Execute -ne $desiredAction.Execute) { $drift += 'launcher' }
+    if ($existing.Actions[0].Arguments -ne $desiredAction.Arguments) { $drift += 'arguments' }
+    if ($existing.Settings.Hidden) { $drift += 'task hidden in UI' }
     if ($existing.TaskPath -ne $script:DevTaskFolderQuery) { $drift += 'taskpath' }
   }
 
   Register-ScheduledTask -TaskName $definition.Name `
     -TaskPath $script:DevTaskFolder `
-    -Action $action `
+    -Action $desiredAction `
     -Trigger $trigger `
     -Settings $settings `
     -Principal $principal `
     -Description (Get-DevTaskDescription -Definition $definition) `
     -Force | Out-Null
 
-  # A legacy root registration would double-fire next to the namespaced one.
-  foreach ($legacyName in $script:DevTaskLegacyNames) {
-    $legacyTask = Get-ScheduledTask -TaskName $legacyName -TaskPath '\' -ErrorAction SilentlyContinue
-    if ($legacyTask) {
-      Unregister-ScheduledTask -TaskName $legacyTask.TaskName -TaskPath $legacyTask.TaskPath -Confirm:$false
-      Write-Host "Removed legacy task: \$($legacyTask.TaskName)"
-    }
+  # Only this definition's legacy registration: removing another watcher's
+  # legacy task would silently stop that watcher's polling.
+  $legacyName = Get-DevTaskLegacyName -Definition $definition
+  $legacyTask = Get-ScheduledTask -TaskName $legacyName -TaskPath '\' -ErrorAction SilentlyContinue
+  if ($legacyTask) {
+    Unregister-ScheduledTask -TaskName $legacyTask.TaskName -TaskPath $legacyTask.TaskPath -Confirm:$false
+    Write-Host "Removed legacy task: \$($legacyTask.TaskName)"
   }
 
   $registered = Get-ScheduledTask -TaskName $definition.Name -TaskPath $script:DevTaskFolderQuery
@@ -196,10 +286,11 @@ function Install-DevTask {
   } else {
     Write-Host "Registered: $($registered.TaskPath)$($registered.TaskName) [$($registered.State)]"
   }
-  Write-Host "Interval: every $IntervalMinutes min, lifetime $LifetimeDays day(s), hidden: $($registered.Settings.Hidden)"
+  Write-Host "Every $IntervalMinutes min, lifetime $LifetimeDays day(s), launcher: $(if ((Get-DevTaskLauncher).Kind -eq 'wscript') { 'wscript (no console window)' } else { 'powershell -WindowStyle Hidden' })"
   Write-Host "Next run: $($info.NextRunTime)"
   Write-Host "Log: $(Join-Path $definition.StateDir 'status.log')"
-  Write-Host "Remove: powershell -ExecutionPolicy Bypass -File scripts/dev-tasks.ps1 -Unregister $($definition.Id) -Purge"
+  Write-Host "Inspect: powershell -ExecutionPolicy Bypass -File scripts/dev-tasks.ps1"
+  Write-Host "Remove:  powershell -ExecutionPolicy Bypass -File scripts/dev-tasks.ps1 -Unregister $($definition.Id) -Purge"
 
   return $registered
 }
@@ -207,10 +298,11 @@ function Install-DevTask {
 function Uninstall-DevTask {
   <#
   .SYNOPSIS
-    Remove a developer task, including any legacy root registration.
+    Remove a developer task, including any legacy or moved registration.
   .DESCRIPTION
-    Purge deletes the task's state directory as well. The application uninstall
-    never touched these paths, so removing the task is the only cleanup step.
+    Only the selected definition is touched. Purge deletes the task's state
+    directory as well; the application uninstall never touched these paths, so
+    removing the task is the only cleanup step.
   #>
   param(
     [Parameter(Mandatory)][string]$Id,
@@ -219,24 +311,7 @@ function Uninstall-DevTask {
   )
 
   $definition = Get-DevTaskDefinition -Id $Id
-  $removed = 0
-
-  $task = Get-ScheduledTask -TaskName $definition.Name -TaskPath $script:DevTaskFolderQuery -ErrorAction SilentlyContinue
-  if ($task) {
-    Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false
-    Write-Host "Removed task: $($task.TaskPath)$($task.TaskName)"
-    $removed++
-  }
-
-  foreach ($legacyName in $script:DevTaskLegacyNames) {
-    $legacyTask = Get-ScheduledTask -TaskName $legacyName -TaskPath '\' -ErrorAction SilentlyContinue
-    if ($legacyTask) {
-      Unregister-ScheduledTask -TaskName $legacyTask.TaskName -TaskPath $legacyTask.TaskPath -Confirm:$false
-      Write-Host "Removed legacy task: \$($legacyTask.TaskName)"
-      $removed++
-    }
-  }
-
+  $removed = Remove-DevTaskRegistration -Definition $definition
   if ($removed -eq 0) { Write-Host "No task registered for $Id" }
 
   if ($Purge -and -not $KeepState) {
@@ -260,93 +335,132 @@ function Get-DevTaskInventory {
   .SYNOPSIS
     Enumerate every developer task and the on-disk state it owns.
   .DESCRIPTION
-    Produces one row per catalog entry with the live registration (if any) plus
-    an explicit flag list, so "what is running in the background" is a single
-    command instead of a guess. Flags:
-        legacy      registered in the task root instead of \VolumeControl-Dev\
-        drift       arguments or hidden flag no longer match the catalog
-        visible     window would be shown (not hidden, or no -WindowStyle Hidden)
-        unbounded   repetition lifetime longer than the catalog value
-        expired     repetition lifetime has elapsed; it will never fire again
+    Produces one row per registration (never the same physical task twice) plus
+    one row per catalog entry with no registration but leftover state. Flags:
+        legacy      registered in the task root or a stale folder
+        drift       launcher/arguments no longer match the catalog
+        visible     the launch mechanism would show a console window
+        unbounded   repetition lifetime missing or longer than the catalog value
+        expired     repetition lifetime elapsed; it will never fire again
         orphan      state directory exists but no task is registered
-        missing     task registered but checker script is gone
+        missing     task registered but the checker script is gone
   #>
-  $rows = foreach ($definition in $script:DevTaskCatalog) {
-    $task = Get-DevTaskRegistration -Definition $definition
-    $info = $null
-    $interval = $null
-    $duration = $null
-    $checker = Join-Path (Split-Path $PSScriptRoot -Parent) $definition.Checker
-    $flags = New-Object System.Collections.Generic.List[string]
+  $rows = New-Object System.Collections.Generic.List[object]
+  $assigned = @{}
 
-    if ($task) {
+  foreach ($definition in $script:DevTaskCatalog) {
+    $checker = Join-Path (Split-Path $PSScriptRoot -Parent) $definition.Checker
+    $desired = Get-DevTaskAction -Definition $definition
+    $registrations = @(Find-DevTaskRegistrations -Definition $definition)
+
+    foreach ($task in $registrations) {
+      $key = "$($task.TaskPath)$($task.TaskName)"
+      $assigned[$key] = $true
+
       $info = Get-ScheduledTaskInfo -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue
       $arguments = [string]$task.Actions[0].Arguments
+      $execute = [string]$task.Actions[0].Execute
+      $flags = New-Object System.Collections.Generic.List[string]
+
       if ($task.TaskPath -ne $script:DevTaskFolderQuery) { $flags.Add('legacy') }
-      if ($arguments -ne (Get-DevTaskArguments -Definition $definition)) { $flags.Add('drift') }
-      if (-not $task.Settings.Hidden -or $arguments -notmatch '-WindowStyle\s+Hidden') { $flags.Add('visible') }
+      if ($execute -ne $desired.Execute) { $flags.Add('drift') }
+      elseif ($arguments -ne $desired.Arguments) { $flags.Add('drift') }
+      # Visible means: the launcher is plain powershell without -WindowStyle
+      # Hidden, or anything else that allocates a console it will show.
+      $hiddenLauncher = ($execute -match '(?i)wscript\.exe$') -or ($arguments -match '-WindowStyle\s+Hidden')
+      if (-not $hiddenLauncher) { $flags.Add('visible') }
       if (-not (Test-Path $checker -PathType Leaf)) { $flags.Add('missing') }
 
       $interval = $null
-      $duration = $null
+      $durationFound = $false
+      $unbounded = $false
       foreach ($trigger in $task.Triggers) {
-        if ($trigger.Repetition -and $trigger.Repetition.Interval) { $interval = $trigger.Repetition.Interval }
-        if ($trigger.Repetition -and $trigger.Repetition.Duration) { $duration = $trigger.Repetition.Duration }
-      }
-      if ($duration) {
-        # Reject anything beyond the catalog's intent; ISO8601 duration strings
-        # from the scheduler are normalized through TimeSpan.
-        try {
-          $span = [System.Xml.XmlConvert]::ToTimeSpan($duration)
-          if ($span.TotalDays -gt $definition.LifetimeDays) { $flags.Add('unbounded') }
-        } catch {
-          $flags.Add('unbounded')
+        if (-not $trigger.Repetition) { continue }
+        if ($trigger.Repetition.Interval) { $interval = $trigger.Repetition.Interval }
+        if ($trigger.Repetition.Duration) {
+          $durationFound = $true
+          try {
+            $span = [System.Xml.XmlConvert]::ToTimeSpan([string]$trigger.Repetition.Duration)
+            if ($span.TotalDays -gt $definition.LifetimeDays) { $unbounded = $true }
+          } catch {
+            $unbounded = $true
+          }
         }
       }
+      # Task Scheduler treats an omitted repetition duration as "repeat
+      # indefinitely", so a missing duration on a repeating trigger is exactly
+      # the unbounded case this audit exists to catch.
+      if ($interval -and -not $durationFound) { $unbounded = $true }
+      if ($unbounded) { $flags.Add('unbounded') }
       if ($info -and $info.NextRunTime -eq [DateTime]::MinValue -and $task.State -ne 'Disabled') { $flags.Add('expired') }
-    } elseif (Test-Path $definition.StateDir) {
-      $flags.Add('orphan')
+
+      $stateSize = 0
+      if (Test-Path $definition.StateDir) {
+        $stateSize = (Get-ChildItem $definition.StateDir -Recurse -File -ErrorAction SilentlyContinue |
+          Measure-Object Length -Sum).Sum
+      }
+
+      $rows.Add([pscustomobject]@{
+        Id           = $definition.Id
+        Task         = "$($task.TaskPath)$($task.TaskName)"
+        State        = [string]$task.State
+        HiddenInUI   = [string]$task.Settings.Hidden
+        EveryMinutes = if ($interval) { $interval } else { '-' }
+        LastRun      = if ($info) { $info.LastRunTime } else { '-' }
+        NextRun      = if ($info) { $info.NextRunTime } else { '-' }
+        StateKB      = [math]::Round($stateSize / 1KB, 1)
+        Flags        = if ($flags.Count -gt 0) { $flags -join ',' } else { 'ok' }
+      })
     }
 
-    $stateDir = $definition.StateDir
-    $stateSize = 0
-    if (Test-Path $stateDir) {
-      $stateSize = (Get-ChildItem $stateDir -Recurse -File -ErrorAction SilentlyContinue |
+    if ($registrations.Count -eq 0 -and (Test-Path $definition.StateDir)) {
+      $stateSize = (Get-ChildItem $definition.StateDir -Recurse -File -ErrorAction SilentlyContinue |
         Measure-Object Length -Sum).Sum
-    }
-
-    [pscustomobject]@{
-      Id           = $definition.Id
-      Task         = if ($task) { "$($task.TaskPath)$($task.TaskName)" } else { "(not registered)" }
-      State        = if ($task) { [string]$task.State } else { '-' }
-      Hidden       = if ($task) { [string]$task.Settings.Hidden } else { '-' }
-      EveryMinutes = if ($interval) { $interval } else { '-' }
-      Lifetime     = if ($duration) { $duration } else { '-' }
-      LastRun      = if ($info) { $info.LastRunTime } else { '-' }
-      NextRun      = if ($info) { $info.NextRunTime } else { '-' }
-      StateKB      = [math]::Round($stateSize / 1KB, 1)
-      Flags        = if ($flags.Count -gt 0) { $flags -join ',' } else { 'ok' }
+      $rows.Add([pscustomobject]@{
+        Id           = $definition.Id
+        Task         = '(not registered)'
+        State        = '-'
+        HiddenInUI   = '-'
+        EveryMinutes = '-'
+        LastRun      = '-'
+        NextRun      = '-'
+        StateKB      = [math]::Round($stateSize / 1KB, 1)
+        Flags        = 'orphan'
+      })
+    } elseif ($registrations.Count -eq 0) {
+      $rows.Add([pscustomobject]@{
+        Id           = $definition.Id
+        Task         = '(not registered)'
+        State        = '-'
+        HiddenInUI   = '-'
+        EveryMinutes = '-'
+        LastRun      = '-'
+        NextRun      = '-'
+        StateKB      = 0
+        Flags        = 'ok'
+      })
     }
   }
 
-  # Unattributed leftovers: root-folder tasks from the pre-namespace installers.
-  foreach ($legacyName in $script:DevTaskLegacyNames) {
-    $task = Get-ScheduledTask -TaskName $legacyName -TaskPath '\' -ErrorAction SilentlyContinue
-    if ($task) {
-      $info = Get-ScheduledTaskInfo -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue
-      [pscustomobject]@{
-        Id           = "(legacy) $legacyName"
-        Task         = '\' + $task.TaskName
-        State        = [string]$task.State
-        Hidden       = [string]$task.Settings.Hidden
-        EveryMinutes = '-'
-        Lifetime     = '-'
-        LastRun      = if ($info) { $info.LastRunTime } else { '-' }
-        NextRun      = if ($info) { $info.NextRunTime } else { '-' }
-        StateKB      = 0
-        Flags        = 'legacy'
-      }
-    }
+  # Marked tasks that no catalog entry claimed (renamed id, moved folder, or a
+  # definition that was removed from the catalog while its task kept running).
+  foreach ($task in (Get-ScheduledTask -ErrorAction SilentlyContinue)) {
+    if (-not ([string]$task.Description).StartsWith($script:DevTaskMarker, [System.StringComparison]::Ordinal)) { continue }
+    $key = "$($task.TaskPath)$($task.TaskName)"
+    if ($assigned.ContainsKey($key)) { continue }
+
+    $info = Get-ScheduledTaskInfo -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue
+    $rows.Add([pscustomobject]@{
+      Id           = '(unclaimed marker)'
+      Task         = $key
+      State        = [string]$task.State
+      HiddenInUI   = [string]$task.Settings.Hidden
+      EveryMinutes = '-'
+      LastRun      = if ($info) { $info.LastRunTime } else { '-' }
+      NextRun      = if ($info) { $info.NextRunTime } else { '-' }
+      StateKB      = 0
+      Flags        = 'unclaimed'
+    })
   }
 
   return $rows

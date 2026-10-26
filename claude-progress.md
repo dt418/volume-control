@@ -4600,3 +4600,26 @@ fn get_window_pid_x11() -> Option<u32> {
   - Both checkers gained `-TaskPath` and now **unregister** (namespaced and legacy root) on a terminal state instead of leaving a disabled entry behind; `-KeepTask` retains the old inspect-only behavior. Task-path comparisons normalize the trailing separator because `Get-ScheduledTask` silently matches nothing without it.
   - `winget-publish` skill (`.agents` + mirrored `.claude`) documents the lifecycle: inspect before/after, register only through the installers, never drop `-Hidden` or restore a multi-year repetition, and run `-Unregister -Purge` when the submission finishes.
 - Verification: PS 5.1 parser clean on all six scripts; registration XML asserts `<Hidden>true</Hidden>`, `-WindowStyle Hidden`, `-NonInteractive`, `<Duration>P14D</Duration>`; `-Verify` returned 0 healthy, 1 on forced drift (`drift,visible`) and 1 on a legacy root registration, then 0 after reinstall repaired it; a real checker run against a closed-unmerged PR unregistered both the namespaced and legacy tasks and logged it; `-Unregister -Purge` left no task and no state directory.
+  - Tasks register under `\VolumeControl-Dev\` with a `volume-control-dev-task|id=...` description marker and start through `scripts/lib/run-hidden.vbs` via `wscript.exe`, which has no console attached, so the child console window is created already hidden. (Round 2 corrected this: the earlier `-Hidden` task flag was measured not to hide the process at all.)
+  - Repetition lifetime is bounded to 14 days instead of 3650; register is idempotent and self-correcting, printing `Re-registered (drift detected: ...)` when arguments, hidden flag or task path no longer match the catalog. Registration also removes that definition's legacy root task so a stale copy cannot double-fire, without touching any other watcher.
+  - `winget-publish` skill (`.agents` + mirrored `.claude`) documents the lifecycle: inspect before/after, register only through the installers, never bypass the `run-hidden.vbs` launcher or restore a multi-year repetition, and run `-Unregister -Purge` when the submission finishes.
+- Verification: PS 5.1 parser clean on all six scripts; registration asserts `Command=wscript.exe`, `//nologo` + `run-hidden.vbs`, and `<Duration>P14D</Duration>`; `-Verify` returned 0 healthy, 1 on forced drift (`drift,visible`) and 1 on a legacy root registration, then 0 after reinstall repaired it; a real checker run against a closed-unmerged PR unregistered both the namespaced and legacy tasks and logged it; `-Unregister -Purge` left no task and no state directory.
+
+## Session 149 (2026-10-26) - Dev tasks review round 2: launcher, scoping, audit accuracy
+
+- Six review findings on #88, all valid:
+  1. Legacy cleanup was catalog-wide, so installing the merge watcher deleted a legacy validation watcher.
+  2. `New-ScheduledTaskSettingsSet -Hidden` was documented as process-level hiding; it only hides the task in the Task Scheduler UI.
+  3. Inventory listed a legacy-only registration twice (once as the catalog row, once as a legacy row).
+  4. A marked task renamed/moved outside the namespace was undiscoverable, so `-Verify` and `-Unregister` missed it.
+  5. Inventory compared only arguments, so a swapped action executable still reported `ok`.
+  6. A repetition with an interval and no duration reported `ok`, although Task Scheduler repeats indefinitely without a duration.
+- Measured hiding mechanisms with a probe task that reports its own `GetConsoleWindow()` + `IsWindowVisible`:
+  - plain PowerShell action -> `visible=True` (the original bug)
+  - `-WindowStyle Hidden` -> `visible=False`
+  - `-Hidden` setting + plain action -> `visible=True`, so `-Hidden` does not hide the process
+  - `scripts/lib/run-hidden.vbs` via `wscript.exe`, as the catalog now builds it -> `visible=False`, `ConsoleWindowClass` created hidden
+- Change: `-Hidden` dropped on purpose, because a hidden registration is undiscoverable and discoverability is what this feature is for. Launch through `scripts/lib/run-hidden.vbs` with window style 0, falling back to `-WindowStyle Hidden` when `wscript.exe` is unavailable.
+- Change: `Find-DevTaskRegistrations` matches the description marker plus the namespaced and legacy names, so moved or renamed tasks are still owned; `Remove-DevTaskRegistration` targets one definition only; the inventory deduplicates by task path+name and reports `unclaimed` markers that no catalog entry claims.
+- Change: the audit compares the action executable, and treats a missing repetition duration as `unbounded`.
+- Verification: installer output asserts `Command=wscript.exe`, `//nologo` + `run-hidden.vbs`, no `<Hidden>`, `P14D`; installing merge leaves the legacy validation task untouched; a legacy-only registration appears once; `MovedWatcher` is discovered by its marker; swapping the executable to `cmd.exe` reports `drift,visible`; an interval without a duration reports `unbounded`; reinstall prints `Re-registered (drift detected: ...)` and then `-Verify` returns 0; `-Unregister -Purge` leaves nothing behind.

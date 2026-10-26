@@ -18,7 +18,7 @@
 
 .PARAMETER Verify
   Exit 1 when any task is flagged (legacy, drift, visible, unbounded, expired,
-  orphan, missing). Use this in a release checklist or CI job.
+  orphan, missing, unclaimed). Use this in a release checklist or CI job.
 
 .PARAMETER Unregister
   Remove the matching task(s), including any legacy root registration.
@@ -75,7 +75,7 @@ $flagged = @($inventory | Where-Object { $_.Flags -ne 'ok' })
 if ($Json) {
   $inventory | ConvertTo-Json -Depth 4
 } else {
-  $inventory | Format-Table Id, Task, State, Hidden, EveryMinutes, Lifetime, Flags -AutoSize -Wrap
+  $inventory | Format-Table Id, Task, State, HiddenInUI, EveryMinutes, Flags -AutoSize -Wrap
 
   $registered = @($inventory | Where-Object { $_.Task -ne '(not registered)' })
   Write-Host ("Tasks registered: {0} of {1} catalog entries. Flagged: {2}." -f
@@ -88,8 +88,8 @@ if ($Json) {
       Write-Host ("  {0,-18} {1}" -f $row.Id, $row.Flags)
     }
     Write-Host ''
-    Write-Host 'Remediate: powershell -ExecutionPolicy Bypass -File scripts/dev-tasks.ps1 -Unregister -Purge'
-    Write-Host 'Re-register when needed: see scripts/install-winget-merge-task.ps1 -?'
+    Write-Host 'Remediate:  powershell -ExecutionPolicy Bypass -File scripts/dev-tasks.ps1 -Unregister -Purge'
+    Write-Host 'Re-register: powershell -ExecutionPolicy Bypass -File scripts/install-winget-merge-task.ps1'
   }
 }
 

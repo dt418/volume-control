@@ -247,16 +247,25 @@ repetition lifetime, last/next run, state-directory size and flags:
 Task definitions, hidden/interval/lifetime defaults and the remove logic live in
 `scripts/lib/DevTask.ps1`. Change behavior there, not in the installers.
 
-Rules that keep these tasks invisible and self-cleaning:
+Rules that keep these tasks quiet and self-cleaning:
 
 - Register through `scripts/install-winget-*-task.ps1` only. Re-running repairs a
   stale registration (it prints `Re-registered (drift detected: ...)`), so after
   pulling a change to `scripts/lib/DevTask.ps1`, re-run the installer instead of
   trusting the existing task.
-- Tasks are created with `TASK_FLAG_HIDDEN` plus `-WindowStyle Hidden
-  -NonInteractive`. `TASK_FLAG_HIDDEN` is the reliable part: the console window
-  is created before PowerShell parses its arguments. Never register a watcher
-  without it.
+- Tasks start through `scripts/lib/run-hidden.vbs`, run by `wscript.exe` with
+  window style 0. That host has no console attached, so the child's console
+  window is created already hidden and no frame is ever painted.
+  `-WindowStyle Hidden` alone is not equivalent: the console is created first and
+  hidden only once PowerShell parses its arguments, which can flash. Measured on
+  Windows 11 26300 with a probe that reports its own `GetConsoleWindow()`
+  visibility: plain launch `visible=True`, `-WindowStyle Hidden` `visible=False`,
+  wscript launcher `visible=False` with the window never shown.
+- Do NOT hide the task in the Task Scheduler UI (`New-ScheduledTaskSettingsSet
+  -Hidden`). That flag only hides the task from the UI; it does not hide the
+  launched process (same probe: `-Hidden` with a plain PowerShell action still
+  reported `visible=True`). Hiding the registration is what makes background work
+  undiscoverable, which is the opposite of the point.
 - `-RepetitionDuration` is bounded (14 days by default). Do not go back to a
   multi-year "forever" repetition.
 - With `-StopOnTerminal` the checkers **unregister** the task (namespaced and any
