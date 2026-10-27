@@ -91,9 +91,11 @@ The final asset bundle should preserve the approved reusable sources rather than
 
 The SVG/background and preview scenery are reusable references for the Rust implementation. Rust does not need to reproduce the DOM; it may rasterize/cache the SVG and port the scenery to painter primitives or GPU layers.
 
-## Appearance preview
+## Appearance preview — mandatory v7 feature
 
-The Appearance preview must visually represent the currently drafted material, theme, accent, and motion mode and must remain isolated from applied app state until Save succeeds.
+The Appearance live preview is a **required v7 feature and part of the critical path**. It must visually represent the currently drafted material, theme, accent, and motion mode and must remain isolated from applied app state until Save succeeds. Shipping v7 without this preview does not satisfy the specification.
+
+The canonical SVG wallpaper and preview scenery are implementation inputs for this required feature, not optional documentation assets. The native preview must reuse them directly or reproduce them faithfully from those canonical sources.
 
 The approved preview includes:
 
@@ -106,11 +108,11 @@ The approved preview includes:
 - optional “try motion” interaction;
 - text/status showing the effective material.
 
-### Deferred custom preview widget
+### Optional preview-widget abstraction
 
-A reusable `LiquidGlassPreview` custom widget is **not required for the first implementation pass**.
+The **preview itself is mandatory**. Only the decision to package that mandatory preview into a reusable `LiquidGlassPreview` custom widget is optional/deferred.
 
-This is a deliberate scope decision, not unfinished work.
+This distinction is intentional: the team may first implement the required preview directly in the Appearance view to control schedule, but may not omit or downgrade the preview feature itself.
 
 For the first pass, the preview may be composed directly inside the Appearance view using existing painter/material helpers, provided that:
 
@@ -197,5 +199,5 @@ The v7 work is acceptable when:
 
 - Rebuilding the application around a web runtime.
 - Making native blur a hard dependency.
-- Implementing a reusable custom Appearance preview widget before there is evidence that direct composition is insufficient.
+- Prematurely extracting the mandatory Appearance preview into a reusable custom widget before there is evidence that the abstraction is useful. The preview feature itself is not a non-goal.
 - Replacing business logic merely to match the prototype.
