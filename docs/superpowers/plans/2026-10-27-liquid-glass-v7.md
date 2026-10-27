@@ -21,7 +21,7 @@
 - No continuous repaint while UI/data are idle.
 - Blacklist suppresses hotkey handling for a foreground process; it does not hide Mixer sessions.
 - Dismissing an update notice must not reset updater state.
-- Use the canonical wallpaper/scenery/token assets when the asset bundle is added to the branch.
+- Use the canonical HTML/CSS preview-scene structure, scenery styling, and token sources when the reference bundle is added to the branch. The demo wallpaper SVG is reference-only and is not required by the native Appearance preview.
 
 ---
 
@@ -99,14 +99,14 @@ Commit only after the repo's required verification gate can run in the implement
 ### Task 3: Add canonical visual assets and asset-loading policy
 
 **Files:**
-- Add: canonical `volumecontrol-wallpaper.svg`
+- Add: demo/reference `volumecontrol-wallpaper.svg` (web demo only; not a native preview dependency)
 - Add: `preview-scenery.html`
 - Add: `preview-scenery.css`
 - Add: canonical `volumecontrol.tokens.json`
 - Add: generated/reference `tokens.css`
 - Add: demo `index.html` and `design-system.html`
 - Add: QA, THEME-DESIGN-SYSTEM, BLACKLIST-PARITY, screenshots, wireframes, and research references.
-- Add or modify: focused asset-loading code only where native implementation needs it.
+- Add or modify native asset-loading code only for assets that the Rust app actually consumes. Do not add SVG rasterization solely for the Appearance preview.
 
 **Interfaces:**
 - Consumes: approved v7 design references.
@@ -114,10 +114,9 @@ Commit only after the repo's required verification gate can run in the implement
 
 - [ ] **Step 1: Add the approved sources unchanged where practical**
 - [ ] **Step 2: Add integrity/version notes so outdated screenshots cannot become canonical accidentally**
-- [ ] **Step 3: If Rust rasterization is needed, write a focused test around asset lookup/cache identity**
-- [ ] **Step 4: Load/rasterize static SVG assets once per renderer/scale, never once per frame**
-- [ ] **Step 5: Verify the web demo/design-system still resolves its local assets**
-- [ ] **Step 6: Commit**
+- [ ] **Step 3: Keep `volumecontrol-wallpaper.svg` classified as web-demo/reference unless another native feature explicitly needs it**
+- [ ] **Step 4: Verify the web demo/design-system still resolves its local assets**
+- [ ] **Step 5: Commit**
 
 ---
 
@@ -186,12 +185,12 @@ Commit only after the repo's required verification gate can run in the implement
 - Reuse: theme/material/asset helpers from previous tasks.
 
 **Interfaces:**
-- Consumes: Settings draft, canonical wallpaper/scenery assets, effective-preview resolver.
+- Consumes: Settings draft, canonical HTML/CSS preview-scene/scenery reference, shared tokens/material resolver.
 - Produces: the required v7 live preview visual and preview-only interaction. This task is release-blocking.
 
 - [ ] **Step 1: Write tests for preview draft isolation and motion policy**
 - [ ] **Step 2: Implement the required preview in the Appearance view using existing painter/material helpers, unless a dedicated widget is already justified**
-- [ ] **Step 3: Recreate wallpaper/scenery, material label, center volume card, slider state, effective-material status, and try-motion interaction**
+- [ ] **Step 3: Port the approved CSS preview scene: background treatment, `preview-scenery` orbs/ribbons/grid, material caption, center glass HUD, volume rail/knob, hint, and try-motion interaction. Do not introduce a wallpaper image dependency.**
 - [ ] **Step 4: Verify Full/Reduced/Off behavior**
 - [ ] **Step 5: Verify the preview stops repainting when idle**
 - [ ] **Step 6: Check the custom-widget activation criteria below**
@@ -285,9 +284,9 @@ If a visual refinement threatens the delivery schedule:
 
 1. preserve correctness and Opaque fallback;
 2. preserve token/material consistency;
-3. preserve canonical wallpaper/scenery usage;
+3. preserve fidelity to the canonical HTML/CSS preview-scene and scenery treatment;
 4. reduce optical complexity before adding abstraction;
-5. keep the required preview functional and visually faithful to the canonical SVG/scenery even if optical complexity must be reduced;
+5. keep the required preview functional and visually faithful to the canonical HTML/CSS scene even if optical complexity must be reduced;
 6. defer only the custom-widget abstraction or non-essential polish;
 7. record deferred polish instead of extending the main implementation task.
 
