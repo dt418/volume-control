@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Do not implement a reusable custom Appearance preview widget in the first pass.
+- The Appearance live preview is mandatory and must ship in v7. Only extraction into a reusable custom widget may be deferred.
 - Do not change business behavior to match the web prototype.
 - Requested appearance and effective appearance are separate.
 - Accessibility/capability fallback must never overwrite the saved requested material.
@@ -179,7 +179,7 @@ Commit only after the repo's required verification gate can run in the implement
 
 ---
 
-### Task 7: Migrate Appearance preview without creating a custom widget
+### Task 7: Implement the mandatory Appearance live preview
 
 **Files:**
 - Modify: `crates/volumecontrol-egui/src/settings/views.rs`
@@ -187,19 +187,19 @@ Commit only after the repo's required verification gate can run in the implement
 
 **Interfaces:**
 - Consumes: Settings draft, canonical wallpaper/scenery assets, effective-preview resolver.
-- Produces: approved live preview visual and preview-only interaction.
+- Produces: the required v7 live preview visual and preview-only interaction. This task is release-blocking.
 
 - [ ] **Step 1: Write tests for preview draft isolation and motion policy**
-- [ ] **Step 2: Compose the preview directly in the Appearance view using existing painter/material helpers**
+- [ ] **Step 2: Implement the required preview in the Appearance view using existing painter/material helpers, unless a dedicated widget is already justified**
 - [ ] **Step 3: Recreate wallpaper/scenery, material label, center volume card, slider state, effective-material status, and try-motion interaction**
 - [ ] **Step 4: Verify Full/Reduced/Off behavior**
 - [ ] **Step 5: Verify the preview stops repainting when idle**
 - [ ] **Step 6: Check the custom-widget activation criteria below**
 - [ ] **Step 7: Commit**
 
-#### Deferred custom-widget decision gate
+#### Optional custom-widget abstraction gate
 
-Do **not** create `LiquidGlassPreview` as part of Task 7 unless evidence shows direct composition is inadequate.
+The live preview may **not** be deferred. Only the `LiquidGlassPreview` abstraction may be deferred. Do not create the abstraction as part of Task 7 unless evidence shows direct composition is inadequate.
 
 Activate the custom-widget follow-up only if one or more are true:
 
@@ -277,7 +277,7 @@ If one applies, open a separate bounded follow-up task/issue. That follow-up mus
 
 Tasks 1 → 2 → 3 → 4 → 5/6 → 7/8/9 → 10.
 
-The **custom Appearance preview widget is not on the critical path**. It is a separate optimization/refactoring decision taken only after Task 7 produces working native preview evidence.
+The **Appearance live preview is on the critical path** through Task 7. The optional `LiquidGlassPreview` abstraction is not on the critical path and may be evaluated only after the required preview works.
 
 ## Time-control rule
 
@@ -287,14 +287,15 @@ If a visual refinement threatens the delivery schedule:
 2. preserve token/material consistency;
 3. preserve canonical wallpaper/scenery usage;
 4. reduce optical complexity before adding abstraction;
-5. defer the custom preview widget;
-6. record the deferred refinement instead of extending the main implementation task.
+5. keep the required preview functional and visually faithful to the canonical SVG/scenery even if optical complexity must be reduced;
+6. defer only the custom-widget abstraction or non-essential polish;
+7. record deferred polish instead of extending the main implementation task.
 
-This rule specifically exists to prevent the preview from consuming disproportionate implementation time.
+This rule specifically exists to prevent optional abstraction/polish from consuming disproportionate implementation time while keeping the preview itself mandatory.
 
 ## Self-review
 
 - Spec coverage: theme/tokens, materials, renderer, native backdrop, preview, surfaces, blacklist, Help/updater, accessibility, performance, and release evidence all have tasks.
-- Custom-widget scope: explicitly deferred and guarded by measurable activation criteria.
-- No task requires the widget for v7 acceptance.
-- Type/API details for the optional widget are deliberately kept in the spec as a future boundary, not an implementation dependency.
+- Preview scope: mandatory in Task 7 and release-blocking.
+- Custom-widget scope: optional and guarded by measurable activation criteria.
+- v7 acceptance requires the preview, but does not require the reusable widget abstraction.
