@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bring the public GitHub Pages landing page at `docs/index.html` into visual and content parity with the approved Liquid Glass v7 design system and the Rust/egui product direction, without turning the landing page into the QA harness.
+**Goal:** Redesign the public GitHub Pages landing page into a premium Liquid Glass v7 product experience aligned with the Rust/egui app, while keeping the QA Demo and Design System as separate specialist surfaces under the same product ecosystem.
 
-**Architecture:** Keep the landing page as a zero-build static GitHub Pages site. Consume the same approved v7 token vocabulary and visual references as the QA demo, but expose a product-facing interactive preview rather than QA state-injection controls. Split the current large single-file page into focused static assets only where doing so reduces drift and improves maintainability.
+**Architecture:** Use a shared-design-system / separate-surface model. Keep `/` as the persuasive product landing, expose the interactive QA harness at a dedicated path such as `/qa/`, and expose the Design System at `/design-system/`. All three consume the same canonical token vocabulary and visual primitives, but each owns its information architecture and interaction model. Keep the landing zero-build/static unless the implementation proves a build step is necessary.
 
 **Tech Stack:** Static HTML/CSS/vanilla JavaScript, GitHub Pages, shared Liquid Glass v7 design tokens/reference assets, existing GitHub Releases API integration.
 
@@ -12,7 +12,8 @@
 
 ## Global Constraints
 
-- The landing page is a separate deliverable from the native Rust/egui app and the interactive QA harness.
+- The landing page is a separate surface from the native Rust/egui app and the interactive QA harness, but all surfaces belong to one shared VolumeControl design system.
+- Prefer one GitHub Pages origin with clear routes: `/` = Landing, `/qa/` = QA Demo, `/design-system/` = Design System. Do not merge their UIs into a single page.
 - The public landing must not expose QA-only state injectors such as simulated save failure, simulated download failure, fake audio-unavailable state, or fake platform capability toggles.
 - Visual language, naming, materials, motion policy, accessibility behavior, and component styling must remain consistent with Liquid Glass v7.
 - Public copy must describe the current Rust/egui product accurately; remove stale Tauri-specific claims where they no longer describe the shipping architecture.
@@ -140,7 +141,7 @@ Keep landing-only layout variables local, but colors/material/radius/motion valu
 
 ---
 
-### Task 3: Rebuild the page shell, header, and hero in the v7 visual language
+### Task 3: Redesign the page shell, navigation, and hero as a premium v7 product experience
 
 **Files:**
 - Modify: `docs/index.html`
@@ -156,7 +157,7 @@ Require one primary H1, one primary install CTA, one release/source CTA, and one
 
 - [ ] **Step 2: Apply the v7 shell**
 
-Use the approved dark/light material language, quieter borders, calibrated glass surfaces, accent treatment, and spacing hierarchy from the design system. Preserve the skip link, sticky navigation, keyboard focus, and responsive nav behavior.
+Replace the incumbent visual world rather than merely recoloring it. Use the approved Liquid Glass material language, stronger editorial hierarchy, calibrated depth, purposeful asymmetry, cleaner spacing, and motion that reinforces product behavior. Preserve the skip link, sticky navigation, keyboard focus, and responsive nav behavior.
 
 - [ ] **Step 3: Correct stale architecture copy**
 
@@ -308,7 +309,7 @@ Checksums versus signatures, unsigned builds, immutable release assets, and no-p
 
 ---
 
-### Task 7: Add explicit separation between Landing, QA Demo, and Design System
+### Task 7: Integrate Landing, QA Demo, and Design System as separate routes in one product ecosystem
 
 **Files:**
 - Modify: `docs/index.html`
@@ -319,7 +320,7 @@ Checksums versus signatures, unsigned builds, immutable release assets, and no-p
 - Consumes: public landing, QA demo, design-system page.
 - Produces: clear artifact roles with no misleading state simulation.
 
-- [ ] **Step 1: Document the three artifact roles in developer docs**
+- [ ] **Step 1: Establish and document the route/surface contract**
 
 ```text
 Landing        = public product/installation/release surface
@@ -327,11 +328,15 @@ QA Demo        = interactive state simulation and visual regression harness
 Design System  = tokens/components/material reference
 ```
 
-- [ ] **Step 2: Decide whether QA/Design links are public**
+- [ ] **Step 2: Keep QA/Design links secondary**
 
-If public, place them under a clearly labeled Developer/Design resources area rather than primary product CTAs. If not public, keep the landing independent and retain links only in contributor documentation.
+If the QA and Design System routes are public, expose them from a clearly labeled Developer/Design resources area, footer, or repository documentation—not from the primary conversion path. The main nav should stay focused on product, install, features, platform support, releases, and source.
 
-- [ ] **Step 3: Ensure no QA-only labels or simulation controls leak into the public product flow**
+- [ ] **Step 3: Reuse a curated product preview on the landing, not the QA control surface**
+
+The landing may reuse the same preview-scene visual primitives and interaction model, but only expose product-facing controls. No simulated save failure, download failure, audio outage, fake blur capability, or fixture blacklist selectors.
+
+- [ ] **Step 4: Ensure no QA-only labels or simulation controls leak into the public product flow**
 
 - [ ] **Step 4: Commit**
 
@@ -431,6 +436,27 @@ Landing Task 9 deploy with matching release
 ```
 
 The landing can be developed in parallel with native work, but final public capability copy should be frozen only after the native release candidate defines what actually ships.
+
+## Recommended Surface Strategy
+
+Use **independent surfaces with shared foundations**, not one combined page:
+
+```text
+GitHub Pages / same origin
+├── /                 Landing — Persuade
+├── /qa/              QA Demo — Operate/Test
+└── /design-system/   Design System — Read/Reference
+
+Shared
+├── tokens
+├── material names
+├── typography/radii/spacing
+├── motion terminology
+├── icons
+└── product facts
+```
+
+This keeps the public experience focused while preventing visual drift across QA, documentation, and the native app.
 
 ## Shared-vs-specific rule
 
