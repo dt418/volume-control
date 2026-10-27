@@ -57,7 +57,7 @@ Full, Reduced, and Off are policy states, not ad-hoc per-widget flags.
 
 ### Settings transaction model
 
-Settings preview is draft-only. Changes in Appearance affect the preview before Save, but other app surfaces do not adopt them until Save succeeds. Cancel restores the applied configuration. Save failure preserves the draft.
+Settings preview is draft-only. The preview renderer/widget must read the current Appearance values from the Settings draft so changes are reflected immediately before Save. This includes at minimum theme, accent, requested material, motion mode, contrast/transparency accessibility state, and any capability-derived effective material. Other app surfaces do not adopt the draft until Save succeeds. Cancel restores the applied configuration. Save failure preserves the draft.
 
 ### Blacklist parity
 
@@ -93,7 +93,7 @@ The final asset bundle should preserve the approved reusable sources rather than
 
 ## Appearance preview — mandatory v7 feature
 
-The Appearance live preview is a **required v7 feature and part of the critical path**. It must visually represent the currently drafted material, theme, accent, and motion mode and must remain isolated from applied app state until Save succeeds. Shipping v7 without this preview does not satisfy the specification.
+The Appearance live preview is a **required v7 feature and part of the critical path**. It must be driven by the current Settings draft and visually represent the currently drafted material, theme, accent, motion mode, contrast/transparency policy, and resulting effective material. Changing a draft value must update the preview immediately without requiring Save. The preview remains isolated from applied app state until Save succeeds. Shipping v7 without this preview does not satisfy the specification.
 
 The HTML/CSS Appearance preview structure and styling are implementation references for this required feature. In particular, the native preview must faithfully reproduce the `preview-scenery` layers (orbs, ribbons, grid), glass HUD, motion response, labels, and controls. The demo wallpaper SVG is not part of the native preview requirement.
 
@@ -134,10 +134,11 @@ Create a dedicated custom widget only when at least one of these conditions is m
 If activated later, the widget boundary should expose approximately:
 
 - immutable/cached preview assets;
-- external preview state;
-- resolved preview configuration;
-- response events such as volume change or try-motion activation;
-- no business logic, file I/O, updater work, or settings persistence inside `Widget::ui`.
+- a read-only reference/projection of the current Settings draft for Appearance values (`theme`, `accent`, `material`, `motion`, contrast/transparency/accessibility inputs);
+- external transient preview state for hover, sheen, tilt/lift, and test-animation progress;
+- resolved effective appearance/material derived from the same Settings draft and capability resolver used by the app;
+- response events such as try-motion activation or preview-only interaction;
+- no settings persistence or Save/Cancel ownership inside `Widget::ui`; the widget consumes draft settings but does not commit them.
 
 If a future widget introduces cached textures for any reason, it must manage them outside per-frame rendering. No wallpaper SVG dependency is required for the native preview.
 
