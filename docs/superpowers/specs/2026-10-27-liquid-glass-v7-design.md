@@ -89,18 +89,18 @@ The final asset bundle should preserve the approved reusable sources rather than
 - demo `index.html` and `design-system.html`;
 - QA, theme/design-system, blacklist-parity, wireframes, screenshots, and reference research documents.
 
-The SVG/background and preview scenery are reusable references for the Rust implementation. Rust does not need to reproduce the DOM; it may rasterize/cache the SVG and port the scenery to painter primitives or GPU layers.
+`volumecontrol-wallpaper.svg` belongs to the web demo/reference bundle and is **not** an input required by the native app preview. The native Appearance preview is based on the HTML/CSS `preview-scene` composition: `preview-scenery` (orbs, ribbons, grid), material caption, glass HUD, volume rail/knob, hint, and try-motion control. Rust should port those visual layers and motion semantics to egui painter/material primitives; it does not need to load the demo wallpaper SVG.
 
 ## Appearance preview — mandatory v7 feature
 
 The Appearance live preview is a **required v7 feature and part of the critical path**. It must visually represent the currently drafted material, theme, accent, and motion mode and must remain isolated from applied app state until Save succeeds. Shipping v7 without this preview does not satisfy the specification.
 
-The canonical SVG wallpaper and preview scenery are implementation inputs for this required feature, not optional documentation assets. The native preview must reuse them directly or reproduce them faithfully from those canonical sources.
+The HTML/CSS Appearance preview structure and styling are implementation references for this required feature. In particular, the native preview must faithfully reproduce the `preview-scenery` layers (orbs, ribbons, grid), glass HUD, motion response, labels, and controls. The demo wallpaper SVG is not part of the native preview requirement.
 
 The approved preview includes:
 
-- canonical wallpaper/backdrop;
-- orb/ribbon/grid scenery;
+- preview-scene background treatment derived from CSS, not a wallpaper image;
+- orb/ribbon/grid scenery from `preview-scenery`;
 - material label;
 - central volume glass card;
 - volume percentage/track/knob;
@@ -116,7 +116,7 @@ This distinction is intentional: the team may first implement the required previ
 
 For the first pass, the preview may be composed directly inside the Appearance view using existing painter/material helpers, provided that:
 
-1. the preview uses the canonical wallpaper/scenery assets;
+1. the preview faithfully ports the canonical HTML/CSS preview scenery and glass treatment;
 2. material resolution is shared with the rest of the app;
 3. Full/Reduced/Off motion behavior remains correct;
 4. preview-only repaint does not continue while idle;
@@ -139,7 +139,7 @@ If activated later, the widget boundary should expose approximately:
 - response events such as volume change or try-motion activation;
 - no business logic, file I/O, updater work, or settings persistence inside `Widget::ui`.
 
-The widget must cache SVG-derived textures and must not parse/upload the canonical wallpaper every frame.
+If a future widget introduces cached textures for any reason, it must manage them outside per-frame rendering. No wallpaper SVG dependency is required for the native preview.
 
 ## Platform behavior
 
@@ -159,7 +159,6 @@ Wayland native blur is optional and compositor-dependent. X11 must retain full u
 
 - No continuous repaint when all animations/data are idle.
 - Reuse pipelines, textures, and bind groups.
-- Upload/rasterize static wallpaper assets once per relevant renderer/scale, not once per frame.
 - Glass effects must degrade gracefully before core UI responsiveness is affected.
 - Performance measurements must separate CPU layout/update cost from GPU material rendering.
 
@@ -190,7 +189,7 @@ The v7 work is acceptable when:
 - all eight materials resolve and fallback consistently;
 - Accessibility policies do not destroy saved appearance choices;
 - blacklist and updater behavior match native semantics;
-- Appearance preview matches the approved visual direction using the canonical assets;
+- Appearance preview matches the approved HTML/CSS preview composition and interaction;
 - native material failure leaves a usable Opaque/app-owned fallback;
 - the app does not repaint indefinitely while idle;
 - CI/repo release gates pass on an environment that provides the required Rust and desktop tooling.
