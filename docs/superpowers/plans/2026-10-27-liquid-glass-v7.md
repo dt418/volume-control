@@ -185,13 +185,15 @@ Commit only after the repo's required verification gate can run in the implement
 - Reuse: theme/material/asset helpers from previous tasks.
 
 **Interfaces:**
-- Consumes: Settings draft, canonical HTML/CSS preview-scene/scenery reference, shared tokens/material resolver.
+- Consumes: a live read-only reference/projection of the current Settings draft (`theme`, `accent`, `material`, `motion`, contrast/transparency/accessibility inputs), canonical HTML/CSS preview-scene/scenery reference, and the shared effective-material resolver.
 - Produces: the required v7 live preview visual and preview-only interaction. This task is release-blocking.
 
-- [ ] **Step 1: Write tests for preview draft isolation and motion policy**
+- [ ] **Step 1: Write tests proving the preview is driven by the current Settings draft and remains isolated from applied settings**
+
+The tests must cover immediate preview updates for theme, accent, material, and especially Motion = Full / Reduced / Off without Save.
 - [ ] **Step 2: Implement the required preview in the Appearance view using existing painter/material helpers, unless a dedicated widget is already justified**
 - [ ] **Step 3: Port the approved CSS preview scene: background treatment, `preview-scenery` orbs/ribbons/grid, material caption, center glass HUD, volume rail/knob, hint, and try-motion interaction. Do not introduce a wallpaper image dependency.**
-- [ ] **Step 4: Verify Full/Reduced/Off behavior**
+- [ ] **Step 4: Verify Full/Reduced/Off behavior is sourced from the Settings draft and updates the preview immediately when the draft changes**
 - [ ] **Step 5: Verify the preview stops repainting when idle**
 - [ ] **Step 6: Check the custom-widget activation criteria below**
 - [ ] **Step 7: Commit**
@@ -210,7 +212,7 @@ Activate the custom-widget follow-up only if one or more are true:
 
 If none apply, close this gate with a short note: **“Custom preview widget not justified; direct composition retained.”**
 
-If one applies, open a separate bounded follow-up task/issue. That follow-up must keep business logic and persistence outside `Widget::ui`, cache SVG-derived textures, and retain the same material/motion resolver. It is intentionally outside the v7 critical path.
+If one applies, open a separate bounded follow-up task/issue. That follow-up must consume the current Settings draft (or a narrow read-only Appearance projection of it) so theme/material/accent/motion changes preview immediately. Persistence, Save/Cancel ownership, updater work, and unrelated business logic remain outside `Widget::ui`. It must retain the same material/motion resolver. It is intentionally outside the v7 critical path.
 
 ---
 
